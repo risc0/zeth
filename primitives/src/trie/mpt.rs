@@ -313,7 +313,7 @@ impl MptNode {
             }
             MptNodeData::Leaf(_, value) => {
                 if self.nibs() == key_nibs {
-                    Ok(Some(&value))
+                    Ok(Some(value))
                 } else {
                     Ok(None)
                 }

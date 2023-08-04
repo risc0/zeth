@@ -16,16 +16,14 @@ rlp = "0.5.2"
 serde = { version = "1.0", features = ["derive"] }
 sha2 = "=0.10.6"
 sha3 = "0.10"
+thiserror = "1.0"
 
 [dev-dependencies]
 bincode = "1.3"
 hex-literal = "0.4"
-rand = "0.8"
 serde_json = "1.0"
 
 [features]
 ethers = ["dep:ethers-core"]
 revm = ["dep:revm-primitives"]
 
-[target.'cfg(not(target_os = "zkvm"))'.dependencies]
-log = "0.4"

@@ -3342,12 +3342,12 @@ dependencies = [
  "bytes",
  "ethers-core",
  "k256",
- "log",
  "revm-primitives",
  "rlp",
  "serde",
  "sha2",
  "sha3",
+ "thiserror",
 ]
 
 [[package]]

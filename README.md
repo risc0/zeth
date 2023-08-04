@@ -1,15 +1,15 @@
 # zeth
 
-[Zeth](https://github.com/risc0/zeth) is an open-source ZK block prover for Ethereum built on the RISC Zero [zkVM](https://dev.risczero.com/zkvm).
+Zeth is an open-source ZK block prover for Ethereum built on the RISC Zero zkVM.
 
 Zeth makes it possible to *prove* that a given Ethereum block is valid (i.e., is the result of applying the given list of transactions to the parent block) *without* relying on the validator or sync committees. This is because Zeth does *all* of the work needed to construct a new block *from within the zkVM*, including:
 
-- Verifying transaction signatures.
-- Verifying account & storage state against the parent block’s state root.
-- Applying transactions.
-- Paying the block reward.
-- Updating the state root.
-- Etc.
+* Verifying transaction signatures.
+* Verifying account & storage state against the parent block’s state root.
+* Applying transactions.
+* Paying the block reward.
+* Updating the state root.
+* Etc.
 
 After constructing the new block, Zeth calculates and outputs its hash. By running this process within the zkVM, we obtain a ZK proof that the new block is valid.
 
@@ -84,9 +84,9 @@ $ RUST_LOG=info ./target/release/zeth \
 
 ## Additional resources
 
-Check out these resources, and come say hi on Discord.
+Check out these resources and say hi on our Discord:
 
-- [RISC Zero developer’s portal](https://dev.risczero.com/)
-- [zkVM quick-start guide](https://dev.risczero.com/zkvm/quickstart)
-- [Bonsai quick-start guide](https://dev.risczero.com/bonsai/quickstart)
-- [RISC Zero on Discord](https://discord.gg/risczero)
+* [RISC Zero developer’s portal](https://dev.risczero.com/)
+* [zkVM quick-start guide](https://dev.risczero.com/zkvm/quickstart)
+* [Bonsai quick-start guide](https://dev.risczero.com/bonsai/quickstart)
+* [RISC Zero on Discord](https://discord.gg/risczero)

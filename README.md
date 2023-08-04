@@ -37,7 +37,7 @@ Zeth requires an Ethereum RPC provider. Three different providers are supported:
 
 For proving, Zeth has built-in support for the [Bonsai proving service](https://www.bonsai.xyz/). To use this feature, first set the `BONSAI_API_URL` and `BONSAI_API_KEY` environment variables, then follow the instructions below for submitting jobs to Bonsai and verifying the proofs.
 
-Need a Bonsai API key? [Fill out this form](https://forms.gle/kGJRhVc7fXUj74XS9).
+Need a Bonsai API key? [Sign up today](https://bonsai.xyz/apply).
 
 ### Running
 

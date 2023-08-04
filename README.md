@@ -81,3 +81,12 @@ $ RUST_LOG=info ./target/release/zeth \
     --block-no 16424130 \
     --bonsai-verify BONSAI_SESSION_UUID
 ```
+
+## Additional resources
+
+Check out these resources, and come say hi on Discord.
+
+- [RISC Zero developer’s portal](https://dev.risczero.com/)
+- [zkVM quick-start guide](https://dev.risczero.com/zkvm/quickstart)
+- [Bonsai quick-start guide](https://dev.risczero.com/bonsai/quickstart)
+- [RISC Zero on Discord](https://discord.gg/risczero)

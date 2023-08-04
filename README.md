@@ -2,7 +2,7 @@
 
 [Zeth](https://github.com/risc0/zeth) is an open-source ZK block prover for Ethereum built on the RISC Zero [zkVM](https://dev.risczero.com/zkvm).
 
-Zeth makes it possible to ***prove*** that a given Ethereum block is valid (i.e., is the result of applying the given list of transactions to the parent block) ***without*** relying on the validator or sync committees. This is because Zeth does *all* of the work needed to construct a new block ***from within the zkVM***, including:
+Zeth makes it possible to *prove* that a given Ethereum block is valid (i.e., is the result of applying the given list of transactions to the parent block) *without* relying on the validator or sync committees. This is because Zeth does *all* of the work needed to construct a new block *from within the zkVM*, including:
 
 - Verifying transaction signatures.
 - Verifying account & storage state against the parent block’s state root.
@@ -33,9 +33,11 @@ Zeth requires an Ethereum RPC provider. Three different providers are supported:
 
 * File provider. This fetches RPC data from a local file. Specified by giving `--cache-path FILENAME`.
 * RPC provider. This fetches data from a Web2 RPC provider, such as [Alchemy](https://www.alchemy.com/). Specified by giving `--rpc-url RPC_URL`.
-* Cached RPC provider. This fetches RPC data from a local file when possible, and falls back to a Web2 RPC provider when necessary. It also updates the local file with results from the Web2 provider, so that subsequent runs don't need to make any additional Web2 RPC calls. Specified by giving both `--cache-path FILENAME` and `--rpc-url RPC_URL`.
+* Cached RPC provider. This fetches RPC data from a local file when possible, and falls back to a Web2 RPC provider when necessary. It also updates the local file with results from the Web2 provider so that subsequent runs don't need to make any additional Web2 RPC calls. Specified by giving both `--cache-path FILENAME` and `--rpc-url RPC_URL`.
 
 For proving, Zeth has built-in support for the [Bonsai proving service](https://www.bonsai.xyz/). To use this feature, first set the `BONSAI_API_URL` and `BONSAI_API_KEY` environment variables, then follow the instructions below for submitting jobs to Bonsai and verifying the proofs.
+
+Need a Bonsai API key? [Fill out this form](https://forms.gle/kGJRhVc7fXUj74XS9).
 
 ### Running
 

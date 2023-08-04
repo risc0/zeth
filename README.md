@@ -1,63 +1,81 @@
 # zeth
 
-## git-lfs
+[Zeth](https://github.com/risc0/zeth) is an open-source ZK block prover for Ethereum built on the RISC Zero [zkVM](https://dev.risczero.com/zkvm).
 
-To facilitate testing, this repository includes cached RPC data. These data are tracked using [git-lfs](https://git-lfs.com/). To use these files:
+Zeth makes it possible to ***prove*** that a given Ethereum block is valid (i.e., is the result of applying the given list of transactions to the parent block) ***without*** relying on the validator or sync committees. This is because Zeth does *all* of the work needed to construct a new block ***from within the zkVM***, including:
 
-1. Install `git-lfs`.
-2. Pull the cache files using `git lfs pull`.
+- Verifying transaction signatures.
+- Verifying account & storage state against the parent block’s state root.
+- Applying transactions.
+- Paying the block reward.
+- Updating the state root.
+- Etc.
 
-This will fetch the cached RPC data and store the results in the `host/testdata` directory.
+After constructing the new block, Zeth calculates and outputs its hash. By running this process within the zkVM, we obtain a ZK proof that the new block is valid.
 
-## Building
+## Status
+
+Zeth is experimental and may still contain bugs.
+
+## Usage
+
+### Building
+
+Clone the repository and build with `cargo`:
 
 ```console
 $ cargo build --release
 ```
 
-## Running
+### Configuration
 
-The `zeth` tool requires an Eth data provider. Three different providers are supported:
+Zeth requires an Ethereum RPC provider. Three different providers are supported:
 
-* File provider. Specified by giving `--cache-path FILENAME`.
-* RPC provider. Specified by giving `--rpc-url RPC_URL`.
-* Cached RPC provider. Specified by giving both `--cache-path FILENAME` and `--rpc-url RPC_URL`.
+* File provider. This fetches RPC data from a local file. Specified by giving `--cache-path FILENAME`.
+* RPC provider. This fetches data from a Web2 RPC provider, such as [Alchemy](https://www.alchemy.com/). Specified by giving `--rpc-url RPC_URL`.
+* Cached RPC provider. This fetches RPC data from a local file when possible, and falls back to a Web2 RPC provider when necessary. It also updates the local file with results from the Web2 provider, so that subsequent runs don't need to make any additional Web2 RPC calls. Specified by giving both `--cache-path FILENAME` and `--rpc-url RPC_URL`.
 
-Example (replace `YOUR_API_KEY` with your API key for Alchemy):
+For proving, Zeth has built-in support for the [Bonsai proving service](https://www.bonsai.xyz/). To use this feature, first set the `BONSAI_API_URL` and `BONSAI_API_KEY` environment variables, then follow the instructions below for submitting jobs to Bonsai and verifying the proofs.
+
+### Running
+
+Zeth currently has several modes of execution:
+
+**Quick test mode**. This is the default. When run in this mode, Zeth does all of the work needed to construct an Ethereum block and verifies the correctness of the result using the RPC provider. No proofs are generated.
 
 ```console
 $ RUST_LOG=info ./target/release/zeth \
+    --rpc-url "https://eth-mainnet.g.alchemy.com/v2/YOUR_API_KEY" \
+    --cache-path host/testdata \
+    --block-no 16424130
+```
+
+**Local executor mode**. To run in this mode, add the flag `--local-exec SEGMENT_LIMIT`. When run in this mode, Zeth does all of the work needed to construct an Ethereum block from within the zkVM's non-proving emulator. Correctness of the result is checked using the RPC provider. This is useful for measuring the size of the computation (number of execution segments and cycles). No proofs are generated.
+
+```console
+$ RUST_LOG=info ./target/release/zeth \
+    --rpc-url "https://eth-mainnet.g.alchemy.com/v2/YOUR_API_KEY" \
     --cache-path host/testdata \
     --block-no 16424130 \
-    --rpc-url "https://eth-mainnet.g.alchemy.com/v2/YOUR_API_KEY"
+    --local-exec 20
 ```
 
-### Running in the zkVM executor
-
-Add the flag `--local-exec (segment limit)`.
-
-### Running on Bonsai
-
-First, set the following environment variables:
-
-* `BONSAI_API_URL`
-* `BONSAI_API_KEY`
-
-For example,
+**Bonsai proving mode**. *This mode generates a ZK proof.* To run in this mode, add the flag `--bonsai-submit`. When run in this mode, Zeth submits a proving task to Bonsai, which then constructs an Ethereum block entirely from within the zkVM. This mode checks the correctness of the result using the RPC provider. It also outputs the Bonsai session UUID, and polls Bonsai until the proof is complete.
 
 ```console
-$ export BONSAI_API_URL="bonsai_url"
-$ export BONSAI_API_KEY="my_api_key"
+$ RUST_LOG=info ./target/release/zeth \
+    --rpc-url "https://eth-mainnet.g.alchemy.com/v2/YOUR_API_KEY" \
+    --cache-path host/testdata \
+    --block-no 16424130 \
+    --bonsai-submit
 ```
 
-To submit a proving job to Bonsai, add the flag `--bonsai-submit`. This will submit the job to Bonsai, print the session UUID to console, and poll Bonsai until the job is complete. For example,
+**Bonsai verify mode**. *This mode verifies the ZK proof.* To run in this mode, add the flag `--bonsai-verify BONSAI_SESSION_UUID`, where `BONSAI_SESSION_UUID` is the session UUID returend by the `--bonsai-submit` mode. This mode checks the correctness of the result using the RPC provider.
 
 ```console
-$ RUST_LOG=info ./target/release/zketh --cache-path host/testdata --block-no 17735424 --bonsai-submit
-```
-
-To check the status of a job that's already been submitted to Bonsai, add the flag `--bonsai-verify SESSION_UUID`, where `SESSION_UUID` is the UUID printed by the `--bonsai-submit` command. For example,
-
-```console
-$ RUST_LOG=info ./target/release/zketh --cache-path host/testdata --block-no 17735424 --bonsai-verify f150e1c6-ca9f-4c8f-9dfb-e9e022315e5c
+$ RUST_LOG=info ./target/release/zeth \
+    --rpc-url "https://eth-mainnet.g.alchemy.com/v2/YOUR_API_KEY" \
+    --cache-path host/testdata \
+    --block-no 16424130 \
+    --bonsai-verify BONSAI_SESSION_UUID
 ```

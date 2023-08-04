@@ -1,0 +1,5 @@
+[patch.crates-io]
+cc = { git = "https://github.com/rust-lang/cc-rs", tag = "1.0.79" }
+
+[env]
+CARGO_WORKSPACE_DIR = { value = "", relative = true }

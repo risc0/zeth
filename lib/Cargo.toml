@@ -1,0 +1,33 @@
+[package]
+name = "zeth_lib"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+hashbrown = "0.13"
+hex-literal = "0.4"
+once_cell = "1.18"
+revm = { version = "3.3", default-features = false, features = ["std", "serde"] }
+ruint = { version = "1.10", default-features = false }
+serde = "1.0"
+thiserror = "1.0"
+zeth-primitives = { path = "../primitives", features = ["revm"] }
+
+[target.'cfg(not(target_os = "zkvm"))'.dependencies]
+chrono = { version = "0.4", default-features = false }
+ethers-core = "2.0"
+ethers-providers =  "2.0"
+flate2 = "1.0.26"
+log = "0.4"
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+serde_with = "3.0"
+tokio = { version = "1.23", features = ["full"] }
+zeth-primitives = { path = "../primitives", features = ["revm", "ethers"] }
+
+[dev-dependencies]
+bincode = "1.3"
+env_logger = "0.10"
+phf = { version = "0.11", features = ["macros"] }
+rstest = "0.18"
+serde_with = "3.1"

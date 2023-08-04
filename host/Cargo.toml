@@ -1,0 +1,31 @@
+[package]
+name = "zeth"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+bincode = "1.3.3"
+bonsai-sdk = { workspace = true }
+bytemuck = "1.13"
+clap = { version = "4.0", features = ["derive"] }
+env_logger = "0.10"
+ethers-core = "2.0"
+hashbrown = "0.13"
+hex = "0.4.3"
+log = "0.4"
+revm = { version = "3.0", default-features = false, features = ["std", "serde"] }
+risc0-zkvm = { workspace = true, features = ["prove"] }
+serde = "1.0"
+tempfile = "3.6"
+tokio = { version = "1.23", features = ["full"] }
+zeth-primitives = { path = "../primitives" }
+zeth_guests = { path = "../guests" }
+zeth_lib = { path = "../lib" }
+
+[dev-dependencies]
+assert_cmd = "2.0"
+rstest = "0.18"
+
+[features]
+profiler = ["risc0-zkvm/profiler"]

@@ -1,0 +1,6 @@
+{
+    "rust-analyzer.linkedProjects": [
+        "./guests/eth-block/Cargo.toml",
+        "./host/Cargo.toml"
+    ]
+}

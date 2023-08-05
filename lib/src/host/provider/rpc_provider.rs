@@ -74,7 +74,7 @@ impl Provider for RpcProvider {
             self.http_client
                 .get_proof(
                     query.address,
-                    query.indices.clone(),
+                    query.indices.iter().cloned().collect(),
                     Some(query.block_no.into()),
                 )
                 .await

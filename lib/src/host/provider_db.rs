@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
+
 use ethers_core::types::{EIP1186ProofResponse, H160, H256};
 use hashbrown::{hash_map, HashMap};
 use revm::{
@@ -64,10 +66,10 @@ impl ProviderDb {
 
         for (address, indices) in storage_keys {
             let proof = {
-                let address: H160 = address.0.into();
-                let indices: Vec<H256> = indices
+                let address: H160 = address.into();
+                let indices: BTreeSet<H256> = indices
                     .into_iter()
-                    .map(|x: U256| x.to_be_bytes().into())
+                    .map(|x| x.to_be_bytes().into())
                     .collect();
                 self.provider.get_proof(&ProofQuery {
                     block_no,

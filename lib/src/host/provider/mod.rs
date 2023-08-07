@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
+
 use anyhow::{anyhow, Result};
 use ethers_core::types::{Block, Bytes, EIP1186ProofResponse, Transaction, H160, H256, U256};
 use serde::{Deserialize, Serialize};
@@ -35,7 +37,7 @@ pub struct BlockQuery {
 pub struct ProofQuery {
     pub block_no: u64,
     pub address: H160,
-    pub indices: Vec<H256>,
+    pub indices: BTreeSet<H256>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]

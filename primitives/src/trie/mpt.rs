@@ -683,6 +683,18 @@ mod tests {
     }
 
     #[test]
+    pub fn test_clear() {
+        let mut trie = MptNode::default();
+        trie.insert(b"dog", b"puppy".to_vec()).unwrap();
+        assert!(!trie.is_empty());
+        assert_ne!(trie.hash(), EMPTY_ROOT);
+
+        trie.clear();
+        assert!(trie.is_empty());
+        assert_eq!(trie.hash(), EMPTY_ROOT);
+    }
+
+    #[test]
     pub fn test_tiny() {
         // trie consisting of an extension, a branch and two leafs
         let mut trie = MptNode::default();
@@ -701,6 +713,30 @@ mod tests {
     }
 
     #[test]
+    pub fn test_partial() {
+        let mut trie = MptNode::default();
+        trie.insert_rlp(b"aa", 0u8).unwrap();
+        trie.insert_rlp(b"ab", 1u8).unwrap();
+        trie.insert_rlp(b"ba", 2u8).unwrap();
+
+        let exp_hash = trie.hash();
+
+        // replace one node with its digest
+        let MptNodeData::Extension(_, node) = &mut trie.data else {
+            panic!("extension expected")
+        };
+        **node = MptNodeData::Digest(node.hash()).into();
+        assert!(!node.is_resolved());
+
+        let trie = MptNode::decode(trie.to_rlp()).unwrap();
+        assert_eq!(trie.hash(), exp_hash);
+
+        // lookups should fail
+        trie.get(b"aa").unwrap_err();
+        trie.get(b"a0").unwrap_err();
+    }
+
+    #[test]
     pub fn test_branch_value() {
         let mut trie = MptNode::default();
         trie.insert(b"do", b"verb".to_vec()).unwrap();
@@ -709,7 +745,7 @@ mod tests {
     }
 
     #[test]
-    pub fn test_update() {
+    pub fn test_insert() {
         let mut trie = MptNode::default();
         let vals = vec![
             ("painting", "place"),
@@ -723,10 +759,10 @@ mod tests {
             ("mood", "cope"),
             ("menu", "fear"),
         ];
-        for i in 0..vals.len() {
-            let (key, val) = vals[i];
-            trie.insert(key.as_bytes(), val.as_bytes().to_vec())
-                .unwrap();
+        for (key, val) in &vals {
+            assert!(trie
+                .insert(key.as_bytes(), val.as_bytes().to_vec())
+                .unwrap());
         }
 
         let expected = hex!("2bab6cdf91a23ebf3af683728ea02403a98346f99ed668eec572d55c70a4b08f");
@@ -735,6 +771,10 @@ mod tests {
         for (key, value) in &vals {
             assert_eq!(trie.get(key.as_bytes()).unwrap(), Some(value.as_bytes()));
         }
+
+        // check inserting duplicate keys
+        assert!(trie.insert(vals[0].0.as_bytes(), b"new".to_vec()).unwrap());
+        assert!(!trie.insert(vals[0].0.as_bytes(), b"new".to_vec()).unwrap());
 
         // try RLP roundtrip
         let decoded = MptNode::decode(trie.to_rlp()).unwrap();

@@ -24,3 +24,11 @@ jobs:
     - uses: risc0/risc0/.github/actions/sccache@release-0.16
     - name: Cargo test
       run: cargo test --workspace
+
+  fmt:
+    name: fmt
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: risc0/risc0/.github/actions/rustup@release-0.16
+    - run: cargo fmt --all --check

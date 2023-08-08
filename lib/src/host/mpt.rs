@@ -14,7 +14,7 @@
 
 use hashbrown::HashMap;
 use zeth_primitives::{
-    trie::{to_prefix, MptNode, MptNodeData, MptNodeReference},
+    trie::{to_encoded_path, MptNode, MptNodeData, MptNodeReference},
     RlpBytes,
 };
 
@@ -122,13 +122,14 @@ pub fn shorten_key(node: MptNode) -> Vec<MptNode> {
         }
         MptNodeData::Leaf(_, value) => {
             for i in 0..nibs.len() {
-                res.push(MptNodeData::Leaf(to_prefix(&nibs[i..], true), value.clone()).into())
+                res.push(MptNodeData::Leaf(to_encoded_path(&nibs[i..], true), value.clone()).into())
             }
         }
         MptNodeData::Extension(_, target) => {
             for i in 0..nibs.len() {
                 res.push(
-                    MptNodeData::Extension(to_prefix(&nibs[i..], false), target.clone()).into(),
+                    MptNodeData::Extension(to_encoded_path(&nibs[i..], false), target.clone())
+                        .into(),
                 )
             }
         }

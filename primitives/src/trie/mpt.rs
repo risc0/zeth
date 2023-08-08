@@ -367,7 +367,7 @@ impl MptNode {
                             let new_nibs: Vec<_> =
                                 iter::once(index as u8).chain(orphan_nibs).collect();
                             self.data = MptNodeData::Leaf(
-                                to_prefix(&new_nibs, true),
+                                to_encoded_path(&new_nibs, true),
                                 mem::take(orphan_value),
                             );
                         }
@@ -376,14 +376,16 @@ impl MptNode {
                             let new_nibs: Vec<_> =
                                 iter::once(index as u8).chain(orphan_nibs).collect();
                             self.data = MptNodeData::Extension(
-                                to_prefix(&new_nibs, false),
+                                to_encoded_path(&new_nibs, false),
                                 mem::take(orphan_child),
                             );
                         }
                         // if the orphan is a branch or digest, convert to an extension
                         MptNodeData::Branch(_) | MptNodeData::Digest(_) => {
-                            self.data =
-                                MptNodeData::Extension(to_prefix(&[index as u8], false), orphan);
+                            self.data = MptNodeData::Extension(
+                                to_encoded_path(&[index as u8], false),
+                                orphan,
+                            );
                         }
                         MptNodeData::Null => unreachable!(),
                     }
@@ -416,13 +418,15 @@ impl MptNode {
                     MptNodeData::Leaf(_, value) => {
                         self_nibs.extend(child_nibs);
                         self.data =
-                            MptNodeData::Leaf(to_prefix(&self_nibs, true), mem::take(value));
+                            MptNodeData::Leaf(to_encoded_path(&self_nibs, true), mem::take(value));
                     }
                     // if the extension points to an extension, make the extension longer
                     MptNodeData::Extension(_, node) => {
                         self_nibs.extend(child_nibs);
-                        self.data =
-                            MptNodeData::Extension(to_prefix(&self_nibs, false), mem::take(node));
+                        self.data = MptNodeData::Extension(
+                            to_encoded_path(&self_nibs, false),
+                            mem::take(node),
+                        );
                     }
                     MptNodeData::Branch(_) | MptNodeData::Digest(_) => {}
                 }
@@ -451,7 +455,7 @@ impl MptNode {
         let self_nibs = self.nibs();
         match &mut self.data {
             MptNodeData::Null => {
-                self.data = MptNodeData::Leaf(to_prefix(key_nibs, true), value);
+                self.data = MptNodeData::Leaf(to_encoded_path(key_nibs, true), value);
             }
             MptNodeData::Branch(children) => {
                 if key_nibs.is_empty() {
@@ -479,20 +483,21 @@ impl MptNode {
 
                     children[self_nibs[common_len] as usize] = Box::new(
                         MptNodeData::Leaf(
-                            to_prefix(&self_nibs[split_point..], true),
+                            to_encoded_path(&self_nibs[split_point..], true),
                             mem::take(old_value),
                         )
                         .into(),
                     );
                     children[key_nibs[common_len] as usize] = Box::new(
-                        MptNodeData::Leaf(to_prefix(&key_nibs[split_point..], true), value).into(),
+                        MptNodeData::Leaf(to_encoded_path(&key_nibs[split_point..], true), value)
+                            .into(),
                     );
 
                     let branch = MptNodeData::Branch(children);
                     if common_len > 0 {
                         // create parent extension for new branch
                         self.data = MptNodeData::Extension(
-                            to_prefix(&self_nibs[..common_len], false),
+                            to_encoded_path(&self_nibs[..common_len], false),
                             Box::new(branch.into()),
                         );
                     } else {
@@ -517,7 +522,7 @@ impl MptNode {
                     children[self_nibs[common_len] as usize] = if split_point < self_nibs.len() {
                         Box::new(
                             MptNodeData::Extension(
-                                to_prefix(&self_nibs[split_point..], false),
+                                to_encoded_path(&self_nibs[split_point..], false),
                                 mem::take(existing_child),
                             )
                             .into(),
@@ -526,14 +531,15 @@ impl MptNode {
                         mem::take(existing_child)
                     };
                     children[key_nibs[common_len] as usize] = Box::new(
-                        MptNodeData::Leaf(to_prefix(&key_nibs[split_point..], true), value).into(),
+                        MptNodeData::Leaf(to_encoded_path(&key_nibs[split_point..], true), value)
+                            .into(),
                     );
 
                     let branch = MptNodeData::Branch(children);
                     if common_len > 0 {
                         // Create parent extension for new branch
                         self.data = MptNodeData::Extension(
-                            to_prefix(&self_nibs[..common_len], false),
+                            to_encoded_path(&self_nibs[..common_len], false),
                             Box::new(branch.into()),
                         );
                     } else {
@@ -586,28 +592,24 @@ impl MptNode {
 /// Converts a byte slice to nibs.
 pub fn to_nibs(slice: &[u8]) -> Vec<u8> {
     let mut result = Vec::with_capacity(2 * slice.len());
-    for nib in slice {
-        result.push(nib >> 4);
-        result.push(nib & 0xf);
+    for byte in slice {
+        result.push(byte >> 4);
+        result.push(byte & 0xf);
     }
     result
 }
 
-pub fn to_prefix(nibs: &[u8], is_leaf: bool) -> Vec<u8> {
-    let is_odd_nib_len = nibs.len() & 1 == 1;
-    let prefix = ((is_odd_nib_len as u8) + ((is_leaf as u8) << 1)) << 4;
-    let mut result = vec![prefix];
-    for (i, nib) in nibs.iter().enumerate() {
-        let is_odd_nib_index = i & 1 == 1;
-        if is_odd_nib_len ^ is_odd_nib_index {
-            // append to last byte
-            *result.last_mut().unwrap() |= nib;
-        } else {
-            // append new byte
-            result.push(nib << 4);
-        }
+/// Encodes a given slice of nibbles as a vector of bytes, along with additional
+/// information about the node itself.
+pub fn to_encoded_path(mut nibs: &[u8], is_leaf: bool) -> Vec<u8> {
+    let mut prefix = (is_leaf as u8) * 0x20;
+    if nibs.len() % 2 != 0 {
+        prefix += 0x10 + nibs[0];
+        nibs = &nibs[1..];
     }
-    result
+    iter::once(prefix)
+        .chain(nibs.chunks_exact(2).map(|byte| (byte[0] << 4) + byte[1]))
+        .collect()
 }
 
 /// Returns the length of the common prefix.
@@ -641,6 +643,22 @@ mod tests {
                 matches!(node.reference(),MptNodeReference::Bytes(bytes) if bytes == node.to_rlp().to_vec())
             );
         }
+    }
+
+    #[test]
+    pub fn test_to_encoded_path() {
+        // extension node with an even path length
+        let nibbles = vec![0x0a, 0x0b, 0x0c, 0x0d];
+        assert_eq!(to_encoded_path(&nibbles, false), vec![0x00, 0xab, 0xcd]);
+        // extension node with an odd path length
+        let nibbles = vec![0x0a, 0x0b, 0x0c];
+        assert_eq!(to_encoded_path(&nibbles, false), vec![0x1a, 0xbc]);
+        // leaf node with an even path length
+        let nibbles = vec![0x0a, 0x0b, 0x0c, 0x0d];
+        assert_eq!(to_encoded_path(&nibbles, true), vec![0x20, 0xab, 0xcd]);
+        // leaf node with an odd path length
+        let nibbles = vec![0x0a, 0x0b, 0x0c];
+        assert_eq!(to_encoded_path(&nibbles, true), vec![0x3a, 0xbc]);
     }
 
     #[test]

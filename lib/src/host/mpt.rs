@@ -14,7 +14,7 @@
 
 use hashbrown::HashMap;
 use zeth_primitives::{
-    trie::{to_prefix, MptNode, MptNodeData, MptNodeReference},
+    trie::{to_encoded_path, MptNode, MptNodeData, MptNodeReference},
     RlpBytes,
 };
 
@@ -24,12 +24,12 @@ pub fn load_pointers(
 ) -> MptNode {
     let compact_node = match root.as_data() {
         MptNodeData::Null | MptNodeData::Digest(_) | MptNodeData::Leaf(_, _) => root.clone(),
-        MptNodeData::Branch(children, value) => {
+        MptNodeData::Branch(children) => {
             let compact_children: Vec<Box<MptNode>> = children
                 .iter()
                 .map(|child| Box::new(load_pointers(child, node_store)))
                 .collect();
-            MptNodeData::Branch(compact_children.try_into().unwrap(), value.clone()).into()
+            MptNodeData::Branch(compact_children.try_into().unwrap()).into()
         }
         MptNodeData::Extension(prefix, target) => MptNodeData::Extension(
             prefix.clone(),
@@ -40,7 +40,7 @@ pub fn load_pointers(
     if let MptNodeData::Digest(_) = compact_node.as_data() {
         // do nothing
     } else {
-        node_store.insert(compact_node.pointer(), compact_node.clone());
+        node_store.insert(compact_node.reference(), compact_node.clone());
     }
     compact_node
 }
@@ -51,7 +51,7 @@ pub fn resolve_pointers(
 ) -> MptNode {
     let result: MptNode = match root.as_data() {
         MptNodeData::Null | MptNodeData::Leaf(_, _) => root.clone(),
-        MptNodeData::Branch(nodes, value) => {
+        MptNodeData::Branch(nodes) => {
             let node_list: Vec<_> = nodes
                 .iter()
                 .map(|n| Box::new(resolve_pointers(n, node_store)))
@@ -60,7 +60,6 @@ pub fn resolve_pointers(
                 node_list
                     .try_into()
                     .expect("Could not convert vector to 16-element array."),
-                value.clone(),
             )
             .into()
         }
@@ -95,7 +94,7 @@ pub fn orphaned_pointers(node: &MptNode) -> Vec<MptNode> {
 fn _orphaned_pointers(node: &MptNode, res: &mut Vec<MptNode>) {
     match node.as_data() {
         MptNodeData::Null => {}
-        MptNodeData::Branch(children, _) => {
+        MptNodeData::Branch(children) => {
             let unresolved_count = children.iter().filter(|n| !n.is_resolved()).count();
             if unresolved_count == 1 {
                 let unresolved_index = children.iter().position(|n| !n.is_resolved()).unwrap();
@@ -118,18 +117,19 @@ pub fn shorten_key(node: MptNode) -> Vec<MptNode> {
     let mut res = Vec::new();
     let nibs = node.nibs();
     match node.as_data() {
-        MptNodeData::Null | MptNodeData::Branch(_, _) | MptNodeData::Digest(_) => {
+        MptNodeData::Null | MptNodeData::Branch(_) | MptNodeData::Digest(_) => {
             res.push(node.clone())
         }
         MptNodeData::Leaf(_, value) => {
             for i in 0..nibs.len() {
-                res.push(MptNodeData::Leaf(to_prefix(&nibs[i..], true), value.clone()).into())
+                res.push(MptNodeData::Leaf(to_encoded_path(&nibs[i..], true), value.clone()).into())
             }
         }
         MptNodeData::Extension(_, target) => {
             for i in 0..nibs.len() {
                 res.push(
-                    MptNodeData::Extension(to_prefix(&nibs[i..], false), target.clone()).into(),
+                    MptNodeData::Extension(to_encoded_path(&nibs[i..], false), target.clone())
+                        .into(),
                 )
             }
         }

@@ -165,19 +165,23 @@ fn build_tries(state: &TestState) -> (MptNode, HashMap<B160, MptNode>) {
         let mut storage_trie = MptNode::default();
         for (slot, value) in &account.storage {
             if *value != LibU256::ZERO {
-                storage_trie.rlp_update(&keccak(&slot.to_be_bytes::<32>()), *value);
+                storage_trie
+                    .insert_rlp(&keccak(&slot.to_be_bytes::<32>()), *value)
+                    .unwrap();
             }
         }
 
-        state_trie.rlp_update(
-            &keccak(address),
-            StateAccount {
-                nonce: account.nonce.try_into().unwrap(),
-                balance: account.balance,
-                storage_root: storage_trie.hash(),
-                code_hash: keccak(account.code.clone()).into(),
-            },
-        );
+        state_trie
+            .insert_rlp(
+                &keccak(address),
+                StateAccount {
+                    nonce: account.nonce.try_into().unwrap(),
+                    balance: account.balance,
+                    storage_root: storage_trie.hash(),
+                    code_hash: keccak(account.code.clone()).into(),
+                },
+            )
+            .unwrap();
         storage_tries.insert(address.clone(), storage_trie);
     }
 

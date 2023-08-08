@@ -277,8 +277,8 @@ pub fn verify_state(
                     .get(&address)
                     .unwrap()
                     .0
-                    .rlp_debug::<zeth_primitives::U256>();
-                let found_pp = storage_root_node.rlp_debug::<zeth_primitives::U256>();
+                    .debug_rlp::<zeth_primitives::U256>();
+                let found_pp = storage_root_node.debug_rlp::<zeth_primitives::U256>();
                 let first_delta = zip(expected, found_pp)
                     .find(|(e, f)| e != f)
                     .map(|(e, f)| format!("Storage trie delta!\nEXPECTED:\t{}FOUND:\t{}", e, f));
@@ -306,10 +306,7 @@ pub fn verify_state(
                     .into();
                 let our_db_value = fini_db.storage(address, index)?;
                 let trie_index = keccak(storage_index.as_bytes());
-                let our_trie_value = storage_trie
-                    .rlp_lookup(&trie_index)
-                    .unwrap_or_default()
-                    .unwrap_or_default();
+                let our_trie_value = storage_trie.get_rlp(&trie_index)?.unwrap_or_default();
                 if rpc_value != our_db_value || our_db_value != our_trie_value {
                     address_errors.push(VerifyError::StorageMismatch {
                         index,
@@ -342,7 +339,7 @@ fn proofs_to_tries(
         // parse the nodes of the account proof
         for bytes in &proof.account_proof {
             let mpt_node = MptNode::decode(bytes).expect("Failed to decode state proof");
-            nodes_by_pointer.insert(mpt_node.pointer(), mpt_node);
+            nodes_by_pointer.insert(mpt_node.reference(), mpt_node);
         }
 
         // process the proof for each storage entry
@@ -354,7 +351,7 @@ fn proofs_to_tries(
                 .iter()
                 .rev()
                 .map(|bytes| MptNode::decode(bytes).expect("Failed to decode storage proof"))
-                .inspect(|node| drop(nodes_by_pointer.insert(node.pointer(), node.clone())))
+                .inspect(|node| drop(nodes_by_pointer.insert(node.reference(), node.clone())))
                 .last();
             // the hash of the root node should match the proof's storage hash
             assert_eq!(
@@ -392,7 +389,7 @@ fn resolve_orphans(
     for node in nodes {
         let mpt_node = MptNode::decode(node).expect("Failed to decode state proof");
         for potential_orphan in shorten_key(mpt_node) {
-            let potential_orphan_hash = potential_orphan.pointer();
+            let potential_orphan_hash = potential_orphan.reference();
             if orphan_set.contains(&potential_orphan_hash) {
                 orphan_set.remove(&potential_orphan_hash);
                 nodes_by_pointer.insert(potential_orphan_hash, potential_orphan);
@@ -440,7 +437,7 @@ impl Into<Input> for Init {
             orphan_set.extend(
                 orphaned_pointers(&root)
                     .iter()
-                    .map(|node: &MptNode| node.pointer()),
+                    .map(|node: &MptNode| node.reference()),
             );
         }
         for fini_proof in self.fini_proofs.values() {

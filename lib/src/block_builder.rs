@@ -113,7 +113,7 @@ where
             let state_account = self
                 .input
                 .parent_state_trie
-                .rlp_lookup::<StateAccount>(&keccak(address))?
+                .get_rlp::<StateAccount>(&keccak(address))?
                 .unwrap_or_default();
             verify_storage_trie(address, storage_trie, &state_account.storage_root)?;
 
@@ -130,7 +130,7 @@ where
             let mut storage = HashMap::with_capacity(slots.len());
             for slot in slots {
                 let value: zeth_primitives::U256 = storage_trie
-                    .rlp_lookup(&keccak(slot.to_be_bytes::<32>()))?
+                    .get_rlp(&keccak(slot.to_be_bytes::<32>()))?
                     .unwrap_or_default();
                 storage.insert(slot, value);
             }
@@ -280,8 +280,12 @@ where
 
             // Add receipt and tx to tries
             let trie_key = tx_no.to_rlp();
-            tx_trie.rlp_update(&trie_key, tx);
-            receipt_trie.rlp_update(&trie_key, receipt);
+            tx_trie
+                .insert_rlp(&trie_key, tx)
+                .context("failed to insert transaction")?;
+            receipt_trie
+                .insert_rlp(&trie_key, receipt)
+                .context("failed to insert receipt")?;
 
             // update account states
             let db = evm.db().unwrap();
@@ -340,7 +344,9 @@ where
                 .unwrap();
 
             // add to trie
-            withdrawals_trie.rlp_update(&i.to_rlp(), withdrawal);
+            withdrawals_trie
+                .insert_rlp(&i.to_rlp(), withdrawal)
+                .context("failed to insert withdrawal")?;
         }
 
         // Update result header with computed values
@@ -383,7 +389,7 @@ where
 
             // remove deleted accounts from the state trie
             if account.state == AccountState::Deleted {
-                state_trie.delete(&state_trie_index);
+                state_trie.delete(&state_trie_index)?;
                 continue;
             }
 
@@ -402,9 +408,9 @@ where
                 for (key, value) in state_storage {
                     let storage_trie_index = keccak(key.to_be_bytes::<32>());
                     if value == &U256::ZERO {
-                        storage_trie.delete(&storage_trie_index);
+                        storage_trie.delete(&storage_trie_index)?;
                     } else {
-                        storage_trie.rlp_update(&storage_trie_index, *value);
+                        storage_trie.insert_rlp(&storage_trie_index, *value)?;
                     }
                 }
 
@@ -422,7 +428,7 @@ where
                 storage_root,
                 code_hash: from_revm_b256(account.info.code_hash),
             };
-            state_trie.rlp_update(&state_trie_index, state_account);
+            state_trie.insert_rlp(&state_trie_index, state_account)?;
         }
 
         // update result header with the new state root

@@ -4507,14 +4507,13 @@ dependencies = [
  "ethers-core",
  "hex-literal",
  "k256",
- "log",
- "rand",
  "revm-primitives",
  "rlp",
  "serde",
  "serde_json",
  "sha2",
  "sha3",
+ "thiserror",
 ]
 
 [[package]]

@@ -15,37 +15,59 @@
 extern crate alloc;
 
 use alloc::boxed::Box;
-use core::{cell::RefCell, fmt::Debug, iter, mem};
+use core::{cell::RefCell, cmp, fmt::Debug, iter, mem};
 
 use alloy_primitives::B256;
 use alloy_rlp::Encodable;
-use anyhow::{bail, Context, Result};
 use rlp::{Decodable, DecoderError, Prototype, Rlp};
 use serde::{Deserialize, Serialize};
+use thiserror::Error as ThisError;
 
 use crate::{keccak::keccak, trie::EMPTY_ROOT, RlpBytes};
 
+/// A node representing the root of a sparse Merkle Patricia trie. Sparse in this context
+/// means that certain unneeded parts of the trie, i.e. sub-tries, can be cut off and
+/// represented by their node hash. However, if a trie operation such as `insert`,
+/// `remove` or `get` ends up in such a truncated part, it cannot be executed and returns
+/// an error. Another difference from other Merkle Patricia trie implementations is that
+/// branches cannot store values. Due to the way how MPTs are constructed in Ethereum,
+/// this is never needed.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
+pub struct MptNode {
+    /// The type and data of the node.
+    data: MptNodeData,
+    /// Cache for a previously computed [MptNodeReference] of this node.
+    #[serde(skip)]
+    cached_reference: RefCell<Option<MptNodeReference>>,
+}
+
+/// Merkle Patricia trie error type.
+#[derive(Debug, ThisError)]
+pub enum Error {
+    #[error("reached an unresolved node: {0:#}")]
+    NodeNotResolved(B256),
+    #[error("branch node with value")]
+    ValueInBranch,
+    #[error("RLP error")]
+    Rlp(#[from] alloy_rlp::Error),
+    #[error("RLP error")]
+    LegacyRlp(#[from] DecoderError),
+}
+
 /// The type and data of a node in a Merkle Patricia trie.
-#[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum MptNodeData {
     /// Empty trie node.
+    #[default]
     Null,
-    /// Node with at most 16 children and a value.
-    Branch([Box<MptNode>; 16], Vec<u8>), // todo: take this away
+    /// Node with at most 16 children.
+    Branch([Box<MptNode>; 16]),
     /// Leaf node with a value.
     Leaf(Vec<u8>, Vec<u8>),
     /// Node with exactly one child.
     Extension(Vec<u8>, Box<MptNode>),
-    /// Reference to a node by its hash.
+    /// Representation of a sub-trie by its hash.
     Digest(B256),
-}
-
-/// A node in a Merkle Patricia trie.
-#[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
-pub struct MptNode {
-    data: MptNodeData,
-    #[serde(skip)]
-    cached_reference: RefCell<Option<MptNodeReference>>,
 }
 
 /// Reference of one node inside another node.
@@ -55,21 +77,6 @@ pub enum MptNodeReference {
     Bytes(Vec<u8>),
     /// Keccak hash of long encodings (not less than 32 bytes).
     Digest(B256),
-}
-
-impl From<B256> for MptNodeReference {
-    fn from(digest: B256) -> Self {
-        Self::Digest(digest)
-    }
-}
-
-impl Default for MptNode {
-    fn default() -> Self {
-        Self {
-            data: MptNodeData::Null,
-            cached_reference: RefCell::new(None),
-        }
-    }
 }
 
 impl From<MptNodeData> for MptNode {
@@ -88,21 +95,22 @@ impl Encodable for MptNode {
             MptNodeData::Null => {
                 out.put_u8(alloy_rlp::EMPTY_STRING_CODE);
             }
-            MptNodeData::Branch(nodes, value) => {
+            MptNodeData::Branch(nodes) => {
                 let mut payload_length = 0;
                 for node in nodes {
-                    payload_length += node.pointer_length();
+                    payload_length += node.reference_length();
                 }
-                payload_length += value.as_slice().length();
+                payload_length += 1;
                 alloy_rlp::Header {
                     list: true,
                     payload_length,
                 }
                 .encode(out);
                 for node in nodes {
-                    node.pointer_encode(out);
+                    node.reference_encode(out);
                 }
-                value.as_slice().encode(out);
+                // in the MPT reference, branches have values so always add empty value
+                out.put_u8(alloy_rlp::EMPTY_STRING_CODE);
             }
             MptNodeData::Leaf(prefix, value) => {
                 let payload_length = prefix.as_slice().length() + value.as_slice().length();
@@ -115,14 +123,14 @@ impl Encodable for MptNode {
                 value.as_slice().encode(out);
             }
             MptNodeData::Extension(prefix, node) => {
-                let payload_length = prefix.as_slice().length() + node.pointer_length();
+                let payload_length = prefix.as_slice().length() + node.reference_length();
                 alloy_rlp::Header {
                     list: true,
                     payload_length,
                 }
                 .encode(out);
                 prefix.as_slice().encode(out);
-                node.pointer_encode(out);
+                node.reference_encode(out);
             }
             MptNodeData::Digest(digest) => {
                 digest.encode(out);
@@ -151,28 +159,32 @@ impl Decodable for MptNode {
                 for node_rlp in rlp.iter().take(16) {
                     node_list.push(Box::new(Decodable::decode(&node_rlp)?));
                 }
-                let value = rlp.val_at(16)?;
-                Ok(MptNodeData::Branch(node_list.try_into().unwrap(), value).into())
+                let value: Vec<u8> = rlp.val_at(16)?;
+                if value.is_empty() {
+                    Ok(MptNodeData::Branch(node_list.try_into().unwrap()).into())
+                } else {
+                    Err(DecoderError::Custom("branch node with value"))
+                }
             }
             Prototype::Data(32) => {
                 let bytes: Vec<u8> = rlp.as_val()?;
                 Ok(MptNodeData::Digest(B256::from_slice(&bytes)).into())
             }
-            _ => Err(DecoderError::Custom("Unknown MPT Node format!")),
+            _ => Err(DecoderError::RlpIncorrectListLen),
         }
     }
 }
 
 impl MptNode {
-    /// Clears the trie, replacing it with [MptNodeData::NULL].
+    /// Clears the trie, replacing it with [MptNodeData::Null].
     pub fn clear(&mut self) {
         self.data = MptNodeData::Null;
         self.invalidate_ref_cache();
     }
 
     /// Decodes an RLP-encoded [MptNode].
-    pub fn decode(bytes: impl AsRef<[u8]>) -> Result<MptNode> {
-        rlp::decode(bytes.as_ref()).context("rlp decode failed")
+    pub fn decode(bytes: impl AsRef<[u8]>) -> Result<MptNode, Error> {
+        rlp::decode(bytes.as_ref()).map_err(Error::from)
     }
 
     /// Returns the type and data of the node.
@@ -184,46 +196,46 @@ impl MptNode {
     pub fn hash(&self) -> B256 {
         match self.data {
             MptNodeData::Null => EMPTY_ROOT,
-            _ => match self.pointer() {
+            _ => match self.reference() {
                 MptNodeReference::Digest(digest) => digest,
                 MptNodeReference::Bytes(bytes) => keccak(bytes).into(),
             },
         }
     }
 
-    /// Returns the pointer of this node when referenced inside another node.
-    pub fn pointer(&self) -> MptNodeReference {
+    /// Returns the [MptNodeReference] of this node when referenced inside another node.
+    pub fn reference(&self) -> MptNodeReference {
         self.cached_reference
             .borrow_mut()
-            .get_or_insert_with(|| self.calc_pointer())
+            .get_or_insert_with(|| self.calc_reference())
             .clone()
     }
 
-    /// Encodes the pointer for this node into the `out` buffer.
-    fn pointer_encode(&self, out: &mut dyn alloy_rlp::BufMut) {
+    /// Encodes the [MptNodeReference] of this node into the `out` buffer.
+    fn reference_encode(&self, out: &mut dyn alloy_rlp::BufMut) {
         match self
             .cached_reference
             .borrow_mut()
-            .get_or_insert_with(|| self.calc_pointer())
+            .get_or_insert_with(|| self.calc_reference())
         {
             MptNodeReference::Bytes(bytes) => out.put_slice(bytes),
             MptNodeReference::Digest(digest) => digest.encode(out),
         }
     }
 
-    /// Returns the length of the encoded pointer for this node.
-    fn pointer_length(&self) -> usize {
+    /// Returns the length of the encoded [MptNodeReference] of this node.
+    fn reference_length(&self) -> usize {
         match self
             .cached_reference
             .borrow_mut()
-            .get_or_insert_with(|| self.calc_pointer())
+            .get_or_insert_with(|| self.calc_reference())
         {
             MptNodeReference::Bytes(bytes) => bytes.len(),
             MptNodeReference::Digest(digest) => digest.length(),
         }
     }
 
-    fn calc_pointer(&self) -> MptNodeReference {
+    fn calc_reference(&self) -> MptNodeReference {
         match &self.data {
             MptNodeData::Null => MptNodeReference::Bytes(vec![alloy_rlp::EMPTY_STRING_CODE]),
             MptNodeData::Digest(digest) => MptNodeReference::Digest(*digest),
@@ -239,11 +251,11 @@ impl MptNode {
     }
 
     /// Returns whether the trie is empty.
-    pub fn is_null(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         matches!(&self.data, MptNodeData::Null)
     }
 
-    /// Returns whether the node is resolved or is the reference of another node.
+    /// Returns whether the trie is resolved or is the reference of another node.
     pub fn is_resolved(&self) -> bool {
         !matches!(&self.data, MptNodeData::Digest(_))
     }
@@ -251,13 +263,13 @@ impl MptNode {
     /// Returns the nibbles corresponding to the node's prefix.
     pub fn nibs(&self) -> Vec<u8> {
         match &self.data {
-            MptNodeData::Null | MptNodeData::Branch(_, _) | MptNodeData::Digest(_) => Vec::new(),
+            MptNodeData::Null | MptNodeData::Branch(_) | MptNodeData::Digest(_) => vec![],
             MptNodeData::Leaf(prefix, _) | MptNodeData::Extension(prefix, _) => {
                 let extension = prefix[0];
                 // the first bit of the first nibble denotes the parity
                 let is_odd = extension & (1 << 4) != 0;
 
-                let mut result = Vec::with_capacity(2 * prefix.len());
+                let mut result = Vec::with_capacity(2 * prefix.len() - 1);
                 // for odd lengths, the second nibble contains the first element
                 if is_odd {
                     result.push(extension & 0xf);
@@ -271,268 +283,246 @@ impl MptNode {
         }
     }
 
-    /// Returns the value of this node.
-    pub fn value(&self) -> Option<&[u8]> {
-        match &self.data {
-            MptNodeData::Null | MptNodeData::Extension(_, _) | MptNodeData::Digest(_) => None,
-            MptNodeData::Branch(_, value) | MptNodeData::Leaf(_, value) => Some(value),
-        }
+    /// Returns a reference to the value corresponding to the key.
+    /// If [None] is returned, the key is provably not in the trie.
+    pub fn get(&self, key: &[u8]) -> Result<Option<&[u8]>, Error> {
+        self.get_internal(&to_nibs(key))
     }
 
-    pub fn rlp_lookup<T: alloy_rlp::Decodable>(&self, trie_index: &[u8]) -> Result<Option<T>> {
-        match self.lookup(trie_index) {
-            Some(mut bytes) => Ok(Some(T::decode(&mut bytes).context("RLP decode failed")?)),
+    /// Returns the RLP-decoded value corresponding to the key.
+    /// If [None] is returned, the key is provably not in the trie.
+    pub fn get_rlp<T: alloy_rlp::Decodable>(&self, key: &[u8]) -> Result<Option<T>, Error> {
+        match self.get(key)? {
+            Some(mut bytes) => Ok(Some(T::decode(&mut bytes)?)),
             None => Ok(None),
         }
     }
 
-    fn lookup_internal(&self, key_nibs: &[u8]) -> Result<Option<&[u8]>> {
+    fn get_internal(&self, key_nibs: &[u8]) -> Result<Option<&[u8]>, Error> {
         match &self.data {
             MptNodeData::Null => Ok(None),
-            MptNodeData::Branch(nodes, _) => {
+            MptNodeData::Branch(nodes) => {
                 if key_nibs.is_empty() {
-                    Ok(self.value())
+                    Ok(None)
                 } else {
                     nodes
                         .get(key_nibs[0] as usize)
                         .unwrap()
-                        .lookup_internal(&key_nibs[1..])
+                        .get_internal(&key_nibs[1..])
                 }
             }
-            MptNodeData::Leaf(_, _) => {
+            MptNodeData::Leaf(_, value) => {
                 if self.nibs() == key_nibs {
-                    Ok(self.value())
+                    Ok(Some(value))
                 } else {
                     Ok(None)
                 }
             }
-            MptNodeData::Extension(_, target) => {
+            MptNodeData::Extension(_, node) => {
                 let ext_nibs = self.nibs();
                 let ext_len = ext_nibs.len();
                 if key_nibs[..ext_len] != ext_nibs {
                     Ok(None)
                 } else {
-                    target.lookup_internal(&key_nibs[ext_len..])
+                    node.get_internal(&key_nibs[ext_len..])
                 }
             }
-            MptNodeData::Digest(_) => bail!("Cannot descend pointer!"),
+            MptNodeData::Digest(digest) => Err(Error::NodeNotResolved(*digest)),
         }
     }
 
-    pub fn lookup(&self, trie_index: &[u8]) -> Option<&[u8]> {
-        self.lookup_internal(&to_nibs(trie_index))
-            .expect("Could not lookup value")
+    // Removes a key from the trie. It returns `true` when that key had a value associated
+    // with it, or `false` if the key was provably not in the trie.
+    pub fn delete(&mut self, key: &[u8]) -> Result<bool, Error> {
+        self.delete_internal(&to_nibs(key))
     }
 
-    fn invalidate_ref_cache(&mut self) {
-        self.cached_reference.borrow_mut().take();
-    }
-
-    fn delete_internal(&mut self, key_nibs: &[u8]) -> Result<bool> {
-        let self_nibs = self.nibs();
-        let value_deleted = match &mut self.data {
-            MptNodeData::Null => false,
-            MptNodeData::Branch(children, _) => {
-                // note: we don't handle storing values at branches (key_nibs cannot be empty)
+    fn delete_internal(&mut self, key_nibs: &[u8]) -> Result<bool, Error> {
+        let mut self_nibs = self.nibs();
+        match &mut self.data {
+            MptNodeData::Null => return Ok(false),
+            MptNodeData::Branch(children) => {
+                if key_nibs.is_empty() {
+                    return Err(Error::ValueInBranch);
+                }
                 let child = children.get_mut(key_nibs[0] as usize).unwrap();
                 if !child.delete_internal(&key_nibs[1..])? {
                     return Ok(false);
                 }
-                let orphan_index = children
-                    .iter()
-                    .position(|n| !n.is_null())
-                    .expect("Deleted last element of a branch!");
-                let mut remaining_children: Vec<_> =
-                    children.iter_mut().filter(|n| !n.is_null()).collect();
-                if remaining_children.len() == 1 {
-                    // convert to extension
-                    let mut orphan = mem::take(remaining_children[0]);
 
-                    let self_nibs = vec![orphan_index as u8];
-                    let orphan_nibs = orphan.nibs();
+                let mut remaining = children
+                    .iter_mut()
+                    .enumerate()
+                    .filter(|(_, n)| !n.is_empty());
+                // there will always be at least one remaining node
+                let (index, node) = remaining.next().unwrap();
+                // if there is only exactly one node left, we need to convert the branch
+                if remaining.next().is_none() {
+                    let mut orphan = mem::take(node);
+
+                    let orphan_nibs = orphan.nibs().into_iter();
                     match &mut orphan.data {
-                        MptNodeData::Null => {
-                            // Dead-end, delete own data
-                            self.data = MptNodeData::Null;
-                        }
-                        MptNodeData::Branch(_, _) => {
-                            self.data =
-                                MptNodeData::Extension(to_prefix(&self_nibs, false), orphan);
-                        }
-                        MptNodeData::Leaf(_, orphan_data) => {
-                            // Replace own data with extended-prefix leaf
-                            let new_nibs = [self_nibs, orphan_nibs].concat();
+                        // if the orphan is a leaf, prepend the corresponding nib to it
+                        MptNodeData::Leaf(_, orphan_value) => {
+                            let new_nibs: Vec<_> =
+                                iter::once(index as u8).chain(orphan_nibs).collect();
                             self.data = MptNodeData::Leaf(
-                                to_prefix(&new_nibs, true),
-                                mem::take(orphan_data),
+                                to_encoded_path(&new_nibs, true),
+                                mem::take(orphan_value),
                             );
                         }
-                        MptNodeData::Extension(_, orphan_target) => {
-                            // Extend own prefix with child's
-                            let new_nibs = [self_nibs, orphan_nibs].concat();
+                        // if the orphan is an extension, prepend the corresponding nib to it
+                        MptNodeData::Extension(_, orphan_child) => {
+                            let new_nibs: Vec<_> =
+                                iter::once(index as u8).chain(orphan_nibs).collect();
                             self.data = MptNodeData::Extension(
-                                to_prefix(&new_nibs, false),
-                                mem::take(orphan_target),
+                                to_encoded_path(&new_nibs, false),
+                                mem::take(orphan_child),
                             );
                         }
-                        MptNodeData::Digest(_) => {
-                            self.data =
-                                MptNodeData::Extension(to_prefix(&self_nibs, false), orphan);
+                        // if the orphan is a branch or digest, convert to an extension
+                        MptNodeData::Branch(_) | MptNodeData::Digest(_) => {
+                            self.data = MptNodeData::Extension(
+                                to_encoded_path(&[index as u8], false),
+                                orphan,
+                            );
                         }
+                        MptNodeData::Null => unreachable!(),
                     }
                 }
-                true
             }
             MptNodeData::Leaf(_, _) => {
-                if self_nibs.len() != key_nibs.len() {
-                    bail!(
-                        "Unequal deletion key-lengths {}/{}",
-                        self_nibs.len(),
-                        key_nibs.len()
-                    );
+                if self_nibs != key_nibs {
+                    return Ok(false);
                 }
-                // Our traversal has ended
-                if self_nibs == key_nibs {
-                    self.data = MptNodeData::Null;
-                    true
-                } else {
-                    false
-                }
+                self.data = MptNodeData::Null;
             }
             MptNodeData::Extension(_, child) => {
                 let ext_len = self_nibs.len();
                 if key_nibs[..ext_len] != self_nibs {
                     return Ok(false);
                 }
-                let value_deleted = child.delete_internal(&key_nibs[ext_len..])?;
-                if value_deleted {
-                    // Potentially collapse this branch
-                    let child_nibs = child.nibs();
-                    match &mut child.data {
-                        MptNodeData::Branch(_, _) | MptNodeData::Digest(_) => {}
-                        MptNodeData::Null => {
-                            // Dead-end, delete own data
-                            self.data = MptNodeData::Null;
-                        }
-                        MptNodeData::Leaf(_, child_value) => {
-                            // Replace own data with extended-prefix leaf
-                            let new_nibs = [self_nibs, child_nibs].concat();
-                            self.data = MptNodeData::Leaf(
-                                to_prefix(&new_nibs, true),
-                                mem::take(child_value),
-                            );
-                        }
-                        MptNodeData::Extension(_, child_target) => {
-                            // Extend own prefix with child's
-                            let new_nibs = [self_nibs, child_nibs].concat();
-                            self.data = MptNodeData::Extension(
-                                to_prefix(&new_nibs, false),
-                                mem::take(child_target),
-                            );
-                        }
-                    }
+                if !child.delete_internal(&key_nibs[ext_len..])? {
+                    return Ok(false);
                 }
-                value_deleted
+
+                // an extension can only point to a branch or a digest
+                // if this is no longer the case, it needs to be cleaned up
+                let child_nibs = child.nibs().into_iter();
+                match &mut child.data {
+                    // if the extension points to nothing, it can be removed as well
+                    MptNodeData::Null => {
+                        self.data = MptNodeData::Null;
+                    }
+                    // if the extension points to a leaf, make the leaf longer
+                    MptNodeData::Leaf(_, value) => {
+                        self_nibs.extend(child_nibs);
+                        self.data =
+                            MptNodeData::Leaf(to_encoded_path(&self_nibs, true), mem::take(value));
+                    }
+                    // if the extension points to an extension, make the extension longer
+                    MptNodeData::Extension(_, node) => {
+                        self_nibs.extend(child_nibs);
+                        self.data = MptNodeData::Extension(
+                            to_encoded_path(&self_nibs, false),
+                            mem::take(node),
+                        );
+                    }
+                    MptNodeData::Branch(_) | MptNodeData::Digest(_) => {}
+                }
             }
-            MptNodeData::Digest(_) => bail!("Hit a pointer during deletion operation!"),
+            MptNodeData::Digest(digest) => return Err(Error::NodeNotResolved(*digest)),
         };
 
-        if value_deleted {
-            // invalidate the cache
-            self.invalidate_ref_cache();
+        self.invalidate_ref_cache();
+        Ok(true)
+    }
+
+    /// Inserts a key-value pair into the trie returning whether the trie has changed.
+    pub fn insert(&mut self, key: &[u8], value: Vec<u8>) -> Result<bool, Error> {
+        if value.is_empty() {
+            panic!("value must not be empty");
         }
-
-        Ok(value_deleted)
+        self.insert_internal(&to_nibs(key), value)
     }
 
-    pub fn delete(&mut self, trie_index: &[u8]) {
-        self.delete_internal(&to_nibs(trie_index))
-            .expect("Could not delete value");
+    /// Inserts an RLP-encoded value into the trie returning whether the trie has changed.
+    pub fn insert_rlp(&mut self, key: &[u8], value: impl Encodable) -> Result<bool, Error> {
+        self.insert_internal(&to_nibs(key), value.to_rlp())
     }
 
-    fn update_internal(&mut self, key_nibs: &[u8], value: Vec<u8>) -> Result<bool> {
+    fn insert_internal(&mut self, key_nibs: &[u8], value: Vec<u8>) -> Result<bool, Error> {
         let self_nibs = self.nibs();
-        let value_updated = match &mut self.data {
+        match &mut self.data {
             MptNodeData::Null => {
-                self.data = MptNodeData::Leaf(to_prefix(key_nibs, true), value);
-                true
+                self.data = MptNodeData::Leaf(to_encoded_path(key_nibs, true), value);
             }
-            MptNodeData::Branch(children, stored_value) => {
+            MptNodeData::Branch(children) => {
                 if key_nibs.is_empty() {
-                    // replace the branch data
-                    *stored_value = value;
-                    true
-                } else {
-                    children
-                        .get_mut(key_nibs[0] as usize)
-                        .unwrap()
-                        .update_internal(&key_nibs[1..], value)?
+                    return Err(Error::ValueInBranch);
+                }
+                let child = children.get_mut(key_nibs[0] as usize).unwrap();
+                if !child.insert_internal(&key_nibs[1..], value)? {
+                    return Ok(false);
                 }
             }
-            MptNodeData::Leaf(_, stored_value) => {
-                let cpl = lcp(&self_nibs, key_nibs);
-                if cpl == self_nibs.len() && cpl == key_nibs.len() {
-                    // replace leaf data
-                    let different_value = stored_value != &value;
-                    if different_value {
-                        *stored_value = value;
+            MptNodeData::Leaf(_, old_value) => {
+                let common_len = lcp(&self_nibs, key_nibs);
+                if common_len == self_nibs.len() && common_len == key_nibs.len() {
+                    // if self_nibs == key_nibs, update the value if it is different
+                    if old_value == &value {
+                        return Ok(false);
                     }
-                    different_value
+                    *old_value = value;
+                } else if common_len == self_nibs.len() || common_len == key_nibs.len() {
+                    return Err(Error::ValueInBranch);
                 } else {
-                    let split_point = cpl + 1;
-                    // create a branch with two children
-                    let mut new_branch_children: [Box<MptNode>; 16] = Default::default();
-                    let mut new_branch_value: Vec<u8> = Vec::new();
-                    // Insert existing leaf data
-                    if cpl == self_nibs.len() {
-                        new_branch_value = mem::take(stored_value);
-                    } else {
-                        new_branch_children[self_nibs[cpl] as usize] = Box::new(
-                            MptNodeData::Leaf(
-                                to_prefix(&self_nibs[split_point..], true),
-                                mem::take(stored_value),
-                            )
-                            .into(),
-                        );
-                    }
-                    if cpl == key_nibs.len() {
-                        new_branch_value = value;
-                    } else {
-                        new_branch_children[key_nibs[cpl] as usize] = Box::new(
-                            MptNodeData::Leaf(to_prefix(&key_nibs[split_point..], true), value)
-                                .into(),
-                        );
-                    }
-                    let branch = MptNodeData::Branch(new_branch_children, new_branch_value);
+                    let split_point = common_len + 1;
+                    // otherwise, create a branch with two children
+                    let mut children: [Box<MptNode>; 16] = Default::default();
 
-                    if cpl > 0 {
-                        // Create parent extension for new branch
+                    children[self_nibs[common_len] as usize] = Box::new(
+                        MptNodeData::Leaf(
+                            to_encoded_path(&self_nibs[split_point..], true),
+                            mem::take(old_value),
+                        )
+                        .into(),
+                    );
+                    children[key_nibs[common_len] as usize] = Box::new(
+                        MptNodeData::Leaf(to_encoded_path(&key_nibs[split_point..], true), value)
+                            .into(),
+                    );
+
+                    let branch = MptNodeData::Branch(children);
+                    if common_len > 0 {
+                        // create parent extension for new branch
                         self.data = MptNodeData::Extension(
-                            to_prefix(&self_nibs[..cpl], false),
+                            to_encoded_path(&self_nibs[..common_len], false),
                             Box::new(branch.into()),
                         );
                     } else {
                         self.data = branch;
                     }
-                    true
                 }
             }
             MptNodeData::Extension(_, existing_child) => {
-                let cpl = lcp(&self_nibs, key_nibs);
-                if cpl == self_nibs.len() {
+                let common_len = lcp(&self_nibs, key_nibs);
+                if common_len == self_nibs.len() {
                     // traverse down for update
-                    existing_child.update_internal(&key_nibs[cpl..], value)?
+                    if !existing_child.insert_internal(&key_nibs[common_len..], value)? {
+                        return Ok(false);
+                    }
+                } else if common_len == key_nibs.len() {
+                    return Err(Error::ValueInBranch);
                 } else {
-                    let split_point = cpl + 1;
-                    // create a branch with two children
-                    let mut new_branch_children: [Box<MptNode>; 16] = Default::default();
-                    let mut new_branch_value: Vec<u8> = Vec::new();
-                    // Insert existing extension
-                    new_branch_children[self_nibs[cpl] as usize] = if self_nibs.len() > split_point
-                    {
+                    let split_point = common_len + 1;
+                    // otherwise, create a branch with two children
+                    let mut children: [Box<MptNode>; 16] = Default::default();
+
+                    children[self_nibs[common_len] as usize] = if split_point < self_nibs.len() {
                         Box::new(
                             MptNodeData::Extension(
-                                to_prefix(&self_nibs[split_point..], false),
+                                to_encoded_path(&self_nibs[split_point..], false),
                                 mem::take(existing_child),
                             )
                             .into(),
@@ -540,67 +530,48 @@ impl MptNode {
                     } else {
                         mem::take(existing_child)
                     };
-                    if cpl == key_nibs.len() {
-                        new_branch_value = value;
-                    } else {
-                        new_branch_children[key_nibs[cpl] as usize] = Box::new(
-                            MptNodeData::Leaf(to_prefix(&key_nibs[split_point..], true), value)
-                                .into(),
-                        );
-                    }
-                    let branch = MptNodeData::Branch(new_branch_children, new_branch_value);
+                    children[key_nibs[common_len] as usize] = Box::new(
+                        MptNodeData::Leaf(to_encoded_path(&key_nibs[split_point..], true), value)
+                            .into(),
+                    );
 
-                    if cpl > 0 {
+                    let branch = MptNodeData::Branch(children);
+                    if common_len > 0 {
                         // Create parent extension for new branch
                         self.data = MptNodeData::Extension(
-                            to_prefix(&self_nibs[..cpl], false),
+                            to_encoded_path(&self_nibs[..common_len], false),
                             Box::new(branch.into()),
                         );
                     } else {
                         self.data = branch;
                     }
-                    true
                 }
             }
-            MptNodeData::Digest(_) => bail!("Hit a pointer during update operation!"),
+            MptNodeData::Digest(digest) => return Err(Error::NodeNotResolved(*digest)),
         };
 
-        if value_updated {
-            // invalidate the cache
-            self.invalidate_ref_cache();
-        }
-
-        Ok(value_updated)
+        self.invalidate_ref_cache();
+        Ok(true)
     }
 
-    pub fn rlp_update(&mut self, key: &[u8], value: impl Encodable) {
-        self.update(key, value.to_rlp());
-    }
-
-    pub fn update(&mut self, trie_index: &[u8], value: Vec<u8>) {
-        self.update_internal(&to_nibs(trie_index), value)
-            .expect("Could not update value");
+    fn invalidate_ref_cache(&mut self) {
+        self.cached_reference.borrow_mut().take();
     }
 
     /// Formats the trie as string list, where each line corresponds to a trie leaf.
-    pub fn rlp_debug<T: alloy_rlp::Decodable + Debug>(&self) -> Vec<String> {
+    pub fn debug_rlp<T: alloy_rlp::Decodable + Debug>(&self) -> Vec<String> {
         let nibs: String = self.nibs().iter().map(|n| format!("{:x}", n)).collect();
         match self.as_data() {
             MptNodeData::Null => vec![format!("{:?}", MptNodeData::Null)],
-            MptNodeData::Branch(nodes, data) => {
-                let c = nodes.iter().enumerate().flat_map(|(i, n)| {
-                    n.rlp_debug::<T>()
+            MptNodeData::Branch(nodes) => nodes
+                .iter()
+                .enumerate()
+                .flat_map(|(i, n)| {
+                    n.debug_rlp::<T>()
                         .into_iter()
                         .map(move |s| format!("{:x} {}", i, s))
-                });
-                if data.is_empty() {
-                    c.collect()
-                } else {
-                    iter::once(format!("-> [{:?}]", T::decode(&mut &data[..]).unwrap()))
-                        .chain(c)
-                        .collect()
-                }
-            }
+                })
+                .collect(),
             MptNodeData::Leaf(_, data) => {
                 vec![format!(
                     "{} -> [{:?}]",
@@ -609,7 +580,7 @@ impl MptNode {
                 )]
             }
             MptNodeData::Extension(_, node) => node
-                .rlp_debug::<T>()
+                .debug_rlp::<T>()
                 .into_iter()
                 .map(|s| format!("{} {}", nibs, s))
                 .collect(),
@@ -618,41 +589,37 @@ impl MptNode {
     }
 }
 
-fn lcp(a: &[u8], b: &[u8]) -> usize {
-    let mut res = 0;
-    while res < a.len() && res < b.len() {
-        if a[res] != b[res] {
-            break;
-        }
-        res += 1
-    }
-    res
-}
-
+/// Converts a byte slice to nibs.
 pub fn to_nibs(slice: &[u8]) -> Vec<u8> {
     let mut result = Vec::with_capacity(2 * slice.len());
-    for nib in slice {
-        result.push(nib >> 4);
-        result.push(nib & 0xf);
+    for byte in slice {
+        result.push(byte >> 4);
+        result.push(byte & 0xf);
     }
     result
 }
 
-pub fn to_prefix(nibs: &[u8], is_leaf: bool) -> Vec<u8> {
-    let is_odd_nib_len = nibs.len() & 1 == 1;
-    let prefix = ((is_odd_nib_len as u8) + ((is_leaf as u8) << 1)) << 4;
-    let mut result = vec![prefix];
-    for (i, nib) in nibs.iter().enumerate() {
-        let is_odd_nib_index = i & 1 == 1;
-        if is_odd_nib_len ^ is_odd_nib_index {
-            // append to last byte
-            *result.last_mut().unwrap() |= nib;
-        } else {
-            // append new byte
-            result.push(nib << 4);
+/// Encodes a given slice of nibbles as a vector of bytes, along with additional
+/// information about the node itself.
+pub fn to_encoded_path(mut nibs: &[u8], is_leaf: bool) -> Vec<u8> {
+    let mut prefix = (is_leaf as u8) * 0x20;
+    if nibs.len() % 2 != 0 {
+        prefix += 0x10 + nibs[0];
+        nibs = &nibs[1..];
+    }
+    iter::once(prefix)
+        .chain(nibs.chunks_exact(2).map(|byte| (byte[0] << 4) + byte[1]))
+        .collect()
+}
+
+/// Returns the length of the common prefix.
+fn lcp(a: &[u8], b: &[u8]) -> usize {
+    for (i, (a, b)) in iter::zip(a, b).enumerate() {
+        if a != b {
+            return i;
         }
     }
-    result
+    cmp::min(a.len(), b.len())
 }
 
 #[cfg(test)]
@@ -673,18 +640,37 @@ mod tests {
             let node: MptNode =
                 MptNodeData::Leaf(k.as_bytes().to_vec(), v.as_bytes().to_vec()).into();
             assert!(
-                matches!(node.pointer(),MptNodeReference::Bytes(bytes) if bytes == node.to_rlp().to_vec())
+                matches!(node.reference(),MptNodeReference::Bytes(bytes) if bytes == node.to_rlp().to_vec())
             );
         }
     }
 
     #[test]
+    pub fn test_to_encoded_path() {
+        // extension node with an even path length
+        let nibbles = vec![0x0a, 0x0b, 0x0c, 0x0d];
+        assert_eq!(to_encoded_path(&nibbles, false), vec![0x00, 0xab, 0xcd]);
+        // extension node with an odd path length
+        let nibbles = vec![0x0a, 0x0b, 0x0c];
+        assert_eq!(to_encoded_path(&nibbles, false), vec![0x1a, 0xbc]);
+        // leaf node with an even path length
+        let nibbles = vec![0x0a, 0x0b, 0x0c, 0x0d];
+        assert_eq!(to_encoded_path(&nibbles, true), vec![0x20, 0xab, 0xcd]);
+        // leaf node with an odd path length
+        let nibbles = vec![0x0a, 0x0b, 0x0c];
+        assert_eq!(to_encoded_path(&nibbles, true), vec![0x3a, 0xbc]);
+    }
+
+    #[test]
     pub fn test_lcp() {
         let cases = [
+            (vec![], vec![], 0),
+            (vec![0xa], vec![0xa], 1),
             (vec![0xa, 0xb], vec![0xa, 0xc], 1),
             (vec![0xa, 0xb], vec![0xa, 0xb], 2),
             (vec![0xa, 0xb], vec![0xa, 0xb, 0xc], 2),
             (vec![0xa, 0xb, 0xc], vec![0xa, 0xb, 0xc], 3),
+            (vec![0xa, 0xb, 0xc], vec![0xa, 0xb, 0xc, 0xd], 3),
             (vec![0xa, 0xb, 0xc, 0xd], vec![0xa, 0xb, 0xc, 0xd], 4),
         ];
         for (a, b, cpl) in cases {
@@ -695,6 +681,9 @@ mod tests {
     #[test]
     pub fn test_empty() {
         let trie = MptNode::default();
+
+        assert!(trie.is_empty());
+        assert_eq!(trie.reference(), MptNodeReference::Bytes(vec![0x80]));
         let expected = hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421");
         assert_eq!(expected, trie.hash().0);
 
@@ -704,12 +693,29 @@ mod tests {
     }
 
     #[test]
+    pub fn test_clear() {
+        let mut trie = MptNode::default();
+        trie.insert(b"dog", b"puppy".to_vec()).unwrap();
+        assert!(!trie.is_empty());
+        assert_ne!(trie.hash(), EMPTY_ROOT);
+
+        trie.clear();
+        assert!(trie.is_empty());
+        assert_eq!(trie.hash(), EMPTY_ROOT);
+    }
+
+    #[test]
     pub fn test_tiny() {
+        // trie consisting of an extension, a branch and two leafs
         let mut trie = MptNode::default();
-        trie.update(b"dog", b"puppy".to_vec());
+        trie.insert_rlp(b"a", 0u8).unwrap();
+        trie.insert_rlp(b"b", 1u8).unwrap();
 
-        let expected = hex!("ed6e08740e4a267eca9d4740f71f573e9aabbcc739b16a2fa6c1baed5ec21278");
-        assert_eq!(expected, trie.hash().0);
+        assert!(!trie.is_empty());
+        let expected = hex!("d816d680c3208180c220018080808080808080808080808080");
+        assert_eq!(trie.reference(), MptNodeReference::Bytes(expected.to_vec()));
+        let expected = hex!("6fbf23d6ec055dd143ff50d558559770005ff44ae1d41276f1bd83affab6dd3b");
+        assert_eq!(trie.hash().0, expected);
 
         // try RLP roundtrip
         let decoded = MptNode::decode(trie.to_rlp()).unwrap();
@@ -717,38 +723,68 @@ mod tests {
     }
 
     #[test]
-    pub fn test_update_branch_value() {
+    pub fn test_partial() {
         let mut trie = MptNode::default();
-        let vals = [("do", "verb"), ("dog", "puppy")];
-        for (key, value) in &vals {
-            trie.update(key.as_bytes(), value.as_bytes().to_vec());
-        }
+        trie.insert_rlp(b"aa", 0u8).unwrap();
+        trie.insert_rlp(b"ab", 1u8).unwrap();
+        trie.insert_rlp(b"ba", 2u8).unwrap();
 
-        let expected = hex!("779db3986dd4f38416bfde49750ef7b13c6ecb3e2221620bcad9267e94604d36");
-        assert_eq!(expected, trie.hash().0);
+        let exp_hash = trie.hash();
 
-        // try RLP roundtrip
-        let decoded = MptNode::decode(trie.to_rlp()).unwrap();
-        assert_eq!(trie.hash(), decoded.hash());
+        // replace one node with its digest
+        let MptNodeData::Extension(_, node) = &mut trie.data else {
+            panic!("extension expected")
+        };
+        **node = MptNodeData::Digest(node.hash()).into();
+        assert!(!node.is_resolved());
+
+        let trie = MptNode::decode(trie.to_rlp()).unwrap();
+        assert_eq!(trie.hash(), exp_hash);
+
+        // lookups should fail
+        trie.get(b"aa").unwrap_err();
+        trie.get(b"a0").unwrap_err();
     }
 
     #[test]
-    pub fn test_update() {
+    pub fn test_branch_value() {
+        let mut trie = MptNode::default();
+        trie.insert(b"do", b"verb".to_vec()).unwrap();
+        // leads to a branch with value which is not supported
+        trie.insert(b"dog", b"puppy".to_vec()).unwrap_err();
+    }
+
+    #[test]
+    pub fn test_insert() {
         let mut trie = MptNode::default();
         let vals = vec![
-            ("doe", "reindeer"),
-            ("dog", "puppy"),
-            ("dogglesworth", "cat"),
+            ("painting", "place"),
+            ("guest", "ship"),
+            ("mud", "leave"),
+            ("paper", "call"),
+            ("gate", "boast"),
+            ("tongue", "gain"),
+            ("baseball", "wait"),
+            ("tale", "lie"),
+            ("mood", "cope"),
+            ("menu", "fear"),
         ];
-        for (key, value) in &vals {
-            trie.update(key.as_bytes(), value.as_bytes().to_vec());
+        for (key, val) in &vals {
+            assert!(trie
+                .insert(key.as_bytes(), val.as_bytes().to_vec())
+                .unwrap());
         }
-        let expected = hex!("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3");
+
+        let expected = hex!("2bab6cdf91a23ebf3af683728ea02403a98346f99ed668eec572d55c70a4b08f");
         assert_eq!(expected, trie.hash().0);
 
         for (key, value) in &vals {
-            assert_eq!(trie.lookup(key.as_bytes()), Some(value.as_bytes()));
+            assert_eq!(trie.get(key.as_bytes()).unwrap(), Some(value.as_bytes()));
         }
+
+        // check inserting duplicate keys
+        assert!(trie.insert(vals[0].0.as_bytes(), b"new".to_vec()).unwrap());
+        assert!(!trie.insert(vals[0].0.as_bytes(), b"new".to_vec()).unwrap());
 
         // try RLP roundtrip
         let decoded = MptNode::decode(trie.to_rlp()).unwrap();
@@ -756,31 +792,81 @@ mod tests {
     }
 
     #[test]
-    pub fn test_delete() {
+    pub fn test_keccak_trie() {
+        const N: usize = 512;
+
+        // insert
         let mut trie = MptNode::default();
-        let vals = vec![
-            ("do", "verb"),
-            ("ether", "wookiedoo"),
-            ("horse", "stallion"),
-            ("shaman", "horse"),
-            ("doge", "coin"),
-            ("ether", ""),
-            ("dog", "puppy"),
-            ("shaman", ""),
-        ];
-        for (key, value) in vals {
-            if value.is_empty() {
-                trie.delete(key.as_bytes());
-            } else {
-                trie.update(key.as_bytes(), value.as_bytes().to_vec());
+        for i in 0..N {
+            assert!(trie.insert_rlp(&keccak(i.to_be_bytes()), i).unwrap());
+
+            // check hash against trie build in reverse
+            let mut reference = MptNode::default();
+            for j in (0..=i).rev() {
+                reference.insert_rlp(&keccak(j.to_be_bytes()), j).unwrap();
             }
+            assert_eq!(trie.hash(), reference.hash());
         }
 
-        let expected = hex!("5991bb8c6514148a29db676a14ac506cd2cd5775ace63c30a4fe457715e9ac84");
-        assert_eq!(expected, trie.hash().0);
+        let expected = hex!("7310027edebdd1f7c950a7fb3413d551e85dff150d45aca4198c2f6315f9b4a7");
+        assert_eq!(trie.hash().0, expected);
 
-        // try RLP roundtrip
-        let decoded = MptNode::decode(trie.to_rlp()).unwrap();
-        assert_eq!(trie.hash(), decoded.hash());
+        // get
+        for i in 0..N {
+            assert_eq!(trie.get_rlp(&keccak(i.to_be_bytes())).unwrap(), Some(i));
+            assert!(trie.get(&keccak((i + N).to_be_bytes())).unwrap().is_none());
+        }
+
+        // delete
+        for i in 0..N {
+            assert!(trie.delete(&keccak(i.to_be_bytes())).unwrap());
+
+            let mut reference = MptNode::default();
+            for j in ((i + 1)..N).rev() {
+                reference.insert_rlp(&keccak(j.to_be_bytes()), j).unwrap();
+            }
+            assert_eq!(trie.hash(), reference.hash());
+        }
+        assert!(trie.is_empty());
+    }
+
+    #[test]
+    pub fn test_index_trie() {
+        const N: usize = 512;
+
+        // insert
+        let mut trie = MptNode::default();
+        for i in 0..N {
+            assert!(trie.insert_rlp(&i.to_rlp(), i).unwrap());
+
+            // check hash against trie build in reverse
+            let mut reference = MptNode::default();
+            for j in (0..=i).rev() {
+                reference.insert_rlp(&j.to_rlp(), j).unwrap();
+            }
+            assert_eq!(trie.hash(), reference.hash());
+
+            // try RLP roundtrip
+            let decoded = MptNode::decode(trie.to_rlp()).unwrap();
+            assert_eq!(trie.hash(), decoded.hash());
+        }
+
+        // get
+        for i in 0..N {
+            assert_eq!(trie.get_rlp(&i.to_rlp()).unwrap(), Some(i));
+            assert!(trie.get(&(i + N).to_rlp()).unwrap().is_none());
+        }
+
+        // delete
+        for i in 0..N {
+            assert!(trie.delete(&i.to_rlp()).unwrap());
+
+            let mut reference = MptNode::default();
+            for j in ((i + 1)..N).rev() {
+                reference.insert_rlp(&j.to_rlp(), j).unwrap();
+            }
+            assert_eq!(trie.hash(), reference.hash());
+        }
+        assert!(trie.is_empty());
     }
 }

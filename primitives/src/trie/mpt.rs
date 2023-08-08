@@ -224,7 +224,10 @@ impl MptNode {
             .get_or_insert_with(|| self.calc_reference())
         {
             MptNodeReference::Bytes(bytes) => out.put_slice(bytes),
-            MptNodeReference::Digest(digest) => digest.encode(out),
+            MptNodeReference::Digest(digest) => {
+                out.put_u8(alloy_rlp::EMPTY_STRING_CODE + 32);
+                out.put_slice(digest.as_slice());
+            }
         }
     }
 
@@ -236,7 +239,7 @@ impl MptNode {
             .get_or_insert_with(|| self.calc_reference())
         {
             MptNodeReference::Bytes(bytes) => bytes.len(),
-            MptNodeReference::Digest(digest) => digest.length(),
+            MptNodeReference::Digest(_) => 1 + 32,
         }
     }
 

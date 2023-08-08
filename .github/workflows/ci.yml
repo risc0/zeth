@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+      with:
+        submodules: recursive
     - uses: risc0/risc0/.github/actions/rustup@release-0.16
     - uses: risc0/risc0/.github/actions/sccache@release-0.16
     - name: Cargo test

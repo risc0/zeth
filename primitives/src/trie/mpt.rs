@@ -343,7 +343,7 @@ impl MptNode {
             MptNodeData::Null => return Ok(false),
             MptNodeData::Branch(children) => {
                 if key_nibs.is_empty() {
-                    return Ok(false);
+                    return Err(Error::ValueInBranch);
                 }
                 let child = children.get_mut(key_nibs[0] as usize).unwrap();
                 if !child.delete_internal(&key_nibs[1..])? {

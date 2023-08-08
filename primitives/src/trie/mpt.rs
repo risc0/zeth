@@ -15,7 +15,7 @@
 extern crate alloc;
 
 use alloc::boxed::Box;
-use core::{cell::RefCell, fmt::Debug, iter, mem};
+use core::{cell::RefCell, cmp, fmt::Debug, iter, mem};
 
 use alloy_primitives::B256;
 use alloy_rlp::Encodable;
@@ -612,20 +612,12 @@ pub fn to_prefix(nibs: &[u8], is_leaf: bool) -> Vec<u8> {
 
 /// Returns the length of the common prefix.
 fn lcp(a: &[u8], b: &[u8]) -> usize {
-    let mut a = a.iter();
-    let mut b = b.iter();
-    let mut res = 0;
-    loop {
-        match (a.next(), b.next()) {
-            (Some(a), Some(b)) => {
-                if a != b {
-                    return res;
-                }
-            }
-            _ => return res,
+    for (i, (a, b)) in iter::zip(a, b).enumerate() {
+        if a != b {
+            return i;
         }
-        res += 1
     }
+    cmp::min(a.len(), b.len())
 }
 
 #[cfg(test)]

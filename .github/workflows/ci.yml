@@ -31,6 +31,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: risc0/risc0/.github/actions/rustup@release-0.16
+    - uses: risc0/risc0/.github/actions/sccache@release-0.16
     - run: rustup component add clippy
     - run: cargo clippy --workspace --all-targets --all-features
       env:

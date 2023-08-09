@@ -67,7 +67,7 @@ impl Encodable for Receipt {
         }
     }
 
-    /// Length of the RLP payload in bytes.
+    /// Returns the length of the encoding of the receipt in bytes.
     #[inline]
     fn length(&self) -> usize {
         let mut payload_length = self.payload.length();

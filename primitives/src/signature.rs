@@ -35,6 +35,13 @@ pub struct TxSignature {
     pub s: U256,
 }
 
+impl TxSignature {
+    /// Length of the RLP payload in bytes.
+    pub(crate) fn payload_length(&self) -> usize {
+        self._alloy_rlp_payload_length()
+    }
+}
+
 impl Transaction {
     /// Recover the sending party of the transaction.
     pub fn recover_from(&self) -> anyhow::Result<B160> {

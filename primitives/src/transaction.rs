@@ -15,10 +15,9 @@
 use alloy_primitives::{Bytes, ChainId, TxHash, TxNumber, B160, B256, U256};
 use alloy_rlp::{Encodable, EMPTY_STRING_CODE};
 use alloy_rlp_derive::RlpEncodable;
-use bytes::{BufMut, BytesMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{access_list::AccessList, keccak::keccak, signature::TxSignature, RlpBytes};
+use crate::{access_list::AccessList, keccak::keccak, signature::TxSignature};
 
 /// Legacy transaction as described in [EIP-155](https://eips.ethereum.org/EIPS/eip-155).
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -54,8 +53,8 @@ impl TxEssenceLegacy {
             + self.data.length()
     }
 
-    /// Encode the transaction into the `out` buffer, only for signing.
-    fn encode_signing(&self, out: &mut dyn alloy_rlp::BufMut) {
+    /// Encodes this transaction essence into the `out` buffer.
+    fn signing_encode(&self, out: &mut dyn alloy_rlp::BufMut) {
         let mut payload_length = self.payload_length();
         // if a chain ID is present, append according to EIP-155
         if let Some(chain_id) = self.chain_id {
@@ -77,6 +76,16 @@ impl TxEssenceLegacy {
             out.put_u8(alloy_rlp::EMPTY_STRING_CODE);
             out.put_u8(alloy_rlp::EMPTY_STRING_CODE);
         }
+    }
+
+    /// Returns the length of the encoded transaction essence in bytes.
+    fn signing_length(&self) -> usize {
+        let mut payload_length = self.payload_length();
+        // if a chain ID is present, append according to EIP-155
+        if let Some(chain_id) = self.chain_id {
+            payload_length += chain_id.length() + 1 + 1;
+        }
+        alloy_rlp::length_of_length(payload_length) + payload_length
     }
 }
 
@@ -182,26 +191,41 @@ impl Encodable for TxEssence {
 }
 
 impl TxEssence {
-    /// Compute the signing hash.
+    /// Computes the signing hash.
     pub(crate) fn signing_hash(&self) -> B256 {
         keccak(self.signing_data()).into()
     }
 
-    fn signing_data(&self) -> Bytes {
-        let mut buf = BytesMut::new();
+    /// Returns the data that should be signed.
+    fn signing_data(&self) -> Vec<u8> {
         match self {
-            TxEssence::Legacy(tx) => tx.encode_signing(&mut buf),
+            TxEssence::Legacy(tx) => {
+                let mut buf = Vec::with_capacity(tx.signing_length());
+                tx.signing_encode(&mut buf);
+                buf
+            }
             TxEssence::Eip2930(tx) => {
-                buf.put_u8(0x01);
+                let mut buf = Vec::with_capacity(tx.length() + 1);
+                buf.push(0x01);
                 tx.encode(&mut buf);
+                buf
             }
             TxEssence::Eip1559(tx) => {
-                buf.put_u8(0x02);
+                let mut buf = Vec::with_capacity(tx.length() + 1);
+                buf.push(0x02);
                 tx.encode(&mut buf);
+                buf
             }
-        };
+        }
+    }
 
-        buf.freeze().into()
+    /// Length of the RLP payload in bytes.
+    fn payload_length(&self) -> usize {
+        match self {
+            TxEssence::Legacy(tx) => tx.payload_length(),
+            TxEssence::Eip2930(tx) => tx._alloy_rlp_payload_length(),
+            TxEssence::Eip1559(tx) => tx._alloy_rlp_payload_length(),
+        }
     }
 }
 
@@ -254,7 +278,7 @@ pub struct Transaction {
 impl Encodable for Transaction {
     /// Encodes the transaction into the `out` buffer.
     #[inline]
-    fn encode(&self, out: &mut dyn BufMut) {
+    fn encode(&self, out: &mut dyn alloy_rlp::BufMut) {
         // prepend the EIP-2718 transaction type
         match self.tx_type() {
             0 => {}
@@ -266,10 +290,10 @@ impl Encodable for Transaction {
         rlp_join_lists(&self.essence, &self.signature, out);
     }
 
-    /// Length of the RLP payload in bytes.
+    /// Returns the length of the encoding of the transaction in bytes.
     #[inline]
     fn length(&self) -> usize {
-        let mut payload_length = self.essence.length() + self.signature.length();
+        let mut payload_length = self.essence.payload_length() + self.signature.payload_length();
         if self.tx_type() != 0 {
             payload_length += 1;
         }
@@ -280,7 +304,7 @@ impl Encodable for Transaction {
 impl Transaction {
     /// Calculates the transaction hash.
     pub fn hash(&self) -> TxHash {
-        keccak(self.to_rlp()).into()
+        keccak(alloy_rlp::encode(self)).into()
     }
 
     pub fn tx_type(&self) -> u8 {
@@ -354,7 +378,6 @@ mod tests {
                   }
         });
         let essence: TxEssence = serde_json::from_value(tx).unwrap();
-        println!("signing data: {}", essence.signing_data());
 
         let signature: TxSignature = serde_json::from_value(json!({
             "v": 28,
@@ -394,7 +417,6 @@ mod tests {
                   }
         });
         let essence: TxEssence = serde_json::from_value(tx).unwrap();
-        println!("signing data: {}", essence.signing_data());
 
         let signature: TxSignature = serde_json::from_value(json!({
             "v": 38,
@@ -471,7 +493,6 @@ mod tests {
           }
         });
         let essence: TxEssence = serde_json::from_value(tx).unwrap();
-        println!("signing data: {}", essence.signing_data());
 
         let signature: TxSignature = serde_json::from_value(json!({
             "v": 1,
@@ -513,7 +534,6 @@ mod tests {
                 }
         });
         let essence: TxEssence = serde_json::from_value(tx).unwrap();
-        println!("signing data: {}", essence.signing_data());
 
         let signature: TxSignature = serde_json::from_value(json!({
             "v": 0,

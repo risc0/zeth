@@ -96,17 +96,16 @@ impl Encodable for MptNode {
                 out.put_u8(alloy_rlp::EMPTY_STRING_CODE);
             }
             MptNodeData::Branch(nodes) => {
-                let mut payload_length = 0;
-                nodes.iter().for_each(|node| {
-                    payload_length += node.as_ref().map_or(1, |n| n.reference_length());
-                });
-                payload_length += 1;
+                let payload_length = 1 + nodes
+                    .iter()
+                    .map(|child| child.as_ref().map_or(1, |node| node.reference_length()))
+                    .sum::<usize>();
                 alloy_rlp::Header {
                     list: true,
                     payload_length,
                 }
                 .encode(out);
-                nodes.iter().for_each(|node| match node {
+                nodes.iter().for_each(|child| match child {
                     Some(node) => node.reference_encode(out),
                     None => out.put_u8(alloy_rlp::EMPTY_STRING_CODE),
                 });

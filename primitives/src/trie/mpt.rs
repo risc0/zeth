@@ -99,7 +99,7 @@ impl Encodable for MptNode {
             MptNodeData::Branch(nodes) => {
                 alloy_rlp::Header {
                     list: true,
-                    payload_length: self.rlp_payload_length(),
+                    payload_length: self.payload_length(),
                 }
                 .encode(out);
                 nodes.iter().for_each(|child| match child {
@@ -112,7 +112,7 @@ impl Encodable for MptNode {
             MptNodeData::Leaf(prefix, value) => {
                 alloy_rlp::Header {
                     list: true,
-                    payload_length: self.rlp_payload_length(),
+                    payload_length: self.payload_length(),
                 }
                 .encode(out);
                 prefix.as_slice().encode(out);
@@ -121,7 +121,7 @@ impl Encodable for MptNode {
             MptNodeData::Extension(prefix, node) => {
                 alloy_rlp::Header {
                     list: true,
-                    payload_length: self.rlp_payload_length(),
+                    payload_length: self.payload_length(),
                 }
                 .encode(out);
                 prefix.as_slice().encode(out);
@@ -136,7 +136,7 @@ impl Encodable for MptNode {
     /// Returns the length of the encoded node in bytes.
     #[inline]
     fn length(&self) -> usize {
-        let payload_length = self.rlp_payload_length();
+        let payload_length = self.payload_length();
         payload_length + alloy_rlp::length_of_length(payload_length)
     }
 }
@@ -632,7 +632,7 @@ impl MptNode {
     }
 
     /// Returns the length of the RLP payload of the node.
-    fn rlp_payload_length(&self) -> usize {
+    fn payload_length(&self) -> usize {
         match &self.data {
             MptNodeData::Null => 0,
             MptNodeData::Branch(nodes) => {

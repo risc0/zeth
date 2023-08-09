@@ -53,7 +53,7 @@ impl TxEssenceLegacy {
             + self.data.length()
     }
 
-    /// Encodes this transaction essence into the `out` buffer.
+    /// Encodes this transaction essence into the `out` buffer, only for signing.
     fn signing_encode(&self, out: &mut dyn alloy_rlp::BufMut) {
         let mut payload_length = self.payload_length();
         // if a chain ID is present, append according to EIP-155
@@ -78,7 +78,7 @@ impl TxEssenceLegacy {
         }
     }
 
-    /// Returns the length of the encoded transaction essence in bytes.
+    /// Returns the length of the encoded transaction essence in bytes, only for signing.
     fn signing_length(&self) -> usize {
         let mut payload_length = self.payload_length();
         // if a chain ID is present, append according to EIP-155

@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    - uses: risc0/risc0/.github/actions/rustup@release-0.16
+    - uses: risc0/risc0/.github/actions/sccache@release-0.16
+    - name: Cargo test
+      run: cargo test --workspace
+
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    - uses: risc0/risc0/.github/actions/rustup@release-0.16
+    - uses: risc0/risc0/.github/actions/sccache@release-0.16
+    - run: rustup component add clippy
+    - uses: risc0/clippy-action@main
+      with:
+        reporter: 'github-pr-check'
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        clippy_flags: --workspace --all-targets --all-features -- -Dwarnings
+
+  fmt:
+    name: fmt
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@v3
+    - uses: risc0/risc0/.github/actions/rustup@release-0.16
+    - run: cargo fmt --all --check

@@ -226,12 +226,14 @@ impl From<TransactionKind> for Option<B160> {
 }
 
 impl Encodable for TransactionKind {
+    #[inline]
     fn encode(&self, out: &mut dyn alloy_rlp::BufMut) {
         match self {
             TransactionKind::Call(addr) => addr.encode(out),
             TransactionKind::Create => out.put_u8(EMPTY_STRING_CODE),
         }
     }
+    #[inline]
     fn length(&self) -> usize {
         match self {
             TransactionKind::Call(addr) => addr.length(),
@@ -250,6 +252,8 @@ pub struct Transaction {
 }
 
 impl Encodable for Transaction {
+    /// Encodes the transaction into the `out` buffer.
+    #[inline]
     fn encode(&self, out: &mut dyn BufMut) {
         // prepend the EIP-2718 transaction type
         match self.tx_type() {
@@ -260,6 +264,16 @@ impl Encodable for Transaction {
         // join the essence lists and the signature list into one
         // this allows to reuse as much of the generated RLP code as possible
         rlp_join_lists(&self.essence, &self.signature, out);
+    }
+
+    /// Length of the RLP payload in bytes.
+    #[inline]
+    fn length(&self) -> usize {
+        let mut payload_length = self.essence.length() + self.signature.length();
+        if self.tx_type() != 0 {
+            payload_length += 1;
+        }
+        payload_length + alloy_rlp::length_of_length(payload_length)
     }
 }
 
@@ -295,8 +309,7 @@ impl Transaction {
 /// Joins two RLP-encoded lists into one lists and outputs the result into the `out`
 /// buffer.
 fn rlp_join_lists(a: impl Encodable, b: impl Encodable, out: &mut dyn alloy_rlp::BufMut) {
-    let mut a_buf = Vec::new();
-    a.encode(&mut a_buf);
+    let a_buf = alloy_rlp::encode(a);
     let header = alloy_rlp::Header::decode(&mut &a_buf[..]).unwrap();
     if !header.list {
         panic!("`a` not a list");
@@ -304,8 +317,7 @@ fn rlp_join_lists(a: impl Encodable, b: impl Encodable, out: &mut dyn alloy_rlp:
     let a_head_length = header.length();
     let a_payload_length = a_buf.len() - a_head_length;
 
-    let mut b_buf = Vec::new();
-    b.encode(&mut b_buf);
+    let b_buf = alloy_rlp::encode(b);
     let header = alloy_rlp::Header::decode(&mut &b_buf[..]).unwrap();
     if !header.list {
         panic!("`b` not a list");

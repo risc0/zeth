@@ -51,6 +51,8 @@ pub struct Receipt {
 }
 
 impl Encodable for Receipt {
+    /// Encodes the receipt into the `out` buffer.
+    #[inline]
     fn encode(&self, out: &mut dyn alloy_rlp::BufMut) {
         match self.tx_type {
             // legacy
@@ -63,6 +65,16 @@ impl Encodable for Receipt {
                 self.payload.encode(out);
             }
         }
+    }
+
+    /// Length of the RLP payload in bytes.
+    #[inline]
+    fn length(&self) -> usize {
+        let mut payload_length = self.payload.length();
+        if self.tx_type != 0 {
+            payload_length += 1;
+        }
+        payload_length
     }
 }
 

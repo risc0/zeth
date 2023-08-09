@@ -90,19 +90,16 @@ impl From<MptNodeData> for MptNode {
 
 impl Encodable for MptNode {
     /// Encode the node into the `out` buffer.
+    #[inline]
     fn encode(&self, out: &mut dyn alloy_rlp::BufMut) {
         match &self.data {
             MptNodeData::Null => {
                 out.put_u8(alloy_rlp::EMPTY_STRING_CODE);
             }
             MptNodeData::Branch(nodes) => {
-                let payload_length = 1 + nodes
-                    .iter()
-                    .map(|child| child.as_ref().map_or(1, |node| node.reference_length()))
-                    .sum::<usize>();
                 alloy_rlp::Header {
                     list: true,
-                    payload_length,
+                    payload_length: self.rlp_payload_length(),
                 }
                 .encode(out);
                 nodes.iter().for_each(|child| match child {
@@ -113,20 +110,18 @@ impl Encodable for MptNode {
                 out.put_u8(alloy_rlp::EMPTY_STRING_CODE);
             }
             MptNodeData::Leaf(prefix, value) => {
-                let payload_length = prefix.as_slice().length() + value.as_slice().length();
                 alloy_rlp::Header {
                     list: true,
-                    payload_length,
+                    payload_length: self.rlp_payload_length(),
                 }
                 .encode(out);
                 prefix.as_slice().encode(out);
                 value.as_slice().encode(out);
             }
             MptNodeData::Extension(prefix, node) => {
-                let payload_length = prefix.as_slice().length() + node.reference_length();
                 alloy_rlp::Header {
                     list: true,
-                    payload_length,
+                    payload_length: self.rlp_payload_length(),
                 }
                 .encode(out);
                 prefix.as_slice().encode(out);
@@ -136,6 +131,13 @@ impl Encodable for MptNode {
                 digest.encode(out);
             }
         }
+    }
+
+    /// Returns the length of the encoded node in bytes.
+    #[inline]
+    fn length(&self) -> usize {
+        let payload_length = self.rlp_payload_length();
+        payload_length + alloy_rlp::length_of_length(payload_length)
     }
 }
 
@@ -248,7 +250,7 @@ impl MptNode {
             MptNodeData::Null => MptNodeReference::Bytes(vec![alloy_rlp::EMPTY_STRING_CODE]),
             MptNodeData::Digest(digest) => MptNodeReference::Digest(*digest),
             _ => {
-                let encoded = self.to_rlp();
+                let encoded = alloy_rlp::encode(self);
                 if encoded.len() < 32 {
                     MptNodeReference::Bytes(encoded)
                 } else {
@@ -628,6 +630,26 @@ impl MptNode {
             MptNodeData::Digest(digest) => vec![format!("#{:#}", digest)],
         }
     }
+
+    /// Returns the length of the RLP payload of the node.
+    fn rlp_payload_length(&self) -> usize {
+        match &self.data {
+            MptNodeData::Null => 0,
+            MptNodeData::Branch(nodes) => {
+                1 + nodes
+                    .iter()
+                    .map(|child| child.as_ref().map_or(1, |node| node.reference_length()))
+                    .sum::<usize>()
+            }
+            MptNodeData::Leaf(prefix, value) => {
+                prefix.as_slice().length() + value.as_slice().length()
+            }
+            MptNodeData::Extension(prefix, node) => {
+                prefix.as_slice().length() + node.reference_length()
+            }
+            MptNodeData::Digest(_) => 32,
+        }
+    }
 }
 
 /// Converts a byte slice to nibs.
@@ -728,8 +750,12 @@ mod tests {
         let expected = hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421");
         assert_eq!(expected, trie.hash().0);
 
-        // try RLP roundtrip
-        let decoded = MptNode::decode(trie.to_rlp()).unwrap();
+        // test RLP encoding
+        let mut out = Vec::new();
+        trie.encode(&mut out);
+        assert_eq!(out, vec![0x80]);
+        assert_eq!(trie.length(), out.len());
+        let decoded = MptNode::decode(out).unwrap();
         assert_eq!(trie.hash(), decoded.hash());
     }
 
@@ -753,13 +779,17 @@ mod tests {
         trie.insert_rlp(b"b", 1u8).unwrap();
 
         assert!(!trie.is_empty());
-        let expected = hex!("d816d680c3208180c220018080808080808080808080808080");
-        assert_eq!(trie.reference(), MptNodeReference::Bytes(expected.to_vec()));
-        let expected = hex!("6fbf23d6ec055dd143ff50d558559770005ff44ae1d41276f1bd83affab6dd3b");
-        assert_eq!(trie.hash().0, expected);
+        let exp_rlp = hex!("d816d680c3208180c220018080808080808080808080808080");
+        assert_eq!(trie.reference(), MptNodeReference::Bytes(exp_rlp.to_vec()));
+        let exp_hash = hex!("6fbf23d6ec055dd143ff50d558559770005ff44ae1d41276f1bd83affab6dd3b");
+        assert_eq!(trie.hash().0, exp_hash);
 
-        // try RLP roundtrip
-        let decoded = MptNode::decode(trie.to_rlp()).unwrap();
+        // test RLP encoding
+        let mut out = Vec::new();
+        trie.encode(&mut out);
+        assert_eq!(out, exp_rlp.to_vec());
+        assert_eq!(trie.length(), out.len());
+        let decoded = MptNode::decode(out).unwrap();
         assert_eq!(trie.hash(), decoded.hash());
     }
 

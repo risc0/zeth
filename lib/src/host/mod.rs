@@ -39,7 +39,7 @@ use crate::{
     block_builder::BlockBuilder,
     consts::{ChainSpec, MAINNET},
     host::{
-        mpt::{load_pointers, orphaned_pointers, resolve_pointers, shorten_key},
+        mpt::{orphaned_digests, resolve_digests, shorten_key},
         provider::{new_provider, BlockQuery},
     },
     mem_db::MemDb,
@@ -208,17 +208,13 @@ pub fn verify_state(
     let fini_storage_keys = fini_db.storage_keys();
 
     // Construct expected tries from fini proofs
-    let (mut nodes_by_pointer, mut storage) =
-        proofs_to_tries(fini_proofs.values().cloned().collect());
-    storage_deltas.values().for_each(|storage_trie| {
-        load_pointers(storage_trie, &mut nodes_by_pointer);
-    });
+    let (nodes_by_pointer, mut storage) = proofs_to_tries(fini_proofs.values().cloned().collect());
     storage
         .values_mut()
-        .for_each(|(n, _)| *n = resolve_pointers(n, &nodes_by_pointer));
+        .for_each(|(n, _)| *n = resolve_digests(n, &nodes_by_pointer));
     storage_deltas
         .values_mut()
-        .for_each(|n| *n = resolve_pointers(n, &nodes_by_pointer));
+        .for_each(|n| *n = resolve_digests(n, &nodes_by_pointer));
 
     for (address, indices) in fini_storage_keys {
         let mut address_errors = Vec::new();
@@ -333,13 +329,13 @@ fn proofs_to_tries(
     HashMap<B160, StorageEntry>,
 ) {
     // construct the proof tries
-    let mut nodes_by_pointer = HashMap::new();
+    let mut nodes_by_reference = HashMap::new();
     let mut storage = HashMap::new();
     for proof in proofs {
         // parse the nodes of the account proof
         for bytes in &proof.account_proof {
             let mpt_node = MptNode::decode(bytes).expect("Failed to decode state proof");
-            nodes_by_pointer.insert(mpt_node.reference(), mpt_node);
+            nodes_by_reference.insert(mpt_node.reference(), mpt_node);
         }
 
         // process the proof for each storage entry
@@ -351,7 +347,7 @@ fn proofs_to_tries(
                 .iter()
                 .rev()
                 .map(|bytes| MptNode::decode(bytes).expect("Failed to decode storage proof"))
-                .inspect(|node| drop(nodes_by_pointer.insert(node.reference(), node.clone())))
+                .inspect(|node| drop(nodes_by_reference.insert(node.reference(), node.clone())))
                 .last();
             // the hash of the root node should match the proof's storage hash
             assert_eq!(
@@ -378,21 +374,20 @@ fn proofs_to_tries(
 
         storage.insert(proof.address.into(), (root_node, slots));
     }
-    (nodes_by_pointer, storage)
+    (nodes_by_reference, storage)
 }
 
 fn resolve_orphans(
     nodes: &Vec<Bytes>,
-    orphan_set: &mut HashSet<MptNodeReference>,
-    nodes_by_pointer: &mut HashMap<MptNodeReference, MptNode>,
+    orphans: &mut HashSet<MptNodeReference>,
+    nodes_by_reference: &mut HashMap<MptNodeReference, MptNode>,
 ) {
     for node in nodes {
         let mpt_node = MptNode::decode(node).expect("Failed to decode state proof");
         for potential_orphan in shorten_key(mpt_node) {
             let potential_orphan_hash = potential_orphan.reference();
-            if orphan_set.contains(&potential_orphan_hash) {
-                orphan_set.remove(&potential_orphan_hash);
-                nodes_by_pointer.insert(potential_orphan_hash, potential_orphan);
+            if orphans.remove(&potential_orphan_hash) {
+                nodes_by_reference.insert(potential_orphan_hash, potential_orphan);
             }
         }
     }
@@ -404,15 +399,10 @@ fn resolve_orphans(
 impl Into<Input> for Init {
     fn into(self) -> Input {
         // construct the proof tries
-        let (mut nodes_by_pointer, mut storage) =
+        let (mut nodes_by_reference, mut storage) =
             proofs_to_tries(self.init_proofs.values().cloned().collect());
         // there should be a trie and a list of storage slots for every account
         assert_eq!(storage.len(), self.db.accounts_len());
-
-        info!(
-            "Constructed proof tries with {} nodes",
-            nodes_by_pointer.len(),
-        );
 
         // collect the code from each account
         let mut contracts = HashMap::new();
@@ -425,37 +415,43 @@ impl Into<Input> for Init {
 
         // extract the state trie
         let state_root = self.init_block.state_root;
-        let state_trie = nodes_by_pointer
+        let state_trie = nodes_by_reference
             .remove(&MptNodeReference::Digest(state_root))
             .expect("State root node not found");
         assert_eq!(state_root, state_trie.hash());
 
-        // Find orphaned pointers during deletion
-        let mut orphan_set = HashSet::new();
+        // identify orphaned digests, that could lead to issues when deleting nodes
+        let mut orphans = HashSet::new();
         for root in storage.values().map(|v| &v.0).chain(once(&state_trie)) {
-            let root = resolve_pointers(root, &nodes_by_pointer);
-            orphan_set.extend(
-                orphaned_pointers(&root)
-                    .iter()
-                    .map(|node: &MptNode| node.reference()),
-            );
+            let root = resolve_digests(root, &nodes_by_reference);
+            orphans.extend(orphaned_digests(&root));
         }
+        // resolve those orphans using the proofs of the final state
         for fini_proof in self.fini_proofs.values() {
             resolve_orphans(
                 &fini_proof.account_proof,
-                &mut orphan_set,
-                &mut nodes_by_pointer,
+                &mut orphans,
+                &mut nodes_by_reference,
             );
             for storage_proof in &fini_proof.storage_proof {
-                resolve_orphans(&storage_proof.proof, &mut orphan_set, &mut nodes_by_pointer);
+                resolve_orphans(&storage_proof.proof, &mut orphans, &mut nodes_by_reference);
             }
         }
 
         // resolve the pointers in the state root node and all storage root nodes
-        let state_trie = resolve_pointers(&state_trie, &nodes_by_pointer);
+        let state_trie = resolve_digests(&state_trie, &nodes_by_reference);
         storage
             .values_mut()
-            .for_each(|(n, _)| *n = resolve_pointers(n, &nodes_by_pointer));
+            .for_each(|(n, _)| *n = resolve_digests(n, &nodes_by_reference));
+
+        info!(
+            "The partial state trie consists of {} nodes",
+            state_trie.size()
+        );
+        info!(
+            "The partial storage tries consist of {} nodes",
+            storage.values().map(|(n, _)| n.size()).sum::<usize>()
+        );
 
         // Create the block builder input
         Input {

@@ -261,7 +261,7 @@ fn proof_internal(node: &MptNode, key_nibs: &[u8]) -> Result<Vec<Vec<u8>>, anyho
         MptNodeData::Null | MptNodeData::Leaf(_, _) => vec![],
         MptNodeData::Branch(children) => {
             let mut path = Vec::new();
-            for node in children {
+            for node in children.iter().flatten() {
                 path.extend(proof_internal(&node, &key_nibs[1..])?);
             }
             path

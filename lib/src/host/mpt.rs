@@ -13,103 +13,67 @@
 // limitations under the License.
 
 use hashbrown::HashMap;
-use zeth_primitives::{
-    trie::{to_encoded_path, MptNode, MptNodeData, MptNodeReference},
-    RlpBytes,
-};
+use zeth_primitives::trie::{to_encoded_path, MptNode, MptNodeData, MptNodeReference};
 
-pub fn load_pointers(
-    root: &MptNode,
-    node_store: &mut HashMap<MptNodeReference, MptNode>,
-) -> MptNode {
-    let compact_node = match root.as_data() {
-        MptNodeData::Null | MptNodeData::Digest(_) | MptNodeData::Leaf(_, _) => root.clone(),
+/// Creates a new MPT trie where all the digests contained in `node_store` are resolved.
+pub fn resolve_digests(trie: &MptNode, node_store: &HashMap<MptNodeReference, MptNode>) -> MptNode {
+    let result: MptNode = match trie.as_data() {
+        MptNodeData::Null | MptNodeData::Leaf(_, _) => trie.clone(),
         MptNodeData::Branch(children) => {
-            let compact_children: Vec<Box<MptNode>> = children
+            let children: Vec<_> = children
                 .iter()
-                .map(|child| Box::new(load_pointers(child, node_store)))
+                .map(|child| {
+                    child
+                        .as_ref()
+                        .map(|node| Box::new(resolve_digests(node, node_store)))
+                })
                 .collect();
-            MptNodeData::Branch(compact_children.try_into().unwrap()).into()
+            MptNodeData::Branch(children.try_into().unwrap()).into()
         }
         MptNodeData::Extension(prefix, target) => MptNodeData::Extension(
             prefix.clone(),
-            Box::new(MptNodeData::Digest(target.hash()).into()),
+            Box::new(resolve_digests(target, node_store)),
         )
         .into(),
-    };
-    if let MptNodeData::Digest(_) = compact_node.as_data() {
-        // do nothing
-    } else {
-        node_store.insert(compact_node.reference(), compact_node.clone());
-    }
-    compact_node
-}
-
-pub fn resolve_pointers(
-    root: &MptNode,
-    node_store: &HashMap<MptNodeReference, MptNode>,
-) -> MptNode {
-    let result: MptNode = match root.as_data() {
-        MptNodeData::Null | MptNodeData::Leaf(_, _) => root.clone(),
-        MptNodeData::Branch(nodes) => {
-            let node_list: Vec<_> = nodes
-                .iter()
-                .map(|n| Box::new(resolve_pointers(n, node_store)))
-                .collect();
-            MptNodeData::Branch(
-                node_list
-                    .try_into()
-                    .expect("Could not convert vector to 16-element array."),
-            )
-            .into()
-        }
-        MptNodeData::Extension(prefix, node) => {
-            MptNodeData::Extension(prefix.clone(), Box::new(resolve_pointers(node, node_store)))
-                .into()
-        }
         MptNodeData::Digest(digest) => {
             if let Some(node) = node_store.get(&MptNodeReference::Digest(*digest)) {
-                resolve_pointers(node, node_store)
+                resolve_digests(node, node_store)
             } else {
-                root.clone()
+                trie.clone()
             }
         }
     };
-    assert_eq!(
-        root.hash(),
-        result.hash(),
-        "Invalid node resolution! {:?} ({:?})",
-        root.to_rlp(),
-        result.to_rlp(),
-    );
+    assert_eq!(trie.hash(), result.hash());
     result
 }
 
-pub fn orphaned_pointers(node: &MptNode) -> Vec<MptNode> {
+/// Returns all orphaned digests in the trie.
+pub fn orphaned_digests(trie: &MptNode) -> Vec<MptNodeReference> {
     let mut result = Vec::new();
-    _orphaned_pointers(node, &mut result);
+    orphaned_digests_internal(trie, &mut result);
     result
 }
 
-fn _orphaned_pointers(node: &MptNode, res: &mut Vec<MptNode>) {
-    match node.as_data() {
-        MptNodeData::Null => {}
+fn orphaned_digests_internal(trie: &MptNode, orphans: &mut Vec<MptNodeReference>) {
+    match trie.as_data() {
         MptNodeData::Branch(children) => {
-            let unresolved_count = children.iter().filter(|n| !n.is_resolved()).count();
-            if unresolved_count == 1 {
-                let unresolved_index = children.iter().position(|n| !n.is_resolved()).unwrap();
-                res.push(*children[unresolved_index].clone());
-            }
-            // Continue descent
-            for child in children {
-                _orphaned_pointers(child, res);
-            }
+            // iterate over all digest children
+            let mut digests = children.iter().flatten().filter(|node| node.is_digest());
+            // if there is exactly one digest child, it is an orphan
+            if let Some(orphan_digest) = digests.next() {
+                if digests.next().is_none() {
+                    orphans.push(orphan_digest.reference());
+                }
+            };
+            // recurse
+            children.iter().flatten().for_each(|child| {
+                orphaned_digests_internal(child, orphans);
+            });
         }
-        MptNodeData::Leaf(_, _) => {}
         MptNodeData::Extension(_, target) => {
-            _orphaned_pointers(target, res);
+            orphaned_digests_internal(target, orphans);
         }
-        MptNodeData::Digest(_) => {}
+        MptNodeData::Null | MptNodeData::Leaf(_, _) | MptNodeData::Digest(_) => {}
     }
 }
 
@@ -121,12 +85,12 @@ pub fn shorten_key(node: MptNode) -> Vec<MptNode> {
             res.push(node.clone())
         }
         MptNodeData::Leaf(_, value) => {
-            for i in 0..nibs.len() {
+            for i in 0..=nibs.len() {
                 res.push(MptNodeData::Leaf(to_encoded_path(&nibs[i..], true), value.clone()).into())
             }
         }
         MptNodeData::Extension(_, target) => {
-            for i in 0..nibs.len() {
+            for i in 0..=nibs.len() {
                 res.push(
                     MptNodeData::Extension(to_encoded_path(&nibs[i..], false), target.clone())
                         .into(),

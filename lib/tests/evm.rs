@@ -14,7 +14,6 @@
 
 use std::{fs::File, io::BufReader, path::PathBuf};
 
-use common::ethers::TestProvider;
 use hashbrown::HashMap;
 use revm::primitives::SpecId;
 use rstest::rstest;
@@ -28,30 +27,17 @@ use zeth_lib::{
 };
 use zeth_primitives::{block::Header, transaction::Transaction, withdrawal::Withdrawal};
 
-use crate::common::*;
+use crate::common::{ethers::*, *};
 
 mod common;
 
-// TODO: investigate those stack overflows
-static IGNORE_SET: phf::Set<&'static str> = phf::phf_set! {
-    "baseFeeDiffPlaces_d34g0v0_Shanghai", "gasPriceDiffPlaces_d34g0v0_Shanghai", "LoopCallsDepthThenRevert2_d0g0v0_Shanghai",
-    "LoopCallsDepthThenRevert3_d0g0v0_Shanghai", "diffPlaces_d34g0v0_Shanghai", "static_Call1024BalanceTooLow2_d1g0v0_Shanghai",
-    "static_Call1024BalanceTooLow_d1g0v0_Shanghai", "static_Call1024PreCalls3_d1g0v0_Shanghai",
-    "static_Call1024PreCalls_d1g0v0_Shanghai", "static_Call1024PreCalls2_d0g0v0_Shanghai",
-    "static_Call1024PreCalls2_d1g0v0_Shanghai", "static_CallRecursiveBomb0_OOG_atMaxCallDepth_d0g0v0_Shanghai",
-    "static_CallRecursiveBombPreCall2_d0g0v0_Shanghai", "static_CallRecursiveBombPreCall_d0g0v0_Shanghai",
-    "static_LoopCallsDepthThenRevert3_d0g0v0_Shanghai", "static_LoopCallsDepthThenRevert2_d0g0v0_Shanghai",
-    "CallRecursiveBomb0_OOG_atMaxCallDepth_d0g0v0_Shanghai", "Call1024BalanceTooLow_d0g0v0_Shanghai",
-    "Call1024PreCalls_d0g1v0_Shanghai", "Call1024PreCalls_d0g2v0_Shanghai", "CallRecursiveBombPreCall_d0g0v0_Shanghai",
-    "Delegatecall1024_d0g0v0_Shanghai", "Create2OnDepth1024_d0g0v0_Shanghai", "Create2OnDepth1023_d0g0v0_Shanghai",
-    "Create2Recursive_d0g0v0_Shanghai", "Create2Recursive_d0g2v0_Shanghai", "Call1024PreCalls_d0g0v0_Shanghai",
-    "Callcode1024BalanceTooLow_d0g0v0_Shanghai", "invalidDiffPlaces_d34g0v0_Shanghai", "opc0EDiffPlaces_d34g0v0_Shanghai",
-};
+/// The size of the stack to use for the EVM.
+const BIG_STACK_SIZE: usize = 8 * 1024 * 1024;
 
 #[rstest]
 fn evm(
     #[files("testdata/BlockchainTests/GeneralStateTests/**/*.json")]
-    #[exclude("stBadOpcode|refundResetFrontier")]
+    #[exclude("stTimeConsuming")] // exclude only the time consuming tests
     path: PathBuf,
 ) {
     let _ = env_logger::builder()
@@ -65,16 +51,12 @@ fn evm(
 
     for (name, test) in root.as_object_mut().unwrap() {
         println!("test '{}'", name);
-        if IGNORE_SET.contains(name) {
-            println!("ignoring");
-            continue;
-        }
         let json: TestJson = serde_json::from_value(test.take()).unwrap();
 
-        // only run Shanghai tests
         let spec: SpecId = json.network.as_str().into();
-        if spec != SpecId::SHANGHAI {
-            println!("skipping ({:?})", spec);
+        // skip tests with an unsupported network version
+        if spec < SpecId::MERGE || spec > SpecId::SHANGHAI {
+            println!("skipping ({})", json.network);
             continue;
         }
         let config = ChainSpec::new_single(1, spec);
@@ -99,7 +81,6 @@ fn evm(
             let expected_header: Header = block_header.clone().into();
             assert_eq!(&expected_header.hash(), &block_header.hash);
 
-            // construct the block
             let builder = new_builder(
                 config.clone(),
                 state,
@@ -111,9 +92,12 @@ fn evm(
             .initialize_evm_storage()
             .unwrap()
             .initialize_header()
-            .unwrap()
-            .execute_transactions()
             .unwrap();
+            // execute the transactions with a larger stack
+            let builder = stacker::grow(BIG_STACK_SIZE, move || {
+                builder.execute_transactions().unwrap()
+            });
+
             let result_header = builder.clone().build(None).unwrap();
             // the headers should match
             assert_eq!(result_header.state_root, expected_header.state_root);
@@ -160,12 +144,14 @@ fn new_builder(
     };
 
     // create and run the block builder once to create the initial DB
-    let block_builder = BlockBuilder::new(Some(provider_db), input)
+    let builder = BlockBuilder::new(Some(provider_db), input)
         .initialize_header()
-        .unwrap()
-        .execute_transactions()
         .unwrap();
-    provider_db = block_builder.to_db();
+    // execute the transactions with a larger stack
+    let builder = stacker::grow(BIG_STACK_SIZE, move || {
+        builder.execute_transactions().unwrap()
+    });
+    provider_db = builder.to_db();
 
     let init_proofs = provider_db.get_initial_proofs().unwrap();
     let fini_proofs = HashMap::new();

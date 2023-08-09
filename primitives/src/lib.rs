@@ -43,7 +43,7 @@ where
 {
     #[inline]
     fn to_rlp(&self) -> Vec<u8> {
-        let mut out = Vec::new();
+        let mut out = Vec::with_capacity(self.length());
         self.encode(&mut out);
         out
     }

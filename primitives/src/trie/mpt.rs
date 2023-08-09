@@ -371,7 +371,7 @@ impl MptNode {
                 let (index, node) = remaining.next().unwrap();
                 // if there is only exactly one node left, we need to convert the branch
                 if remaining.next().is_none() {
-                    let mut orphan = mem::take(node).unwrap();
+                    let mut orphan = node.take().unwrap();
 
                     let orphan_nibs = orphan.nibs().into_iter();
                     match &mut orphan.data {

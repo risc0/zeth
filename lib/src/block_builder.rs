@@ -170,7 +170,10 @@ where
             // Initialize fields that we can compute from the parent
             parent_hash: self.input.parent_header.hash(),
             number: compute_block_number(&self.input.parent_header)?,
-            base_fee_per_gas: compute_base_fee(&self.input.parent_header)?,
+            base_fee_per_gas: compute_base_fee(
+                &self.input.parent_header,
+                self.input.chain_spec.gas_constants(),
+            )?,
             // Initialize metadata from input
             beneficiary: self.input.beneficiary,
             gas_limit: self.input.gas_limit,

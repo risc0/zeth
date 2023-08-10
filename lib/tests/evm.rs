@@ -59,7 +59,7 @@ fn evm(
             println!("skipping ({})", json.network);
             continue;
         }
-        let config = ChainSpec::new_single(1, spec);
+        let config = ChainSpec::new_single(1, spec, Default::default());
 
         let genesis: Header = json.genesis.clone().into();
         assert_eq!(genesis.hash(), json.genesis.hash);

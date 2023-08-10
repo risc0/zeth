@@ -134,7 +134,7 @@ fn build_tries(state: &TestState) -> (MptNode, HashMap<B160, MptNode>) {
         for (slot, value) in &account.storage {
             if *value != LibU256::ZERO {
                 storage_trie
-                    .insert_rlp(&keccak(&slot.to_be_bytes::<32>()), *value)
+                    .insert_rlp(&keccak(slot.to_be_bytes::<32>()), *value)
                     .unwrap();
             }
         }
@@ -150,7 +150,7 @@ fn build_tries(state: &TestState) -> (MptNode, HashMap<B160, MptNode>) {
                 },
             )
             .unwrap();
-        storage_tries.insert(address.clone(), storage_trie);
+        storage_tries.insert(*address, storage_trie);
     }
 
     (state_trie, storage_tries)
@@ -162,7 +162,7 @@ fn get_proof(
     state: &TestState,
 ) -> Result<EIP1186ProofResponse, anyhow::Error> {
     let account = state.0.get(&address).cloned().unwrap_or_default();
-    let (state_trie, mut storage_tries) = build_tries(&state);
+    let (state_trie, mut storage_tries) = build_tries(state);
     let storage_trie = storage_tries.remove(&address).unwrap_or_default();
 
     let account_proof = mpt_proof(&state_trie, keccak(address))?

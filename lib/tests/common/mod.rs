@@ -262,7 +262,7 @@ fn proof_internal(node: &MptNode, key_nibs: &[u8]) -> Result<Vec<Vec<u8>>, anyho
         MptNodeData::Branch(children) => {
             let mut path = Vec::new();
             for node in children.iter().flatten() {
-                path.extend(proof_internal(&node, &key_nibs[1..])?);
+                path.extend(proof_internal(node, &key_nibs[1..])?);
             }
             path
         }
@@ -270,7 +270,7 @@ fn proof_internal(node: &MptNode, key_nibs: &[u8]) -> Result<Vec<Vec<u8>>, anyho
             let ext_nibs = node.nibs();
             let ext_len = ext_nibs.len();
             if key_nibs[..ext_len] == ext_nibs {
-                proof_internal(&child, &key_nibs[ext_len..])?
+                proof_internal(child, &key_nibs[ext_len..])?
             } else {
                 vec![]
             }

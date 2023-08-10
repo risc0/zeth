@@ -78,7 +78,7 @@ impl Provider for TestProvider {
         let mut storage_proof = vec![];
         for index in &query.indices {
             let proof = StorageProof {
-                key: index.clone().into(),
+                key: *index,
                 proof: mpt_proof(&storage_trie, keccak(index))?
                     .into_iter()
                     .map(|p| p.into())
@@ -166,7 +166,7 @@ fn build_tries(state: &TestState) -> (MptNode, HashMap<B160, MptNode>) {
         for (slot, value) in &account.storage {
             if *value != LibU256::ZERO {
                 storage_trie
-                    .insert_rlp(&keccak(&slot.to_be_bytes::<32>()), *value)
+                    .insert_rlp(&keccak(slot.to_be_bytes::<32>()), *value)
                     .unwrap();
             }
         }
@@ -182,7 +182,7 @@ fn build_tries(state: &TestState) -> (MptNode, HashMap<B160, MptNode>) {
                 },
             )
             .unwrap();
-        storage_tries.insert(address.clone(), storage_trie);
+        storage_tries.insert(*address, storage_trie);
     }
 
     (state_trie, storage_tries)

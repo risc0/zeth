@@ -4461,6 +4461,8 @@ dependencies = [
  "risc0-zkvm",
  "rstest",
  "serde",
+ "serde_json",
+ "serde_with",
  "tempfile",
  "tokio",
  "zeth-primitives",

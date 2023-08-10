@@ -15,6 +15,7 @@
 use ethers_core::types::{
     Block, Bloom, Bytes, EIP1186ProofResponse, StorageProof, Transaction, H256, U256,
 };
+use revm::primitives::B160 as RevmB160;
 use zeth_primitives::U256 as LibU256;
 
 use super::*;
@@ -65,44 +66,11 @@ impl Provider for TestProvider {
     fn get_proof(&mut self, query: &ProofQuery) -> Result<EIP1186ProofResponse, anyhow::Error> {
         assert_eq!(query.block_no, self.header.number);
 
-        let address = from_ethers_h160(query.address);
-        let account = self.state.0.get(&address).cloned().unwrap_or_default();
-
-        let (state_trie, mut storage_tries) = build_tries(&self.state);
-        let storage_trie = storage_tries.remove(&address).unwrap_or_default();
-
-        let account_proof = mpt_proof(&state_trie, keccak(query.address))?
-            .into_iter()
-            .map(|p| p.into())
-            .collect();
-        let mut storage_proof = vec![];
-        for index in &query.indices {
-            let proof = StorageProof {
-                key: index.clone().into(),
-                proof: mpt_proof(&storage_trie, keccak(index))?
-                    .into_iter()
-                    .map(|p| p.into())
-                    .collect(),
-                value: account
-                    .storage
-                    .get(&LibU256::from_be_bytes(index.0))
-                    .cloned()
-                    .unwrap_or_default()
-                    .to_be_bytes()
-                    .into(),
-            };
-            storage_proof.push(proof);
-        }
-
-        Ok(EIP1186ProofResponse {
-            address: query.address,
-            balance: account.balance.to_be_bytes().into(),
-            code_hash: keccak(account.code).into(),
-            nonce: account.nonce.to_be_bytes().into(),
-            storage_hash: storage_trie.hash().0.into(),
-            account_proof,
-            storage_proof,
-        })
+        let indices = query
+            .indices
+            .iter()
+            .map(|idx| LibU256::from_be_bytes(idx.0));
+        get_proof(from_ethers_h160(query.address), indices, &self.state)
     }
 
     fn get_transaction_count(&mut self, query: &AccountQuery) -> Result<U256, anyhow::Error> {
@@ -186,4 +154,64 @@ fn build_tries(state: &TestState) -> (MptNode, HashMap<B160, MptNode>) {
     }
 
     (state_trie, storage_tries)
+}
+
+fn get_proof(
+    address: B160,
+    indices: impl IntoIterator<Item = LibU256>,
+    state: &TestState,
+) -> Result<EIP1186ProofResponse, anyhow::Error> {
+    let account = state.0.get(&address).cloned().unwrap_or_default();
+    let (state_trie, mut storage_tries) = build_tries(&state);
+    let storage_trie = storage_tries.remove(&address).unwrap_or_default();
+
+    let account_proof = mpt_proof(&state_trie, keccak(address))?
+        .into_iter()
+        .map(|p| p.into())
+        .collect();
+    let mut storage_proof = vec![];
+    for index in indices {
+        let proof = StorageProof {
+            key: index.to_be_bytes().into(),
+            proof: mpt_proof(&storage_trie, keccak(index.to_be_bytes::<32>()))?
+                .into_iter()
+                .map(|p| p.into())
+                .collect(),
+            value: account
+                .storage
+                .get(&index)
+                .cloned()
+                .unwrap_or_default()
+                .to_be_bytes()
+                .into(),
+        };
+        storage_proof.push(proof);
+    }
+
+    Ok(EIP1186ProofResponse {
+        address: address.0.into(),
+        balance: account.balance.to_be_bytes().into(),
+        code_hash: keccak(account.code).into(),
+        nonce: account.nonce.to_be_bytes().into(),
+        storage_hash: storage_trie.hash().0.into(),
+        account_proof,
+        storage_proof,
+    })
+}
+
+/// Get EIP-1186 proofs for a set of addresses and storage keys.
+pub fn get_proofs(
+    state: &impl BlockBuilderDatabase,
+    storage_keys: HashMap<RevmB160, Vec<LibU256>>,
+) -> Result<HashMap<RevmB160, EIP1186ProofResponse>, anyhow::Error> {
+    let state = state.into();
+
+    let mut result = HashMap::new();
+    for (address, indices) in storage_keys {
+        result.insert(
+            address,
+            get_proof(from_revm_b160(address), indices, &state)?,
+        );
+    }
+    Ok(result)
 }

@@ -90,8 +90,8 @@ impl From<DbAccount> for TestAccount {
 #[serde(rename_all = "camelCase")]
 pub struct TestState(pub HashMap<B160, TestAccount>);
 
-impl<D: BlockBuilderDatabase> From<D> for TestState {
-    fn from(db: D) -> Self {
+impl<D: BlockBuilderDatabase> From<&D> for TestState {
+    fn from(db: &D) -> Self {
         TestState(
             db.accounts()
                 .map(|(addr, account)| (from_revm_b160(*addr), account.clone().into()))

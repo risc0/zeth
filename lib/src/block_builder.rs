@@ -87,8 +87,14 @@ where
         }
     }
 
-    pub fn to_db(self) -> D {
-        self.db.unwrap()
+    /// Returns a reference to the database.
+    pub fn db(&self) -> Option<&D> {
+        self.db.as_ref()
+    }
+
+    /// Returns a mutable reference to the database.
+    pub fn mut_db(&mut self) -> Option<&mut D> {
+        self.db.as_mut()
     }
 
     pub fn initialize_evm_storage(mut self) -> Result<Self> {

@@ -14,8 +14,10 @@
 
 //! Constants for the Ethereum protocol.
 
+use core::str::FromStr;
 use std::collections::BTreeMap;
 
+use anyhow::bail;
 use once_cell::sync::Lazy;
 use revm::primitives::SpecId;
 use serde::{Deserialize, Serialize};
@@ -108,6 +110,31 @@ impl ChainSpec {
             }
         }
         unreachable!()
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub enum Network {
+    #[default]
+    Ethereum,
+}
+
+impl FromStr for Network {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "ethereum" => Ok(Network::Ethereum),
+            _ => bail!("Unknown network"),
+        }
+    }
+}
+
+impl ToString for Network {
+    fn to_string(&self) -> String {
+        match self {
+            Network::Ethereum => String::from("ethereum"),
+        }
     }
 }
 

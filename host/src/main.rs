@@ -26,7 +26,7 @@ use risc0_zkvm::{
 };
 use tempfile::tempdir;
 use zeth_guests::{ETH_BLOCK_ELF, ETH_BLOCK_ID};
-use zeth_lib::{block_builder::BlockBuilder, validation::Input};
+use zeth_lib::{block_builder::BlockBuilder, consts::Network, validation::Input};
 use zeth_primitives::BlockHash;
 
 #[derive(Parser, Debug)]
@@ -35,8 +35,11 @@ struct Args {
     #[clap(short, long)]
     rpc_url: Option<String>,
 
-    #[clap(short, long)]
-    cache_path: Option<String>,
+    #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "host/testdata")]
+    cache: Option<String>,
+
+    #[clap(short, long, value_enum, default_value = "ethereum")]
+    network: Network,
 
     #[clap(short, long)]
     block_no: u64,
@@ -51,8 +54,8 @@ struct Args {
     bonsai_verify: Option<String>,
 }
 
-fn cache_file_path(cache_path: &String, block_no: u64, ext: &str) -> String {
-    format!("{}/{}.{}", cache_path, block_no, ext)
+fn cache_file_path(cache_path: &String, network: &String, block_no: u64, ext: &str) -> String {
+    format!("{}/{}/{}.{}", cache_path, network, block_no, ext)
 }
 
 #[tokio::main]
@@ -62,9 +65,9 @@ async fn main() -> Result<()> {
 
     // Fetch all of the initial data
     let rpc_cache = args
-        .cache_path
+        .cache
         .as_ref()
-        .map(|dir| cache_file_path(dir, args.block_no, "json.gz"));
+        .map(|dir| cache_file_path(dir, &args.network.to_string(), args.block_no, "json.gz"));
 
     let init = tokio::task::spawn_blocking(move || {
         zeth_lib::host::get_initial_data(rpc_cache, args.rpc_url, args.block_no)

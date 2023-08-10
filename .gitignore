@@ -4,3 +4,4 @@ tmp/
 log.txt
 *.pb
 rpc_cache.json
+.idea

@@ -15,9 +15,9 @@
 #![no_main]
 
 use risc0_zkvm::guest::env;
-use zeth_lib::{block_builder::BlockBuilder, validation::Input};
-use zeth_lib::consts::MAINNET;
-use zeth_lib::execution::EthTxExecStrategy;
+use zeth_lib::{
+    block_builder::BlockBuilder, consts::MAINNET, execution::EthTxExecStrategy, validation::Input,
+};
 
 risc0_zkvm::guest::entry!(main);
 

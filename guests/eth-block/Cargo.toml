@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 k256 = { version = "=0.13.1", features = ["std", "ecdsa"], default_features = false }
 risc0-zkvm = { git = "https://github.com/risc0/risc0.git", branch = "release-0.16", default-features = false, features = ['std'] }
-zeth_lib = { path = "../../lib", default-features = false }
+zeth-lib = { path = "../../lib", default-features = false }
 
 [patch.crates-io]
 radium = { git = 'https://github.com/ferrilab/radium.git', rev = "723bed5" }

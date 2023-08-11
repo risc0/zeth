@@ -740,7 +740,7 @@ version = "0.1.0"
 dependencies = [
  "k256",
  "risc0-zkvm",
- "zeth_lib",
+ "zeth-lib",
 ]
 
 [[package]]
@@ -3332,26 +3332,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeth-primitives"
-version = "0.1.0"
-dependencies = [
- "alloy-primitives",
- "alloy-rlp",
- "alloy-rlp-derive",
- "anyhow",
- "bytes",
- "ethers-core",
- "k256",
- "revm-primitives",
- "rlp",
- "serde",
- "sha2",
- "sha3",
- "thiserror",
-]
-
-[[package]]
-name = "zeth_lib"
+name = "zeth-lib"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -3371,4 +3352,23 @@ dependencies = [
  "thiserror",
  "tokio",
  "zeth-primitives",
+]
+
+[[package]]
+name = "zeth-primitives"
+version = "0.1.0"
+dependencies = [
+ "alloy-primitives",
+ "alloy-rlp",
+ "alloy-rlp-derive",
+ "anyhow",
+ "bytes",
+ "ethers-core",
+ "k256",
+ "revm-primitives",
+ "rlp",
+ "serde",
+ "sha2",
+ "sha3",
+ "thiserror",
 ]

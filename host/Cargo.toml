@@ -19,9 +19,9 @@ risc0-zkvm = { workspace = true, features = ["prove"] }
 serde = "1.0"
 tempfile = "3.6"
 tokio = { version = "1.23", features = ["full"] }
+zeth-guests = { path = "../guests" }
+zeth-lib = { path = "../lib" }
 zeth-primitives = { path = "../primitives" }
-zeth_guests = { path = "../guests" }
-zeth_lib = { path = "../lib" }
 
 [dev-dependencies]
 assert_cmd = "2.0"

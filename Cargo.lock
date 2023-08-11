@@ -4463,42 +4463,20 @@ dependencies = [
  "serde",
  "tempfile",
  "tokio",
+ "zeth-guests",
+ "zeth-lib",
  "zeth-primitives",
- "zeth_guests",
- "zeth_lib",
 ]
 
 [[package]]
-name = "zeth-primitives"
-version = "0.1.0"
-dependencies = [
- "alloy-primitives",
- "alloy-rlp",
- "alloy-rlp-derive",
- "anyhow",
- "bincode",
- "bytes",
- "ethers-core",
- "hex-literal",
- "k256",
- "revm-primitives",
- "rlp",
- "serde",
- "serde_json",
- "sha2",
- "sha3",
- "thiserror",
-]
-
-[[package]]
-name = "zeth_guests"
+name = "zeth-guests"
 version = "0.1.0"
 dependencies = [
  "risc0-build",
 ]
 
 [[package]]
-name = "zeth_lib"
+name = "zeth-lib"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -4522,6 +4500,28 @@ dependencies = [
  "thiserror",
  "tokio",
  "zeth-primitives",
+]
+
+[[package]]
+name = "zeth-primitives"
+version = "0.1.0"
+dependencies = [
+ "alloy-primitives",
+ "alloy-rlp",
+ "alloy-rlp-derive",
+ "anyhow",
+ "bincode",
+ "bytes",
+ "ethers-core",
+ "hex-literal",
+ "k256",
+ "revm-primitives",
+ "rlp",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sha3",
+ "thiserror",
 ]
 
 [[package]]

@@ -23,6 +23,7 @@ jobs:
         submodules: recursive
     - uses: risc0/risc0/.github/actions/rustup@release-0.16
     - uses: risc0/risc0/.github/actions/sccache@release-0.16
+    - run: cargo install cargo-risczero && cargo risczero install
     - name: Cargo test
       run: cargo test --workspace
 

@@ -37,7 +37,7 @@ use zeth_primitives::{
 
 use crate::{
     block_builder::BlockBuilder,
-    consts::MAINNET,
+    consts::ETH_MAINNET_CHAIN_SPEC,
     execution::EthTxExecStrategy,
     host::{
         mpt::{orphaned_digests, resolve_digests, shorten_key},
@@ -120,9 +120,13 @@ pub fn get_initial_data(
     };
 
     // Create the block builder, run the transactions and extract the DB
-    let mut builder = BlockBuilder::new(Some(MAINNET.clone()), Some(provider_db), input)
-        .initialize_header()?
-        .execute_transactions::<EthTxExecStrategy>()?;
+    let mut builder = BlockBuilder::new(
+        Some(ETH_MAINNET_CHAIN_SPEC.clone()),
+        Some(provider_db),
+        input,
+    )
+    .initialize_header()?
+    .execute_transactions::<EthTxExecStrategy>()?;
     let provider_db = builder.mut_db().unwrap();
 
     info!("Gathering inclusion proofs ...");

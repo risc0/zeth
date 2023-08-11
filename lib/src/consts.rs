@@ -46,7 +46,7 @@ pub const GWEI_TO_WEI: U256 = uint!(1_000_000_000_U256);
 pub const MIN_SPEC_ID: SpecId = SpecId::MERGE;
 
 /// The Ethereum mainnet specification.
-pub static MAINNET: Lazy<ChainSpec> = Lazy::new(|| {
+pub static ETH_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| {
     ChainSpec {
         chain_id: 1,
         hard_forks: BTreeMap::from([
@@ -176,9 +176,9 @@ mod tests {
 
     #[test]
     fn revm_spec_id() {
-        assert!(MAINNET.spec_id(15537393) < SpecId::MERGE);
-        assert_eq!(MAINNET.spec_id(15537394), SpecId::MERGE);
-        assert_eq!(MAINNET.spec_id(17034869), SpecId::MERGE);
-        assert_eq!(MAINNET.spec_id(17034870), SpecId::SHANGHAI);
+        assert!(ETH_MAINNET_CHAIN_SPEC.spec_id(15537393) < SpecId::MERGE);
+        assert_eq!(ETH_MAINNET_CHAIN_SPEC.spec_id(15537394), SpecId::MERGE);
+        assert_eq!(ETH_MAINNET_CHAIN_SPEC.spec_id(17034869), SpecId::MERGE);
+        assert_eq!(ETH_MAINNET_CHAIN_SPEC.spec_id(17034870), SpecId::SHANGHAI);
     }
 }

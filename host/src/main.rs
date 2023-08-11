@@ -28,7 +28,7 @@ use tempfile::tempdir;
 use zeth_guests::{ETH_BLOCK_ELF, ETH_BLOCK_ID};
 use zeth_lib::{
     block_builder::BlockBuilder,
-    consts::{Network, MAINNET},
+    consts::{Network, ETH_MAINNET_CHAIN_SPEC},
     execution::EthTxExecStrategy,
     validation::Input,
 };
@@ -90,7 +90,7 @@ async fn main() -> Result<()> {
         info!("Running from memory ...");
 
         let block_builder = BlockBuilder::from(input)
-            .with_chain_spec(MAINNET.clone())
+            .with_chain_spec(ETH_MAINNET_CHAIN_SPEC.clone())
             .initialize_evm_storage()
             .expect("Error initializing MemDb from Input")
             .initialize_header()

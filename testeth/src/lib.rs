@@ -17,9 +17,16 @@ use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, NoneAsEmptyString};
 use zeth_lib::{
-    block_builder::BlockBuilderDatabase,
-    host::provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
-    mem_db::DbAccount,
+    block_builder::{BlockBuilder, BlockBuilderDatabase},
+    consts::ChainSpec,
+    execution::EthTxExecStrategy,
+    host::{
+        provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
+        provider_db::ProviderDb,
+        Init,
+    },
+    mem_db::{DbAccount, MemDb},
+    validation::Input,
 };
 use zeth_primitives::{
     access_list::{AccessList, AccessListItem},
@@ -36,6 +43,8 @@ use zeth_primitives::{
     withdrawal::Withdrawal,
     Bloom, Bytes, RlpBytes, StorageKey, B160, B256, B64, U256, U64,
 };
+
+use crate::ethers::{get_proofs, TestProvider};
 
 pub mod ethers;
 
@@ -280,4 +289,67 @@ fn proof_internal(node: &MptNode, key_nibs: &[u8]) -> Result<Vec<Vec<u8>>, anyho
     path.push(node.to_rlp());
 
     Ok(path)
+}
+
+/// The size of the stack to use for the EVM.
+pub const BIG_STACK_SIZE: usize = 8 * 1024 * 1024;
+
+pub fn new_builder(
+    chain_spec: ChainSpec,
+    state: TestState,
+    parent_header: Header,
+    header: Header,
+    transactions: Vec<TestTransaction>,
+    withdrawals: Vec<Withdrawal>,
+) -> BlockBuilder<MemDb> {
+    // create the provider DB
+    let provider_db = ProviderDb::new(
+        Box::new(TestProvider {
+            state,
+            header: parent_header.clone(),
+        }),
+        parent_header.number,
+    );
+
+    let transactions: Vec<Transaction> = transactions.into_iter().map(Transaction::from).collect();
+    let input = Input {
+        beneficiary: header.beneficiary,
+        gas_limit: header.gas_limit,
+        timestamp: header.timestamp,
+        extra_data: header.extra_data.clone(),
+        mix_hash: header.mix_hash,
+        transactions: transactions.clone(),
+        withdrawals: withdrawals.clone(),
+        parent_header: parent_header.clone(),
+        ..Default::default()
+    };
+
+    // create and run the block builder once to create the initial DB
+    let builder = BlockBuilder::new(Some(chain_spec.clone()), Some(provider_db), input)
+        .initialize_header()
+        .unwrap();
+    // execute the transactions with a larger stack
+    let mut builder = stacker::grow(BIG_STACK_SIZE, move || {
+        builder.execute_transactions::<EthTxExecStrategy>().unwrap()
+    });
+    let provider_db = builder.mut_db().unwrap();
+
+    let init_proofs = provider_db.get_initial_proofs().unwrap();
+    let fini_proofs = get_proofs(provider_db, provider_db.get_latest_db().storage_keys()).unwrap();
+    let ancestor_headers = provider_db.get_ancestor_headers().unwrap();
+
+    let input: Input = Init {
+        db: provider_db.get_initial_db().clone(),
+        init_block: parent_header,
+        init_proofs,
+        fini_block: header,
+        fini_transactions: transactions,
+        fini_withdrawals: withdrawals,
+        fini_proofs,
+        ancestor_headers,
+    }
+    .into();
+
+    let builder: BlockBuilder<MemDb> = input.into();
+    builder.with_chain_spec(chain_spec)
 }

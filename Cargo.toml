@@ -4,6 +4,7 @@ members = [
     "host",
     "lib",
     "primitives",
+    "testeth"
 ]
 
 # Always optimize; building and running the guest takes much longer without optimization.

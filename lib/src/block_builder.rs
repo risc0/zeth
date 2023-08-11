@@ -14,7 +14,7 @@
 
 use core::mem;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use hashbrown::{hash_map, HashMap};
 use revm::primitives::{Account, AccountInfo, Address, Bytecode, B160, B256, U256};
 use zeth_primitives::{
@@ -26,6 +26,7 @@ use zeth_primitives::{
 };
 
 use crate::{
+    consts::ChainSpec,
     execution::TxExecStrategy,
     guest_mem_forget,
     mem_db::{AccountState, DbAccount, MemDb},
@@ -48,6 +49,7 @@ pub trait BlockBuilderDatabase: revm::Database + Sized {
 
 #[derive(Clone)]
 pub struct BlockBuilder<D> {
+    pub chain_spec: Option<ChainSpec>,
     pub db: Option<D>,
     pub header: Option<Header>,
     pub input: Input,
@@ -56,6 +58,7 @@ pub struct BlockBuilder<D> {
 impl From<Input> for BlockBuilder<MemDb> {
     fn from(input: Input) -> Self {
         BlockBuilder {
+            chain_spec: None,
             db: None,
             header: None,
             input,
@@ -68,8 +71,9 @@ where
     D: BlockBuilderDatabase,
     <D as revm::Database>::Error: std::fmt::Debug,
 {
-    pub fn new(db: Option<D>, input: Input) -> Self {
+    pub fn new(chain_spec: Option<ChainSpec>, db: Option<D>, input: Input) -> Self {
         BlockBuilder {
+            chain_spec,
             db,
             header: None,
             input,
@@ -78,6 +82,11 @@ where
 
     pub fn to_db(self) -> D {
         self.db.unwrap()
+    }
+
+    pub fn with_chain_spec(mut self, chain_spec: ChainSpec) -> Self {
+        self.chain_spec = Some(chain_spec);
+        self
     }
 
     pub fn initialize_evm_storage(mut self) -> Result<Self> {
@@ -155,13 +164,16 @@ where
         verify_timestamp(self.input.timestamp, self.input.parent_header.timestamp)?;
         verify_extra_data(&self.input.extra_data)?;
         // Initialize result header
+        let Some(ref chain_spec) = self.chain_spec else {
+            bail!("Missing ChainSpec");
+        };
         self.header = Some(Header {
             // Initialize fields that we can compute from the parent
             parent_hash: self.input.parent_header.hash(),
             number: compute_block_number(&self.input.parent_header)?,
             base_fee_per_gas: compute_base_fee(
                 &self.input.parent_header,
-                self.input.chain_spec.gas_constants(),
+                chain_spec.gas_constants(),
             )?,
             // Initialize metadata from input
             beneficiary: self.input.beneficiary,

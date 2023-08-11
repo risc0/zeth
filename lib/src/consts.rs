@@ -85,7 +85,7 @@ impl ForkCondition {
 }
 
 /// [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559) parameters.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Eip1559Constants {
     pub base_fee_change_denominator: U256,
     pub base_fee_max_increase_denominator: U256,

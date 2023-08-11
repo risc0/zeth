@@ -60,7 +60,7 @@ fn evm(
             println!("skipping ({})", json.network);
             continue;
         }
-        let config = ChainSpec::new_single(1, spec, Default::default());
+        let chain_spec = ChainSpec::new_single(1, spec, Default::default());
 
         let genesis: Header = json.genesis.clone().into();
         assert_eq!(genesis.hash(), json.genesis.hash);
@@ -83,7 +83,7 @@ fn evm(
             assert_eq!(&expected_header.hash(), &block_header.hash);
 
             let builder = new_builder(
-                config.clone(),
+                chain_spec.clone(),
                 state,
                 parent_header.clone(),
                 expected_header.clone(),
@@ -114,7 +114,7 @@ fn evm(
 }
 
 fn new_builder(
-    config: ChainSpec,
+    chain_spec: ChainSpec,
     state: TestState,
     parent_header: Header,
     header: Header,
@@ -139,13 +139,12 @@ fn new_builder(
         mix_hash: header.mix_hash,
         transactions: transactions.clone(),
         withdrawals: withdrawals.clone(),
-        chain_spec: config.clone(),
         parent_header: parent_header.clone(),
         ..Default::default()
     };
 
     // create and run the block builder once to create the initial DB
-    let builder = BlockBuilder::new(Some(provider_db), input)
+    let builder = BlockBuilder::new(Some(chain_spec.clone()), Some(provider_db), input)
         .initialize_header()
         .unwrap();
     // execute the transactions with a larger stack
@@ -167,9 +166,9 @@ fn new_builder(
         fini_withdrawals: withdrawals,
         fini_proofs,
         ancestor_headers,
-        chain_spec: config,
     }
     .into();
 
-    input.into()
+    let builder: BlockBuilder<MemDb> = input.into();
+    builder.with_chain_spec(chain_spec)
 }

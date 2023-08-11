@@ -16,14 +16,17 @@
 
 use risc0_zkvm::guest::env;
 use zeth_lib::{block_builder::BlockBuilder, validation::Input};
+use zeth_lib::consts::MAINNET;
 use zeth_lib::execution::EthTxExecStrategy;
 
 risc0_zkvm::guest::entry!(main);
 
 pub fn main() {
+    // Read the input previous block and transaction data
     let input: Input = env::read();
-
+    // Build the resulting block
     let output = BlockBuilder::from(input)
+        .with_chain_spec(MAINNET.clone())
         .initialize_evm_storage()
         .expect("Failed to create in-memory evm storage")
         .initialize_header()
@@ -32,9 +35,8 @@ pub fn main() {
         .expect("Failed to execute transactions")
         .build(None)
         .expect("Failed to build the resulting block");
-
+    // Output the resulting block's hash to the journal
     env::commit(&output.hash());
-
     // Leak memory, save cycles
     core::mem::forget(output);
 }

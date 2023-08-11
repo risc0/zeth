@@ -56,7 +56,10 @@ impl TxExecStrategy for EthTxExecStrategy {
             .header
             .as_mut()
             .expect("Header is not initialized");
-        let spec_id = compute_spec_id(&block_builder.input.chain_spec, header.number)?;
+        let Some(ref chain_spec) = block_builder.chain_spec else {
+            bail!("Undefined ChainSpec");
+        };
+        let spec_id = compute_spec_id(chain_spec, header.number)?;
 
         #[cfg(not(target_os = "zkvm"))]
         {
@@ -80,7 +83,7 @@ impl TxExecStrategy for EthTxExecStrategy {
         let mut evm = EVM::new();
 
         evm.env.cfg = CfgEnv {
-            chain_id: U256::from(block_builder.input.chain_spec.chain_id()),
+            chain_id: U256::from(chain_spec.chain_id()),
             spec_id,
             ..Default::default()
         };

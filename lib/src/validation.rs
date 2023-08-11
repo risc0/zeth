@@ -31,8 +31,6 @@ use crate::consts::{
 /// External block input.
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct Input {
-    /// Chain spec
-    pub chain_spec: ChainSpec,
     /// Previous block header
     pub parent_header: Header,
     /// Address to which all priority fees in this block are transferred.

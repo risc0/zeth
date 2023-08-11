@@ -37,7 +37,7 @@ use zeth_primitives::{
 
 use crate::{
     block_builder::BlockBuilder,
-    consts::{ChainSpec, MAINNET},
+    consts::MAINNET,
     execution::EthTxExecStrategy,
     host::{
         mpt::{orphaned_digests, resolve_digests, shorten_key},
@@ -61,7 +61,6 @@ pub struct Init {
     pub fini_withdrawals: Vec<Withdrawal>,
     pub fini_proofs: HashMap<B160, EIP1186ProofResponse>,
     pub ancestor_headers: Vec<Header>,
-    pub chain_spec: ChainSpec,
 }
 
 pub fn get_initial_data(
@@ -117,12 +116,11 @@ pub fn get_initial_data(
             .map(|w| w.try_into().unwrap())
             .collect(),
         parent_header: init_block.clone().try_into()?,
-        chain_spec: MAINNET.clone(),
         ..Default::default()
     };
 
     // Create the block builder, run the transactions and extract the DB
-    provider_db = BlockBuilder::new(Some(provider_db), input)
+    provider_db = BlockBuilder::new(Some(MAINNET.clone()), Some(provider_db), input)
         .initialize_header()?
         .execute_transactions::<EthTxExecStrategy>()?
         .to_db();
@@ -166,7 +164,6 @@ pub fn get_initial_data(
         fini_withdrawals: withdrawals,
         fini_proofs,
         ancestor_headers,
-        chain_spec: MAINNET.clone(),
     })
 }
 
@@ -456,7 +453,6 @@ impl Into<Input> for Init {
 
         // Create the block builder input
         Input {
-            chain_spec: self.chain_spec,
             parent_header: self.init_block,
             beneficiary: self.fini_block.beneficiary,
             gas_limit: self.fini_block.gas_limit,

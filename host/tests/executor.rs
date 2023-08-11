@@ -14,7 +14,7 @@
 
 use std::{fs::File, io::BufReader, path::PathBuf};
 
-use risc0_zkvm::{serde::from_slice, ExecutorEnv, FileSegmentRef, Executor};
+use risc0_zkvm::{serde::from_slice, Executor, ExecutorEnv, FileSegmentRef};
 use rstest::rstest;
 use serde::{Deserialize, Serialize};
 use serde_with::{base64::Base64, serde_as};

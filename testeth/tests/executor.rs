@@ -20,23 +20,13 @@ use risc0_zkvm::{
     ExecutorEnv, FileSegmentRef, LocalExecutor,
 };
 use rstest::rstest;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use serde_with::{base64::Base64, serde_as};
 use tempfile::tempdir;
 use zeth_lib::consts::ChainSpec;
 use zeth_primitives::{block::Header, BlockHash};
-use zeth_testeth::{guests::TEST_GUEST_ELF, new_builder, TestJson};
+use zeth_testeth::{create_input, guests::TEST_GUEST_ELF, TestJson};
 
 const SEGMENT_LIMIT_PO2: usize = 21;
-
-#[serde_as]
-#[derive(Debug, Serialize, Deserialize)]
-struct Test {
-    #[serde_as(as = "Base64")]
-    input: Vec<u8>,
-    hash: BlockHash,
-}
 
 #[rstest]
 fn executor(
@@ -64,9 +54,6 @@ fn executor(
         let genesis: Header = json.genesis.clone().into();
         assert_eq!(genesis.hash(), json.genesis.hash);
 
-        // log the pre-state
-        dbg!(&json.pre);
-
         // only one block
         assert_eq!(json.blocks.len(), 1usize);
         let block = json.blocks.first().unwrap().clone();
@@ -81,8 +68,8 @@ fn executor(
         let expected_header: Header = block_header.clone().into();
         assert_eq!(&expected_header.hash(), &block_header.hash);
 
-        let builder = new_builder(
-            chain_spec.clone(),
+        let input = create_input(
+            &chain_spec,
             json.pre,
             genesis,
             expected_header.clone(),
@@ -94,7 +81,7 @@ fn executor(
             .session_limit(None)
             .segment_limit_po2(SEGMENT_LIMIT_PO2)
             .add_input(&to_vec(&chain_spec).unwrap())
-            .add_input(&to_vec(&builder.input).unwrap())
+            .add_input(&to_vec(&input).unwrap())
             .build()
             .unwrap();
         let mut exec = LocalExecutor::from_elf(env, TEST_GUEST_ELF).unwrap();

@@ -17,7 +17,9 @@ use std::{fs::File, io::BufReader, path::PathBuf};
 use revm::primitives::SpecId;
 use rstest::rstest;
 use serde_json::Value;
-use zeth_lib::{consts::ChainSpec, execution::EthTxExecStrategy};
+use zeth_lib::{
+    block_builder::BlockBuilder, consts::ChainSpec, execution::EthTxExecStrategy, mem_db::MemDb,
+};
 use zeth_primitives::block::Header;
 use zeth_testeth::*;
 
@@ -68,18 +70,19 @@ fn evm(
             let expected_header: Header = block_header.clone().into();
             assert_eq!(&expected_header.hash(), &block_header.hash);
 
-            let builder = new_builder(
-                chain_spec.clone(),
+            let input = create_input(
+                &chain_spec,
                 state,
                 parent_header.clone(),
                 expected_header.clone(),
                 block.transactions,
                 block.withdrawals.unwrap_or_default(),
-            )
-            .initialize_evm_storage()
-            .unwrap()
-            .initialize_header()
-            .unwrap();
+            );
+            let builder = BlockBuilder::<MemDb>::new(&chain_spec, input)
+                .initialize_db()
+                .unwrap()
+                .initialize_header()
+                .unwrap();
             // execute the transactions with a larger stack
             let builder = stacker::grow(BIG_STACK_SIZE, move || {
                 builder.execute_transactions::<EthTxExecStrategy>().unwrap()

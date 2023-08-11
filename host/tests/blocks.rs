@@ -27,7 +27,7 @@ fn block_cli(#[files("testdata/*.json.gz")] mut path: PathBuf) {
 
     let mut cmd = Command::cargo_bin("zeth").unwrap();
     let assert = cmd
-        .args(&[
+        .args([
             "--cache-path",
             path.to_str().unwrap(),
             "--block-no",

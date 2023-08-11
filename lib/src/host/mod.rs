@@ -92,7 +92,7 @@ pub fn get_initial_data(
     info!("Transaction count: {:?}", fini_block.transactions.len());
 
     // Create the provider DB
-    let mut provider_db =
+    let provider_db =
         crate::host::provider_db::ProviderDb::new(provider, init_block.number.unwrap().as_u64());
 
     // Create input
@@ -121,10 +121,10 @@ pub fn get_initial_data(
     };
 
     // Create the block builder, run the transactions and extract the DB
-    provider_db = BlockBuilder::new(Some(provider_db), input)
+    let mut builder = BlockBuilder::new(Some(provider_db), input)
         .initialize_header()?
-        .execute_transactions()?
-        .to_db();
+        .execute_transactions()?;
+    let provider_db = builder.mut_db().unwrap();
 
     info!("Gathering inclusion proofs ...");
 

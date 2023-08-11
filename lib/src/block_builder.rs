@@ -286,7 +286,6 @@ where
 
             // Add receipt and tx to tries
             let trie_key = tx_no.to_rlp();
-            dbg!(tx_no, &tx);
             tx_trie
                 .insert_rlp(&trie_key, tx)
                 .context("failed to insert transaction")?;

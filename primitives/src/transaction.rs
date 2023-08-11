@@ -599,10 +599,13 @@ mod tests {
         );
 
         let transaction = Transaction { essence, signature };
-        dbg!(transaction.hash());
 
         let encoded = alloy_rlp::encode(&transaction);
-        dbg!(Bytes::from(encoded.clone()));
         assert_eq!(encoded.len(), transaction.length());
+
+        assert_eq!(
+            "0x275631a3549307b2e8c93b18dfcc0fe8aedf0276bb650c28eaa0a8a011d18867",
+            transaction.hash().to_string()
+        );
     }
 }

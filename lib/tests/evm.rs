@@ -21,6 +21,7 @@ use serde_json::Value;
 use zeth_lib::{
     block_builder::BlockBuilder,
     consts::ChainSpec,
+    execution::EthTxExecStrategy,
     host::{provider_db::ProviderDb, Init},
     mem_db::MemDb,
     validation::Input,
@@ -95,7 +96,7 @@ fn evm(
             .unwrap();
             // execute the transactions with a larger stack
             let builder = stacker::grow(BIG_STACK_SIZE, move || {
-                builder.execute_transactions().unwrap()
+                builder.execute_transactions::<EthTxExecStrategy>().unwrap()
             });
 
             let result_header = builder.clone().build(None).unwrap();
@@ -149,7 +150,7 @@ fn new_builder(
         .unwrap();
     // execute the transactions with a larger stack
     let builder = stacker::grow(BIG_STACK_SIZE, move || {
-        builder.execute_transactions().unwrap()
+        builder.execute_transactions::<EthTxExecStrategy>().unwrap()
     });
     provider_db = builder.to_db();
 

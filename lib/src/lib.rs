@@ -19,6 +19,7 @@ pub mod host;
 
 pub mod block_builder;
 pub mod consts;
+pub mod execution;
 pub mod mem_db;
 pub mod validation;
 

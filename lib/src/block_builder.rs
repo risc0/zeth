@@ -14,35 +14,24 @@
 
 use core::mem;
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::Result;
 use hashbrown::{hash_map, HashMap};
-#[cfg(not(target_os = "zkvm"))]
-use log::{debug, info};
-use revm::{
-    primitives::{
-        Account, AccountInfo, Address, BlockEnv, Bytecode, CfgEnv, ResultAndState, SpecId,
-        TransactTo, TxEnv, B160, B256, U256,
-    },
-    EVM,
-};
+use revm::primitives::{Account, AccountInfo, Address, Bytecode, B160, B256, U256};
 use zeth_primitives::{
     block::Header,
     keccak::{keccak, KECCAK_EMPTY},
-    receipt::Receipt,
-    revm::{from_revm_b256, to_revm_b160, to_revm_b256},
-    transaction::{Transaction, TransactionKind, TxEssence},
+    revm::{from_revm_b256, to_revm_b256},
     trie::{MptNode, StateAccount},
-    Bloom, Bytes, RlpBytes,
+    Bytes,
 };
 
 use crate::{
-    consts::{self, GWEI_TO_WEI},
+    execution::TxExecStrategy,
     guest_mem_forget,
     mem_db::{AccountState, DbAccount, MemDb},
     validation::{
-        compute_base_fee, compute_block_number, compute_spec_id, verify_extra_data,
-        verify_gas_limit, verify_parent_chain, verify_state_trie, verify_storage_trie,
-        verify_timestamp, Input,
+        compute_base_fee, compute_block_number, verify_extra_data, verify_gas_limit,
+        verify_parent_chain, verify_state_trie, verify_storage_trie, verify_timestamp, Input,
     },
 };
 
@@ -59,9 +48,9 @@ pub trait BlockBuilderDatabase: revm::Database + Sized {
 
 #[derive(Clone)]
 pub struct BlockBuilder<D> {
-    db: Option<D>,
-    header: Option<Header>,
-    input: Input,
+    pub db: Option<D>,
+    pub header: Option<Header>,
+    pub input: Input,
 }
 
 impl From<Input> for BlockBuilder<MemDb> {
@@ -186,187 +175,8 @@ where
         Ok(self)
     }
 
-    pub fn execute_transactions(mut self) -> Result<Self> {
-        let header = self.header.as_mut().expect("Header is not initialized");
-        let spec_id = compute_spec_id(&self.input.chain_spec, header.number)?;
-
-        #[cfg(not(target_os = "zkvm"))]
-        {
-            use chrono::{TimeZone, Utc};
-            let dt = Utc
-                .timestamp_opt(self.input.timestamp.try_into().unwrap(), 0)
-                .unwrap();
-
-            info!("Block no. {}", header.number);
-            info!("  EVM spec ID: {:?}", spec_id);
-            info!("  Timestamp: {}", dt);
-            info!("  Transactions: {}", self.input.transactions.len());
-            info!("  Withdrawals: {}", self.input.withdrawals.len());
-            info!("  Fee Recipient: {:?}", self.input.beneficiary);
-            info!("  Gas limit: {}", self.input.gas_limit);
-            info!("  Base fee per gas: {}", header.base_fee_per_gas);
-            info!("  Extra data: {:?}", self.input.extra_data);
-        }
-
-        // initialize the EVM
-        let mut evm = EVM::new();
-
-        evm.env.cfg = CfgEnv {
-            chain_id: U256::from(self.input.chain_spec.chain_id()),
-            spec_id,
-            ..Default::default()
-        };
-        evm.env.block = BlockEnv {
-            number: header.number.try_into().unwrap(),
-            coinbase: to_revm_b160(self.input.beneficiary),
-            timestamp: self.input.timestamp,
-            difficulty: U256::ZERO,
-            prevrandao: Some(to_revm_b256(self.input.mix_hash)),
-            basefee: header.base_fee_per_gas,
-            gas_limit: self.input.gas_limit,
-        };
-
-        evm.database(self.db.take().unwrap());
-
-        // bloom filter over all transaction logs
-        let mut logs_bloom = Bloom::default();
-        // keep track of the gas used over all transactions
-        let mut cumulative_gas_used = consts::ZERO;
-
-        // process all the transactions
-        let mut tx_trie = MptNode::default();
-        let mut receipt_trie = MptNode::default();
-        for (tx_no, tx) in self.input.transactions.iter().enumerate() {
-            // verify the transaction signature
-            let tx_from = tx
-                .recover_from()
-                .with_context(|| format!("Error recovering address for transaction {}", tx_no))?;
-
-            #[cfg(not(target_os = "zkvm"))]
-            {
-                let tx_hash = tx.hash();
-                debug!("Tx no. {} (hash: {})", tx_no, tx_hash);
-                debug!("  Type: {}", tx.tx_type());
-                debug!("  Fr: {:?}", tx_from);
-                debug!("  To: {:?}", tx.to().unwrap_or_default());
-            }
-
-            // verify transaction gas
-            let block_available_gas = self.input.gas_limit - cumulative_gas_used;
-            if block_available_gas < tx.gas_limit() {
-                bail!("Error at transaction {}: gas exceeds block limit", tx_no);
-            }
-
-            // process the transaction
-            let tx_from = to_revm_b160(tx_from);
-            fill_tx_env(&mut evm.env.tx, tx, tx_from);
-            let ResultAndState { result, state } = evm
-                .transact()
-                .map_err(|evm_err| anyhow!("Error at transaction {}: {:?}", tx_no, evm_err))?;
-
-            let gas_used = result.gas_used().try_into().unwrap();
-            cumulative_gas_used = cumulative_gas_used.checked_add(gas_used).unwrap();
-
-            #[cfg(not(target_os = "zkvm"))]
-            debug!("  Ok: {:?}", result);
-
-            // create the receipt from the EVM result
-            let receipt = Receipt::new(
-                tx.tx_type(),
-                result.is_success(),
-                cumulative_gas_used,
-                result.logs().into_iter().map(|log| log.into()).collect(),
-            );
-
-            // accumulate logs to the block bloom filter
-            logs_bloom.accrue_bloom(receipt.payload.logs_bloom);
-
-            // Add receipt and tx to tries
-            let trie_key = tx_no.to_rlp();
-            tx_trie
-                .insert_rlp(&trie_key, tx)
-                .context("failed to insert transaction")?;
-            receipt_trie
-                .insert_rlp(&trie_key, receipt)
-                .context("failed to insert receipt")?;
-
-            // update account states
-            let db = evm.db().unwrap();
-            for (address, account) in state {
-                #[cfg(not(target_os = "zkvm"))]
-                if account.is_touched {
-                    // log account
-                    debug!(
-                        "  State {:?} (storage_cleared={}, is_destroyed={}, is_not_existing={})",
-                        address,
-                        account.storage_cleared,
-                        account.is_destroyed,
-                        account.is_not_existing
-                    );
-                    // log balance changes
-                    debug!(
-                        "     After balance: {} (Nonce: {})",
-                        account.info.balance, account.info.nonce
-                    );
-
-                    // log state changes
-                    for (addr, slot) in &account.storage {
-                        if slot.is_changed() {
-                            debug!("    Storage address: {:?}", addr);
-                            debug!("      Before: {:?}", slot.original_value);
-                            debug!("       After: {:?}", slot.present_value);
-                        }
-                    }
-                }
-
-                db.update(address, account);
-            }
-        }
-
-        self.db = Some(evm.take_db());
-
-        // process withdrawals unconditionally after any transactions
-        let mut withdrawals_trie = MptNode::default();
-        for (i, withdrawal) in self.input.withdrawals.iter().enumerate() {
-            // the withdrawal amount is given in Gwei
-            let amount_wei = GWEI_TO_WEI
-                .checked_mul(withdrawal.amount.try_into().unwrap())
-                .unwrap();
-
-            #[cfg(not(target_os = "zkvm"))]
-            {
-                debug!("Withdrawal no. {}", withdrawal.index);
-                debug!("  Recipient: {:?}", withdrawal.address);
-                debug!("  Value: {}", amount_wei);
-            }
-
-            self.db
-                .as_mut()
-                .unwrap()
-                .increase_balance(to_revm_b160(withdrawal.address), amount_wei)
-                .unwrap();
-
-            // add to trie
-            withdrawals_trie
-                .insert_rlp(&i.to_rlp(), withdrawal)
-                .context("failed to insert withdrawal")?;
-        }
-
-        // Update result header with computed values
-        header.transactions_root = tx_trie.hash();
-        header.receipts_root = receipt_trie.hash();
-        header.logs_bloom = logs_bloom;
-        header.gas_used = cumulative_gas_used;
-        header.withdrawals_root = if spec_id < SpecId::SHANGHAI {
-            None
-        } else {
-            Some(withdrawals_trie.hash())
-        };
-
-        // Leak memory, save cycles
-        guest_mem_forget([tx_trie, receipt_trie, withdrawals_trie]);
-
-        Ok(self)
+    pub fn execute_transactions<T: TxExecStrategy>(self) -> Result<Self> {
+        T::execute_transactions(self)
     }
 
     pub fn build(
@@ -443,57 +253,4 @@ where
 
         Ok(header)
     }
-}
-
-fn fill_tx_env(tx_env: &mut TxEnv, tx: &Transaction, caller: Address) {
-    match &tx.essence {
-        TxEssence::Legacy(tx) => {
-            tx_env.caller = caller;
-            tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
-            tx_env.gas_price = tx.gas_price;
-            tx_env.gas_priority_fee = None;
-            tx_env.transact_to = if let TransactionKind::Call(to_addr) = tx.to {
-                TransactTo::Call(to_revm_b160(to_addr))
-            } else {
-                TransactTo::create()
-            };
-            tx_env.value = tx.value;
-            tx_env.data = tx.data.0.clone();
-            tx_env.chain_id = tx.chain_id;
-            tx_env.nonce = Some(tx.nonce);
-            tx_env.access_list.clear();
-        }
-        TxEssence::Eip2930(tx) => {
-            tx_env.caller = caller;
-            tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
-            tx_env.gas_price = tx.gas_price;
-            tx_env.gas_priority_fee = None;
-            tx_env.transact_to = if let TransactionKind::Call(to_addr) = tx.to {
-                TransactTo::Call(to_revm_b160(to_addr))
-            } else {
-                TransactTo::create()
-            };
-            tx_env.value = tx.value;
-            tx_env.data = tx.data.0.clone();
-            tx_env.chain_id = Some(tx.chain_id);
-            tx_env.nonce = Some(tx.nonce);
-            tx_env.access_list = tx.access_list.clone().into();
-        }
-        TxEssence::Eip1559(tx) => {
-            tx_env.caller = caller;
-            tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
-            tx_env.gas_price = tx.max_fee_per_gas;
-            tx_env.gas_priority_fee = Some(tx.max_priority_fee_per_gas);
-            tx_env.transact_to = if let TransactionKind::Call(to_addr) = tx.to {
-                TransactTo::Call(to_revm_b160(to_addr))
-            } else {
-                TransactTo::create()
-            };
-            tx_env.value = tx.value;
-            tx_env.data = tx.data.0.clone();
-            tx_env.chain_id = Some(tx.chain_id);
-            tx_env.nonce = Some(tx.nonce);
-            tx_env.access_list = tx.access_list.clone().into();
-        }
-    };
 }

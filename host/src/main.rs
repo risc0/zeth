@@ -26,7 +26,9 @@ use risc0_zkvm::{
 };
 use tempfile::tempdir;
 use zeth_guests::{ETH_BLOCK_ELF, ETH_BLOCK_ID};
-use zeth_lib::{block_builder::BlockBuilder, consts::Network, validation::Input};
+use zeth_lib::{
+    block_builder::BlockBuilder, consts::Network, execution::EthTxExecStrategy, validation::Input,
+};
 use zeth_primitives::BlockHash;
 
 #[derive(Parser, Debug)]
@@ -89,7 +91,7 @@ async fn main() -> Result<()> {
             .expect("Error initializing MemDb from Input")
             .initialize_header()
             .expect("Error creating initial block header")
-            .execute_transactions()
+            .execute_transactions::<EthTxExecStrategy>()
             .expect("Error while running transactions");
 
         let fini_db = block_builder.clone().to_db();

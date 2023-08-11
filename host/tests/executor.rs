@@ -14,7 +14,7 @@
 
 use std::{fs::File, io::BufReader, path::PathBuf};
 
-use risc0_zkvm::{serde::from_slice, ExecutorEnv, FileSegmentRef, LocalExecutor};
+use risc0_zkvm::{serde::from_slice, ExecutorEnv, FileSegmentRef, Executor};
 use rstest::rstest;
 use serde::{Deserialize, Serialize};
 use serde_with::{base64::Base64, serde_as};
@@ -44,7 +44,7 @@ fn executor(#[files("testdata/input/*.json")] path: PathBuf) {
         .add_input(&test.input)
         .build()
         .unwrap();
-    let mut exec = LocalExecutor::from_elf(env, ETH_BLOCK_ELF).unwrap();
+    let mut exec = Executor::from_elf(env, ETH_BLOCK_ELF).unwrap();
 
     let segment_dir = tempdir().unwrap();
     let session = exec

@@ -35,17 +35,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 
 [[package]]
-name = "aes"
-version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac1f845298e95f983ff1944b728ae08b8cebab80d684f0a832ed0fc74dfa27e2"
-dependencies = [
- "cfg-if",
- "cipher",
- "cpufeatures",
-]
-
-[[package]]
 name = "ahash"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -477,8 +466,8 @@ dependencies = [
 
 [[package]]
 name = "bonsai-sdk"
-version = "0.2.0"
-source = "git+https://github.com/risc0/risc0.git?branch=release-0.16#0d02111b2f84a53cf6198a0064086b281ed0f749"
+version = "0.3.0"
+source = "git+https://github.com/risc0/risc0.git?branch=release-0.17#da5bc39089c6dba8b03510837f1c7363ed3cc8b7"
 dependencies = [
  "reqwest",
  "serde",
@@ -544,27 +533,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bzip2"
-version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bdb116a6ef3f6c3698828873ad02c3014b3c85cadb88496095628e3ef1e347f8"
-dependencies = [
- "bzip2-sys",
- "libc",
-]
-
-[[package]]
-name = "bzip2-sys"
-version = "0.1.11+1.0.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "736a955f3fa7875102d57c82b8cac37ec45224a07fd32d58f9f7a186b6cd4cdc"
-dependencies = [
- "cc",
- "libc",
- "pkg-config",
-]
-
-[[package]]
 name = "camino"
 version = "1.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -584,9 +552,9 @@ dependencies = [
 
 [[package]]
 name = "cargo_metadata"
-version = "0.15.4"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eee4243f1f26fc7a42710e7439c149e2b10b05472f88090acce52632f231a73a"
+checksum = "e7daec1a2a2129eeba1644b220b4647ec537b0b5d4bfd6876fcc5a540056b592"
 dependencies = [
  "camino",
  "cargo-platform",
@@ -621,16 +589,6 @@ dependencies = [
  "num-traits",
  "serde",
  "winapi",
-]
-
-[[package]]
-name = "cipher"
-version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "773f3b9af64447d2ce9850330c473515014aa235e6a783b02db81ff39e4a3dad"
-dependencies = [
- "crypto-common",
- "inout",
 ]
 
 [[package]]
@@ -697,12 +655,6 @@ name = "const-oid"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "795bc6e66a8e340f075fcf6227e417a2dc976b92b91f3cdc778bb858778b6747"
-
-[[package]]
-name = "constant_time_eq"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
 
 [[package]]
 name = "convert_case"
@@ -958,38 +910,6 @@ name = "downcast-rs"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ea835d29036a4087793836fa931b08837ad5e957da9e23886b29586fb9b6650"
-
-[[package]]
-name = "downloader"
-version = "0.2.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d05213e96f184578b5f70105d4d0a644a168e99e12d7bea0b200c15d67b5c182"
-dependencies = [
- "futures",
- "rand",
- "reqwest",
- "thiserror",
- "tokio",
-]
-
-[[package]]
-name = "dyn_partial_eq"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a07039d197226c4b9a3810c4f165328fb4e715258a4b8584f143d38e9de04301"
-dependencies = [
- "dyn_partial_eq_derive",
-]
-
-[[package]]
-name = "dyn_partial_eq_derive"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e217c6c1435ebf9b88662354589d339192b8eaf506edd22951e75e045c8e8bd"
-dependencies = [
- "quote",
- "syn 1.0.109",
-]
 
 [[package]]
 name = "ecdsa"
@@ -1800,15 +1720,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "inout"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0c10553d664a4d0bcff9f4215d0aac67a639cc68ef660840afe309b807bc9f5"
-dependencies = [
- "generic-array",
-]
-
-[[package]]
 name = "instant"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2348,33 +2259,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "password-hash"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7676374caaee8a325c9e7a2ae557f216c5563a171d6997b0ef8a65af35147700"
-dependencies = [
- "base64ct",
- "rand_core",
- "subtle",
-]
-
-[[package]]
 name = "paste"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "de3145af08024dea9fa9914f381a17b8fc6034dfb00f3a84013f7ff43f29ed4c"
-
-[[package]]
-name = "pbkdf2"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83a0692ec44e4cf1ef28ca317f14f8f07da2d95ec3fa01f86e4467b725e60917"
-dependencies = [
- "digest 0.10.7",
- "hmac",
- "password-hash",
- "sha2",
-]
 
 [[package]]
 name = "percent-encoding"
@@ -2952,26 +2840,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "risc0-binfmt"
+version = "0.17.0"
+source = "git+https://github.com/risc0/risc0.git?branch=release-0.17#da5bc39089c6dba8b03510837f1c7363ed3cc8b7"
+dependencies = [
+ "anyhow",
+ "elf",
+ "log",
+ "risc0-zkp",
+ "risc0-zkvm-platform",
+ "serde",
+]
+
+[[package]]
 name = "risc0-build"
-version = "0.16.1"
-source = "git+https://github.com/risc0/risc0.git?branch=release-0.16#0d02111b2f84a53cf6198a0064086b281ed0f749"
+version = "0.17.0"
+source = "git+https://github.com/risc0/risc0.git?branch=release-0.17#da5bc39089c6dba8b03510837f1c7363ed3cc8b7"
 dependencies = [
  "cargo_metadata",
- "directories",
- "downloader",
- "risc0-zkvm",
+ "risc0-binfmt",
+ "risc0-zkp",
  "risc0-zkvm-platform",
  "serde",
  "serde_json",
- "sha2",
- "tempfile",
- "zip",
 ]
 
 [[package]]
 name = "risc0-build-kernel"
-version = "0.16.1"
-source = "git+https://github.com/risc0/risc0.git?branch=release-0.16#0d02111b2f84a53cf6198a0064086b281ed0f749"
+version = "0.17.0"
+source = "git+https://github.com/risc0/risc0.git?branch=release-0.17#da5bc39089c6dba8b03510837f1c7363ed3cc8b7"
 dependencies = [
  "cc",
  "directories",
@@ -2983,8 +2880,8 @@ dependencies = [
 
 [[package]]
 name = "risc0-circuit-rv32im"
-version = "0.16.1"
-source = "git+https://github.com/risc0/risc0.git?branch=release-0.16#0d02111b2f84a53cf6198a0064086b281ed0f749"
+version = "0.17.0"
+source = "git+https://github.com/risc0/risc0.git?branch=release-0.17#da5bc39089c6dba8b03510837f1c7363ed3cc8b7"
 dependencies = [
  "anyhow",
  "log",
@@ -3000,8 +2897,8 @@ dependencies = [
 
 [[package]]
 name = "risc0-circuit-rv32im-sys"
-version = "0.16.1"
-source = "git+https://github.com/risc0/risc0.git?branch=release-0.16#0d02111b2f84a53cf6198a0064086b281ed0f749"
+version = "0.17.0"
+source = "git+https://github.com/risc0/risc0.git?branch=release-0.17#da5bc39089c6dba8b03510837f1c7363ed3cc8b7"
 dependencies = [
  "glob",
  "risc0-build-kernel",
@@ -3011,8 +2908,8 @@ dependencies = [
 
 [[package]]
 name = "risc0-core"
-version = "0.16.1"
-source = "git+https://github.com/risc0/risc0.git?branch=release-0.16#0d02111b2f84a53cf6198a0064086b281ed0f749"
+version = "0.17.0"
+source = "git+https://github.com/risc0/risc0.git?branch=release-0.17#da5bc39089c6dba8b03510837f1c7363ed3cc8b7"
 dependencies = [
  "bytemuck",
  "rand_core",
@@ -3020,8 +2917,8 @@ dependencies = [
 
 [[package]]
 name = "risc0-sys"
-version = "0.16.1"
-source = "git+https://github.com/risc0/risc0.git?branch=release-0.16#0d02111b2f84a53cf6198a0064086b281ed0f749"
+version = "0.17.0"
+source = "git+https://github.com/risc0/risc0.git?branch=release-0.17#da5bc39089c6dba8b03510837f1c7363ed3cc8b7"
 dependencies = [
  "cc",
  "glob",
@@ -3031,8 +2928,8 @@ dependencies = [
 
 [[package]]
 name = "risc0-zkp"
-version = "0.16.1"
-source = "git+https://github.com/risc0/risc0.git?branch=release-0.16#0d02111b2f84a53cf6198a0064086b281ed0f749"
+version = "0.17.0"
+source = "git+https://github.com/risc0/risc0.git?branch=release-0.17#da5bc39089c6dba8b03510837f1c7363ed3cc8b7"
 dependencies = [
  "anyhow",
  "blake2",
@@ -3052,14 +2949,13 @@ dependencies = [
  "risc0-zkvm-platform",
  "serde",
  "sha2",
- "thiserror",
  "tracing",
 ]
 
 [[package]]
 name = "risc0-zkvm"
-version = "0.16.1"
-source = "git+https://github.com/risc0/risc0.git?branch=release-0.16#0d02111b2f84a53cf6198a0064086b281ed0f749"
+version = "0.17.0"
+source = "git+https://github.com/risc0/risc0.git?branch=release-0.17#da5bc39089c6dba8b03510837f1c7363ed3cc8b7"
 dependencies = [
  "addr2line",
  "anyhow",
@@ -3068,8 +2964,6 @@ dependencies = [
  "bytemuck",
  "cfg-if",
  "crypto-bigint",
- "dyn_partial_eq",
- "elf",
  "generic-array",
  "getrandom",
  "gimli",
@@ -3084,6 +2978,7 @@ dependencies = [
  "protobuf-src",
  "rand",
  "rayon",
+ "risc0-binfmt",
  "risc0-circuit-rv32im",
  "risc0-core",
  "risc0-zkp",
@@ -3098,8 +2993,8 @@ dependencies = [
 
 [[package]]
 name = "risc0-zkvm-platform"
-version = "0.16.1"
-source = "git+https://github.com/risc0/risc0.git?branch=release-0.16#0d02111b2f84a53cf6198a0064086b281ed0f749"
+version = "0.17.0"
+source = "git+https://github.com/risc0/risc0.git?branch=release-0.17#da5bc39089c6dba8b03510837f1c7363ed3cc8b7"
 
 [[package]]
 name = "rlp"
@@ -4524,54 +4419,4 @@ dependencies = [
  "thiserror",
  "tokio",
  "zeth-primitives",
-]
-
-[[package]]
-name = "zip"
-version = "0.6.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "760394e246e4c28189f19d488c058bf16f564016aefac5d32bb1f3b51d5e9261"
-dependencies = [
- "aes",
- "byteorder",
- "bzip2",
- "constant_time_eq",
- "crc32fast",
- "crossbeam-utils",
- "flate2",
- "hmac",
- "pbkdf2",
- "sha1",
- "time",
- "zstd",
-]
-
-[[package]]
-name = "zstd"
-version = "0.11.2+zstd.1.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20cc960326ece64f010d2d2107537f26dc589a6573a316bd5b1dba685fa5fde4"
-dependencies = [
- "zstd-safe",
-]
-
-[[package]]
-name = "zstd-safe"
-version = "5.0.2+zstd.1.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d2a5585e04f9eea4b2a3d1eca508c4dee9592a89ef6f450c11719da0726f4db"
-dependencies = [
- "libc",
- "zstd-sys",
-]
-
-[[package]]
-name = "zstd-sys"
-version = "2.0.8+zstd.1.5.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5556e6ee25d32df2586c098bbfa278803692a20d0ab9565e049480d52707ec8c"
-dependencies = [
- "cc",
- "libc",
- "pkg-config",
 ]

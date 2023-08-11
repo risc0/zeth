@@ -48,6 +48,10 @@ use crate::ethers::{get_proofs, TestProvider};
 
 pub mod ethers;
 
+pub mod guests {
+    include!(concat!(env!("OUT_DIR"), "/methods.rs"));
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TestJson {

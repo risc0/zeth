@@ -750,15 +750,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "eth-test"
-version = "0.1.0"
-dependencies = [
- "k256",
- "risc0-zkvm",
- "zeth-lib",
-]
-
-[[package]]
 name = "ethabi"
 version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2700,6 +2691,15 @@ dependencies = [
  "redox_syscall",
  "rustix",
  "windows-sys",
+]
+
+[[package]]
+name = "test-guest"
+version = "0.1.0"
+dependencies = [
+ "k256",
+ "risc0-zkvm",
+ "zeth-lib",
 ]
 
 [[package]]

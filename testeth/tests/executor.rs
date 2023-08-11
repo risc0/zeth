@@ -24,10 +24,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::{base64::Base64, serde_as};
 use tempfile::tempdir;
-use zeth_guests::ETH_TEST_ELF;
 use zeth_lib::consts::ChainSpec;
 use zeth_primitives::{block::Header, BlockHash};
-use zeth_testeth::{new_builder, TestJson};
+use zeth_testeth::{guests::TEST_GUEST_ELF, new_builder, TestJson};
 
 const SEGMENT_LIMIT_PO2: usize = 21;
 
@@ -98,7 +97,7 @@ fn executor(
             .add_input(&to_vec(&builder.input).unwrap())
             .build()
             .unwrap();
-        let mut exec = LocalExecutor::from_elf(env, ETH_TEST_ELF).unwrap();
+        let mut exec = LocalExecutor::from_elf(env, TEST_GUEST_ELF).unwrap();
 
         let segment_dir = tempdir().unwrap();
         let session = exec

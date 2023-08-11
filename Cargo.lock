@@ -4532,6 +4532,7 @@ dependencies = [
  "hashbrown 0.13.2",
  "log",
  "revm",
+ "risc0-build",
  "risc0-zkvm",
  "rstest",
  "serde",

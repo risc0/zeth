@@ -23,3 +23,9 @@ log = "0.4"
 risc0-zkvm = { workspace = true, features = ["prove"] }
 rstest = "0.18"
 tempfile = "3.6"
+
+[build-dependencies]
+risc0-build = { workspace = true }
+
+[package.metadata.risc0]
+methods = ["testguest"]

@@ -14,7 +14,6 @@
 
 use std::{fs::File, io::BufReader, path::PathBuf};
 
-use hashbrown::HashMap;
 use revm::primitives::SpecId;
 use rstest::rstest;
 use serde_json::Value;
@@ -98,13 +97,15 @@ fn evm(
             let builder = stacker::grow(BIG_STACK_SIZE, move || {
                 builder.execute_transactions::<EthTxExecStrategy>().unwrap()
             });
+            // update the state
+            state = builder.db().unwrap().into();
 
-            let result_header = builder.clone().build(None).unwrap();
+            let result_header = builder.build(None).unwrap();
             // the headers should match
             assert_eq!(result_header.state_root, expected_header.state_root);
             assert_eq!(result_header, expected_header);
 
-            state = builder.to_db().into();
+            // update the headers
             ancestor_headers.push(parent_header);
             parent_header = block_header.into();
         }
@@ -122,7 +123,7 @@ fn new_builder(
     withdrawals: Vec<Withdrawal>,
 ) -> BlockBuilder<MemDb> {
     // create the provider DB
-    let mut provider_db = ProviderDb::new(
+    let provider_db = ProviderDb::new(
         Box::new(TestProvider {
             state,
             header: parent_header.clone(),
@@ -148,13 +149,13 @@ fn new_builder(
         .initialize_header()
         .unwrap();
     // execute the transactions with a larger stack
-    let builder = stacker::grow(BIG_STACK_SIZE, move || {
+    let mut builder = stacker::grow(BIG_STACK_SIZE, move || {
         builder.execute_transactions::<EthTxExecStrategy>().unwrap()
     });
-    provider_db = builder.to_db();
+    let provider_db = builder.mut_db().unwrap();
 
     let init_proofs = provider_db.get_initial_proofs().unwrap();
-    let fini_proofs = HashMap::new();
+    let fini_proofs = get_proofs(provider_db, provider_db.get_latest_db().storage_keys()).unwrap();
     let ancestor_headers = provider_db.get_ancestor_headers().unwrap();
 
     let input: Input = Init {

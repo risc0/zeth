@@ -13,9 +13,7 @@
 // limitations under the License.
 
 use alloy_primitives::{b256, BlockHash, BlockNumber, Bloom, Bytes, B160, B256, B64, U256};
-use alloy_rlp::Encodable;
 use alloy_rlp_derive::RlpEncodable;
-use bytes::BytesMut;
 use serde::{Deserialize, Serialize};
 
 use crate::{keccak::keccak, trie::EMPTY_ROOT};
@@ -92,9 +90,7 @@ impl Default for Header {
 impl Header {
     /// Calculates the block hash.
     pub fn hash(&self) -> BlockHash {
-        let mut bytes = BytesMut::new();
-        self.encode(&mut bytes);
-        keccak(bytes).into()
+        keccak(alloy_rlp::encode(self)).into()
     }
 }
 

@@ -98,7 +98,7 @@ async fn main() -> Result<()> {
             .execute_transactions::<EthTxExecStrategy>()
             .expect("Error while running transactions");
 
-        let fini_db = block_builder.clone().to_db();
+        let fini_db = block_builder.db().unwrap().clone();
         let accounts_len = fini_db.accounts_len();
 
         let mut storage_deltas = Default::default();

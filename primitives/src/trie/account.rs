@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use alloy_primitives::{TxNumber, B256, U256};
-use alloy_rlp_derive::{RlpDecodable, RlpEncodable};
+use alloy_rlp_derive::{RlpDecodable, RlpEncodable, RlpMaxEncodedLen};
 use serde::{Deserialize, Serialize};
 
 use crate::{keccak::KECCAK_EMPTY, trie::EMPTY_ROOT};
 
 /// An Ethereum account as represented in the trie.
-#[derive(Debug, Clone, Serialize, Deserialize, RlpEncodable, RlpDecodable)]
+#[derive(Debug, Clone, Serialize, Deserialize, RlpEncodable, RlpDecodable, RlpMaxEncodedLen)]
 pub struct StateAccount {
     /// Account nonce.
     pub nonce: TxNumber,

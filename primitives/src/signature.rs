@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use alloy_primitives::{B160, U256};
-use alloy_rlp_derive::RlpEncodable;
+use alloy_rlp_derive::{RlpEncodable, RlpMaxEncodedLen};
 use anyhow::Context;
 use k256::{
     ecdsa::{RecoveryId, Signature as K256Signature, VerifyingKey as K256VerifyingKey},
@@ -28,11 +28,18 @@ use crate::{
 };
 
 /// A signature that can be used to recover the signing public key.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, RlpEncodable)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, RlpEncodable, RlpMaxEncodedLen)]
 pub struct TxSignature {
     pub v: u64,
     pub r: U256,
     pub s: U256,
+}
+
+impl TxSignature {
+    /// Length of the RLP payload in bytes.
+    pub(crate) fn payload_length(&self) -> usize {
+        self._alloy_rlp_payload_length()
+    }
 }
 
 impl Transaction {

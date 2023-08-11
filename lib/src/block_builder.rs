@@ -80,8 +80,14 @@ where
         }
     }
 
-    pub fn to_db(self) -> D {
-        self.db.unwrap()
+    /// Returns a reference to the database.
+    pub fn db(&self) -> Option<&D> {
+        self.db.as_ref()
+    }
+
+    /// Returns a mutable reference to the database.
+    pub fn mut_db(&mut self) -> Option<&mut D> {
+        self.db.as_mut()
     }
 
     pub fn with_chain_spec(mut self, chain_spec: ChainSpec) -> Self {

@@ -13,11 +13,13 @@
 // limitations under the License.
 
 use alloy_primitives::B160;
-use alloy_rlp_derive::RlpEncodable;
+use alloy_rlp_derive::{RlpEncodable, RlpMaxEncodedLen};
 use serde::{Deserialize, Serialize};
 
 /// A validator withdrawal from the consensus layer ([EIP-4895](https://eips.ethereum.org/EIPS/eip-4895)).
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, RlpEncodable)]
+#[derive(
+    Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, RlpEncodable, RlpMaxEncodedLen,
+)]
 pub struct Withdrawal {
     /// Monotonically increasing identifier assigned by consensus layer.
     pub index: u64,

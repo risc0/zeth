@@ -24,8 +24,7 @@ jobs:
     - uses: risc0/risc0/.github/actions/rustup@release-0.17
     - uses: risc0/risc0/.github/actions/sccache@release-0.17
     - run: cargo install cargo-risczero && cargo risczero install
-    - name: Cargo test
-      run: cargo test --workspace
+    - run: cargo test --workspace
 
   clippy:
     name: clippy
@@ -37,7 +36,6 @@ jobs:
         submodules: recursive
     - uses: risc0/risc0/.github/actions/rustup@release-0.17
     - uses: risc0/risc0/.github/actions/sccache@release-0.17
-    - run: cargo install cargo-risczero && cargo risczero install
     - run: rustup component add clippy
     - uses: risc0/clippy-action@main
       with:

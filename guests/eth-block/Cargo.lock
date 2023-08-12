@@ -2076,7 +2076,8 @@ dependencies = [
 [[package]]
 name = "risc0-binfmt"
 version = "0.17.0"
-source = "git+https://github.com/risc0/risc0.git?branch=release-0.17#da5bc39089c6dba8b03510837f1c7363ed3cc8b7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47552e56df694790ef3fc91b4e0bb40de97f1ad6916e8545a17b6740f40c31fb"
 dependencies = [
  "anyhow",
  "elf",
@@ -2089,7 +2090,8 @@ dependencies = [
 [[package]]
 name = "risc0-circuit-rv32im"
 version = "0.17.0"
-source = "git+https://github.com/risc0/risc0.git?branch=release-0.17#da5bc39089c6dba8b03510837f1c7363ed3cc8b7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fbb3685e42e4bf1e987b8f52de3606eb26792f4fe76d3ae07c5530b8fac14884"
 dependencies = [
  "anyhow",
  "log",
@@ -2102,7 +2104,8 @@ dependencies = [
 [[package]]
 name = "risc0-core"
 version = "0.17.0"
-source = "git+https://github.com/risc0/risc0.git?branch=release-0.17#da5bc39089c6dba8b03510837f1c7363ed3cc8b7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16ef34344403c55e33095513948ab4f4e034ce5cb940d62470b58d44618603d3"
 dependencies = [
  "bytemuck",
  "rand_core",
@@ -2111,7 +2114,8 @@ dependencies = [
 [[package]]
 name = "risc0-zkp"
 version = "0.17.0"
-source = "git+https://github.com/risc0/risc0.git?branch=release-0.17#da5bc39089c6dba8b03510837f1c7363ed3cc8b7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd3454c4dfb4573178e7d802c0969e658f0bf38e793948b7d77cb57455a52993"
 dependencies = [
  "anyhow",
  "blake2",
@@ -2131,7 +2135,8 @@ dependencies = [
 [[package]]
 name = "risc0-zkvm"
 version = "0.17.0"
-source = "git+https://github.com/risc0/risc0.git?branch=release-0.17#da5bc39089c6dba8b03510837f1c7363ed3cc8b7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3363c73f05de3d3474b1796ebce5c19094820bc155f808f3172864991964758f"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -2154,7 +2159,8 @@ dependencies = [
 [[package]]
 name = "risc0-zkvm-platform"
 version = "0.17.0"
-source = "git+https://github.com/risc0/risc0.git?branch=release-0.17#da5bc39089c6dba8b03510837f1c7363ed3cc8b7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be7dfd4644e051a450f2d4acecb37409fbdfb9a520cd6e96da3b17d415b92771"
 
 [[package]]
 name = "rlp"

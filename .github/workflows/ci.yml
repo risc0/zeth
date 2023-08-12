@@ -36,7 +36,6 @@ jobs:
         submodules: recursive
     - uses: risc0/risc0/.github/actions/rustup@release-0.17
     - uses: risc0/risc0/.github/actions/sccache@release-0.17
-    - run: rustup component add clippy
     - uses: risc0/clippy-action@main
       with:
         reporter: 'github-pr-check'

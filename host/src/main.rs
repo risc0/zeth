@@ -47,7 +47,13 @@ struct Args {
     /// [default: host/testdata]
     cache: Option<String>,
 
-    #[clap(short, long, require_equals = true, value_enum, default_value = "ethereum")]
+    #[clap(
+        short,
+        long,
+        require_equals = true,
+        value_enum,
+        default_value = "ethereum"
+    )]
     /// Network name.
     network: Network,
 
@@ -64,7 +70,7 @@ struct Args {
     /// Whether to submit the proving workload to Bonsai.
     submit_to_bonsai: bool,
 
-    #[clap(short,long, require_equals = true)]
+    #[clap(short, long, require_equals = true)]
     /// Bonsai Session UUID to use for receipt verification.
     verify_bonsai_receipt_uuid: Option<String>,
 }

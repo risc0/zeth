@@ -15,25 +15,28 @@
 #![no_main]
 
 use risc0_zkvm::guest::env;
-use zeth_lib::{block_builder::BlockBuilder, validation::Input};
+use zeth_lib::{
+    block_builder::BlockBuilder, consts::ETH_MAINNET_CHAIN_SPEC, execution::EthTxExecStrategy,
+    mem_db::MemDb, validation::Input,
+};
 
 risc0_zkvm::guest::entry!(main);
 
 pub fn main() {
+    // Read the input previous block and transaction data
     let input: Input = env::read();
-
-    let result = BlockBuilder::from(input)
-        .initialize_evm_storage()
+    // Build the resulting block
+    let output = BlockBuilder::<MemDb>::new(&ETH_MAINNET_CHAIN_SPEC, input)
+        .initialize_db()
         .expect("Failed to create in-memory evm storage")
         .initialize_header()
         .expect("Failed to create the initial block header fields")
-        .execute_transactions()
+        .execute_transactions::<EthTxExecStrategy>()
         .expect("Failed to execute transactions")
         .build(None)
         .expect("Failed to build the resulting block");
-
-    env::commit(&result.hash());
-
+    // Output the resulting block's hash to the journal
+    env::commit(&output.hash());
     // Leak memory, save cycles
-    core::mem::forget(result);
+    core::mem::forget(output);
 }

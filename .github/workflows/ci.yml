@@ -24,7 +24,7 @@ jobs:
     - uses: risc0/risc0/.github/actions/rustup@release-0.17
     - uses: risc0/risc0/.github/actions/sccache@release-0.17
     - run: cargo install cargo-risczero && cargo risczero install
-    - run: cargo test --workspace
+    - run: cargo test --workspace --all-targets --all-features
 
   clippy:
     name: clippy
@@ -39,6 +39,7 @@ jobs:
     - uses: risc0/clippy-action@main
       with:
         reporter: 'github-pr-check'
+        fail_on_error: true
         github_token: ${{ secrets.GITHUB_TOKEN }}
         clippy_flags: --workspace --all-targets --all-features -- -Dwarnings
 

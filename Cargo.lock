@@ -4367,13 +4367,42 @@ dependencies = [
  "risc0-zkvm",
  "rstest",
  "serde",
- "serde_json",
- "serde_with",
  "tempfile",
  "tokio",
+ "zeth-guests",
+ "zeth-lib",
  "zeth-primitives",
- "zeth_guests",
- "zeth_lib",
+]
+
+[[package]]
+name = "zeth-guests"
+version = "0.1.0"
+dependencies = [
+ "risc0-build",
+]
+
+[[package]]
+name = "zeth-lib"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "chrono",
+ "ethers-core",
+ "ethers-providers",
+ "flate2",
+ "hashbrown 0.13.2",
+ "hex-literal",
+ "log",
+ "once_cell",
+ "revm",
+ "ruint",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "thiserror",
+ "tokio",
+ "zeth-primitives",
 ]
 
 [[package]]
@@ -4399,35 +4428,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeth_guests"
-version = "0.1.0"
-dependencies = [
- "risc0-build",
-]
-
-[[package]]
-name = "zeth_lib"
+name = "zeth-testeth"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bincode",
- "chrono",
  "env_logger",
  "ethers-core",
- "ethers-providers",
- "flate2",
  "hashbrown 0.13.2",
- "hex-literal",
  "log",
- "once_cell",
  "revm",
+ "risc0-build",
+ "risc0-zkvm",
  "rstest",
- "ruint",
  "serde",
  "serde_json",
  "serde_with",
  "stacker",
- "thiserror",
- "tokio",
+ "tempfile",
+ "zeth-guests",
+ "zeth-lib",
  "zeth-primitives",
 ]

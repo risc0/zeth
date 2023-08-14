@@ -20,19 +20,12 @@ use assert_cmd::Command;
 use rstest::rstest;
 
 #[rstest]
-fn block_cli(#[files("testdata/*.json.gz")] mut path: PathBuf) {
+fn block_cli_ethereum(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
     let block_no = String::from(path.file_prefix().unwrap().to_str().unwrap());
 
-    path.pop();
-
-    let mut cmd = Command::cargo_bin("zeth").unwrap();
-    let assert = cmd
-        .args([
-            "--cache-path",
-            path.to_str().unwrap(),
-            "--block-no",
-            &block_no,
-        ])
-        .assert();
-    assert.success();
+    Command::cargo_bin("zeth")
+        .unwrap()
+        .args(["--cache=testdata", &format!("--block-no={}", &block_no)])
+        .assert()
+        .success();
 }

@@ -37,7 +37,8 @@ use zeth_primitives::{
 
 use crate::{
     block_builder::BlockBuilder,
-    consts::{ChainSpec, MAINNET},
+    consts::ETH_MAINNET_CHAIN_SPEC,
+    execution::EthTxExecStrategy,
     host::{
         mpt::{orphaned_digests, resolve_digests, shorten_key},
         provider::{new_provider, BlockQuery},
@@ -60,7 +61,6 @@ pub struct Init {
     pub fini_withdrawals: Vec<Withdrawal>,
     pub fini_proofs: HashMap<B160, EIP1186ProofResponse>,
     pub ancestor_headers: Vec<Header>,
-    pub chain_spec: ChainSpec,
 }
 
 pub fn get_initial_data(
@@ -116,14 +116,14 @@ pub fn get_initial_data(
             .map(|w| w.try_into().unwrap())
             .collect(),
         parent_header: init_block.clone().try_into()?,
-        chain_spec: MAINNET.clone(),
         ..Default::default()
     };
 
     // Create the block builder, run the transactions and extract the DB
-    let mut builder = BlockBuilder::new(Some(provider_db), input)
+    let mut builder = BlockBuilder::new(&ETH_MAINNET_CHAIN_SPEC, input)
+        .with_db(provider_db)
         .initialize_header()?
-        .execute_transactions()?;
+        .execute_transactions::<EthTxExecStrategy>()?;
     let provider_db = builder.mut_db().unwrap();
 
     info!("Gathering inclusion proofs ...");
@@ -165,7 +165,6 @@ pub fn get_initial_data(
         fini_withdrawals: withdrawals,
         fini_proofs,
         ancestor_headers,
-        chain_spec: MAINNET.clone(),
     })
 }
 
@@ -455,7 +454,6 @@ impl Into<Input> for Init {
 
         // Create the block builder input
         Input {
-            chain_spec: self.chain_spec,
             parent_header: self.init_block,
             beneficiary: self.fini_block.beneficiary,
             gas_limit: self.fini_block.gas_limit,

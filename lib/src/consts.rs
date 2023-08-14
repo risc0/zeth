@@ -14,8 +14,10 @@
 
 //! Constants for the Ethereum protocol.
 
+use core::str::FromStr;
 use std::collections::BTreeMap;
 
+use anyhow::bail;
 use once_cell::sync::Lazy;
 use revm::primitives::SpecId;
 use serde::{Deserialize, Serialize};
@@ -40,16 +42,11 @@ pub const MAX_BLOCK_HASH_AGE: u64 = 256;
 /// Multiplier for converting gwei to wei.
 pub const GWEI_TO_WEI: U256 = uint!(1_000_000_000_U256);
 
-/// [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559) parameter.
-pub const BASE_FEE_MAX_CHANGE_DENOMINATOR: U256 = uint!(8_U256);
-/// [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559) parameter.
-pub const ELASTICITY_MULTIPLIER: U256 = uint!(2_U256);
-
 /// Minimum supported protocol version: Paris (Block no. 15537394).
 pub const MIN_SPEC_ID: SpecId = SpecId::MERGE;
 
 /// The Ethereum mainnet specification.
-pub static MAINNET: Lazy<ChainSpec> = Lazy::new(|| {
+pub static ETH_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| {
     ChainSpec {
         chain_id: 1,
         hard_forks: BTreeMap::from([
@@ -59,6 +56,12 @@ pub static MAINNET: Lazy<ChainSpec> = Lazy::new(|| {
             (SpecId::SHANGHAI, ForkCondition::Block(17034870)),
             (SpecId::CANCUN, ForkCondition::TBD),
         ]),
+        eip_1559_constants: Eip1559Constants {
+            base_fee_change_denominator: uint!(8_U256),
+            base_fee_max_increase_denominator: uint!(8_U256),
+            base_fee_max_decrease_denominator: uint!(8_U256),
+            elasticity_multiplier: uint!(2_U256),
+        },
     }
 });
 
@@ -81,19 +84,46 @@ impl ForkCondition {
     }
 }
 
+/// [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559) parameters.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+pub struct Eip1559Constants {
+    pub base_fee_change_denominator: U256,
+    pub base_fee_max_increase_denominator: U256,
+    pub base_fee_max_decrease_denominator: U256,
+    pub elasticity_multiplier: U256,
+}
+
+impl Default for Eip1559Constants {
+    /// Defaults to Ethereum network values
+    fn default() -> Self {
+        Self {
+            base_fee_change_denominator: uint!(8_U256),
+            base_fee_max_increase_denominator: uint!(8_U256),
+            base_fee_max_decrease_denominator: uint!(8_U256),
+            elasticity_multiplier: uint!(2_U256),
+        }
+    }
+}
+
 /// Specification of a specific chain.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ChainSpec {
     chain_id: ChainId,
     hard_forks: BTreeMap<SpecId, ForkCondition>,
+    eip_1559_constants: Eip1559Constants,
 }
 
 impl ChainSpec {
     /// Creates a new configuration consisting of only one specification ID.
-    pub fn new_single(chain_id: ChainId, spec_id: SpecId) -> Self {
+    pub fn new_single(
+        chain_id: ChainId,
+        spec_id: SpecId,
+        eip_1559_constants: Eip1559Constants,
+    ) -> Self {
         ChainSpec {
             chain_id,
             hard_forks: BTreeMap::from([(spec_id, ForkCondition::Block(0))]),
+            eip_1559_constants,
         }
     }
     /// Returns the network chain ID.
@@ -109,6 +139,35 @@ impl ChainSpec {
         }
         unreachable!()
     }
+    /// Returns the Eip1559 constants
+    pub fn gas_constants(&self) -> &Eip1559Constants {
+        &self.eip_1559_constants
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub enum Network {
+    #[default]
+    Ethereum,
+}
+
+impl FromStr for Network {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "ethereum" => Ok(Network::Ethereum),
+            _ => bail!("Unknown network"),
+        }
+    }
+}
+
+impl ToString for Network {
+    fn to_string(&self) -> String {
+        match self {
+            Network::Ethereum => String::from("ethereum"),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -117,9 +176,9 @@ mod tests {
 
     #[test]
     fn revm_spec_id() {
-        assert!(MAINNET.spec_id(15537393) < SpecId::MERGE);
-        assert_eq!(MAINNET.spec_id(15537394), SpecId::MERGE);
-        assert_eq!(MAINNET.spec_id(17034869), SpecId::MERGE);
-        assert_eq!(MAINNET.spec_id(17034870), SpecId::SHANGHAI);
+        assert!(ETH_MAINNET_CHAIN_SPEC.spec_id(15537393) < SpecId::MERGE);
+        assert_eq!(ETH_MAINNET_CHAIN_SPEC.spec_id(15537394), SpecId::MERGE);
+        assert_eq!(ETH_MAINNET_CHAIN_SPEC.spec_id(17034869), SpecId::MERGE);
+        assert_eq!(ETH_MAINNET_CHAIN_SPEC.spec_id(17034870), SpecId::SHANGHAI);
     }
 }

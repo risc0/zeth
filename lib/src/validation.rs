@@ -24,15 +24,13 @@ use zeth_primitives::{
 };
 
 use crate::consts::{
-    ChainSpec, BASE_FEE_MAX_CHANGE_DENOMINATOR, ELASTICITY_MULTIPLIER, GAS_LIMIT_BOUND_DIVISOR,
-    MAX_BLOCK_HASH_AGE, MAX_EXTRA_DATA_BYTES, MIN_GAS_LIMIT, MIN_SPEC_ID, ONE,
+    ChainSpec, Eip1559Constants, GAS_LIMIT_BOUND_DIVISOR, MAX_BLOCK_HASH_AGE, MAX_EXTRA_DATA_BYTES,
+    MIN_GAS_LIMIT, MIN_SPEC_ID, ONE,
 };
 
 /// External block input.
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct Input {
-    /// Chain spec
-    pub chain_spec: ChainSpec,
     /// Previous block header
     pub parent_header: Header,
     /// Address to which all priority fees in this block are transferred.
@@ -189,27 +187,34 @@ pub fn compute_spec_id(chain_spec: &ChainSpec, block_number: BlockNumber) -> Res
 }
 
 /// Calculate base fee for next block. [EIP-1559](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1559.md) spec
-pub fn compute_base_fee(parent: &Header) -> Result<U256> {
-    let parent_gas_target = parent.gas_limit / ELASTICITY_MULTIPLIER;
+pub fn compute_base_fee(parent: &Header, eip_1559_constants: &Eip1559Constants) -> Result<U256> {
+    let parent_gas_target = parent.gas_limit / eip_1559_constants.elasticity_multiplier;
 
     match parent.gas_used.cmp(&parent_gas_target) {
         std::cmp::Ordering::Equal => Ok(parent.base_fee_per_gas),
 
         std::cmp::Ordering::Greater => {
             let gas_used_delta = parent.gas_used - parent_gas_target;
-            let base_fee_delta = ONE.max(
-                parent.base_fee_per_gas * gas_used_delta
-                    / parent_gas_target
-                    / BASE_FEE_MAX_CHANGE_DENOMINATOR,
-            );
+            let base_fee_delta = ONE
+                .max(
+                    parent.base_fee_per_gas * gas_used_delta
+                        / parent_gas_target
+                        / eip_1559_constants.base_fee_change_denominator,
+                )
+                .min(
+                    parent.base_fee_per_gas / eip_1559_constants.base_fee_max_increase_denominator,
+                );
             Ok(parent.base_fee_per_gas + base_fee_delta)
         }
 
         std::cmp::Ordering::Less => {
             let gas_used_delta = parent_gas_target - parent.gas_used;
-            let base_fee_delta = parent.base_fee_per_gas * gas_used_delta
+            let base_fee_delta = (parent.base_fee_per_gas * gas_used_delta
                 / parent_gas_target
-                / BASE_FEE_MAX_CHANGE_DENOMINATOR;
+                / eip_1559_constants.base_fee_change_denominator)
+                .min(
+                    parent.base_fee_per_gas / eip_1559_constants.base_fee_max_decrease_denominator,
+                );
             Ok(parent.base_fee_per_gas - base_fee_delta)
         }
     }

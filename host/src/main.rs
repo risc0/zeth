@@ -26,33 +26,57 @@ use risc0_zkvm::{
 };
 use tempfile::tempdir;
 use zeth_guests::{ETH_BLOCK_ELF, ETH_BLOCK_ID};
-use zeth_lib::{block_builder::BlockBuilder, validation::Input};
+use zeth_lib::{
+    block_builder::BlockBuilder,
+    consts::{Network, ETH_MAINNET_CHAIN_SPEC},
+    execution::EthTxExecStrategy,
+    mem_db::MemDb,
+    validation::Input,
+};
 use zeth_primitives::BlockHash;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
-    #[clap(short, long)]
+    #[clap(short, long, require_equals = true)]
+    /// URL of the chain RPC node.
     rpc_url: Option<String>,
 
-    #[clap(short, long)]
-    cache_path: Option<String>,
+    #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "host/testdata")]
+    /// Use a local directory as a cache for RPC calls. Accepts a custom directory.
+    /// [default: host/testdata]
+    cache: Option<String>,
 
-    #[clap(short, long)]
+    #[clap(
+        short,
+        long,
+        require_equals = true,
+        value_enum,
+        default_value = "ethereum"
+    )]
+    /// Network name.
+    network: Network,
+
+    #[clap(short, long, require_equals = true)]
+    /// Block number to validate.
     block_no: u64,
 
-    #[clap(short, long, default_value_t = 0)]
-    local_exec: u32,
+    #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "20")]
+    /// Runs the verification inside the zkvm executor locally. Accepts a custom maximum
+    /// segment cycle count as a power of 2. [default: 20]
+    local_exec: Option<usize>,
 
-    #[clap(long, default_value_t = false)]
-    bonsai_submit: bool,
+    #[clap(short, long, default_value_t = false)]
+    /// Whether to submit the proving workload to Bonsai.
+    submit_to_bonsai: bool,
 
-    #[clap(long)]
-    bonsai_verify: Option<String>,
+    #[clap(short, long, require_equals = true)]
+    /// Bonsai Session UUID to use for receipt verification.
+    verify_bonsai_receipt_uuid: Option<String>,
 }
 
-fn cache_file_path(cache_path: &String, block_no: u64, ext: &str) -> String {
-    format!("{}/{}.{}", cache_path, block_no, ext)
+fn cache_file_path(cache_path: &String, network: &String, block_no: u64, ext: &str) -> String {
+    format!("{}/{}/{}.{}", cache_path, network, block_no, ext)
 }
 
 #[tokio::main]
@@ -62,9 +86,9 @@ async fn main() -> Result<()> {
 
     // Fetch all of the initial data
     let rpc_cache = args
-        .cache_path
+        .cache
         .as_ref()
-        .map(|dir| cache_file_path(dir, args.block_no, "json.gz"));
+        .map(|dir| cache_file_path(dir, &args.network.to_string(), args.block_no, "json.gz"));
 
     let init = tokio::task::spawn_blocking(move || {
         zeth_lib::host::get_initial_data(rpc_cache, args.rpc_url, args.block_no)
@@ -81,12 +105,12 @@ async fn main() -> Result<()> {
 
         info!("Running from memory ...");
 
-        let block_builder = BlockBuilder::from(input)
-            .initialize_evm_storage()
+        let block_builder = BlockBuilder::<MemDb>::new(&ETH_MAINNET_CHAIN_SPEC, input)
+            .initialize_db()
             .expect("Error initializing MemDb from Input")
             .initialize_header()
             .expect("Error creating initial block header")
-            .execute_transactions()
+            .execute_transactions::<EthTxExecStrategy>()
             .expect("Error while running transactions");
 
         let fini_db = block_builder.db().unwrap().clone();
@@ -151,9 +175,7 @@ async fn main() -> Result<()> {
     }
 
     // Run in the executor (if requested)
-    if args.local_exec > 0 {
-        let segment_limit_po2 = args.local_exec as usize;
-
+    if let Some(segment_limit_po2) = args.local_exec {
         info!(
             "Running in executor with segment_limit_po2 = {:?}",
             segment_limit_po2
@@ -230,10 +252,10 @@ async fn main() -> Result<()> {
         }
     }
 
-    let mut bonsai_session_uuid = args.bonsai_verify;
+    let mut bonsai_session_uuid = args.verify_bonsai_receipt_uuid;
 
     // Run in Bonsai (if requested)
-    if bonsai_session_uuid.is_none() && args.bonsai_submit {
+    if bonsai_session_uuid.is_none() && args.submit_to_bonsai {
         info!("Creating Bonsai client");
         let client = bonsai_sdk::Client::from_env().expect("Could not create Bonsai client");
 

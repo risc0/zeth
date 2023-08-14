@@ -17,7 +17,7 @@ use std::{fs::File, io::BufReader, path::PathBuf};
 use revm::primitives::SpecId;
 use risc0_zkvm::{
     serde::{from_slice, to_vec},
-    ExecutorEnv, FileSegmentRef, LocalExecutor,
+    Executor, ExecutorEnv, FileSegmentRef,
 };
 use rstest::rstest;
 use serde::{Deserialize, Serialize};
@@ -97,7 +97,7 @@ fn executor(
             .add_input(&to_vec(&builder.input).unwrap())
             .build()
             .unwrap();
-        let mut exec = LocalExecutor::from_elf(env, TEST_GUEST_ELF).unwrap();
+        let mut exec = Executor::from_elf(env, TEST_GUEST_ELF).unwrap();
 
         let segment_dir = tempdir().unwrap();
         let session = exec

@@ -293,11 +293,12 @@ impl Encodable for Transaction {
     /// Returns the length of the encoding of the transaction in bytes.
     #[inline]
     fn length(&self) -> usize {
-        let mut payload_length = self.essence.payload_length() + self.signature.payload_length();
+        let payload_length = self.essence.payload_length() + self.signature.payload_length();
+        let mut length = payload_length + alloy_rlp::length_of_length(payload_length);
         if self.tx_type() != 0 {
-            payload_length += 1;
+            length += 1;
         }
-        payload_length + alloy_rlp::length_of_length(payload_length)
+        length
     }
 }
 
@@ -555,6 +556,56 @@ mod tests {
         assert_eq!(
             "0x4b9f4114d50e7907bff87728a060ce8d53bf4cf7",
             recovered.to_string()
+        );
+    }
+
+    #[test]
+    fn rlp() {
+        // Tx: 0x275631a3549307b2e8c93b18dfcc0fe8aedf0276bb650c28eaa0a8a011d18867
+        let tx = json!({
+                "Eip1559": {
+                  "chain_id": 1,
+                  "nonce": 267,
+                  "max_priority_fee_per_gas": "0x05f5e100",
+                  "max_fee_per_gas": "0x0cb2bf61c2",
+                  "gas_limit": "0x0278be",
+                  "to": { "Call": "0x00005ea00ac477b1030ce78506496e8c2de24bf5" },
+                  "value": "0x01351609ff758000",
+                  "data": "0x161ac21f0000000000000000000000007de6f03b8b50b835f706e51a40b3224465802ddc0000000000000000000000000000a26b00c1f0df003000390027140000faa71900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003360c6ebe",
+                  "access_list": []
+                }
+        });
+        let essence: TxEssence = serde_json::from_value(tx).unwrap();
+
+        let encoded = alloy_rlp::encode(&essence);
+        assert_eq!(encoded.len(), essence.length());
+        assert_eq!(
+            essence.payload_length() + alloy_rlp::length_of_length(essence.payload_length()),
+            encoded.len()
+        );
+
+        let signature: TxSignature = serde_json::from_value(json!({
+            "v": 0,
+            "r": "0x5fc1441d3469a16715c862240794ef76656c284930e08820b79fd703a98b380a",
+            "s": "0x37488b0ceef613dc68116ed44b8e63769dbcf039222e25acc1cb9e85e777ade2"
+        }))
+        .unwrap();
+
+        let encoded = alloy_rlp::encode(&signature);
+        assert_eq!(encoded.len(), signature.length());
+        assert_eq!(
+            signature.payload_length() + alloy_rlp::length_of_length(signature.payload_length()),
+            encoded.len()
+        );
+
+        let transaction = Transaction { essence, signature };
+
+        let encoded = alloy_rlp::encode(&transaction);
+        assert_eq!(encoded.len(), transaction.length());
+
+        assert_eq!(
+            "0x275631a3549307b2e8c93b18dfcc0fe8aedf0276bb650c28eaa0a8a011d18867",
+            transaction.hash().to_string()
         );
     }
 }

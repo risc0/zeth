@@ -43,27 +43,29 @@ struct Args {
     rpc_url: Option<String>,
 
     #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "host/testdata")]
+    /// Use a local directory as a cache for RPC calls. Accepts a custom directory.
     /// [default: host/testdata]
     cache: Option<String>,
 
     #[clap(short, long, value_enum, default_value = "ethereum")]
-    /// Network name
+    /// Network name.
     network: Network,
 
     #[clap(short, long)]
-    /// Block number to validate
+    /// Block number to validate.
     block_no: u64,
 
-    #[clap(short, long, default_value_t = 0)]
-    /// Segment size
-    local_exec: u32,
+    #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "20")]
+    /// Runs the verification inside the zkvm executor locally. Accepts a custom maximum
+    /// segment cycle count as a power of 2. [default: 20]
+    local_exec: Option<usize>,
 
     #[clap(long, default_value_t = false)]
-    /// Whether to submit the proving workload to Bonsai
+    /// Whether to submit the proving workload to Bonsai.
     bonsai_submit: bool,
 
     #[clap(long)]
-    /// Bonsai Session UUID to use for receipt verification
+    /// Bonsai Session UUID to use for receipt verification.
     bonsai_verify: Option<String>,
 }
 
@@ -167,9 +169,7 @@ async fn main() -> Result<()> {
     }
 
     // Run in the executor (if requested)
-    if args.local_exec > 0 {
-        let segment_limit_po2 = args.local_exec as usize;
-
+    if let Some(segment_limit_po2) = args.local_exec {
         info!(
             "Running in executor with segment_limit_po2 = {:?}",
             segment_limit_po2

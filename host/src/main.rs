@@ -22,7 +22,7 @@ use clap::Parser;
 use log::{error, info};
 use risc0_zkvm::{
     serde::{from_slice, to_vec},
-    ExecutorEnv, FileSegmentRef, LocalExecutor, MemoryImage, Program, SessionReceipt,
+    Executor, ExecutorEnv, FileSegmentRef, MemoryImage, Program, Receipt,
 };
 use tempfile::tempdir;
 use zeth_guests::{ETH_BLOCK_ELF, ETH_BLOCK_ID};
@@ -183,7 +183,7 @@ async fn main() -> Result<()> {
             builder.trace_callback(profiler.make_trace_callback());
 
             let env = builder.build().unwrap();
-            let mut exec = LocalExecutor::from_elf(env, ETH_BLOCK_ELF).unwrap();
+            let mut exec = Executor::from_elf(env, ETH_BLOCK_ELF).unwrap();
 
             let segment_dir = tempdir().unwrap();
 
@@ -295,7 +295,7 @@ async fn main() -> Result<()> {
                 let receipt_buf = client
                     .download(&receipt_url)
                     .expect("Could not download receipt");
-                let receipt: SessionReceipt =
+                let receipt: Receipt =
                     bincode::deserialize(&receipt_buf).expect("Could not deserialize receipt");
                 receipt
                     .verify(ETH_BLOCK_ID)

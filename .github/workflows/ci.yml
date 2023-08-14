@@ -16,15 +16,15 @@ jobs:
   test:
     name: test
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
     - uses: actions/checkout@v3
       with:
         submodules: recursive
-    - uses: risc0/risc0/.github/actions/rustup@release-0.16
-    - uses: risc0/risc0/.github/actions/sccache@release-0.16
-    - name: Cargo test
-      run: cargo test --workspace
+    - uses: risc0/risc0/.github/actions/rustup@release-0.17
+    - uses: risc0/risc0/.github/actions/sccache@release-0.17
+    - run: cargo install cargo-risczero && cargo risczero install
+    - run: cargo test --workspace
 
   clippy:
     name: clippy
@@ -34,9 +34,8 @@ jobs:
     - uses: actions/checkout@v3
       with:
         submodules: recursive
-    - uses: risc0/risc0/.github/actions/rustup@release-0.16
-    - uses: risc0/risc0/.github/actions/sccache@release-0.16
-    - run: rustup component add clippy
+    - uses: risc0/risc0/.github/actions/rustup@release-0.17
+    - uses: risc0/risc0/.github/actions/sccache@release-0.17
     - uses: risc0/clippy-action@main
       with:
         reporter: 'github-pr-check'
@@ -49,5 +48,5 @@ jobs:
     timeout-minutes: 10
     steps:
     - uses: actions/checkout@v3
-    - uses: risc0/risc0/.github/actions/rustup@release-0.16
+    - uses: risc0/risc0/.github/actions/rustup@release-0.17
     - run: cargo fmt --all --check

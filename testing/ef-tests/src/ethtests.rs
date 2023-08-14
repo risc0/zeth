@@ -22,9 +22,9 @@ use zeth_primitives::block::Header;
 use crate::TestJson;
 
 pub struct EthTestCase {
-    json: TestJson,
-    genesis: Header,
-    chain_spec: ChainSpec,
+    pub json: TestJson,
+    pub genesis: Header,
+    pub chain_spec: ChainSpec,
 }
 
 pub fn read_eth_test(path: PathBuf) -> Vec<EthTestCase> {

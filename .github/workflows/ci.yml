@@ -39,6 +39,7 @@ jobs:
     - uses: risc0/clippy-action@main
       with:
         reporter: 'github-pr-check'
+        fail_on_error: true
         github_token: ${{ secrets.GITHUB_TOKEN }}
         clippy_flags: --workspace --all-targets --all-features -- -Dwarnings
 

@@ -39,24 +39,31 @@ use zeth_primitives::BlockHash;
 #[clap(author, version, about, long_about = None)]
 struct Args {
     #[clap(short, long)]
+    /// URL of the chain RPC node.
     rpc_url: Option<String>,
 
     #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "host/testdata")]
+    /// [default: host/testdata]
     cache: Option<String>,
 
     #[clap(short, long, value_enum, default_value = "ethereum")]
+    /// Network name
     network: Network,
 
     #[clap(short, long)]
+    /// Block number to validate
     block_no: u64,
 
     #[clap(short, long, default_value_t = 0)]
+    /// Segment size
     local_exec: u32,
 
     #[clap(long, default_value_t = false)]
+    /// Whether to submit the proving workload to Bonsai
     bonsai_submit: bool,
 
     #[clap(long)]
+    /// Bonsai Session UUID to use for receipt verification
     bonsai_verify: Option<String>,
 }
 

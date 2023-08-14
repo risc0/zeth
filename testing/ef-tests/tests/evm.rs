@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![cfg(feature = "ef-tests")]
+
 use std::{fs::File, io::BufReader, path::PathBuf};
 
 use revm::primitives::SpecId;

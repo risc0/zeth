@@ -4432,7 +4432,6 @@ name = "zeth-testeth"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bincode",
  "env_logger",
  "ethers-core",
  "hashbrown 0.13.2",

@@ -3,6 +3,9 @@ name = "zeth-testeth"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+ef-tests = []
+
 [dependencies]
 anyhow = "1.0"
 ethers-core = "2.0"
@@ -12,12 +15,11 @@ serde = "1.0"
 serde_json = "1.0"
 serde_with = "3.1"
 stacker = "0.1"
-zeth-guests = { path = "../guests" }
-zeth-lib = { path = "../lib" }
-zeth-primitives = { path = "../primitives" }
+zeth-guests = { path = "../../guests" }
+zeth-lib = { path = "../../lib" }
+zeth-primitives = { path = "../../primitives" }
 
 [dev-dependencies]
-bincode = "1.3"
 env_logger = "0.10"
 log = "0.4"
 risc0-zkvm = { workspace = true, features = ["prove"] }

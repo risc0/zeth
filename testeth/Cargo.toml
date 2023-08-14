@@ -10,7 +10,7 @@ hashbrown = "0.13"
 revm = { version = "3.3", default-features = false, features = ["std", "serde"] }
 serde = "1.0"
 serde_json = "1.0"
-serde_with = { version = "3.1", features = ["base64"] }
+serde_with = "3.1"
 stacker = "0.1"
 zeth-guests = { path = "../guests" }
 zeth-lib = { path = "../lib" }

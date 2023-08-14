@@ -16,7 +16,8 @@
 
 use risc0_zkvm::guest::env;
 use zeth_lib::{
-    block_builder::BlockBuilder, consts::ETH_MAINNET_CHAIN_SPEC, execution::EthTxExecStrategy, validation::Input,
+    block_builder::BlockBuilder, consts::ETH_MAINNET_CHAIN_SPEC, execution::EthTxExecStrategy,
+    mem_db::MemDb, validation::Input,
 };
 
 risc0_zkvm::guest::entry!(main);
@@ -25,9 +26,8 @@ pub fn main() {
     // Read the input previous block and transaction data
     let input: Input = env::read();
     // Build the resulting block
-    let output = BlockBuilder::from(input)
-        .with_chain_spec(ETH_MAINNET_CHAIN_SPEC.clone())
-        .initialize_evm_storage()
+    let output = BlockBuilder::<MemDb>::new(&ETH_MAINNET_CHAIN_SPEC, input)
+        .initialize_db()
         .expect("Failed to create in-memory evm storage")
         .initialize_header()
         .expect("Failed to create the initial block header fields")

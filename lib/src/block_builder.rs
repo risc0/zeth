@@ -14,7 +14,7 @@
 
 use core::mem;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use hashbrown::{hash_map, HashMap};
 use revm::primitives::{Account, AccountInfo, Address, Bytecode, B160, B256, U256};
 use zeth_primitives::{
@@ -29,7 +29,7 @@ use crate::{
     consts::ChainSpec,
     execution::TxExecStrategy,
     guest_mem_forget,
-    mem_db::{AccountState, DbAccount, MemDb},
+    mem_db::{AccountState, DbAccount},
     validation::{
         compute_base_fee, compute_block_number, verify_extra_data, verify_gas_limit,
         verify_parent_chain, verify_state_trie, verify_storage_trie, verify_timestamp, Input,
@@ -47,55 +47,37 @@ pub trait BlockBuilderDatabase: revm::Database + Sized {
     fn update(&mut self, address: Address, account: Account);
 }
 
-#[derive(Clone)]
-pub struct BlockBuilder<D> {
-    pub chain_spec: Option<ChainSpec>,
-    pub db: Option<D>,
-    pub header: Option<Header>,
-    pub input: Input,
+#[derive(Clone, Debug)]
+pub struct BlockBuilder<'a, D> {
+    pub(crate) chain_spec: &'a ChainSpec,
+    pub(crate) input: Input,
+    pub(crate) db: Option<D>,
+    pub(crate) header: Option<Header>,
 }
 
-impl From<Input> for BlockBuilder<MemDb> {
-    fn from(input: Input) -> Self {
+impl<D> BlockBuilder<'_, D>
+where
+    D: BlockBuilderDatabase,
+    <D as revm::Database>::Error: std::fmt::Debug,
+{
+    /// Creates a new block builder.
+    pub fn new(chain_spec: &ChainSpec, input: Input) -> BlockBuilder<'_, D> {
         BlockBuilder {
-            chain_spec: None,
+            chain_spec,
             db: None,
             header: None,
             input,
         }
     }
-}
 
-impl<D> BlockBuilder<D>
-where
-    D: BlockBuilderDatabase,
-    <D as revm::Database>::Error: std::fmt::Debug,
-{
-    pub fn new(chain_spec: Option<ChainSpec>, db: Option<D>, input: Input) -> Self {
-        BlockBuilder {
-            chain_spec,
-            db,
-            header: None,
-            input,
-        }
-    }
-
-    /// Returns a reference to the database.
-    pub fn db(&self) -> Option<&D> {
-        self.db.as_ref()
-    }
-
-    /// Returns a mutable reference to the database.
-    pub fn mut_db(&mut self) -> Option<&mut D> {
-        self.db.as_mut()
-    }
-
-    pub fn with_chain_spec(mut self, chain_spec: ChainSpec) -> Self {
-        self.chain_spec = Some(chain_spec);
+    /// Sets the database.
+    pub fn with_db(mut self, db: D) -> Self {
+        self.db = Some(db);
         self
     }
 
-    pub fn initialize_evm_storage(mut self) -> Result<Self> {
+    /// Initializes the database from the input tries.
+    pub fn initialize_db(mut self) -> Result<Self> {
         verify_state_trie(
             &self.input.parent_state_trie,
             &self.input.parent_header.state_root,
@@ -164,22 +146,20 @@ where
         Ok(self)
     }
 
+    /// Initializes the header. This must be called before executing transactions.
     pub fn initialize_header(mut self) -> Result<Self> {
         // Verify current block
         verify_gas_limit(self.input.gas_limit, self.input.parent_header.gas_limit)?;
         verify_timestamp(self.input.timestamp, self.input.parent_header.timestamp)?;
         verify_extra_data(&self.input.extra_data)?;
         // Initialize result header
-        let Some(ref chain_spec) = self.chain_spec else {
-            bail!("Missing ChainSpec");
-        };
         self.header = Some(Header {
             // Initialize fields that we can compute from the parent
             parent_hash: self.input.parent_header.hash(),
             number: compute_block_number(&self.input.parent_header)?,
             base_fee_per_gas: compute_base_fee(
                 &self.input.parent_header,
-                chain_spec.gas_constants(),
+                self.chain_spec.gas_constants(),
             )?,
             // Initialize metadata from input
             beneficiary: self.input.beneficiary,
@@ -193,10 +173,12 @@ where
         Ok(self)
     }
 
+    /// Executes the transactions.
     pub fn execute_transactions<T: TxExecStrategy>(self) -> Result<Self> {
         T::execute_transactions(self)
     }
 
+    /// Builds the block and returns the header.
     pub fn build(
         mut self,
         mut debug_storage_tries: Option<&mut HashMap<Address, MptNode>>,
@@ -270,5 +252,15 @@ where
         guest_mem_forget(self);
 
         Ok(header)
+    }
+
+    /// Returns a reference to the database.
+    pub fn db(&self) -> Option<&D> {
+        self.db.as_ref()
+    }
+
+    /// Returns a mutable reference to the database.
+    pub fn mut_db(&mut self) -> Option<&mut D> {
+        self.db.as_mut()
     }
 }

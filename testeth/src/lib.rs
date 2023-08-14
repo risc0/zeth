@@ -25,7 +25,7 @@ use zeth_lib::{
         provider_db::ProviderDb,
         Init,
     },
-    mem_db::{DbAccount, MemDb},
+    mem_db::DbAccount,
     validation::Input,
 };
 use zeth_primitives::{
@@ -298,14 +298,14 @@ fn proof_internal(node: &MptNode, key_nibs: &[u8]) -> Result<Vec<Vec<u8>>, anyho
 /// The size of the stack to use for the EVM.
 pub const BIG_STACK_SIZE: usize = 8 * 1024 * 1024;
 
-pub fn new_builder(
-    chain_spec: ChainSpec,
+pub fn create_input(
+    chain_spec: &ChainSpec,
     state: TestState,
     parent_header: Header,
     header: Header,
     transactions: Vec<TestTransaction>,
     withdrawals: Vec<Withdrawal>,
-) -> BlockBuilder<MemDb> {
+) -> Input {
     // create the provider DB
     let provider_db = ProviderDb::new(
         Box::new(TestProvider {
@@ -329,7 +329,8 @@ pub fn new_builder(
     };
 
     // create and run the block builder once to create the initial DB
-    let builder = BlockBuilder::new(Some(chain_spec.clone()), Some(provider_db), input)
+    let builder = BlockBuilder::new(chain_spec, input)
+        .with_db(provider_db)
         .initialize_header()
         .unwrap();
     // execute the transactions with a larger stack
@@ -342,7 +343,7 @@ pub fn new_builder(
     let fini_proofs = get_proofs(provider_db, provider_db.get_latest_db().storage_keys()).unwrap();
     let ancestor_headers = provider_db.get_ancestor_headers().unwrap();
 
-    let input: Input = Init {
+    Init {
         db: provider_db.get_initial_db().clone(),
         init_block: parent_header,
         init_proofs,
@@ -352,8 +353,5 @@ pub fn new_builder(
         fini_proofs,
         ancestor_headers,
     }
-    .into();
-
-    let builder: BlockBuilder<MemDb> = input.into();
-    builder.with_chain_spec(chain_spec)
+    .into()
 }

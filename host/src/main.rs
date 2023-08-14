@@ -30,6 +30,7 @@ use zeth_lib::{
     block_builder::BlockBuilder,
     consts::{Network, ETH_MAINNET_CHAIN_SPEC},
     execution::EthTxExecStrategy,
+    mem_db::MemDb,
     validation::Input,
 };
 use zeth_primitives::BlockHash;
@@ -89,9 +90,8 @@ async fn main() -> Result<()> {
 
         info!("Running from memory ...");
 
-        let block_builder = BlockBuilder::from(input)
-            .with_chain_spec(ETH_MAINNET_CHAIN_SPEC.clone())
-            .initialize_evm_storage()
+        let block_builder = BlockBuilder::<MemDb>::new(&ETH_MAINNET_CHAIN_SPEC, input)
+            .initialize_db()
             .expect("Error initializing MemDb from Input")
             .initialize_header()
             .expect("Error creating initial block header")

@@ -25,7 +25,7 @@ fn block_cli_ethereum(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
 
     Command::cargo_bin("zeth")
         .unwrap()
-        .args(["--cache=testdata", "--block-no", &block_no])
+        .args(["--cache=testdata", &format!("--block-no={}", &block_no)])
         .assert()
         .success();
 }

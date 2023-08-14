@@ -31,24 +31,6 @@ Clone the repository and build with `cargo`:
 $ cargo build --release
 ```
 
-### Configuration
-
-Zeth requires an Ethereum RPC provider.
-Two complementary providers are supported:
-
-* RPC provider. This fetches data from a Web2 RPC provider, such as [Alchemy](https://www.alchemy.com/).
-  Specified using the `--rpc-url=<RPC_URL>` parameter.
-* Cached RPC provider.
-  This fetches RPC data from a local file when possible, and falls back to a Web2 RPC provider when necessary.
-  It amends the local file with results from the Web2 provider so that subsequent runs don't require additional Web2 RPC calls.
-  Specified using the `--cache[=CACHE_DIRECTORY]` parameter.
-
-For proving, Zeth has built-in support for the [Bonsai proving service](https://www.bonsai.xyz/).
-To use this feature, first set the `BONSAI_API_URL` and `BONSAI_API_KEY` environment variables,
-then follow the instructions below for submitting jobs to Bonsai and verifying the proofs.
-
-Need a Bonsai API key? [Sign up today](https://bonsai.xyz/apply).
-
 ### Running
 
 Zeth currently has several modes of execution:
@@ -82,6 +64,16 @@ Options:
           Print version
 ```
 
+Zeth primarily requires an Ethereum RPC provider.
+Two complementary types of providers are supported:
+
+* RPC provider.
+  This fetches data from a Web2 RPC provider, such as [Alchemy](https://www.alchemy.com/).
+  Specified using the `--rpc-url=<RPC_URL>` parameter.
+* Cached RPC provider.
+  This fetches RPC data from a local file when possible, and falls back to a Web2 RPC provider when necessary.
+  It amends the local file with results from the Web2 provider so that subsequent runs don't require additional Web2 RPC calls.
+  Specified using the `--cache[=CACHE_DIRECTORY]` parameter.
 
 **Quick test mode**.
 This is the default.
@@ -114,10 +106,15 @@ $ RUST_LOG=info ./target/release/zeth \
 **Bonsai proving mode**.
 *This mode generates a ZK proof.*
 To run in this mode, add the parameter `--submit-to-bonsai`.
-When run in this mode, Zeth submits a proving task to Bonsai, which then constructs an Ethereum block entirely from
-within the zkVM.
+When run in this mode, Zeth submits a proving task to the [Bonsai proving service](https://www.bonsai.xyz/),
+which then constructs an Ethereum block entirely from within the zkVM.
 This mode checks the correctness of the result using the RPC provider.
 It also outputs the Bonsai session UUID, and polls Bonsai until the proof is complete.
+
+To use this feature, first set the `BONSAI_API_URL` and `BONSAI_API_KEY` environment variables,
+then follow the instructions below for submitting jobs to Bonsai and verifying the proofs.
+
+Need a Bonsai API key? [Sign up today](https://bonsai.xyz/apply).
 
 ```console
 $ RUST_LOG=info ./target/release/zeth \

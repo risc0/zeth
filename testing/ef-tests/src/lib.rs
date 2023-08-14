@@ -50,6 +50,8 @@ use crate::ethers::{get_proofs, TestProvider};
 
 pub mod ethers;
 
+pub mod ethtests;
+
 pub mod guests {
     include!(concat!(env!("OUT_DIR"), "/methods.rs"));
 }

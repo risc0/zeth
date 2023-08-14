@@ -14,19 +14,20 @@
 
 #![cfg(feature = "ef-tests")]
 
-use std::{fs::File, io::BufReader, path::PathBuf};
+use std::path::PathBuf;
 
-use revm::primitives::SpecId;
 use risc0_zkvm::{
     serde::{from_slice, to_vec},
     Executor, ExecutorEnv, FileSegmentRef,
 };
 use rstest::rstest;
-use serde_json::Value;
 use tempfile::tempdir;
-use zeth_lib::consts::ChainSpec;
 use zeth_primitives::{block::Header, BlockHash};
-use zeth_testeth::{create_input, guests::TEST_GUEST_ELF, TestJson};
+use zeth_testeth::{
+    create_input,
+    ethtests::{read_eth_test, EthTestCase},
+    guests::TEST_GUEST_ELF,
+};
 
 const SEGMENT_LIMIT_PO2: usize = 21;
 
@@ -36,26 +37,17 @@ fn executor(
     #[files("testdata/BlockchainTests/GeneralStateTests/**/*Call1024BalanceTooLow.json")]
     path: PathBuf,
 ) {
-    println!("Using file: {}", path.display());
+    let _ = env_logger::builder()
+        .filter_level(log::LevelFilter::Debug)
+        .is_test(true)
+        .try_init();
 
-    let f = File::open(path).unwrap();
-    let mut root: Value = serde_json::from_reader(BufReader::new(f)).unwrap();
-
-    for (name, test) in root.as_object_mut().unwrap() {
-        println!("test '{}'", name);
-        let json: TestJson = serde_json::from_value(test.take()).unwrap();
-
-        let spec: SpecId = json.network.as_str().into();
-        // skip tests with an unsupported network version
-        if spec < SpecId::MERGE || spec > SpecId::SHANGHAI {
-            println!("skipping ({})", json.network);
-            continue;
-        }
-        let chain_spec = ChainSpec::new_single(1, spec, Default::default());
-
-        let genesis: Header = json.genesis.clone().into();
-        assert_eq!(genesis.hash(), json.genesis.hash);
-
+    for EthTestCase {
+        json,
+        genesis,
+        chain_spec,
+    } in read_eth_test(path)
+    {
         // only one block
         assert_eq!(json.blocks.len(), 1usize);
         let block = json.blocks.first().unwrap().clone();

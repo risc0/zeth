@@ -14,16 +14,15 @@
 
 #![cfg(feature = "ef-tests")]
 
-use std::{fs::File, io::BufReader, path::PathBuf};
+use std::path::PathBuf;
 
-use revm::primitives::SpecId;
 use rstest::rstest;
-use serde_json::Value;
-use zeth_lib::{
-    block_builder::BlockBuilder, consts::ChainSpec, execution::EthTxExecStrategy, mem_db::MemDb,
-};
+use zeth_lib::{block_builder::BlockBuilder, execution::EthTxExecStrategy, mem_db::MemDb};
 use zeth_primitives::block::Header;
-use zeth_testeth::*;
+use zeth_testeth::{
+    ethtests::{read_eth_test, EthTestCase},
+    *,
+};
 
 #[rstest]
 fn evm(
@@ -36,28 +35,12 @@ fn evm(
         .is_test(true)
         .try_init();
 
-    println!("Using file: {}", path.display());
-    let f = File::open(path).unwrap();
-    let mut root: Value = serde_json::from_reader(BufReader::new(f)).unwrap();
-
-    for (name, test) in root.as_object_mut().unwrap() {
-        println!("test '{}'", name);
-        let json: TestJson = serde_json::from_value(test.take()).unwrap();
-
-        let spec: SpecId = json.network.as_str().into();
-        // skip tests with an unsupported network version
-        if spec < SpecId::MERGE || spec > SpecId::SHANGHAI {
-            println!("skipping ({})", json.network);
-            continue;
-        }
-        let chain_spec = ChainSpec::new_single(1, spec, Default::default());
-
-        let genesis: Header = json.genesis.clone().into();
-        assert_eq!(genesis.hash(), json.genesis.hash);
-
-        // log the pre-state
-        dbg!(&json.pre);
-
+    for EthTestCase {
+        json,
+        genesis,
+        chain_spec,
+    } in read_eth_test(path)
+    {
         let mut state = json.pre;
         let mut parent_header = genesis;
         let mut ancestor_headers = vec![];

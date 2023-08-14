@@ -38,7 +38,7 @@ use zeth_primitives::BlockHash;
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
-    #[clap(short, long)]
+    #[clap(short, long, require_equals = true)]
     /// URL of the chain RPC node.
     rpc_url: Option<String>,
 
@@ -47,11 +47,11 @@ struct Args {
     /// [default: host/testdata]
     cache: Option<String>,
 
-    #[clap(short, long, value_enum, default_value = "ethereum")]
+    #[clap(short, long, require_equals = true, value_enum, default_value = "ethereum")]
     /// Network name.
     network: Network,
 
-    #[clap(short, long)]
+    #[clap(short, long, require_equals = true)]
     /// Block number to validate.
     block_no: u64,
 
@@ -60,13 +60,13 @@ struct Args {
     /// segment cycle count as a power of 2. [default: 20]
     local_exec: Option<usize>,
 
-    #[clap(long, default_value_t = false)]
+    #[clap(short, long, default_value_t = false)]
     /// Whether to submit the proving workload to Bonsai.
-    bonsai_submit: bool,
+    submit_to_bonsai: bool,
 
-    #[clap(long)]
+    #[clap(short,long, require_equals = true)]
     /// Bonsai Session UUID to use for receipt verification.
-    bonsai_verify: Option<String>,
+    verify_bonsai_receipt_uuid: Option<String>,
 }
 
 fn cache_file_path(cache_path: &String, network: &String, block_no: u64, ext: &str) -> String {
@@ -246,10 +246,10 @@ async fn main() -> Result<()> {
         }
     }
 
-    let mut bonsai_session_uuid = args.bonsai_verify;
+    let mut bonsai_session_uuid = args.verify_bonsai_receipt_uuid;
 
     // Run in Bonsai (if requested)
-    if bonsai_session_uuid.is_none() && args.bonsai_submit {
+    if bonsai_session_uuid.is_none() && args.submit_to_bonsai {
         info!("Creating Bonsai client");
         let client = bonsai_sdk::Client::from_env().expect("Could not create Bonsai client");
 

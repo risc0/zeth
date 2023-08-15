@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use anyhow::{anyhow, bail, Result};
-use hashbrown::HashMap;
+use hashbrown::{hash_map::Iter, HashMap};
 use revm::{
-    db::{CacheDB, DatabaseRef},
-    primitives::{AccountInfo, Bytecode, B160, B256},
+    db::{CacheDB, DatabaseRef, DbAccount},
+    primitives::{Account, AccountInfo, Address, Bytecode, B160, B256},
 };
 use ruint::aliases::U256;
 use zeth_primitives::{
@@ -27,15 +27,17 @@ use zeth_primitives::{
     Bytes,
 };
 
+use crate::block_builder::BlockBuilderDatabase;
+
 pub struct AuthenticatedDb {
     /// State trie of the block.
-    state_trie: MptNode,
+    pub state_trie: MptNode,
     /// Maps each address with its storage trie and the used storage slots.
-    storage_tries: HashMap<B160, MptNode>,
-    /// Maps byte code digests to their preimages
-    contracts: HashMap<B256, Bytecode>,
+    pub storage_tries: HashMap<B160, MptNode>,
+    /// Maps bytecode digests to their preimages
+    pub contracts: HashMap<B256, Bytecode>,
     /// Maps block numbers to their hashes
-    block_hashes: HashMap<U256, B256>,
+    pub block_hashes: HashMap<U256, B256>,
 }
 
 impl DatabaseRef for AuthenticatedDb {
@@ -52,14 +54,14 @@ impl DatabaseRef for AuthenticatedDb {
         self.contracts
             .get(&code_hash)
             .cloned()
-            .ok_or(anyhow!("Missing code"))
+            .ok_or(anyhow!("Missing bytecode!"))
     }
 
     fn storage(&self, address: B160, index: U256) -> Result<U256, Self::Error> {
         Ok(self
             .storage_tries
             .get(&address)
-            .ok_or(anyhow!("Missing account storage"))?
+            .ok_or(anyhow!("Missing account storage trie!"))?
             .get_rlp(&keccak(index.to_be_bytes::<32>()))?
             .unwrap_or_default())
     }
@@ -67,7 +69,7 @@ impl DatabaseRef for AuthenticatedDb {
     fn block_hash(&self, number: U256) -> Result<B256, Self::Error> {
         self.block_hashes
             .get(&number)
-            .ok_or(anyhow!("Missing block hash"))
+            .ok_or(anyhow!("Missing block hash!"))
             .cloned()
     }
 }
@@ -79,11 +81,21 @@ impl AuthenticatedDb {
         contracts: Vec<Bytes>,
         blocks: Vec<&Header>,
     ) -> Result<Self> {
+        // authenticate account storage tries
+        for (address, storage_trie) in &storage_tries {
+            let account = state_trie
+                .get_rlp::<TrieAccount>(&keccak(address))?
+                .ok_or(anyhow!("Missing account state!"))?;
+            if storage_trie.hash() != account.storage_root {
+                bail!("Initial account storage root mismatch!")
+            }
+        }
+        // authenticate historical block hashes
         let mut block_hashes: HashMap<U256, B256> = Default::default();
         blocks.into_iter().fold(Ok(None), |previous, current| {
             if let Ok(Some(parent_hash)) = previous {
                 if parent_hash != current.parent_hash {
-                    bail!("Invalid historical block sequence")
+                    bail!("Invalid historical block sequence!")
                 }
             }
             let current_block_hash = current.hash();
@@ -115,4 +127,27 @@ impl Into<CacheDB<AuthenticatedDb>> for AuthenticatedDb {
             db: self,
         }
     }
+}
+
+pub type CachedAuthDb = CacheDB<AuthenticatedDb>;
+
+impl BlockBuilderDatabase for CachedAuthDb {
+    fn accounts(&self) -> Iter<B160, DbAccount> {
+        todo!()
+    }
+
+    fn increase_balance(&mut self, address: Address, amount: U256) -> Result<(), Self::Error> {
+        todo!()
+    }
+
+    fn update(&mut self, address: Address, account: Account) {
+        todo!()
+    }
+}
+
+pub fn clone_storage_keys(accounts: &HashMap<B160, DbAccount>) -> HashMap<B160, Vec<U256>> {
+    accounts
+        .iter()
+        .map(|(address, account)| (*address, account.storage.keys().cloned().collect()))
+        .collect()
 }

@@ -16,9 +16,11 @@
 
 use risc0_zkvm::guest::env;
 use zeth_lib::{
-    block_builder::BlockBuilder, consts::ChainSpec, execution::EthTxExecStrategy, mem_db::MemDb,
+    block_builder::BlockBuilder, consts::ChainSpec, execution::EthTxExecStrategy,
     validation::Input,
 };
+use zeth_lib::auth_db::CachedAuthDb;
+use zeth_lib::initialization::CachedAuthDbFromInputStrategy;
 
 risc0_zkvm::guest::entry!(main);
 
@@ -28,9 +30,9 @@ pub fn main() {
     // Read the input previous block and transaction data
     let input: Input = env::read();
     // Build the resulting block
-    let output = BlockBuilder::<MemDb>::new(&chain_spec, input)
-        .initialize_db()
-        .expect("Failed to create in-memory evm storage")
+    let output = BlockBuilder::<CachedAuthDb>::new(&chain_spec, input)
+        .initialize_database::<CachedAuthDbFromInputStrategy>()
+        .expect("Failed to create authenticated evm storage")
         .initialize_header()
         .expect("Failed to create the initial block header fields")
         .execute_transactions::<EthTxExecStrategy>()

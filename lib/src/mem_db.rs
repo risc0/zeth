@@ -187,15 +187,9 @@ impl Database for MemDb {
 }
 
 impl BlockBuilderDatabase for MemDb {
-    fn load(accounts: HashMap<B160, DbAccount>, block_hashes: HashMap<u64, B256>) -> Self {
-        MemDb {
-            accounts,
-            block_hashes,
-        }
-    }
-
-    fn accounts(&self) -> hash_map::Iter<B160, DbAccount> {
-        self.accounts.iter()
+    fn accounts(&self) -> hash_map::Iter<B160, revm::db::DbAccount> {
+        todo!()
+        // self.accounts.iter()
     }
 
     fn increase_balance(&mut self, address: B160, amount: U256) -> Result<(), Self::Error> {

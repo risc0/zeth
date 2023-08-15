@@ -16,16 +16,16 @@ use core::fmt::Debug;
 
 use anyhow::{bail, Context, Result};
 use hashbrown::HashMap;
-use revm::primitives::{SpecId, B160 as RevmB160, B256 as RevmB256};
+use revm::primitives::{SpecId, B160 as RevmB160};
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
-    block::Header, revm::to_revm_b256, transaction::Transaction, trie::MptNode,
-    withdrawal::Withdrawal, BlockNumber, Bytes, B160, B256, U256,
+    block::Header, transaction::Transaction, trie::MptNode, withdrawal::Withdrawal, BlockNumber,
+    Bytes, B160, B256, U256,
 };
 
 use crate::consts::{
-    ChainSpec, Eip1559Constants, GAS_LIMIT_BOUND_DIVISOR, MAX_BLOCK_HASH_AGE, MAX_EXTRA_DATA_BYTES,
-    MIN_GAS_LIMIT, MIN_SPEC_ID, ONE,
+    ChainSpec, Eip1559Constants, GAS_LIMIT_BOUND_DIVISOR, MAX_EXTRA_DATA_BYTES, MIN_GAS_LIMIT,
+    MIN_SPEC_ID, ONE,
 };
 
 /// External block input.
@@ -50,14 +50,14 @@ pub struct Input {
     /// State trie of the parent block.
     pub parent_state_trie: MptNode,
     /// Maps each address with its storage trie and the used storage slots.
-    pub parent_storage: HashMap<RevmB160, StorageEntry>,
+    pub parent_storage: HashMap<RevmB160, MptNode>,
     /// The code of all unique contracts.
     pub contracts: Vec<Bytes>,
     /// List of at most 256 previous block headers
     pub ancestor_headers: Vec<Header>,
 }
 
-pub type StorageEntry = (MptNode, Vec<U256>);
+// pub type StorageEntry = (MptNode, Vec<U256>);
 
 pub fn verify_gas_limit(input_gas_limit: U256, parent_gas_limit: U256) -> Result<()> {
     let diff = parent_gas_limit.abs_diff(input_gas_limit);
@@ -104,67 +104,6 @@ pub fn verify_extra_data(input_extra_data: &Bytes) -> Result<()> {
     }
 
     Ok(())
-}
-
-pub fn verify_state_trie(state_trie: &MptNode, parent_state_root: &B256) -> Result<()> {
-    let state_root = state_trie.hash();
-    if &state_root != parent_state_root {
-        bail!(
-            "Invalid state trie: expected {}, got {}",
-            parent_state_root,
-            state_root
-        );
-    }
-
-    Ok(())
-}
-
-pub fn verify_storage_trie(
-    address: impl Debug,
-    storage_trie: &MptNode,
-    account_storage_root: &B256,
-) -> Result<()> {
-    let storage_root = storage_trie.hash();
-    if &storage_root != account_storage_root {
-        bail!(
-            "Invalid storage trie for {:?}: expected {}, got {}",
-            address,
-            account_storage_root,
-            storage_root
-        );
-    }
-
-    Ok(())
-}
-
-pub fn verify_parent_chain(
-    parent: &Header,
-    ancestors: &[Header],
-) -> Result<HashMap<u64, RevmB256>> {
-    let mut block_hashes = HashMap::with_capacity(ancestors.len() + 1);
-    block_hashes.insert(parent.number, to_revm_b256(parent.hash()));
-    let mut prev = parent;
-    for current in ancestors {
-        let current_hash = current.hash();
-        if prev.parent_hash != current_hash {
-            bail!(
-                "Invalid chain: {} is not the parent of {}",
-                current.number,
-                prev.number
-            );
-        }
-        if parent.number < current.number || parent.number - current.number >= MAX_BLOCK_HASH_AGE {
-            bail!(
-                "Invalid chain: {} is not one of the {} most recent blocks",
-                current.number,
-                MAX_BLOCK_HASH_AGE,
-            );
-        }
-        block_hashes.insert(current.number, to_revm_b256(current_hash));
-        prev = current;
-    }
-
-    Ok(block_hashes)
 }
 
 pub fn compute_block_number(parent: &Header) -> Result<BlockNumber> {

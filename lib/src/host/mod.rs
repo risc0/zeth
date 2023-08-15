@@ -36,15 +36,17 @@ use zeth_primitives::{
 };
 
 use crate::{
+    auth_db::{clone_storage_keys, CachedAuthDb},
     block_builder::BlockBuilder,
     consts::ETH_MAINNET_CHAIN_SPEC,
     execution::EthTxExecStrategy,
     host::{
         mpt::{orphaned_digests, resolve_digests, shorten_key},
         provider::{new_provider, BlockQuery},
+        provider_db::ProviderDb,
     },
     mem_db::MemDb,
-    validation::{Input, StorageEntry},
+    validation::Input,
 };
 
 pub mod mpt;
@@ -92,8 +94,7 @@ pub fn get_initial_data(
     info!("Transaction count: {:?}", fini_block.transactions.len());
 
     // Create the provider DB
-    let provider_db =
-        crate::host::provider_db::ProviderDb::new(provider, init_block.number.unwrap().as_u64());
+    let provider_db = ProviderDb::new(provider, init_block.number.unwrap().as_u64());
 
     // Create input
     let input = Input {
@@ -199,18 +200,18 @@ pub enum VerifyError {
 }
 
 pub fn verify_state(
-    mut fini_db: MemDb,
+    mut fini_db: CachedAuthDb,
     fini_proofs: HashMap<B160, EIP1186ProofResponse>,
     mut storage_deltas: HashMap<Address, MptNode>,
 ) -> Result<HashMap<B160, Vec<VerifyError>>> {
     let mut errors = HashMap::new();
-    let fini_storage_keys = fini_db.storage_keys();
+    let fini_storage_keys = clone_storage_keys(&fini_db.accounts);
 
     // Construct expected tries from fini proofs
     let (nodes_by_pointer, mut storage) = proofs_to_tries(fini_proofs.values().cloned().collect());
     storage
         .values_mut()
-        .for_each(|(n, _)| *n = resolve_digests(n, &nodes_by_pointer));
+        .for_each(|n| *n = resolve_digests(n, &nodes_by_pointer));
     storage_deltas
         .values_mut()
         .for_each(|n| *n = resolve_digests(n, &nodes_by_pointer));
@@ -271,7 +272,6 @@ pub fn verify_state(
                 let expected = storage
                     .get(&address)
                     .unwrap()
-                    .0
                     .debug_rlp::<zeth_primitives::U256>();
                 let found_pp = storage_root_node.debug_rlp::<zeth_primitives::U256>();
                 let first_delta = zip(expected, found_pp)
@@ -323,10 +323,7 @@ pub fn verify_state(
 
 fn proofs_to_tries(
     proofs: Vec<EIP1186ProofResponse>,
-) -> (
-    HashMap<MptNodeReference, MptNode>,
-    HashMap<B160, StorageEntry>,
-) {
+) -> (HashMap<MptNodeReference, MptNode>, HashMap<B160, MptNode>) {
     // construct the proof tries
     let mut nodes_by_reference = HashMap::new();
     let mut storage = HashMap::new();
@@ -364,14 +361,15 @@ fn proofs_to_tries(
             // as this is just the digest any tries to update this trie will fail
             MptNodeData::Digest(from_ethers_h256(proof.storage_hash)).into()
         };
-        // collect all storage slots with a proof
-        let slots = proof
-            .storage_proof
-            .into_iter()
-            .map(|p| zeth_primitives::U256::from_be_bytes(p.key.into()))
-            .collect();
+        // // collect all storage slots with a proof
+        // let slots = proof
+        //     .storage_proof
+        //     .into_iter()
+        //     .map(|p| zeth_primitives::U256::from_be_bytes(p.key.into()))
+        //     .collect();
 
-        storage.insert(proof.address.into(), (root_node, slots));
+        // storage.insert(proof.address.into(), (root_node, slots));
+        storage.insert(proof.address.into(), root_node);
     }
     (nodes_by_reference, storage)
 }
@@ -421,7 +419,7 @@ impl Into<Input> for Init {
 
         // identify orphaned digests, that could lead to issues when deleting nodes
         let mut orphans = HashSet::new();
-        for root in storage.values().map(|v| &v.0).chain(once(&state_trie)) {
+        for root in storage.values().map(|v| v).chain(once(&state_trie)) {
             let root = resolve_digests(root, &nodes_by_reference);
             orphans.extend(orphaned_digests(&root));
         }
@@ -441,7 +439,7 @@ impl Into<Input> for Init {
         let state_trie = resolve_digests(&state_trie, &nodes_by_reference);
         storage
             .values_mut()
-            .for_each(|(n, _)| *n = resolve_digests(n, &nodes_by_reference));
+            .for_each(|n| *n = resolve_digests(n, &nodes_by_reference));
 
         info!(
             "The partial state trie consists of {} nodes",
@@ -449,7 +447,7 @@ impl Into<Input> for Init {
         );
         info!(
             "The partial storage tries consist of {} nodes",
-            storage.values().map(|(n, _)| n.size()).sum::<usize>()
+            storage.values().map(|n| n.size()).sum::<usize>()
         );
 
         // Create the block builder input

@@ -17,22 +17,24 @@ use std::collections::BTreeSet;
 use ethers_core::types::{EIP1186ProofResponse, H160, H256};
 use hashbrown::{hash_map, HashMap};
 use revm::{
+    db::DbAccount,
     primitives::{Account, AccountInfo, Bytecode, B160, B256, U256},
-    Database,
+    Database, InMemoryDB,
 };
 use zeth_primitives::block::Header;
 
 use crate::{
+    auth_db::clone_storage_keys,
     block_builder::BlockBuilderDatabase,
     host::provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
-    mem_db::{DbAccount, DbError, MemDb},
+    mem_db::DbError,
 };
 
 pub struct ProviderDb {
     provider: Box<dyn Provider>,
     block_no: u64,
-    initial_db: MemDb,
-    latest_db: MemDb,
+    initial_db: InMemoryDB,
+    latest_db: InMemoryDB,
 }
 
 impl ProviderDb {
@@ -40,8 +42,8 @@ impl ProviderDb {
         ProviderDb {
             provider,
             block_no,
-            initial_db: MemDb::default(),
-            latest_db: MemDb::default(),
+            initial_db: Default::default(),
+            latest_db: Default::default(),
         }
     }
 
@@ -49,11 +51,11 @@ impl ProviderDb {
         self.provider.as_ref()
     }
 
-    pub fn get_initial_db(&self) -> &MemDb {
+    pub fn get_initial_db(&self) -> &InMemoryDB {
         &self.initial_db
     }
 
-    pub fn get_latest_db(&self) -> &MemDb {
+    pub fn get_latest_db(&self) -> &InMemoryDB {
         &self.latest_db
     }
 
@@ -86,15 +88,15 @@ impl ProviderDb {
     pub fn get_initial_proofs(
         &mut self,
     ) -> Result<HashMap<B160, EIP1186ProofResponse>, anyhow::Error> {
-        self.get_proofs(self.block_no, self.initial_db.storage_keys())
+        self.get_proofs(self.block_no, clone_storage_keys(&self.initial_db.accounts))
     }
 
     pub fn get_latest_proofs(
         &mut self,
     ) -> Result<HashMap<B160, EIP1186ProofResponse>, anyhow::Error> {
-        let mut storage_keys = self.initial_db.storage_keys();
+        let mut storage_keys = clone_storage_keys(&self.initial_db.accounts);
 
-        for (address, mut indices) in self.latest_db.storage_keys() {
+        for (address, mut indices) in clone_storage_keys(&self.latest_db.accounts) {
             match storage_keys.get_mut(&address) {
                 Some(initial_indices) => initial_indices.append(&mut indices),
                 None => {
@@ -112,6 +114,7 @@ impl ProviderDb {
             .block_hashes
             .keys()
             .min()
+            .map(|uint| &(*uint).try_into().unwrap())
             .unwrap_or(&self.block_no);
         let headers = (*earliest_block..self.block_no)
             .rev()
@@ -131,6 +134,7 @@ impl Database for ProviderDb {
     type Error = anyhow::Error;
 
     fn basic(&mut self, address: B160) -> Result<Option<AccountInfo>, Self::Error> {
+        // todo: wrap the cache db around the provider db instead!
         match self.latest_db.basic(address) {
             Ok(db_result) => return Ok(db_result),
             Err(DbError::AccountNotFound(_)) => {}
@@ -194,7 +198,7 @@ impl Database for ProviderDb {
         };
 
         self.initial_db
-            .insert_account_storage(&address, index, storage.into());
+            .insert_account_storage(address, index, storage.into())?;
         Ok(storage.into())
     }
 
@@ -220,10 +224,6 @@ impl Database for ProviderDb {
 }
 
 impl BlockBuilderDatabase for ProviderDb {
-    fn load(_accounts: HashMap<B160, DbAccount>, _block_hashes: HashMap<u64, B256>) -> Self {
-        unimplemented!()
-    }
-
     fn accounts(&self) -> hash_map::Iter<B160, DbAccount> {
         self.latest_db.accounts()
     }
@@ -237,6 +237,7 @@ impl BlockBuilderDatabase for ProviderDb {
     }
 
     fn update(&mut self, address: B160, account: Account) {
-        self.latest_db.update(address, account);
+        unimplemented!()
+        // self.latest_db.update(address, account);
     }
 }

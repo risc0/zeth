@@ -16,9 +16,11 @@
 
 use anyhow::bail;
 use hashbrown::HashMap;
+use revm::db::DbAccount;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, NoneAsEmptyString};
 use zeth_lib::{
+    auth_db::clone_storage_keys,
     block_builder::{BlockBuilder, BlockBuilderDatabase},
     consts::ChainSpec,
     execution::EthTxExecStrategy,
@@ -27,7 +29,6 @@ use zeth_lib::{
         provider_db::ProviderDb,
         Init,
     },
-    mem_db::DbAccount,
     validation::Input,
 };
 use zeth_primitives::{
@@ -344,7 +345,11 @@ pub fn create_input(
     let provider_db = builder.mut_db().unwrap();
 
     let init_proofs = provider_db.get_initial_proofs().unwrap();
-    let fini_proofs = get_proofs(provider_db, provider_db.get_latest_db().storage_keys()).unwrap();
+    let fini_proofs = get_proofs(
+        provider_db,
+        clone_storage_keys(provider_db.get_latest_db().accounts),
+    )
+    .unwrap();
     let ancestor_headers = provider_db.get_ancestor_headers().unwrap();
 
     Init {

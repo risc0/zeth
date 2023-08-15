@@ -21,6 +21,8 @@ pub mod auth_db;
 pub mod block_builder;
 pub mod consts;
 pub mod execution;
+pub mod finalization;
+pub mod initialization;
 pub mod mem_db;
 pub mod validation;
 

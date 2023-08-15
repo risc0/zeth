@@ -27,10 +27,11 @@ use risc0_zkvm::{
 use tempfile::tempdir;
 use zeth_guests::{ETH_BLOCK_ELF, ETH_BLOCK_ID};
 use zeth_lib::{
+    auth_db::CachedAuthDb,
     block_builder::BlockBuilder,
     consts::{Network, ETH_MAINNET_CHAIN_SPEC},
     execution::EthTxExecStrategy,
-    mem_db::MemDb,
+    initialization::CachedAuthDbFromInputStrategy,
     validation::Input,
 };
 use zeth_primitives::BlockHash;
@@ -105,8 +106,8 @@ async fn main() -> Result<()> {
 
         info!("Running from memory ...");
 
-        let block_builder = BlockBuilder::<MemDb>::new(&ETH_MAINNET_CHAIN_SPEC, input)
-            .initialize_db()
+        let block_builder = BlockBuilder::<CachedAuthDb>::new(&ETH_MAINNET_CHAIN_SPEC, input)
+            .initialize_database::<CachedAuthDbFromInputStrategy>()
             .expect("Error initializing MemDb from Input")
             .initialize_header()
             .expect("Error creating initial block header")
@@ -114,7 +115,7 @@ async fn main() -> Result<()> {
             .expect("Error while running transactions");
 
         let fini_db = block_builder.db().unwrap().clone();
-        let accounts_len = fini_db.accounts_len();
+        let accounts_len = fini_db.accounts.len();
 
         let mut storage_deltas = Default::default();
         let validated_header = block_builder

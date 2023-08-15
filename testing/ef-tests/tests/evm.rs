@@ -64,7 +64,7 @@ fn evm(
                 block.withdrawals.unwrap_or_default(),
             );
             let builder = BlockBuilder::<MemDb>::new(&chain_spec, input)
-                .initialize_db()
+                .initialize_database()
                 .unwrap()
                 .initialize_header()
                 .unwrap();

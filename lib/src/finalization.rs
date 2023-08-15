@@ -37,6 +37,24 @@ pub struct BuildFromCachedAuthDbStrategy {
     debug_storage_tries: Option<HashMap<Address, MptNode>>,
 }
 
+impl BuildFromCachedAuthDbStrategy {
+    pub fn without_debugging() -> Self {
+        Self {
+            debug_storage_tries: None,
+        }
+    }
+
+    pub fn with_debugging() -> Self {
+        Self {
+            debug_storage_tries: Some(Default::default()),
+        }
+    }
+
+    pub fn take_storage_trace(self) -> Option<HashMap<Address, MptNode>> {
+        self.debug_storage_tries
+    }
+}
+
 impl BlockBuildStrategy for BuildFromCachedAuthDbStrategy {
     type Db = CachedAuthDb;
 
@@ -53,12 +71,7 @@ impl BlockBuildStrategy for BuildFromCachedAuthDbStrategy {
             if account.account_state == AccountState::None {
                 // store the root node for debugging
                 if let Some(map) = &mut self.debug_storage_tries {
-                    let storage_root = block_builder
-                        .input
-                        .parent_storage
-                        .get(address)
-                        .unwrap()
-                        .clone();
+                    let storage_root = cached_db.db.storage_tries.get(address).unwrap().clone();
                     map.insert(*address, storage_root);
                 }
                 continue;

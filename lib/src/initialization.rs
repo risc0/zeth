@@ -51,6 +51,7 @@ impl DbInitStrategy for CachedAuthDbFromInputStrategy {
                     .input
                     .ancestor_headers
                     .iter()
+                    .rev()
                     .chain(once(&block_builder.input.parent_header))
                     .collect(),
             )?

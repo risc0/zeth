@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use anyhow::{anyhow, bail, Result};
-use hashbrown::{hash_map::Iter, HashMap};
+use hashbrown::HashMap;
 use revm::{
     db::{CacheDB, DatabaseRef, DbAccount},
-    primitives::{Account, AccountInfo, Address, Bytecode, B160, B256},
+    primitives::{AccountInfo, Bytecode, B160, B256, KECCAK_EMPTY},
 };
 use ruint::aliases::U256;
 use zeth_primitives::{
@@ -27,8 +27,7 @@ use zeth_primitives::{
     Bytes,
 };
 
-use crate::block_builder::BlockBuilderDatabase;
-
+#[derive(Clone, Debug)]
 pub struct AuthenticatedDb {
     /// State trie of the block.
     pub state_trie: MptNode,
@@ -85,7 +84,7 @@ impl AuthenticatedDb {
         for (address, storage_trie) in &storage_tries {
             let account = state_trie
                 .get_rlp::<TrieAccount>(&keccak(address))?
-                .ok_or(anyhow!("Missing account state!"))?;
+                .unwrap_or_default();
             if storage_trie.hash() != account.storage_root {
                 bail!("Initial account storage root mismatch!")
             }
@@ -119,9 +118,12 @@ impl AuthenticatedDb {
 
 impl Into<CacheDB<AuthenticatedDb>> for AuthenticatedDb {
     fn into(mut self) -> CacheDB<AuthenticatedDb> {
+        let mut contracts = core::mem::take(&mut self.contracts);
+        contracts.insert(KECCAK_EMPTY, Bytecode::new());
+        contracts.insert(B256::zero(), Bytecode::new());
         CacheDB {
             accounts: Default::default(),
-            contracts: core::mem::take(&mut self.contracts),
+            contracts,
             logs: vec![],
             block_hashes: core::mem::take(&mut self.block_hashes),
             db: self,
@@ -130,20 +132,6 @@ impl Into<CacheDB<AuthenticatedDb>> for AuthenticatedDb {
 }
 
 pub type CachedAuthDb = CacheDB<AuthenticatedDb>;
-
-impl BlockBuilderDatabase for CachedAuthDb {
-    fn accounts(&self) -> Iter<B160, DbAccount> {
-        todo!()
-    }
-
-    fn increase_balance(&mut self, address: Address, amount: U256) -> Result<(), Self::Error> {
-        todo!()
-    }
-
-    fn update(&mut self, address: Address, account: Account) {
-        todo!()
-    }
-}
 
 pub fn clone_storage_keys(accounts: &HashMap<B160, DbAccount>) -> HashMap<B160, Vec<U256>> {
     accounts

@@ -20,6 +20,7 @@ use zeth_lib::{
     validation::Input,
 };
 use zeth_lib::auth_db::CachedAuthDb;
+use zeth_lib::finalization::BuildFromCachedAuthDbStrategy;
 use zeth_lib::initialization::CachedAuthDbFromInputStrategy;
 
 risc0_zkvm::guest::entry!(main);
@@ -37,7 +38,7 @@ pub fn main() {
         .expect("Failed to create the initial block header fields")
         .execute_transactions::<EthTxExecStrategy>()
         .expect("Failed to execute transactions")
-        .build(None)
+        .build(&mut BuildFromCachedAuthDbStrategy::without_debugging())
         .expect("Failed to build the resulting block");
     // Output the resulting block's hash to the journal
     env::commit(&output.hash());

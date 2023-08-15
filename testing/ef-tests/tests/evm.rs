@@ -17,7 +17,10 @@
 use std::path::PathBuf;
 
 use rstest::rstest;
-use zeth_lib::{block_builder::BlockBuilder, execution::EthTxExecStrategy, mem_db::MemDb};
+use zeth_lib::{
+    auth_db::CachedAuthDb, block_builder::BlockBuilder, execution::EthTxExecStrategy,
+    finalization::BuildFromCachedAuthDbStrategy, initialization::CachedAuthDbFromInputStrategy,
+};
 use zeth_primitives::block::Header;
 use zeth_testeth::{
     ethtests::{read_eth_test, EthTestCase},
@@ -63,8 +66,8 @@ fn evm(
                 block.transactions,
                 block.withdrawals.unwrap_or_default(),
             );
-            let builder = BlockBuilder::<MemDb>::new(&chain_spec, input)
-                .initialize_database()
+            let builder = BlockBuilder::<CachedAuthDb>::new(&chain_spec, input)
+                .initialize_database::<CachedAuthDbFromInputStrategy>()
                 .unwrap()
                 .initialize_header()
                 .unwrap();
@@ -75,7 +78,9 @@ fn evm(
             // update the state
             state = builder.db().unwrap().into();
 
-            let result_header = builder.build(None).unwrap();
+            let result_header = builder
+                .build(&mut BuildFromCachedAuthDbStrategy::without_debugging())
+                .unwrap();
             // the headers should match
             assert_eq!(result_header.state_root, expected_header.state_root);
             assert_eq!(result_header, expected_header);

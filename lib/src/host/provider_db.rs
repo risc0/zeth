@@ -12,51 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
+use std::{cell::RefCell, collections::BTreeSet};
 
 use ethers_core::types::{EIP1186ProofResponse, H160, H256};
-use hashbrown::{hash_map, HashMap};
+use hashbrown::HashMap;
 use revm::{
-    db::DbAccount,
-    primitives::{Account, AccountInfo, Bytecode, B160, B256, U256},
-    Database, InMemoryDB,
+    db::{CacheDB, DatabaseRef},
+    primitives::{AccountInfo, Bytecode, B160, B256, U256},
+    InMemoryDB,
 };
 use zeth_primitives::block::Header;
 
 use crate::{
     auth_db::clone_storage_keys,
-    block_builder::BlockBuilderDatabase,
     host::provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
-    mem_db::DbError,
 };
 
+pub type CachedProviderDb = CacheDB<CacheDB<ProviderDb>>;
+
 pub struct ProviderDb {
-    provider: Box<dyn Provider>,
-    block_no: u64,
-    initial_db: InMemoryDB,
-    latest_db: InMemoryDB,
+    pub provider: RefCell<Box<dyn Provider>>,
+    pub block_no: u64,
+    pub initial_db: RefCell<InMemoryDB>,
 }
 
 impl ProviderDb {
     pub fn new(provider: Box<dyn Provider>, block_no: u64) -> Self {
         ProviderDb {
-            provider,
+            provider: RefCell::new(provider),
             block_no,
             initial_db: Default::default(),
-            latest_db: Default::default(),
         }
-    }
-
-    pub fn get_provider(&self) -> &dyn Provider {
-        self.provider.as_ref()
-    }
-
-    pub fn get_initial_db(&self) -> &InMemoryDB {
-        &self.initial_db
-    }
-
-    pub fn get_latest_db(&self) -> &InMemoryDB {
-        &self.latest_db
     }
 
     fn get_proofs(
@@ -73,7 +59,7 @@ impl ProviderDb {
                     .into_iter()
                     .map(|x| x.to_be_bytes().into())
                     .collect();
-                self.provider.get_proof(&ProofQuery {
+                self.provider.borrow_mut().get_proof(&ProofQuery {
                     block_no,
                     address,
                     indices,
@@ -84,66 +70,14 @@ impl ProviderDb {
 
         Ok(out)
     }
-
-    pub fn get_initial_proofs(
-        &mut self,
-    ) -> Result<HashMap<B160, EIP1186ProofResponse>, anyhow::Error> {
-        self.get_proofs(self.block_no, clone_storage_keys(&self.initial_db.accounts))
-    }
-
-    pub fn get_latest_proofs(
-        &mut self,
-    ) -> Result<HashMap<B160, EIP1186ProofResponse>, anyhow::Error> {
-        let mut storage_keys = clone_storage_keys(&self.initial_db.accounts);
-
-        for (address, mut indices) in clone_storage_keys(&self.latest_db.accounts) {
-            match storage_keys.get_mut(&address) {
-                Some(initial_indices) => initial_indices.append(&mut indices),
-                None => {
-                    storage_keys.insert(address, indices);
-                }
-            }
-        }
-
-        self.get_proofs(self.block_no + 1, storage_keys)
-    }
-
-    pub fn get_ancestor_headers(&mut self) -> Result<Vec<Header>, anyhow::Error> {
-        let earliest_block = self
-            .initial_db
-            .block_hashes
-            .keys()
-            .min()
-            .map(|uint| &(*uint).try_into().unwrap())
-            .unwrap_or(&self.block_no);
-        let headers = (*earliest_block..self.block_no)
-            .rev()
-            .map(|block_no| {
-                self.provider
-                    .get_partial_block(&BlockQuery { block_no })
-                    .expect("Failed to retrieve ancestor block")
-                    .try_into()
-                    .expect("Failed to convert ethers block to zeth block")
-            })
-            .collect();
-        Ok(headers)
-    }
 }
 
-impl Database for ProviderDb {
+impl DatabaseRef for ProviderDb {
     type Error = anyhow::Error;
 
-    fn basic(&mut self, address: B160) -> Result<Option<AccountInfo>, Self::Error> {
-        // todo: wrap the cache db around the provider db instead!
-        match self.latest_db.basic(address) {
-            Ok(db_result) => return Ok(db_result),
-            Err(DbError::AccountNotFound(_)) => {}
-            Err(err) => return Err(err.into()),
-        }
-        match self.initial_db.basic(address) {
-            Ok(db_result) => return Ok(db_result),
-            Err(DbError::AccountNotFound(_)) => {}
-            Err(err) => return Err(err.into()),
+    fn basic(&self, address: B160) -> Result<Option<AccountInfo>, Self::Error> {
+        if let Some(db_account) = self.initial_db.borrow().accounts.get(&address) {
+            return Ok(db_account.info());
         }
 
         let account_info = {
@@ -152,92 +86,133 @@ impl Database for ProviderDb {
                 block_no: self.block_no,
                 address,
             };
-            let nonce = self.provider.get_transaction_count(&query)?;
-            let balance = self.provider.get_balance(&query)?;
-            let code = self.provider.get_code(&query)?;
+            let nonce = self.provider.borrow_mut().get_transaction_count(&query)?;
+            let balance = self.provider.borrow_mut().get_balance(&query)?;
+            let code = self.provider.borrow_mut().get_code(&query)?;
 
             AccountInfo::new(balance.into(), nonce.as_u64(), Bytecode::new_raw(code.0))
         };
 
         self.initial_db
+            .borrow_mut()
             .insert_account_info(address, account_info.clone());
+
         Ok(Some(account_info))
     }
 
-    fn code_by_hash(&mut self, _code_hash: B256) -> Result<Bytecode, Self::Error> {
+    fn code_by_hash(&self, _code_hash: B256) -> Result<Bytecode, Self::Error> {
         // not needed because we already load code with basic info
         unreachable!()
     }
 
-    fn storage(&mut self, address: B160, index: U256) -> Result<U256, Self::Error> {
-        match self.latest_db.storage(address, index) {
-            Ok(db_result) => return Ok(db_result),
-            Err(DbError::AccountNotFound(_)) | Err(DbError::SlotNotFound(_, _)) => {}
-            Err(err) => return Err(err.into()),
-        }
-        match self.initial_db.storage(address, index) {
-            Ok(db_result) => return Ok(db_result),
-            Err(DbError::AccountNotFound(_)) | Err(DbError::SlotNotFound(_, _)) => {}
-            Err(err) => return Err(err.into()),
-        }
-
+    fn storage(&self, address: B160, index: U256) -> Result<U256, Self::Error> {
         // ensure that the corresponding account is loaded
-        self.initial_db.basic(address)?;
+        self.basic(address)?;
+
+        if let Some(value) = self
+            .initial_db
+            .borrow()
+            .accounts
+            .get(&address)
+            .unwrap()
+            .storage
+            .get(&index)
+        {
+            return Ok(*value);
+        }
 
         let storage = {
             let address = H160::from(address.0);
             let bytes = index.to_be_bytes();
             let index = H256::from(bytes);
 
-            let storage = self.provider.get_storage(&StorageQuery {
+            let storage = self.provider.borrow_mut().get_storage(&StorageQuery {
                 block_no: self.block_no,
                 address,
                 index,
             })?;
-            ethers_core::types::U256::from(storage.0)
+            U256::from_be_bytes(storage.0)
         };
 
         self.initial_db
-            .insert_account_storage(address, index, storage.into())?;
-        Ok(storage.into())
+            .borrow_mut()
+            .insert_account_storage(address, index, storage)?;
+
+        Ok(storage)
     }
 
-    fn block_hash(&mut self, number: U256) -> Result<B256, Self::Error> {
-        match self.initial_db.block_hash(number) {
-            Ok(block_hash) => return Ok(block_hash),
-            Err(DbError::BlockNotFound(_)) => {}
-            Err(err) => return Err(err.into()),
+    fn block_hash(&self, number: U256) -> Result<B256, Self::Error> {
+        if let Some(hash) = self.initial_db.borrow().block_hashes.get(&number) {
+            return Ok(*hash);
         }
 
         let block_no = u64::try_from(number).unwrap();
         let block_hash = self
             .provider
+            .borrow_mut()
             .get_partial_block(&BlockQuery { block_no })?
             .hash
             .unwrap()
             .0
             .into();
 
-        self.initial_db.insert_block_hash(block_no, block_hash);
+        self.initial_db
+            .borrow_mut()
+            .block_hashes
+            .insert(number, block_hash);
+
         Ok(block_hash)
     }
 }
 
-impl BlockBuilderDatabase for ProviderDb {
-    fn accounts(&self) -> hash_map::Iter<B160, DbAccount> {
-        self.latest_db.accounts()
-    }
+pub fn get_initial_proofs(
+    latest_db: &mut CacheDB<ProviderDb>,
+) -> Result<HashMap<B160, EIP1186ProofResponse>, anyhow::Error> {
+    let provider_db = &mut latest_db.db;
+    let storage_keys = clone_storage_keys(&provider_db.initial_db.borrow().accounts);
+    provider_db.get_proofs(provider_db.block_no, storage_keys)
+}
 
-    fn increase_balance(&mut self, address: B160, amount: U256) -> Result<(), Self::Error> {
-        // ensure that the address is loaded into the latest_db
-        if let Some(account_info) = self.basic(address)? {
-            self.latest_db.insert_account_info(address, account_info);
+pub fn get_latest_proofs(
+    latest_db: &mut CacheDB<ProviderDb>,
+) -> Result<HashMap<B160, EIP1186ProofResponse>, anyhow::Error> {
+    let mut storage_keys = clone_storage_keys(&latest_db.db.initial_db.borrow().accounts);
+
+    for (address, mut indices) in clone_storage_keys(&latest_db.accounts) {
+        match storage_keys.get_mut(&address) {
+            Some(initial_indices) => initial_indices.append(&mut indices),
+            None => {
+                storage_keys.insert(address, indices);
+            }
         }
-        Ok(self.latest_db.increase_balance(address, amount)?)
     }
 
-    fn update(&mut self, address: B160, account: Account) {
-        unimplemented!()
-        // self.latest_db.update(address, account);
-    }
+    let provider_db = &mut latest_db.db;
+    provider_db.get_proofs(provider_db.block_no + 1, storage_keys)
+}
+
+pub fn get_ancestor_headers(
+    latest_db: &mut CacheDB<ProviderDb>,
+) -> Result<Vec<Header>, anyhow::Error> {
+    let provider_db = &mut latest_db.db;
+    let initial_db = provider_db.initial_db.borrow();
+    let earliest_block = initial_db
+        .block_hashes
+        .keys()
+        .min()
+        .map(|uint| (*uint).try_into().unwrap())
+        .unwrap_or(provider_db.block_no);
+    let headers = (earliest_block..provider_db.block_no)
+        .rev()
+        .map(|block_no| {
+            provider_db
+                .provider
+                .borrow_mut()
+                .get_partial_block(&BlockQuery { block_no })
+                .expect("Failed to retrieve ancestor block")
+                .try_into()
+                .expect("Failed to convert ethers block to zeth block")
+        })
+        .collect();
+    Ok(headers)
 }

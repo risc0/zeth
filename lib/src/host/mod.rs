@@ -22,8 +22,9 @@ use ethers_core::types::{Bytes, EIP1186ProofResponse, H256};
 use hashbrown::HashMap;
 use log::info;
 use revm::{
+    db::CacheDB,
     primitives::{Address, B160, B256, U256},
-    Database,
+    Database, InMemoryDB,
 };
 use zeth_primitives::{
     block::Header,
@@ -43,9 +44,8 @@ use crate::{
     host::{
         mpt::{orphaned_digests, resolve_digests, shorten_key},
         provider::{new_provider, BlockQuery},
-        provider_db::ProviderDb,
+        provider_db::{get_ancestor_headers, get_initial_proofs, get_latest_proofs, ProviderDb},
     },
-    mem_db::MemDb,
     validation::Input,
 };
 
@@ -55,7 +55,7 @@ pub mod provider_db;
 
 #[derive(Clone)]
 pub struct Init {
-    pub db: MemDb,
+    pub db: InMemoryDB,
     pub init_block: Header,
     pub init_proofs: HashMap<B160, EIP1186ProofResponse>,
     pub fini_block: Header,
@@ -94,7 +94,10 @@ pub fn get_initial_data(
     info!("Transaction count: {:?}", fini_block.transactions.len());
 
     // Create the provider DB
-    let provider_db = ProviderDb::new(provider, init_block.number.unwrap().as_u64());
+    let latest_db = CacheDB::new(ProviderDb::new(
+        provider,
+        init_block.number.unwrap().as_u64(),
+    ));
 
     // Create input
     let input = Input {
@@ -122,24 +125,24 @@ pub fn get_initial_data(
 
     // Create the block builder, run the transactions and extract the DB
     let mut builder = BlockBuilder::new(&ETH_MAINNET_CHAIN_SPEC, input)
-        .with_db(provider_db)
+        .with_db(latest_db)
         .initialize_header()?
         .execute_transactions::<EthTxExecStrategy>()?;
-    let provider_db = builder.mut_db().unwrap();
+    let latest_db = builder.mut_db().unwrap();
 
     info!("Gathering inclusion proofs ...");
 
     // Gather inclusion proofs for the initial and final state
-    let init_proofs = provider_db.get_initial_proofs()?;
-    let fini_proofs = provider_db.get_latest_proofs()?;
+    let init_proofs = get_initial_proofs(latest_db)?;
+    let fini_proofs = get_latest_proofs(latest_db)?;
 
     // Gather proofs for block history
-    let ancestor_headers = provider_db.get_ancestor_headers()?;
+    let ancestor_headers = get_ancestor_headers(latest_db)?;
 
     info!("Saving provider cache ...");
 
     // Save the provider cache
-    provider_db.get_provider().save()?;
+    latest_db.db.provider.borrow().save()?;
 
     info!("Provider-backed execution is Done!");
 
@@ -157,8 +160,17 @@ pub fn get_initial_data(
         .map(|w| w.try_into().unwrap())
         .collect();
 
+    let initial_db = latest_db.db.initial_db.borrow();
+    let db = InMemoryDB {
+        accounts: initial_db.accounts.clone(),
+        contracts: initial_db.contracts.clone(),
+        logs: initial_db.logs.clone(),
+        block_hashes: initial_db.block_hashes.clone(),
+        db: Default::default(),
+    };
+
     Ok(Init {
-        db: provider_db.get_initial_db().clone(),
+        db,
         init_block: init_block.try_into()?,
         init_proofs,
         fini_block: fini_block.try_into()?,
@@ -399,7 +411,7 @@ impl Into<Input> for Init {
         let (mut nodes_by_reference, mut storage) =
             proofs_to_tries(self.init_proofs.values().cloned().collect());
         // there should be a trie and a list of storage slots for every account
-        assert_eq!(storage.len(), self.db.accounts_len());
+        assert_eq!(storage.len(), self.db.accounts.len());
 
         // collect the code from each account
         let mut contracts = HashMap::new();

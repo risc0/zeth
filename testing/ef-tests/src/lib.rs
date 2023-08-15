@@ -14,19 +14,21 @@
 
 #![cfg(feature = "ef-tests")]
 
+use std::fmt::Debug;
+
 use anyhow::bail;
 use hashbrown::HashMap;
-use revm::db::DbAccount;
+use revm::db::{CacheDB, DatabaseRef, DbAccount};
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, NoneAsEmptyString};
 use zeth_lib::{
     auth_db::clone_storage_keys,
-    block_builder::{BlockBuilder, BlockBuilderDatabase},
+    block_builder::BlockBuilder,
     consts::ChainSpec,
     execution::EthTxExecStrategy,
     host::{
         provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
-        provider_db::ProviderDb,
+        provider_db::{get_ancestor_headers, get_initial_proofs, ProviderDb},
         Init,
     },
     validation::Input,
@@ -108,11 +110,21 @@ impl From<DbAccount> for TestAccount {
 #[serde(rename_all = "camelCase")]
 pub struct TestState(pub HashMap<B160, TestAccount>);
 
-impl<D: BlockBuilderDatabase> From<&D> for TestState {
-    fn from(db: &D) -> Self {
+impl<D: DatabaseRef> From<&CacheDB<D>> for TestState
+where
+    <D as DatabaseRef>::Error: Debug,
+{
+    fn from(db: &CacheDB<D>) -> Self {
         TestState(
-            db.accounts()
-                .map(|(addr, account)| (from_revm_b160(*addr), account.clone().into()))
+            db.accounts
+                .iter()
+                .map(|(addr, account)| {
+                    let mut account = account.clone();
+                    if account.info.code.is_none() {
+                        account.info.code = Some(db.code_by_hash(account.info.code_hash).unwrap());
+                    }
+                    (from_revm_b160(*addr), account.into())
+                })
                 .collect(),
         )
     }
@@ -335,7 +347,7 @@ pub fn create_input(
 
     // create and run the block builder once to create the initial DB
     let builder = BlockBuilder::new(chain_spec, input)
-        .with_db(provider_db)
+        .with_db(CacheDB::new(provider_db))
         .initialize_header()
         .unwrap();
     // execute the transactions with a larger stack
@@ -344,16 +356,15 @@ pub fn create_input(
     });
     let provider_db = builder.mut_db().unwrap();
 
-    let init_proofs = provider_db.get_initial_proofs().unwrap();
-    let fini_proofs = get_proofs(
-        provider_db,
-        clone_storage_keys(provider_db.get_latest_db().accounts),
-    )
-    .unwrap();
-    let ancestor_headers = provider_db.get_ancestor_headers().unwrap();
+    let init_proofs = get_initial_proofs(provider_db).unwrap();
+    let storage_keys = clone_storage_keys(&provider_db.accounts);
+    let fini_proofs = get_proofs(provider_db, storage_keys).unwrap();
+    let ancestor_headers = get_ancestor_headers(provider_db).unwrap();
+
+    let db = provider_db.db.initial_db.borrow().clone();
 
     Init {
-        db: provider_db.get_initial_db().clone(),
+        db,
         init_block: parent_header,
         init_proofs,
         fini_block: header,

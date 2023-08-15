@@ -31,6 +31,7 @@ use zeth_lib::{
     block_builder::BlockBuilder,
     consts::{Network, ETH_MAINNET_CHAIN_SPEC},
     execution::EthTxExecStrategy,
+    finalization::BuildFromCachedAuthDbStrategy,
     initialization::CachedAuthDbFromInputStrategy,
     validation::Input,
 };
@@ -108,18 +109,18 @@ async fn main() -> Result<()> {
 
         let block_builder = BlockBuilder::<CachedAuthDb>::new(&ETH_MAINNET_CHAIN_SPEC, input)
             .initialize_database::<CachedAuthDbFromInputStrategy>()
-            .expect("Error initializing MemDb from Input")
+            .expect("Error initializing authenticated db from Input")
             .initialize_header()
             .expect("Error creating initial block header")
             .execute_transactions::<EthTxExecStrategy>()
             .expect("Error while running transactions");
 
-        let fini_db = block_builder.db().unwrap().clone();
+        let fini_db = block_builder.db().cloned().unwrap();
         let accounts_len = fini_db.accounts.len();
 
-        let mut storage_deltas = Default::default();
+        let mut debug_build_strategy = BuildFromCachedAuthDbStrategy::with_debugging();
         let validated_header = block_builder
-            .build(Some(&mut storage_deltas))
+            .build(&mut debug_build_strategy)
             .expect("Error while verifying final state");
 
         info!(
@@ -129,8 +130,12 @@ async fn main() -> Result<()> {
 
         // Verify final state
         info!("Verifying final state using provider data ...");
-        let errors = zeth_lib::host::verify_state(fini_db, init.fini_proofs, storage_deltas)
-            .expect("Could not verify final state!");
+        let errors = zeth_lib::host::verify_state(
+            fini_db,
+            init.fini_proofs,
+            debug_build_strategy.take_storage_trace().unwrap(),
+        )
+        .expect("Could not verify final state!");
         for (address, address_errors) in &errors {
             info!(
                 "Verify found {:?} error(s) for address {:?}",
@@ -158,6 +163,41 @@ async fn main() -> Result<()> {
                 "Verify found {:?} account(s) with error(s) ({}% correct)",
                 errors_len,
                 (100.0 * (accounts_len - errors_len) as f64 / accounts_len as f64)
+            );
+        }
+
+        if validated_header.base_fee_per_gas != init.fini_block.base_fee_per_gas {
+            error!(
+                "Base fee mismatch {} (expected {})",
+                validated_header.base_fee_per_gas, init.fini_block.base_fee_per_gas
+            );
+        }
+
+        if validated_header.state_root != init.fini_block.state_root {
+            error!(
+                "State root mismatch {} (expected {})",
+                validated_header.state_root, init.fini_block.state_root
+            );
+        }
+
+        if validated_header.transactions_root != init.fini_block.transactions_root {
+            error!(
+                "Transactions root mismatch {} (expected {})",
+                validated_header.transactions_root, init.fini_block.transactions_root
+            );
+        }
+
+        if validated_header.receipts_root != init.fini_block.receipts_root {
+            error!(
+                "Receipts root mismatch {} (expected {})",
+                validated_header.receipts_root, init.fini_block.receipts_root
+            );
+        }
+
+        if validated_header.withdrawals_root != init.fini_block.withdrawals_root {
+            error!(
+                "Withdrawals root mismatch {:?} (expected {:?})",
+                validated_header.withdrawals_root, init.fini_block.withdrawals_root
             );
         }
 

@@ -18,8 +18,9 @@ use anyhow::{anyhow, bail, Context, Result};
 #[cfg(not(target_os = "zkvm"))]
 use log::{debug, info};
 use revm::{
-    primitives::{Address, BlockEnv, CfgEnv, ResultAndState, SpecId, TransactTo, TxEnv, U256},
-    Database, EVM,
+    db::Database,
+    primitives::{Account, Address, BlockEnv, CfgEnv, SpecId, TransactTo, TxEnv, U256},
+    DatabaseCommit, EVM,
 };
 use zeth_primitives::{
     receipt::Receipt,
@@ -30,18 +31,15 @@ use zeth_primitives::{
 };
 
 use crate::{
-    block_builder::{BlockBuilder, BlockBuilderDatabase},
-    consts,
-    consts::GWEI_TO_WEI,
-    guest_mem_forget,
+    block_builder::BlockBuilder, consts, consts::GWEI_TO_WEI, guest_mem_forget,
     validation::compute_spec_id,
 };
 
 pub trait TxExecStrategy {
     fn execute_transactions<D>(block_builder: BlockBuilder<D>) -> Result<BlockBuilder<D>>
     where
-        D: BlockBuilderDatabase,
-        <D as revm::Database>::Error: std::fmt::Debug;
+        D: Database + DatabaseCommit,
+        <D as Database>::Error: std::fmt::Debug;
 }
 
 pub struct EthTxExecStrategy {}
@@ -49,7 +47,7 @@ pub struct EthTxExecStrategy {}
 impl TxExecStrategy for EthTxExecStrategy {
     fn execute_transactions<D>(mut block_builder: BlockBuilder<D>) -> Result<BlockBuilder<D>>
     where
-        D: BlockBuilderDatabase,
+        D: Database + DatabaseCommit,
         <D as Database>::Error: Debug,
     {
         let header = block_builder
@@ -128,8 +126,8 @@ impl TxExecStrategy for EthTxExecStrategy {
             // process the transaction
             let tx_from = to_revm_b160(tx_from);
             fill_tx_env(&mut evm.env.tx, tx, tx_from);
-            let ResultAndState { result, state } = evm
-                .transact()
+            let result = evm
+                .transact_commit()
                 .map_err(|evm_err| anyhow!("Error at transaction {}: {:?}", tx_no, evm_err))?;
 
             let gas_used = result.gas_used().try_into().unwrap();
@@ -157,38 +155,6 @@ impl TxExecStrategy for EthTxExecStrategy {
             receipt_trie
                 .insert_rlp(&trie_key, receipt)
                 .context("failed to insert receipt")?;
-
-            // update account states
-            let db = evm.db().unwrap();
-            for (address, account) in state {
-                #[cfg(not(target_os = "zkvm"))]
-                if account.is_touched {
-                    // log account
-                    debug!(
-                        "  State {:?} (storage_cleared={}, is_destroyed={}, is_not_existing={})",
-                        address,
-                        account.storage_cleared,
-                        account.is_destroyed,
-                        account.is_not_existing
-                    );
-                    // log balance changes
-                    debug!(
-                        "     After balance: {} (Nonce: {})",
-                        account.info.balance, account.info.nonce
-                    );
-
-                    // log state changes
-                    for (addr, slot) in &account.storage {
-                        if slot.is_changed() {
-                            debug!("    Storage address: {:?}", addr);
-                            debug!("      Before: {:?}", slot.original_value);
-                            debug!("       After: {:?}", slot.present_value);
-                        }
-                    }
-                }
-
-                db.update(address, account);
-            }
         }
 
         block_builder.db = Some(evm.take_db());
@@ -208,12 +174,25 @@ impl TxExecStrategy for EthTxExecStrategy {
                 debug!("  Value: {}", amount_wei);
             }
 
+            let address = to_revm_b160(withdrawal.address);
+            let mut withdrawal_account = block_builder
+                .db
+                .as_mut()
+                .unwrap()
+                .basic(address)
+                .map_err(|db_err| anyhow!("Error at withdrawal {}: {:?}", i, db_err))?
+                .unwrap_or_default();
+            withdrawal_account.balance = withdrawal_account
+                .balance
+                .checked_add(amount_wei)
+                .ok_or(anyhow!("Overflow on withdrawal!"))?;
+            let mut account = Account::from(withdrawal_account);
+            account.is_touched = true;
             block_builder
                 .db
                 .as_mut()
                 .unwrap()
-                .increase_balance(to_revm_b160(withdrawal.address), amount_wei)
-                .unwrap();
+                .commit(core::iter::once((address, account)).collect());
 
             // add to trie
             withdrawals_trie

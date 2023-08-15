@@ -13,19 +13,14 @@
 // limitations under the License.
 
 use anyhow::Context;
-use hashbrown::{
-    hash_map::{self, Entry},
-    HashMap,
-};
-#[cfg(not(target_os = "zkvm"))]
-use log::debug;
+use hashbrown::{hash_map::Entry, HashMap};
 use revm::{
-    primitives::{Account, AccountInfo, Bytecode, B160, B256, U256},
+    primitives::{AccountInfo, Bytecode, B160, B256, U256},
     Database,
 };
 use thiserror::Error as ThisError;
 
-use crate::block_builder::BlockBuilderDatabase;
+// use crate::block_builder::BlockBuilderDatabase;
 
 /// Error returned by the [MemDb].
 #[derive(Debug, ThisError)]
@@ -186,128 +181,128 @@ impl Database for MemDb {
     }
 }
 
-impl BlockBuilderDatabase for MemDb {
-    fn accounts(&self) -> hash_map::Iter<B160, revm::db::DbAccount> {
-        todo!()
-        // self.accounts.iter()
-    }
-
-    fn increase_balance(&mut self, address: B160, amount: U256) -> Result<(), Self::Error> {
-        let account = self
-            .accounts
-            .get_mut(&address)
-            .ok_or(DbError::AccountNotFound(address))?;
-
-        account.info.balance = account
-            .info
-            .balance
-            .checked_add(amount)
-            .with_context(|| format!("addition overflow for {:?}", &address))?;
-
-        match account.state {
-            // if the account was deleted, we still have to clear its storage
-            AccountState::Deleted => {
-                account.state = AccountState::StorageCleared;
-            }
-            // mark as touched
-            AccountState::None => {
-                account.state = AccountState::Touched;
-            }
-            _ => {}
-        };
-
-        Ok(())
-    }
-
-    fn update(&mut self, address: B160, new_account: Account) {
-        // if nothing was touched, there is nothing to do
-        if !new_account.is_touched {
-            return;
-        }
-        #[cfg(not(target_os = "zkvm"))]
-        debug!("State update {:?}: {:?}", &address, &new_account);
-
-        if new_account.is_destroyed {
-            // get the account we are destroying
-            let db_account = match self.accounts.entry(address) {
-                Entry::Occupied(entry) => entry.into_mut(),
-                Entry::Vacant(_) => {
-                    // destruction of a non-existing account, so there is nothing to do
-                    // a) the account was created and destroyed in the same transaction
-                    // b) or it was destroyed without reading and thus not cached
-                    return;
-                }
-            };
-
-            // it is not possible to delete a deleted account
-            debug_assert!(db_account.state != AccountState::Deleted);
-
-            // clear the account and mark it as deleted
-            db_account.storage.clear();
-            db_account.state = AccountState::Deleted;
-            db_account.info = AccountInfo::default();
-
-            return;
-        }
-
-        // empty accounts cannot have any non-zero storage
-        if new_account.is_empty() {
-            debug_assert!(new_account.storage.is_empty());
-        }
-
-        // update account info
-        let db_account = match self.accounts.entry(address) {
-            Entry::Occupied(entry) => {
-                let db_account = entry.into_mut();
-
-                // the account was touched, but it is empty, so it should be deleted
-                // this also deletes empty accounts previously contained in the state trie
-                if db_account.state != AccountState::Deleted && new_account.is_empty() {
-                    db_account.storage.clear();
-                    db_account.state = AccountState::Deleted;
-                    db_account.info = AccountInfo::default();
-
-                    return;
-                }
-
-                // create account only if it is not empty
-                if db_account.info.is_empty() && new_account.is_empty() {
-                    return;
-                }
-
-                // update the account info
-                db_account.info = new_account.info;
-                db_account
-            }
-            Entry::Vacant(entry) => {
-                // create a new account only if it is not empty
-                if new_account.is_empty() {
-                    return;
-                }
-
-                // create new non-empty account
-                entry.insert(DbAccount::new(new_account.info))
-            }
-        };
-
-        // set the correct state
-        db_account.state = if new_account.storage_cleared {
-            db_account.storage.clear();
-            AccountState::StorageCleared
-        } else if db_account.state == AccountState::StorageCleared {
-            // when creating the storage trie, it must be cleared it first
-            AccountState::StorageCleared
-        } else {
-            AccountState::Touched
-        };
-
-        // update all changed storage values
-        db_account.storage.extend(
-            new_account
-                .storage
-                .into_iter()
-                .filter(|(_, value)| value.is_changed())
-                .map(|(key, value)| (key, value.present_value())),
-        );
-    }
-}
+// impl BlockBuilderDatabase for MemDb {
+//     fn accounts(&self) -> hash_map::Iter<B160, revm::db::DbAccount> {
+//         todo!()
+//         // self.accounts.iter()
+//     }
+//
+//     fn increase_balance(&mut self, address: B160, amount: U256) -> Result<(),
+// Self::Error> {         let account = self
+//             .accounts
+//             .get_mut(&address)
+//             .ok_or(DbError::AccountNotFound(address))?;
+//
+//         account.info.balance = account
+//             .info
+//             .balance
+//             .checked_add(amount)
+//             .with_context(|| format!("addition overflow for {:?}", &address))?;
+//
+//         match account.state {
+//             // if the account was deleted, we still have to clear its storage
+//             AccountState::Deleted => {
+//                 account.state = AccountState::StorageCleared;
+//             }
+//             // mark as touched
+//             AccountState::None => {
+//                 account.state = AccountState::Touched;
+//             }
+//             _ => {}
+//         };
+//
+//         Ok(())
+//     }
+//
+//     fn update(&mut self, address: B160, new_account: Account) {
+//         // if nothing was touched, there is nothing to do
+//         if !new_account.is_touched {
+//             return;
+//         }
+//         #[cfg(not(target_os = "zkvm"))]
+//         debug!("State update {:?}: {:?}", &address, &new_account);
+//
+//         if new_account.is_destroyed {
+//             // get the account we are destroying
+//             let db_account = match self.accounts.entry(address) {
+//                 Entry::Occupied(entry) => entry.into_mut(),
+//                 Entry::Vacant(_) => {
+//                     // destruction of a non-existing account, so there is nothing to do
+//                     // a) the account was created and destroyed in the same transaction
+//                     // b) or it was destroyed without reading and thus not cached
+//                     return;
+//                 }
+//             };
+//
+//             // it is not possible to delete a deleted account
+//             debug_assert!(db_account.state != AccountState::Deleted);
+//
+//             // clear the account and mark it as deleted
+//             db_account.storage.clear();
+//             db_account.state = AccountState::Deleted;
+//             db_account.info = AccountInfo::default();
+//
+//             return;
+//         }
+//
+//         // empty accounts cannot have any non-zero storage
+//         if new_account.is_empty() {
+//             debug_assert!(new_account.storage.is_empty());
+//         }
+//
+//         // update account info
+//         let db_account = match self.accounts.entry(address) {
+//             Entry::Occupied(entry) => {
+//                 let db_account = entry.into_mut();
+//
+//                 // the account was touched, but it is empty, so it should be deleted
+//                 // this also deletes empty accounts previously contained in the state
+// trie                 if db_account.state != AccountState::Deleted &&
+// new_account.is_empty() {                     db_account.storage.clear();
+//                     db_account.state = AccountState::Deleted;
+//                     db_account.info = AccountInfo::default();
+//
+//                     return;
+//                 }
+//
+//                 // create account only if it is not empty
+//                 if db_account.info.is_empty() && new_account.is_empty() {
+//                     return;
+//                 }
+//
+//                 // update the account info
+//                 db_account.info = new_account.info;
+//                 db_account
+//             }
+//             Entry::Vacant(entry) => {
+//                 // create a new account only if it is not empty
+//                 if new_account.is_empty() {
+//                     return;
+//                 }
+//
+//                 // create new non-empty account
+//                 entry.insert(DbAccount::new(new_account.info))
+//             }
+//         };
+//
+//         // set the correct state
+//         db_account.state = if new_account.storage_cleared {
+//             db_account.storage.clear();
+//             AccountState::StorageCleared
+//         } else if db_account.state == AccountState::StorageCleared {
+//             // when creating the storage trie, it must be cleared it first
+//             AccountState::StorageCleared
+//         } else {
+//             AccountState::Touched
+//         };
+//
+//         // update all changed storage values
+//         db_account.storage.extend(
+//             new_account
+//                 .storage
+//                 .into_iter()
+//                 .filter(|(_, value)| value.is_changed())
+//                 .map(|(key, value)| (key, value.present_value())),
+//         );
+//     }
+// }

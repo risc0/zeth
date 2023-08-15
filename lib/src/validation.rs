@@ -57,8 +57,6 @@ pub struct Input {
     pub ancestor_headers: Vec<Header>,
 }
 
-// pub type StorageEntry = (MptNode, Vec<U256>);
-
 pub fn verify_gas_limit(input_gas_limit: U256, parent_gas_limit: U256) -> Result<()> {
     let diff = parent_gas_limit.abs_diff(input_gas_limit);
     let limit = parent_gas_limit / GAS_LIMIT_BOUND_DIVISOR;

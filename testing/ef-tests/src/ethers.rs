@@ -15,7 +15,7 @@
 use ethers_core::types::{
     Block, Bloom, Bytes, EIP1186ProofResponse, StorageProof, Transaction, H256, U256,
 };
-use revm::primitives::B160 as RevmB160;
+use revm::{db::DatabaseRef, primitives::B160 as RevmB160};
 use zeth_primitives::U256 as LibU256;
 
 use super::*;
@@ -200,10 +200,13 @@ fn get_proof(
 }
 
 /// Get EIP-1186 proofs for a set of addresses and storage keys.
-pub fn get_proofs(
-    state: &impl BlockBuilderDatabase,
+pub fn get_proofs<D: DatabaseRef>(
+    state: &CacheDB<D>,
     storage_keys: HashMap<RevmB160, Vec<LibU256>>,
-) -> Result<HashMap<RevmB160, EIP1186ProofResponse>, anyhow::Error> {
+) -> Result<HashMap<RevmB160, EIP1186ProofResponse>, anyhow::Error>
+where
+    <D as DatabaseRef>::Error: Debug,
+{
     let state = state.into();
 
     let mut result = HashMap::new();

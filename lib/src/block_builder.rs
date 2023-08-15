@@ -13,11 +13,7 @@
 // limitations under the License.
 
 use anyhow::Result;
-use hashbrown::hash_map;
-use revm::{
-    db::DbAccount,
-    primitives::{Account, Address, B160, U256},
-};
+use revm::{db::Database, DatabaseCommit};
 use zeth_primitives::block::Header;
 
 use crate::{
@@ -31,15 +27,6 @@ use crate::{
     },
 };
 
-pub trait BlockBuilderDatabase: revm::Database + Sized {
-    /// Returns all non-deleted accounts with their storage entries.
-    fn accounts(&self) -> hash_map::Iter<B160, DbAccount>;
-    /// Increases the balance of `address` by `amount`.
-    fn increase_balance(&mut self, address: Address, amount: U256) -> Result<(), Self::Error>;
-    /// Updates the account of `address`.
-    fn update(&mut self, address: Address, account: Account);
-}
-
 #[derive(Clone, Debug)]
 pub struct BlockBuilder<'a, D> {
     pub(crate) chain_spec: &'a ChainSpec,
@@ -50,8 +37,8 @@ pub struct BlockBuilder<'a, D> {
 
 impl<D> BlockBuilder<'_, D>
 where
-    D: BlockBuilderDatabase,
-    <D as revm::Database>::Error: std::fmt::Debug,
+    D: Database + DatabaseCommit,
+    <D as Database>::Error: std::fmt::Debug,
 {
     /// Creates a new block builder.
     pub fn new(chain_spec: &ChainSpec, input: Input) -> BlockBuilder<'_, D> {
@@ -70,7 +57,7 @@ where
     }
 
     /// Initializes the database from the input tries.
-    pub fn initialize_database<T: DbInitStrategy<Db = D>>(mut self) -> Result<Self> {
+    pub fn initialize_database<T: DbInitStrategy<Db = D>>(self) -> Result<Self> {
         T::initialize_database(self)
     }
 
@@ -107,7 +94,7 @@ where
     }
 
     /// Builds the block and returns the header.
-    pub fn build<T: BlockBuildStrategy<Db = D>>(mut self, mut strategy: T) -> Result<Header> {
+    pub fn build<T: BlockBuildStrategy<Db = D>>(self, strategy: &mut T) -> Result<Header> {
         strategy.build(self)
     }
 

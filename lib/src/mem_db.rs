@@ -21,7 +21,7 @@ use hashbrown::{
 use log::debug;
 use revm::{
     primitives::{Account, AccountInfo, Bytecode, B160, B256, U256},
-    Database, DatabaseCommit,
+    Database,
 };
 use thiserror::Error as ThisError;
 
@@ -315,13 +315,5 @@ impl BlockBuilderDatabase for MemDb {
                 .filter(|(_, value)| value.is_changed())
                 .map(|(key, value)| (key, value.present_value())),
         );
-    }
-}
-
-impl DatabaseCommit for MemDb {
-    fn commit(&mut self, changes: HashMap<B160, Account>) {
-        for (address, new_account) in changes {
-            self.update(address, new_account);
-        }
     }
 }

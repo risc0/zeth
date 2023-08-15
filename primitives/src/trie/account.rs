@@ -14,13 +14,14 @@
 
 use alloy_primitives::{TxNumber, B256, U256};
 use alloy_rlp_derive::{RlpDecodable, RlpEncodable, RlpMaxEncodedLen};
+use revm_primitives::AccountInfo;
 use serde::{Deserialize, Serialize};
 
-use crate::{keccak::KECCAK_EMPTY, trie::EMPTY_ROOT};
+use crate::{keccak::KECCAK_EMPTY, revm::to_revm_b256, trie::EMPTY_ROOT};
 
 /// An Ethereum account as represented in the trie.
 #[derive(Debug, Clone, Serialize, Deserialize, RlpEncodable, RlpDecodable, RlpMaxEncodedLen)]
-pub struct StateAccount {
+pub struct TrieAccount {
     /// Account nonce.
     pub nonce: TxNumber,
     /// Account balance.
@@ -31,13 +32,24 @@ pub struct StateAccount {
     pub code_hash: B256,
 }
 
-impl Default for StateAccount {
+impl Default for TrieAccount {
     fn default() -> Self {
         Self {
             nonce: 0,
             balance: U256::ZERO,
             storage_root: EMPTY_ROOT,
             code_hash: KECCAK_EMPTY,
+        }
+    }
+}
+
+impl Into<AccountInfo> for TrieAccount {
+    fn into(self) -> AccountInfo {
+        AccountInfo {
+            balance: self.balance,
+            nonce: self.nonce,
+            code_hash: to_revm_b256(self.code_hash),
+            code: None,
         }
     }
 }

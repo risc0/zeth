@@ -21,7 +21,7 @@ use zeth_primitives::{
     block::Header,
     keccak::{keccak, KECCAK_EMPTY},
     revm::{from_revm_b256, to_revm_b256},
-    trie::{MptNode, StateAccount},
+    trie::{MptNode, TrieAccount},
     Bytes,
 };
 
@@ -99,7 +99,7 @@ where
             let state_account = self
                 .input
                 .parent_state_trie
-                .get_rlp::<StateAccount>(&keccak(address))?
+                .get_rlp::<TrieAccount>(&keccak(address))?
                 .unwrap_or_default();
             verify_storage_trie(address, storage_trie, &state_account.storage_root)?;
 
@@ -235,7 +235,7 @@ where
                 storage_trie.hash()
             };
 
-            let state_account = StateAccount {
+            let state_account = TrieAccount {
                 nonce: account.info.nonce,
                 balance: account.info.balance,
                 storage_root,

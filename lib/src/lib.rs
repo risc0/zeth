@@ -17,6 +17,7 @@ extern crate core;
 #[cfg(not(target_os = "zkvm"))]
 pub mod host;
 
+pub mod auth_db;
 pub mod block_builder;
 pub mod consts;
 pub mod execution;

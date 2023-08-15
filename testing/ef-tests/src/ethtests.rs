@@ -50,9 +50,6 @@ pub fn read_eth_test(path: PathBuf) -> Vec<EthTestCase> {
             let genesis: Header = json.genesis.clone().into();
             assert_eq!(genesis.hash(), json.genesis.hash);
 
-            // log the pre-state
-            dbg!(&json.pre);
-
             Some(EthTestCase {
                 json,
                 genesis,

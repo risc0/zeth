@@ -373,14 +373,7 @@ fn proofs_to_tries(
             // as this is just the digest any tries to update this trie will fail
             MptNodeData::Digest(from_ethers_h256(proof.storage_hash)).into()
         };
-        // // collect all storage slots with a proof
-        // let slots = proof
-        //     .storage_proof
-        //     .into_iter()
-        //     .map(|p| zeth_primitives::U256::from_be_bytes(p.key.into()))
-        //     .collect();
 
-        // storage.insert(proof.address.into(), (root_node, slots));
         storage.insert(proof.address.into(), root_node);
     }
     (nodes_by_reference, storage)

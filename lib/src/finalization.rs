@@ -115,11 +115,6 @@ impl BlockBuildStrategy for BuildFromCachedAuthDbStrategy {
                 map.insert(*address, storage_trie.clone());
             }
 
-            // let storage_root = {
-            //
-            //     storage_trie.hash()
-            // };
-
             let state_account = TrieAccount {
                 nonce: account.info.nonce,
                 balance: account.info.balance,

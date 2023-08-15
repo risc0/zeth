@@ -23,7 +23,6 @@ pub mod consts;
 pub mod execution;
 pub mod finalization;
 pub mod initialization;
-pub mod mem_db;
 pub mod validation;
 
 /// call forget only if running inside the guest

@@ -19,31 +19,38 @@ use serde::{Deserialize, Serialize};
 
 use crate::{access_list::AccessList, keccak::keccak, signature::TxSignature};
 
-/// Legacy transaction as described in [EIP-155](https://eips.ethereum.org/EIPS/eip-155).
+/// Represents a legacy Ethereum transaction as detailed in [EIP-155](https://eips.ethereum.org/EIPS/eip-155).
+///
+/// The `TxEssenceLegacy` struct encapsulates the core components of a traditional
+/// Ethereum transaction prior to the introduction of more recent transaction types. It
+/// adheres to the specifications set out in EIP-155.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct TxEssenceLegacy {
-    /// Network chain ID, added in EIP-155.
+    /// The network's chain ID introduced in EIP-155 to prevent replay attacks across
+    /// different chains.
     pub chain_id: Option<ChainId>,
-    /// A scalar value equal to the number of transactions sent by the sender.
+    /// A numeric value representing the total number of transactions previously sent by
+    /// the sender.
     pub nonce: TxNumber,
-    /// A scalar value equal to the number of Wei to be paid per unit of gas for all
-    /// computation costs.
+    /// The price, in Wei, that the sender is willing to pay per unit of gas for the
+    /// transaction's execution.
     pub gas_price: U256,
-    /// A scalar value equal to the maximum amount of gas that should be used in executing
-    /// this transaction.
+    /// The maximum amount of gas allocated for the transaction's execution.
     pub gas_limit: U256,
-    /// The 160-bit address of the message call's recipient or, for a contract creation
-    /// transaction, ∅.
+    /// The 160-bit address of the intended recipient for a message call. For contract
+    /// creation transactions, this is null.
     pub to: TransactionKind,
-    /// A scalar value equal to the number of Wei to be transferred to the message call's
-    /// recipient.
+    /// The amount, in Wei, to be transferred to the recipient of the message call.
     pub value: U256,
-    /// An unlimited size byte array specifying the transaction data.
+    /// The transaction's payload, represented as a variable-length byte array.
     pub data: Bytes,
 }
 
 impl TxEssenceLegacy {
-    /// Length of the RLP payload in bytes.
+    /// Computes the length of the RLP-encoded payload in bytes.
+    ///
+    /// This method calculates the combined length of all the individual fields
+    /// of the transaction when they are RLP-encoded.
     fn payload_length(&self) -> usize {
         self.nonce.length()
             + self.gas_price.length()
@@ -53,10 +60,14 @@ impl TxEssenceLegacy {
             + self.data.length()
     }
 
-    /// Encodes this transaction essence into the `out` buffer, only for signing.
+    /// Encodes the transaction essence into the provided `out` buffer for the purpose of
+    /// signing.
+    ///
+    /// The method follows the RLP encoding scheme. If a `chain_id` is present,
+    /// the encoding adheres to the specifications set out in [EIP-155](https://eips.ethereum.org/EIPS/eip-155).
     fn signing_encode(&self, out: &mut dyn alloy_rlp::BufMut) {
         let mut payload_length = self.payload_length();
-        // if a chain ID is present, append according to EIP-155
+        // Append chain ID according to EIP-155 if present
         if let Some(chain_id) = self.chain_id {
             payload_length += chain_id.length() + 1 + 1;
         }
@@ -78,10 +89,14 @@ impl TxEssenceLegacy {
         }
     }
 
-    /// Returns the length of the encoded transaction essence in bytes, only for signing.
+    /// Computes the length of the RLP-encoded transaction essence in bytes, specifically
+    /// for signing.
+    ///
+    /// This method calculates the total length of the transaction when it is RLP-encoded,
+    /// including any additional bytes required for the encoding format.
     fn signing_length(&self) -> usize {
         let mut payload_length = self.payload_length();
-        // if a chain ID is present, append according to EIP-155
+        // Append chain ID according to EIP-155 if present
         if let Some(chain_id) = self.chain_id {
             payload_length += chain_id.length() + 1 + 1;
         }
@@ -89,8 +104,13 @@ impl TxEssenceLegacy {
     }
 }
 
-// implement Encodable to always ignore the chain ID
+// Implement the Encodable trait for TxEssenceLegacy.
+// Ensures that the `chain_id` is always ignored during the RLP encoding process.
 impl Encodable for TxEssenceLegacy {
+    /// Encodes the `TxEssenceLegacy` instance into the provided `out` buffer.
+    ///
+    /// This method follows the RLP encoding scheme, but intentionally omits the
+    /// `chain_id` to ensure compatibility with legacy transactions.
     fn encode(&self, out: &mut dyn alloy_rlp::BufMut) {
         alloy_rlp::Header {
             list: true,
@@ -105,75 +125,108 @@ impl Encodable for TxEssenceLegacy {
         self.data.encode(out);
     }
 
+    /// Computes the length of the RLP-encoded `TxEssenceLegacy` instance in bytes.
+    ///
+    /// This method calculates the total length of the transaction when it is RLP-encoded,
+    /// excluding the `chain_id`.
     fn length(&self) -> usize {
         let payload_length = self.payload_length();
         alloy_rlp::length_of_length(payload_length) + payload_length
     }
 }
 
-/// Transaction with an access list as described in [EIP-2930](https://eips.ethereum.org/EIPS/eip-2930).
+/// Represents an Ethereum transaction with an access list, as detailed in [EIP-2930](https://eips.ethereum.org/EIPS/eip-2930).
+///
+/// The `TxEssenceEip2930` struct encapsulates the core components of an Ethereum
+/// transaction that includes an access list. Access lists are a feature introduced in
+/// EIP-2930 to specify a list of addresses and storage keys that the transaction will
+/// access, allowing for more predictable gas costs.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, RlpEncodable)]
 pub struct TxEssenceEip2930 {
-    /// Network chain ID.
+    /// The network's chain ID, ensuring the transaction is valid on the intended chain.
     pub chain_id: ChainId,
-    /// A scalar value equal to the number of transactions sent by the sender.
+    /// A numeric value representing the total number of transactions previously sent by
+    /// the sender.
     pub nonce: TxNumber,
-    /// A scalar value equal to the number of Wei to be paid per unit of gas for all
-    /// computation costs.
+    /// The price, in Wei, that the sender is willing to pay per unit of gas for the
+    /// transaction's execution.
     pub gas_price: U256,
-    /// A scalar value equal to the maximum amount of gas that should be used in executing
-    /// this transaction.
+    /// The maximum amount of gas allocated for the transaction's execution.
     pub gas_limit: U256,
-    /// The 160-bit address of the message call's recipient or, for a contract creation
-    /// transaction, ∅.
+    /// The 160-bit address of the intended recipient for a message call. For contract
+    /// creation transactions, this is null.
     pub to: TransactionKind,
-    /// A scalar value equal to the number of Wei to be transferred to the message call's
-    /// recipient.
+    /// The amount, in Wei, to be transferred to the recipient of the message call.
     pub value: U256,
-    /// An unlimited size byte array specifying the transaction data.
+    /// The transaction's payload, represented as a variable-length byte array.
     pub data: Bytes,
-    /// List of access entries to warm up.
+    /// A list of addresses and storage keys that the transaction will access, helping in
+    /// gas optimization.
     pub access_list: AccessList,
 }
 
-/// A transaction with a priority fee as described in [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559).
+/// Represents an Ethereum transaction with a priority fee, as detailed in [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559).
+///
+/// The `TxEssenceEip1559` struct encapsulates the core components of an Ethereum
+/// transaction that incorporates the priority fee mechanism introduced in EIP-1559. This
+/// mechanism aims to improve the predictability of gas fees and enhance the overall user
+/// experience.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, RlpEncodable)]
 pub struct TxEssenceEip1559 {
-    /// Network chain ID, added in EIP-155.
+    /// The network's chain ID, ensuring the transaction is valid on the intended chain,
+    /// as introduced in EIP-155.
     pub chain_id: ChainId,
-    /// A scalar value equal to the number of transactions sent by the sender.
+    /// A numeric value representing the total number of transactions previously sent by
+    /// the sender.
     pub nonce: TxNumber,
-    /// Maximum priority fee that transaction is paying to the miner.
+    /// The maximum priority fee per unit of gas that the sender is willing to pay to the
+    /// miner.
     pub max_priority_fee_per_gas: U256,
-    /// Maximum base and priority fee paid per unit of gas for all computation costs.
+    /// The combined maximum fee (base + priority) per unit of gas that the sender is
+    /// willing to pay for the transaction's execution.
     pub max_fee_per_gas: U256,
-    /// A scalar value equal to the maximum amount of gas that should be used in executing
-    /// this transaction.
+    /// The maximum amount of gas allocated for the transaction's execution.
     pub gas_limit: U256,
-    /// The 160-bit address of the message call's recipient or, for a contract creation
-    /// transaction, ∅.
+    /// The 160-bit address of the intended recipient for a message call. For contract
+    /// creation transactions, this is null.
     pub to: TransactionKind,
-    /// A scalar value equal to the number of Wei to be transferred to the message call's
-    /// recipient.
+    /// The amount, in Wei, to be transferred to the recipient of the message call.
     pub value: U256,
-    /// An unlimited size byte array specifying the transaction data.
+    /// The transaction's payload, represented as a variable-length byte array.
     pub data: Bytes,
-    /// List of access entries to warm up.
+    /// A list of addresses and storage keys that the transaction will access, aiding in
+    /// gas optimization.
     pub access_list: AccessList,
 }
 
-/// Essence of a transaction, i.e. the signed part.
+/// Represents the core essence of an Ethereum transaction, specifically the portion that
+/// gets signed.
+///
+/// The `TxEssence` enum provides a way to handle different types of Ethereum
+/// transactions, from legacy transactions to more recent types introduced by various
+/// Ethereum Improvement Proposals (EIPs).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TxEssence {
-    /// Legacy transaction.
+    /// Represents a legacy Ethereum transaction, which follows the original transaction
+    /// format.
     Legacy(TxEssenceLegacy),
-    /// Transaction with an access list ([EIP-2930](https://eips.ethereum.org/EIPS/eip-2930)).
+    /// Represents an Ethereum transaction that includes an access list, as introduced in [EIP-2930](https://eips.ethereum.org/EIPS/eip-2930).
+    /// Access lists specify a list of addresses and storage keys that the transaction
+    /// will access, allowing for more predictable gas costs.
     Eip2930(TxEssenceEip2930),
-    /// A transaction with a priority fee ([EIP-1559](https://eips.ethereum.org/EIPS/eip-1559)).
+    /// Represents an Ethereum transaction that incorporates a priority fee mechanism, as detailed in [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559).
+    /// This mechanism aims to improve the predictability of gas fees and enhances the
+    /// overall user experience.
     Eip1559(TxEssenceEip1559),
 }
 
+// Implement the Encodable trait for the TxEssence enum.
+// Ensures that each variant of the `TxEssence` enum can be RLP-encoded.
 impl Encodable for TxEssence {
+    /// Encodes the `TxEssence` enum variant into the provided `out` buffer.
+    ///
+    /// Depending on the variant of the `TxEssence` enum, this method will delegate
+    /// the encoding process to the appropriate transaction type's encoding method.
     fn encode(&self, out: &mut dyn alloy_rlp::BufMut) {
         match self {
             TxEssence::Legacy(tx) => tx.encode(out),
@@ -181,6 +234,11 @@ impl Encodable for TxEssence {
             TxEssence::Eip1559(tx) => tx.encode(out),
         }
     }
+
+    /// Computes the length of the RLP-encoded `TxEssence` enum variant in bytes.
+    ///
+    /// Depending on the variant of the `TxEssence` enum, this method will delegate
+    /// the length computation to the appropriate transaction type's length method.
     fn length(&self) -> usize {
         match self {
             TxEssence::Legacy(tx) => tx.length(),
@@ -191,12 +249,19 @@ impl Encodable for TxEssence {
 }
 
 impl TxEssence {
-    /// Computes the signing hash.
+    /// Computes the signing hash for the transaction essence.
+    ///
+    /// This method calculates the Keccak hash of the data that needs to be signed
+    /// for the transaction, ensuring the integrity and authenticity of the transaction.
     pub(crate) fn signing_hash(&self) -> B256 {
         keccak(self.signing_data()).into()
     }
 
-    /// Returns the data that should be signed.
+    /// Retrieves the data that should be signed for the transaction essence.
+    ///
+    /// Depending on the variant of the `TxEssence` enum, this method prepares the
+    /// appropriate data for signing. For EIP-2930 and EIP-1559 transactions, a specific
+    /// prefix byte is added before the transaction data.
     fn signing_data(&self) -> Vec<u8> {
         match self {
             TxEssence::Legacy(tx) => {
@@ -219,7 +284,11 @@ impl TxEssence {
         }
     }
 
-    /// Length of the RLP payload in bytes.
+    /// Computes the length of the RLP-encoded payload in bytes for the transaction
+    /// essence.
+    ///
+    /// This method calculates the length of the transaction data when it is RLP-encoded,
+    /// which is used for serialization and deserialization in the Ethereum network.
     fn payload_length(&self) -> usize {
         match self {
             TxEssence::Legacy(tx) => tx.payload_length(),
@@ -229,18 +298,33 @@ impl TxEssence {
     }
 }
 
-/// Whether or not the transaction is a contract creation.
-/// This cannot be an [Option] as options get RLP encoded into lists.
+/// Represents the type of an Ethereum transaction: either a contract creation or a call
+/// to an existing contract.
+///
+/// This enum is used to distinguish between the two primary types of Ethereum
+/// transactions. It avoids using an [Option] for this purpose because options get RLP
+/// encoded into lists.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum TransactionKind {
-    /// A contract creation transaction.
+    /// Indicates that the transaction is for creating a new contract on the Ethereum
+    /// network.
     #[default]
     Create,
-    /// The 160-bit address of the transaction call's recipient.
+    /// Indicates that the transaction is a call to an existing contract, identified by
+    /// its 160-bit address.
     Call(B160),
 }
 
+/// Provides a conversion from `TransactionKind` to `Option<B160>`.
+///
+/// This implementation allows for a straightforward extraction of the Ethereum address
+/// from a `TransactionKind`. If the transaction kind is a `Call`, the address is wrapped
+/// in a `Some`. If it's a `Create`, the result is `None`.
 impl From<TransactionKind> for Option<B160> {
+    /// Converts a `TransactionKind` into an `Option<B160>`.
+    ///
+    /// - If the transaction kind is `Create`, this returns `None`.
+    /// - If the transaction kind is `Call`, this returns the address wrapped in a `Some`.
     fn from(value: TransactionKind) -> Self {
         match value {
             TransactionKind::Create => None,
@@ -249,7 +333,17 @@ impl From<TransactionKind> for Option<B160> {
     }
 }
 
+/// Provides RLP encoding functionality for the `TransactionKind` enum.
+///
+/// This implementation ensures that each variant of the `TransactionKind` enum can be
+/// RLP-encoded.
+/// - The `Call` variant is encoded as the address it contains.
+/// - The `Create` variant is encoded as an empty string.
 impl Encodable for TransactionKind {
+    /// Encodes the `TransactionKind` enum variant into the provided `out` buffer.
+    ///
+    /// If the transaction kind is `Call`, the Ethereum address is encoded directly.
+    /// If the transaction kind is `Create`, an empty string code is added to the buffer.
     #[inline]
     fn encode(&self, out: &mut dyn alloy_rlp::BufMut) {
         match self {
@@ -257,6 +351,12 @@ impl Encodable for TransactionKind {
             TransactionKind::Create => out.put_u8(EMPTY_STRING_CODE),
         }
     }
+
+    /// Computes the length of the RLP-encoded `TransactionKind` enum variant in bytes.
+    ///
+    /// If the transaction kind is `Call`, this returns the length of the Ethereum
+    /// address. If the transaction kind is `Create`, this returns 1 (length of the
+    /// empty string code).
     #[inline]
     fn length(&self) -> usize {
         match self {
@@ -266,17 +366,35 @@ impl Encodable for TransactionKind {
     }
 }
 
-/// A raw transaction including the signature.
+/// Represents a complete Ethereum transaction, encompassing its core essence and the
+/// associated signature.
+///
+/// The `Transaction` struct encapsulates both the core details of the transaction (the
+/// essence) and its cryptographic signature. The signature ensures the authenticity and
+/// integrity of the transaction, confirming it was issued by the rightful sender.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Transaction {
-    /// Transaction essence to be signed.
+    /// The core details of the transaction, which include its type (e.g., legacy,
+    /// EIP-2930, EIP-1559) and associated data (e.g., recipient address, value, gas
+    /// details).
     pub essence: TxEssence,
-    /// Signature of the transaction essence.
+    /// The cryptographic signature associated with the transaction, generated by signing
+    /// the transaction essence.
     pub signature: TxSignature,
 }
 
+/// Provides RLP encoding functionality for the `Transaction` struct.
+///
+/// This implementation ensures that the entire transaction, including its essence and
+/// signature, can be RLP-encoded. The encoding process also considers the EIP-2718
+/// transaction type.
 impl Encodable for Transaction {
-    /// Encodes the transaction into the `out` buffer.
+    /// Encodes the `Transaction` struct into the provided `out` buffer.
+    ///
+    /// The encoding process starts by prepending the EIP-2718 transaction type, if
+    /// applicable. It then joins the RLP lists of the transaction essence and the
+    /// signature into a single list. This approach optimizes the encoding process by
+    /// reusing as much of the generated RLP code as possible.
     #[inline]
     fn encode(&self, out: &mut dyn alloy_rlp::BufMut) {
         // prepend the EIP-2718 transaction type
@@ -286,11 +404,14 @@ impl Encodable for Transaction {
         }
 
         // join the essence lists and the signature list into one
-        // this allows to reuse as much of the generated RLP code as possible
         rlp_join_lists(&self.essence, &self.signature, out);
     }
 
-    /// Returns the length of the encoding of the transaction in bytes.
+    /// Computes the length of the RLP-encoded `Transaction` struct in bytes.
+    ///
+    /// The computed length includes the lengths of the encoded transaction essence and
+    /// signature. If the transaction type (as per EIP-2718) is not zero, an
+    /// additional byte is added to the length.
     #[inline]
     fn length(&self) -> usize {
         let payload_length = self.essence.payload_length() + self.signature.payload_length();
@@ -303,11 +424,19 @@ impl Encodable for Transaction {
 }
 
 impl Transaction {
-    /// Calculates the transaction hash.
+    /// Calculates the Keccak hash of the RLP-encoded transaction.
+    ///
+    /// This hash uniquely identifies the transaction on the Ethereum network.
     pub fn hash(&self) -> TxHash {
         keccak(alloy_rlp::encode(self)).into()
     }
 
+    /// Determines the type of the transaction based on its essence.
+    ///
+    /// Returns a byte representing the transaction type:
+    /// - `0x00` for Legacy transactions.
+    /// - `0x01` for EIP-2930 transactions.
+    /// - `0x02` for EIP-1559 transactions.
     pub fn tx_type(&self) -> u8 {
         match &self.essence {
             TxEssence::Legacy(_) => 0x00,
@@ -315,6 +444,11 @@ impl Transaction {
             TxEssence::Eip1559(_) => 0x02,
         }
     }
+
+    /// Retrieves the gas limit set for the transaction.
+    ///
+    /// The gas limit represents the maximum amount of gas units that the transaction
+    /// is allowed to consume. It ensures that transactions don't run indefinitely.
     pub fn gas_limit(&self) -> U256 {
         match &self.essence {
             TxEssence::Legacy(tx) => tx.gas_limit,
@@ -322,6 +456,11 @@ impl Transaction {
             TxEssence::Eip1559(tx) => tx.gas_limit,
         }
     }
+
+    /// Retrieves the recipient address of the transaction, if available.
+    ///
+    /// For contract creation transactions, this method returns `None` as there's no
+    /// recipient address.
     pub fn to(&self) -> Option<B160> {
         match &self.essence {
             TxEssence::Legacy(tx) => tx.to.into(),
@@ -331,8 +470,21 @@ impl Transaction {
     }
 }
 
-/// Joins two RLP-encoded lists into one lists and outputs the result into the `out`
-/// buffer.
+/// Joins two RLP-encoded lists into a single RLP-encoded list.
+///
+/// This function takes two RLP-encoded lists, decodes their headers to ensure they are
+/// valid lists, and then combines their payloads into a single RLP-encoded list. The
+/// resulting list is written to the provided `out` buffer.
+///
+/// # Arguments
+///
+/// * `a` - The first RLP-encoded list to be joined.
+/// * `b` - The second RLP-encoded list to be joined.
+/// * `out` - The buffer where the resulting RLP-encoded list will be written.
+///
+/// # Panics
+///
+/// This function will panic if either `a` or `b` are not valid RLP-encoded lists.
 fn rlp_join_lists(a: impl Encodable, b: impl Encodable, out: &mut dyn alloy_rlp::BufMut) {
     let a_buf = alloy_rlp::encode(a);
     let header = alloy_rlp::Header::decode(&mut &a_buf[..]).unwrap();

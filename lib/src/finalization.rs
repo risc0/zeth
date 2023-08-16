@@ -23,7 +23,7 @@ use zeth_primitives::{
     guest_mem_forget,
     keccak::keccak,
     revm::from_revm_b256,
-    trie::{MptNode, MptNodeData, TrieAccount, EMPTY_ROOT},
+    trie::{MptNode, TrieAccount},
 };
 
 use crate::{
@@ -143,17 +143,6 @@ impl BlockBuildStrategy for BuildFromCachedAuthDbStrategy {
 fn get_storage_trie(auth_db: &mut AuthenticatedDb, address: B160) -> &mut MptNode {
     match auth_db.storage_tries.entry(address) {
         Entry::Occupied(entry) => entry.into_mut(),
-        Entry::Vacant(vacancy) => {
-            let node_data = match auth_db
-                .state_trie
-                .get_rlp::<TrieAccount>(&keccak(address))
-                .unwrap()
-            {
-                None => MptNodeData::Null,
-                Some(account) if account.storage_root == EMPTY_ROOT => MptNodeData::Null,
-                Some(account) => MptNodeData::Digest(account.storage_root),
-            };
-            vacancy.insert(node_data.into())
-        }
+        Entry::Vacant(vacancy) => vacancy.insert(Default::default()),
     }
 }

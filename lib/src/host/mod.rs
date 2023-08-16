@@ -450,7 +450,7 @@ impl Into<Input> for Init {
             "The partial state trie consists of {} nodes",
             state_trie.size()
         );
-        println!(
+        info!(
             "The partial storage tries consist of {} nodes",
             storage.values().map(|n| n.size()).sum::<usize>()
         );

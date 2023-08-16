@@ -24,9 +24,3 @@ pub mod execution;
 pub mod finalization;
 pub mod initialization;
 pub mod validation;
-
-/// call forget only if running inside the guest
-pub fn guest_mem_forget<T>(_t: T) {
-    #[cfg(target_os = "zkvm")]
-    core::mem::forget(_t)
-}

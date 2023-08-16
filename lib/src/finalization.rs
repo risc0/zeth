@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use hashbrown::HashMap;
 use revm::{
     db::AccountState,
@@ -20,12 +20,13 @@ use revm::{
 };
 use zeth_primitives::{
     block::Header,
+    guest_mem_forget,
     keccak::keccak,
     revm::from_revm_b256,
     trie::{MptNode, TrieAccount},
 };
 
-use crate::{auth_db::CachedAuthDb, block_builder::BlockBuilder, guest_mem_forget};
+use crate::{auth_db::CachedAuthDb, block_builder::BlockBuilder};
 
 pub trait BlockBuildStrategy {
     type Db;
@@ -59,10 +60,7 @@ impl BlockBuildStrategy for BuildFromCachedAuthDbStrategy {
     type Db = CachedAuthDb;
 
     fn build(&mut self, mut block_builder: BlockBuilder<Self::Db>) -> Result<Header> {
-        let mut cached_db = block_builder
-            .db
-            .take()
-            .ok_or(anyhow!("Missing database!"))?;
+        let mut cached_db = block_builder.db.take().unwrap();
 
         // apply state updates
         let state_trie = &mut cached_db.db.state_trie;
@@ -87,21 +85,17 @@ impl BlockBuildStrategy for BuildFromCachedAuthDbStrategy {
             }
 
             // otherwise, compute the updated storage root for that account
-            let state_storage = &account.storage;
+
             // getting a mutable reference is more efficient than calling remove
             // every account must have an entry, even newly created accounts
-            let storage_trie = cached_db
-                .db
-                .storage_tries
-                .get_mut(address)
-                .ok_or(anyhow!("Missing final account storage trie!"))?;
+            let storage_trie = cached_db.db.storage_tries.get_mut(address).unwrap();
             // for cleared accounts always start from the empty trie
             if account.account_state == AccountState::StorageCleared {
                 storage_trie.clear();
             }
 
             // apply all new storage entries for the current account (address)
-            for (key, value) in state_storage {
+            for (key, value) in &account.storage {
                 let storage_trie_index = keccak(key.to_be_bytes::<32>());
                 if value == &U256::ZERO {
                     storage_trie.delete(&storage_trie_index)?;
@@ -128,7 +122,8 @@ impl BlockBuildStrategy for BuildFromCachedAuthDbStrategy {
         let mut header = block_builder
             .header
             .take()
-            .expect("Header was not initialized");
+            // .expect("Header was not initialized");
+            .unwrap();
         header.state_root = state_trie.hash();
 
         // Leak memory, save cycles

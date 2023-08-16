@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
+use core::{fmt::Debug, mem::take};
 
 use anyhow::{anyhow, bail, Context, Result};
 #[cfg(not(target_os = "zkvm"))]
@@ -23,6 +23,7 @@ use revm::{
     DatabaseCommit, EVM,
 };
 use zeth_primitives::{
+    guest_mem_forget,
     receipt::Receipt,
     revm::{to_revm_b160, to_revm_b256},
     transaction::{Transaction, TransactionKind, TxEssence},
@@ -31,8 +32,7 @@ use zeth_primitives::{
 };
 
 use crate::{
-    block_builder::BlockBuilder, consts, consts::GWEI_TO_WEI, guest_mem_forget,
-    validation::compute_spec_id,
+    block_builder::BlockBuilder, consts, consts::GWEI_TO_WEI, validation::compute_spec_id,
 };
 
 pub trait TxExecStrategy {
@@ -102,10 +102,14 @@ impl TxExecStrategy for EthTxExecStrategy {
         // process all the transactions
         let mut tx_trie = MptNode::default();
         let mut receipt_trie = MptNode::default();
-        for (tx_no, tx) in block_builder.input.transactions.iter().enumerate() {
+        for (tx_no, tx) in take(&mut block_builder.input.transactions)
+            .into_iter()
+            .enumerate()
+        {
             // verify the transaction signature
             let tx_from = tx
                 .recover_from()
+                .map(to_revm_b160)
                 .with_context(|| format!("Error recovering address for transaction {}", tx_no))?;
 
             #[cfg(not(target_os = "zkvm"))]
@@ -124,8 +128,7 @@ impl TxExecStrategy for EthTxExecStrategy {
             }
 
             // process the transaction
-            let tx_from = to_revm_b160(tx_from);
-            fill_tx_env(&mut evm.env.tx, tx, tx_from);
+            fill_tx_env(&mut evm.env.tx, &tx, tx_from);
             let result = evm
                 .transact_commit()
                 .map_err(|evm_err| anyhow!("Error at transaction {}: {:?}", tx_no, evm_err))?;
@@ -147,7 +150,7 @@ impl TxExecStrategy for EthTxExecStrategy {
             // accumulate logs to the block bloom filter
             logs_bloom.accrue_bloom(receipt.payload.logs_bloom);
 
-            // Add receipt and tx to tries
+            // Add tx and receipt to tries
             let trie_key = tx_no.to_rlp();
             tx_trie
                 .insert_rlp(&trie_key, tx)
@@ -161,7 +164,10 @@ impl TxExecStrategy for EthTxExecStrategy {
 
         // process withdrawals unconditionally after any transactions
         let mut withdrawals_trie = MptNode::default();
-        for (i, withdrawal) in block_builder.input.withdrawals.iter().enumerate() {
+        for (i, withdrawal) in take(&mut block_builder.input.withdrawals)
+            .into_iter()
+            .enumerate()
+        {
             // the withdrawal amount is given in Gwei
             let amount_wei = GWEI_TO_WEI
                 .checked_mul(withdrawal.amount.try_into().unwrap())
@@ -182,10 +188,8 @@ impl TxExecStrategy for EthTxExecStrategy {
                 .basic(address)
                 .map_err(|db_err| anyhow!("Error at withdrawal {}: {:?}", i, db_err))?
                 .unwrap_or_default();
-            withdrawal_account.balance = withdrawal_account
-                .balance
-                .checked_add(amount_wei)
-                .ok_or(anyhow!("Overflow on withdrawal!"))?;
+            withdrawal_account.balance =
+                withdrawal_account.balance.checked_add(amount_wei).unwrap();
             let mut account = Account::from(withdrawal_account);
             account.is_touched = true;
             block_builder
@@ -213,6 +217,7 @@ impl TxExecStrategy for EthTxExecStrategy {
 
         // Leak memory, save cycles
         guest_mem_forget([tx_trie, receipt_trie, withdrawals_trie]);
+        guest_mem_forget(evm);
 
         Ok(block_builder)
     }

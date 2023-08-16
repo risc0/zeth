@@ -23,7 +23,7 @@ use rlp::{Decodable, DecoderError, Prototype, Rlp};
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
-use crate::{keccak::keccak, trie::EMPTY_ROOT, RlpBytes};
+use crate::{guest_mem_forget, keccak::keccak, trie::EMPTY_ROOT, RlpBytes};
 
 /// A node representing the root of a sparse Merkle Patricia trie. Sparse in this context
 /// means that certain unneeded parts of the trie, i.e. sub-tries, can be cut off and
@@ -185,7 +185,8 @@ impl Decodable for MptNode {
 impl MptNode {
     /// Clears the trie, replacing it with [MptNodeData::Null].
     pub fn clear(&mut self) {
-        self.data = MptNodeData::Null;
+        // Leak memory, save cycles
+        guest_mem_forget(core::mem::take(&mut self.data));
         self.invalidate_ref_cache();
     }
 

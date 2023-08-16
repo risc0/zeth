@@ -133,6 +133,7 @@ impl BlockBuildStrategy for BuildFromCachedAuthDbStrategy {
 
         // Leak memory, save cycles
         guest_mem_forget(block_builder);
+        guest_mem_forget(cached_db);
 
         Ok(header)
     }

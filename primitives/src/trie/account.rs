@@ -43,6 +43,7 @@ impl Default for TrieAccount {
     }
 }
 
+#[allow(clippy::from_over_into)]
 impl Into<AccountInfo> for TrieAccount {
     fn into(self) -> AccountInfo {
         AccountInfo {

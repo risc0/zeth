@@ -101,16 +101,18 @@ impl AuthenticatedDb {
             block_hashes.insert(current.number.try_into()?, to_revm_b256(current_block_hash));
             Ok(Some(current_block_hash))
         })?;
+        // authenticate bytecode
+        let contracts = contracts
+            .into_iter()
+            .map(|bytes| unsafe {
+                let hash = keccak(&bytes).into();
+                (hash, Bytecode::new_raw_with_hash(bytes.0, hash))
+            })
+            .collect();
         Ok(AuthenticatedDb {
             state_trie,
             storage_tries,
-            contracts: contracts
-                .into_iter()
-                .map(|bytes| unsafe {
-                    let hash = keccak(&bytes).into();
-                    (hash, Bytecode::new_raw_with_hash(bytes.0, hash))
-                })
-                .collect(),
+            contracts,
             block_hashes,
         })
     }

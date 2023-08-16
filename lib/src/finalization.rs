@@ -13,20 +13,23 @@
 // limitations under the License.
 
 use anyhow::Result;
-use hashbrown::HashMap;
+use hashbrown::{hash_map::Entry, HashMap};
 use revm::{
     db::AccountState,
-    primitives::{Address, U256},
+    primitives::{Address, B160, U256},
 };
 use zeth_primitives::{
     block::Header,
     guest_mem_forget,
     keccak::keccak,
     revm::from_revm_b256,
-    trie::{MptNode, TrieAccount},
+    trie::{MptNode, MptNodeData, TrieAccount, EMPTY_ROOT},
 };
 
-use crate::{auth_db::CachedAuthDb, block_builder::BlockBuilder};
+use crate::{
+    auth_db::{AuthenticatedDb, CachedAuthDb},
+    block_builder::BlockBuilder,
+};
 
 pub trait BlockBuildStrategy {
     type Db;
@@ -63,13 +66,12 @@ impl BlockBuildStrategy for BuildFromCachedAuthDbStrategy {
         let mut cached_db = block_builder.db.take().unwrap();
 
         // apply state updates
-        let state_trie = &mut cached_db.db.state_trie;
         for (address, account) in cached_db.accounts.iter() {
             // if the account has not been touched, it can be ignored
             if account.account_state == AccountState::None {
                 // store the root node for debugging
                 if let Some(map) = &mut self.debug_storage_tries {
-                    let storage_root = cached_db.db.storage_tries.get(address).unwrap().clone();
+                    let storage_root = get_storage_trie(&mut cached_db.db, *address).clone();
                     map.insert(*address, storage_root);
                 }
                 continue;
@@ -80,7 +82,7 @@ impl BlockBuildStrategy for BuildFromCachedAuthDbStrategy {
 
             // remove deleted accounts from the state trie
             if account.info.is_empty() {
-                state_trie.delete(&state_trie_index)?;
+                cached_db.db.state_trie.delete(&state_trie_index)?;
                 continue;
             }
 
@@ -88,7 +90,8 @@ impl BlockBuildStrategy for BuildFromCachedAuthDbStrategy {
 
             // getting a mutable reference is more efficient than calling remove
             // every account must have an entry, even newly created accounts
-            let storage_trie = cached_db.db.storage_tries.get_mut(address).unwrap();
+            // let storage_trie = cached_db.db.storage_trie(*address);
+            let storage_trie = get_storage_trie(&mut cached_db.db, *address);
             // for cleared accounts always start from the empty trie
             if account.account_state == AccountState::StorageCleared {
                 storage_trie.clear();
@@ -115,7 +118,10 @@ impl BlockBuildStrategy for BuildFromCachedAuthDbStrategy {
                 storage_root: storage_trie.hash(),
                 code_hash: from_revm_b256(account.info.code_hash),
             };
-            state_trie.insert_rlp(&state_trie_index, state_account)?;
+            cached_db
+                .db
+                .state_trie
+                .insert_rlp(&state_trie_index, state_account)?;
         }
 
         // update result header with the new state root
@@ -124,12 +130,30 @@ impl BlockBuildStrategy for BuildFromCachedAuthDbStrategy {
             .take()
             // .expect("Header was not initialized");
             .unwrap();
-        header.state_root = state_trie.hash();
+        header.state_root = cached_db.db.state_trie.hash();
 
         // Leak memory, save cycles
         guest_mem_forget(block_builder);
         guest_mem_forget(cached_db);
 
         Ok(header)
+    }
+}
+
+fn get_storage_trie(auth_db: &mut AuthenticatedDb, address: B160) -> &mut MptNode {
+    match auth_db.storage_tries.entry(address) {
+        Entry::Occupied(entry) => entry.into_mut(),
+        Entry::Vacant(vacancy) => {
+            let node_data = match auth_db
+                .state_trie
+                .get_rlp::<TrieAccount>(&keccak(address))
+                .unwrap()
+            {
+                None => MptNodeData::Null,
+                Some(account) if account.storage_root == EMPTY_ROOT => MptNodeData::Null,
+                Some(account) => MptNodeData::Digest(account.storage_root),
+            };
+            vacancy.insert(node_data.into())
+        }
     }
 }

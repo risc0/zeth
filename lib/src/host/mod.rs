@@ -450,7 +450,7 @@ impl Into<Input> for Init {
             "The partial state trie consists of {} nodes",
             state_trie.size()
         );
-        info!(
+        println!(
             "The partial storage tries consist of {} nodes",
             storage.values().map(|n| n.size()).sum::<usize>()
         );
@@ -466,7 +466,7 @@ impl Into<Input> for Init {
             transactions: self.fini_transactions,
             withdrawals: self.fini_withdrawals,
             parent_state_trie: state_trie,
-            parent_storage: storage,
+            parent_storage: storage.into_iter().filter(|(_, s)| !s.is_empty()).collect(),
             contracts: contracts.into_values().map(|bytes| bytes.into()).collect(),
             ancestor_headers: self.ancestor_headers,
         }

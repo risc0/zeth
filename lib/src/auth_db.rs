@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use hashbrown::HashMap;
 use revm::{
     db::{CacheDB, DatabaseRef, DbAccount},
@@ -36,16 +36,10 @@ impl DatabaseRef for AuthenticatedDb {
     type Error = anyhow::Error;
 
     fn basic(&self, address: B160) -> Result<Option<AccountInfo>, Self::Error> {
-        let trie_account = self.state_trie.get_rlp::<TrieAccount>(&keccak(address))?;
-        // authenticate account storage trie
-        if let Some(ref account) = trie_account {
-            if let Some(storage_trie) = self.storage_tries.get(&address) {
-                if storage_trie.hash() != account.storage_root {
-                    bail!("Initial account storage root mismatch!")
-                }
-            }
-        }
-        Ok(trie_account.map(|trie_account| trie_account.into()))
+        Ok(self
+            .state_trie
+            .get_rlp::<TrieAccount>(&keccak(address))?
+            .map(|trie_account| trie_account.into()))
     }
 
     fn code_by_hash(&self, _code_hash: B256) -> Result<Bytecode, Self::Error> {
@@ -53,12 +47,13 @@ impl DatabaseRef for AuthenticatedDb {
     }
 
     fn storage(&self, address: B160, index: U256) -> Result<U256, Self::Error> {
-        Ok(self
-            .storage_tries
-            .get(&address)
-            .unwrap()
-            .get_rlp(&keccak(index.to_be_bytes::<32>()))?
-            .unwrap_or_default())
+        if let Some(storage_trie) = self.storage_tries.get(&address) {
+            Ok(storage_trie
+                .get_rlp(&keccak(index.to_be_bytes::<32>()))?
+                .unwrap_or_default())
+        } else {
+            Ok(Default::default())
+        }
     }
 
     fn block_hash(&self, _number: U256) -> Result<B256, Self::Error> {

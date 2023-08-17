@@ -28,7 +28,10 @@ use crate::consts::{
     MIN_GAS_LIMIT, MIN_SPEC_ID, ONE,
 };
 
-/// External block input.
+/// External Block Input Structure.
+///
+/// Represents the external input for a block, including details like the previous block
+/// header, beneficiary address, gas limit, and more.
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct Input {
     /// Previous block header
@@ -59,6 +62,10 @@ pub struct Input {
 
 pub type StorageEntry = (MptNode, Vec<U256>);
 
+/// Gas Limit Verification.
+///
+/// Verifies the gas limit against the parent's gas limit, ensuring it's within acceptable
+/// bounds.
 pub fn verify_gas_limit(input_gas_limit: U256, parent_gas_limit: U256) -> Result<()> {
     let diff = parent_gas_limit.abs_diff(input_gas_limit);
     let limit = parent_gas_limit / GAS_LIMIT_BOUND_DIVISOR;
@@ -81,6 +88,9 @@ pub fn verify_gas_limit(input_gas_limit: U256, parent_gas_limit: U256) -> Result
     Ok(())
 }
 
+/// Timestamp Verification.
+///
+/// Ensures the block's timestamp is greater than its parent's.
 pub fn verify_timestamp(input_timestamp: U256, parent_timestamp: U256) -> Result<()> {
     if input_timestamp <= parent_timestamp {
         bail!(
@@ -93,6 +103,10 @@ pub fn verify_timestamp(input_timestamp: U256, parent_timestamp: U256) -> Result
     Ok(())
 }
 
+/// Extra Data Length Verification.
+///
+/// Validates the length of the block's extra data, ensuring it doesn't exceed the maximum
+/// allowed.
 pub fn verify_extra_data(input_extra_data: &Bytes) -> Result<()> {
     let extra_data_bytes = input_extra_data.len();
     if extra_data_bytes >= MAX_EXTRA_DATA_BYTES {
@@ -106,6 +120,9 @@ pub fn verify_extra_data(input_extra_data: &Bytes) -> Result<()> {
     Ok(())
 }
 
+/// State Trie Root Verification.
+///
+/// Checks if the state trie's root matches the expected value.
 pub fn verify_state_trie(state_trie: &MptNode, parent_state_root: &B256) -> Result<()> {
     let state_root = state_trie.hash();
     if &state_root != parent_state_root {
@@ -119,6 +136,10 @@ pub fn verify_state_trie(state_trie: &MptNode, parent_state_root: &B256) -> Resu
     Ok(())
 }
 
+/// Storage Trie Root Verification for Address.
+///
+/// Validates the storage trie's root for a given address, ensuring it matches the
+/// expected value.
 pub fn verify_storage_trie(
     address: impl Debug,
     storage_trie: &MptNode,
@@ -137,6 +158,10 @@ pub fn verify_storage_trie(
     Ok(())
 }
 
+/// Parent Chain Integrity Verification.
+///
+/// Validates the integrity of the parent chain by comparing each block's parent hash with
+/// its predecessor.
 pub fn verify_parent_chain(
     parent: &Header,
     ancestors: &[Header],
@@ -167,6 +192,9 @@ pub fn verify_parent_chain(
     Ok(block_hashes)
 }
 
+/// Block Number Calculation.
+///
+/// Calculates the block number for the next block based on its parent.
 pub fn compute_block_number(parent: &Header) -> Result<BlockNumber> {
     parent
         .number
@@ -174,6 +202,10 @@ pub fn compute_block_number(parent: &Header) -> Result<BlockNumber> {
         .context("Invalid block number: too large")
 }
 
+/// Specification ID Determination.
+///
+/// Determines the specification ID for a block number based on the chain's
+/// specifications.
 pub fn compute_spec_id(chain_spec: &ChainSpec, block_number: BlockNumber) -> Result<SpecId> {
     let spec_id = chain_spec.spec_id(block_number);
     if !SpecId::enabled(spec_id, MIN_SPEC_ID) {
@@ -186,7 +218,9 @@ pub fn compute_spec_id(chain_spec: &ChainSpec, block_number: BlockNumber) -> Res
     Ok(spec_id)
 }
 
-/// Calculate base fee for next block. [EIP-1559](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1559.md) spec
+/// EIP-1559 Base Fee Calculation.
+///
+/// Computes the base fee for the next block following the [EIP-1559](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1559.md) specification.
 pub fn compute_base_fee(parent: &Header, eip_1559_constants: &Eip1559Constants) -> Result<U256> {
     let parent_gas_target = parent.gas_limit / eip_1559_constants.elasticity_multiplier;
 

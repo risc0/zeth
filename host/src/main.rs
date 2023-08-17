@@ -32,7 +32,7 @@ use zeth_lib::{
     consts::{Network, ETH_MAINNET_CHAIN_SPEC},
     derivation::EthHeaderDerivationStrategy,
     execution::EthTxExecStrategy,
-    finalization::BuildFromCachedAuthDbStrategy,
+    finalization::DebugBuildFromCachedAuthDbStrategy,
     initialization::CachedAuthDbFromInputStrategy,
     input::Input,
 };
@@ -119,9 +119,8 @@ async fn main() -> Result<()> {
         let fini_db = block_builder.db().cloned().unwrap();
         let accounts_len = fini_db.accounts.len();
 
-        let mut debug_build_strategy = BuildFromCachedAuthDbStrategy::with_debugging();
-        let validated_header = block_builder
-            .build(&mut debug_build_strategy)
+        let (validated_header, storage_deltas) = block_builder
+            .build::<DebugBuildFromCachedAuthDbStrategy>()
             .expect("Error while verifying final state");
 
         info!(
@@ -131,12 +130,8 @@ async fn main() -> Result<()> {
 
         // Verify final state
         info!("Verifying final state using provider data ...");
-        let errors = zeth_lib::host::verify_state(
-            fini_db,
-            init.fini_proofs,
-            debug_build_strategy.take_storage_trace().unwrap(),
-        )
-        .expect("Could not verify final state!");
+        let errors = zeth_lib::host::verify_state(fini_db, init.fini_proofs, storage_deltas)
+            .expect("Could not verify final state!");
         for (address, address_errors) in &errors {
             info!(
                 "Verify found {:?} error(s) for address {:?}",

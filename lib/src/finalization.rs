@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use anyhow::Result;
-use hashbrown::{hash_map::Entry, HashMap};
+use hashbrown::HashMap;
 use revm::{
     db::AccountState,
-    primitives::{Address, B160, U256},
+    primitives::{Address, U256},
 };
 use zeth_primitives::{
     block::Header,
@@ -26,15 +26,13 @@ use zeth_primitives::{
     trie::{MptNode, TrieAccount},
 };
 
-use crate::{
-    auth_db::{AuthenticatedDb, CachedAuthDb},
-    block_builder::BlockBuilder,
-};
+use crate::{auth_db::CachedAuthDb, block_builder::BlockBuilder};
 
 pub trait BlockBuildStrategy {
     type Db;
+    type Output;
 
-    fn build(&mut self, block_builder: BlockBuilder<Self::Db>) -> Result<Header>;
+    fn build(block_builder: BlockBuilder<Self::Db>) -> Result<Self::Output>;
 }
 
 pub struct BuildFromCachedAuthDbStrategy {
@@ -57,12 +55,11 @@ impl BuildFromCachedAuthDbStrategy {
     pub fn take_storage_trace(self) -> Option<HashMap<Address, MptNode>> {
         self.debug_storage_tries
     }
-}
 
-impl BlockBuildStrategy for BuildFromCachedAuthDbStrategy {
-    type Db = CachedAuthDb;
-
-    fn build(&mut self, mut block_builder: BlockBuilder<Self::Db>) -> Result<Header> {
+    pub fn build_injected(
+        &mut self,
+        mut block_builder: BlockBuilder<CachedAuthDb>,
+    ) -> Result<Header> {
         let mut cached_db = block_builder.db.take().unwrap();
 
         // apply state updates
@@ -71,7 +68,7 @@ impl BlockBuildStrategy for BuildFromCachedAuthDbStrategy {
             if account.account_state == AccountState::None {
                 // store the root node for debugging
                 if let Some(map) = &mut self.debug_storage_tries {
-                    let storage_root = get_storage_trie(&mut cached_db.db, *address).clone();
+                    let storage_root = cached_db.db.get_or_create_storage_trie(*address).clone();
                     map.insert(*address, storage_root);
                 }
                 continue;
@@ -91,7 +88,7 @@ impl BlockBuildStrategy for BuildFromCachedAuthDbStrategy {
             // getting a mutable reference is more efficient than calling remove
             // every account must have an entry, even newly created accounts
             // let storage_trie = cached_db.db.storage_trie(*address);
-            let storage_trie = get_storage_trie(&mut cached_db.db, *address);
+            let storage_trie = cached_db.db.get_or_create_storage_trie(*address);
             // for cleared accounts always start from the empty trie
             if account.account_state == AccountState::StorageCleared {
                 storage_trie.clear();
@@ -140,9 +137,24 @@ impl BlockBuildStrategy for BuildFromCachedAuthDbStrategy {
     }
 }
 
-fn get_storage_trie(auth_db: &mut AuthenticatedDb, address: B160) -> &mut MptNode {
-    match auth_db.storage_tries.entry(address) {
-        Entry::Occupied(entry) => entry.into_mut(),
-        Entry::Vacant(vacancy) => vacancy.insert(Default::default()),
+impl BlockBuildStrategy for BuildFromCachedAuthDbStrategy {
+    type Db = CachedAuthDb;
+    type Output = Header;
+
+    fn build(block_builder: BlockBuilder<Self::Db>) -> Result<Self::Output> {
+        BuildFromCachedAuthDbStrategy::without_debugging().build_injected(block_builder)
+    }
+}
+
+pub struct DebugBuildFromCachedAuthDbStrategy {}
+
+impl BlockBuildStrategy for DebugBuildFromCachedAuthDbStrategy {
+    type Db = CachedAuthDb;
+    type Output = (Header, HashMap<Address, MptNode>);
+
+    fn build(block_builder: BlockBuilder<Self::Db>) -> Result<Self::Output> {
+        let mut strategy = BuildFromCachedAuthDbStrategy::with_debugging();
+        let header = strategy.build_injected(block_builder)?;
+        Ok((header, strategy.take_storage_trace().unwrap()))
     }
 }

@@ -39,7 +39,7 @@ pub fn main() {
         .expect("Failed to create the initial block header fields")
         .execute_transactions::<EthTxExecStrategy>()
         .expect("Failed to execute transactions")
-        .build(&mut BuildFromCachedAuthDbStrategy::without_debugging())
+        .build::<BuildFromCachedAuthDbStrategy>()
         .expect("Failed to build the resulting block");
     // Output the resulting block's hash to the journal
     env::commit(&output.hash());

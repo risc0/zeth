@@ -79,9 +79,7 @@ fn evm(
             // update the state
             state = builder.db().unwrap().into();
 
-            let result_header = builder
-                .build(&mut BuildFromCachedAuthDbStrategy::without_debugging())
-                .unwrap();
+            let result_header = builder.build::<BuildFromCachedAuthDbStrategy>().unwrap();
             // the headers should match
             assert_eq!(result_header.state_root, expected_header.state_root);
             assert_eq!(result_header, expected_header);

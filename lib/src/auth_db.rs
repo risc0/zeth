@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use anyhow::{bail, Result};
-use hashbrown::HashMap;
+use hashbrown::{hash_map::Entry, HashMap};
 use revm::{
     db::{CacheDB, DatabaseRef, DbAccount},
     primitives::{AccountInfo, Bytecode, B160, B256},
@@ -30,6 +30,15 @@ pub struct AuthenticatedDb {
     pub state_trie: MptNode,
     /// Maps each address with its storage trie and the used storage slots.
     pub storage_tries: HashMap<B160, MptNode>,
+}
+
+impl AuthenticatedDb {
+    pub fn get_or_create_storage_trie(&mut self, address: B160) -> &mut MptNode {
+        match self.storage_tries.entry(address) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(vacancy) => vacancy.insert(Default::default()),
+        }
+    }
 }
 
 impl DatabaseRef for AuthenticatedDb {

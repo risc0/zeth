@@ -66,8 +66,8 @@ where
     }
 
     /// Builds the block and returns the header.
-    pub fn build<T: BlockBuildStrategy<Db = D>>(self, strategy: &mut T) -> Result<Header> {
-        strategy.build(self)
+    pub fn build<T: BlockBuildStrategy<Db = D>>(self) -> Result<T::Output> {
+        T::build(self)
     }
 
     /// Returns a reference to the database.

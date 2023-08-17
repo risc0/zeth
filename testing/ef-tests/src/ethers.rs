@@ -142,7 +142,7 @@ fn build_tries(state: &TestState) -> (MptNode, HashMap<B160, MptNode>) {
         state_trie
             .insert_rlp(
                 &keccak(address),
-                TrieAccount {
+                StateAccount {
                     nonce: account.nonce.try_into().unwrap(),
                     balance: account.balance,
                     storage_root: storage_trie.hash(),

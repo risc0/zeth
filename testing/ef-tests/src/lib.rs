@@ -45,7 +45,7 @@ use zeth_primitives::{
         Transaction, TransactionKind, TxEssence, TxEssenceEip1559, TxEssenceEip2930,
         TxEssenceLegacy,
     },
-    trie::{self, MptNode, MptNodeData, TrieAccount},
+    trie::{self, MptNode, MptNodeData, StateAccount},
     withdrawal::Withdrawal,
     Bloom, Bytes, RlpBytes, StorageKey, B160, B256, B64, U256, U64,
 };

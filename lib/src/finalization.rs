@@ -23,7 +23,7 @@ use zeth_primitives::{
     guest_mem_forget,
     keccak::keccak,
     revm::from_revm_b256,
-    trie::{MptNode, TrieAccount},
+    trie::{MptNode, StateAccount},
 };
 
 use crate::{auth_db::CachedAuthDb, block_builder::BlockBuilder};
@@ -109,7 +109,7 @@ impl BuildFromCachedAuthDbStrategy {
                 map.insert(*address, storage_trie.clone());
             }
 
-            let state_account = TrieAccount {
+            let state_account = StateAccount {
                 nonce: account.info.nonce,
                 balance: account.info.balance,
                 storage_root: storage_trie.hash(),

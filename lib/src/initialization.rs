@@ -21,7 +21,7 @@ use revm::{
     primitives::{AccountInfo, Bytecode, B256, KECCAK_EMPTY},
 };
 use ruint::aliases::U256;
-use zeth_primitives::{keccak::keccak, revm::to_revm_b256, trie::TrieAccount};
+use zeth_primitives::{keccak::keccak, revm::to_revm_b256, trie::StateAccount};
 
 use crate::{
     auth_db::{AuthenticatedDb, CachedAuthDb},
@@ -86,7 +86,7 @@ impl DbInitStrategy for CachedAuthDbFromInputStrategy {
             let trie_account = block_builder
                 .input
                 .parent_state_trie
-                .get_rlp::<TrieAccount>(&keccak(address))?
+                .get_rlp::<StateAccount>(&keccak(address))?
                 .unwrap();
             if storage_trie.hash() != trie_account.storage_root {
                 bail!("Account storage root mismatch!")

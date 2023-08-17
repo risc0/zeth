@@ -21,7 +21,7 @@ use crate::{keccak::KECCAK_EMPTY, revm::to_revm_b256, trie::EMPTY_ROOT};
 
 /// An Ethereum account as represented in the trie.
 #[derive(Debug, Clone, Serialize, Deserialize, RlpEncodable, RlpDecodable, RlpMaxEncodedLen)]
-pub struct TrieAccount {
+pub struct StateAccount {
     /// Account nonce.
     pub nonce: TxNumber,
     /// Account balance.
@@ -32,7 +32,7 @@ pub struct TrieAccount {
     pub code_hash: B256,
 }
 
-impl Default for TrieAccount {
+impl Default for StateAccount {
     fn default() -> Self {
         Self {
             nonce: 0,
@@ -43,8 +43,8 @@ impl Default for TrieAccount {
     }
 }
 
-impl From<TrieAccount> for AccountInfo {
-    fn from(value: TrieAccount) -> Self {
+impl From<StateAccount> for AccountInfo {
+    fn from(value: StateAccount) -> Self {
         AccountInfo {
             balance: value.balance,
             nonce: value.nonce,

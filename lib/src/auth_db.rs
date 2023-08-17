@@ -21,7 +21,7 @@ use revm::{
 use ruint::aliases::U256;
 use zeth_primitives::{
     keccak::keccak,
-    trie::{MptNode, TrieAccount, EMPTY_ROOT},
+    trie::{MptNode, StateAccount, EMPTY_ROOT},
 };
 
 #[derive(Clone, Debug)]
@@ -45,7 +45,7 @@ impl DatabaseRef for AuthenticatedDb {
     type Error = anyhow::Error;
 
     fn basic(&self, address: B160) -> Result<Option<AccountInfo>, Self::Error> {
-        if let Some(trie_account) = self.state_trie.get_rlp::<TrieAccount>(&keccak(address))? {
+        if let Some(trie_account) = self.state_trie.get_rlp::<StateAccount>(&keccak(address))? {
             if trie_account.storage_root != EMPTY_ROOT {
                 bail!("Missing storage root!")
             }

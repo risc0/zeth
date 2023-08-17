@@ -22,26 +22,32 @@ use crate::{
     receipt::Log,
 };
 
+/// Converts a `B160` type to its corresponding `RevmB160` representation.
 #[inline]
 pub fn to_revm_b160(v: B160) -> RevmB160 {
     v.0.into()
 }
 
+/// Converts a `B256` type to its corresponding `RevmB256` representation.
 #[inline]
 pub fn to_revm_b256(v: B256) -> RevmB256 {
     v.0.into()
 }
 
+/// Converts a `RevmB160` type to its corresponding `B160` representation.
 #[inline]
 pub fn from_revm_b160(v: RevmB160) -> B160 {
     v.0.into()
 }
 
+/// Converts a `RevmB256` type to its corresponding `B256` representation.
 #[inline]
 pub fn from_revm_b256(v: RevmB256) -> B256 {
     v.0.into()
 }
 
+/// Provides a conversion from `AccessListItem` to a tuple of `RevmB160` and a vector of
+/// `RevmU256`.
 impl From<AccessListItem> for (RevmB160, Vec<RevmU256>) {
     fn from(item: AccessListItem) -> (RevmB160, Vec<RevmU256>) {
         (
@@ -54,12 +60,15 @@ impl From<AccessListItem> for (RevmB160, Vec<RevmU256>) {
     }
 }
 
+/// Provides a conversion from `AccessList` to a vector of tuples containing `RevmB160`
+/// and a vector of `RevmU256`.
 impl From<AccessList> for Vec<(RevmB160, Vec<RevmU256>)> {
     fn from(list: AccessList) -> Vec<(RevmB160, Vec<RevmU256>)> {
         list.0.into_iter().map(|item| item.into()).collect()
     }
 }
 
+/// Provides a conversion from `RevmLog` to `Log`.
 impl From<RevmLog> for Log {
     fn from(log: RevmLog) -> Self {
         Log {

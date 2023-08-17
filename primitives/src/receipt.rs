@@ -17,7 +17,7 @@ use alloy_rlp::Encodable;
 use alloy_rlp_derive::RlpEncodable;
 use serde::{Deserialize, Serialize};
 
-/// Ethereum Log
+/// Represents an Ethereum log entry.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, RlpEncodable)]
 pub struct Log {
     /// Contract that emitted this log.
@@ -28,25 +28,25 @@ pub struct Log {
     pub data: Bytes,
 }
 
-/// Payload of a [Receipt].
+/// Payload of a `Receipt`.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, RlpEncodable)]
 pub struct ReceiptPayload {
-    /// If transaction is executed successfully.
+    /// Indicates whether the transaction was executed successfully.
     pub success: bool,
-    /// Gas used
+    /// Total gas used by the transaction.
     pub cumulative_gas_used: U256,
-    /// Bloom filter composed from information in logs.
+    /// A bloom filter that contains indexed information of logs for quick searching.
     pub logs_bloom: Bloom,
-    /// Log send from contracts.
+    /// Logs generated during the execution of the transaction.
     pub logs: Vec<Log>,
 }
 
 /// Receipt containing result of transaction execution.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Receipt {
-    /// Receipt type.
+    /// Type of Receipt.
     pub tx_type: u8,
-    /// Receipt payload.
+    /// Detailed payload of the receipt.
     pub payload: ReceiptPayload,
 }
 
@@ -55,9 +55,9 @@ impl Encodable for Receipt {
     #[inline]
     fn encode(&self, out: &mut dyn alloy_rlp::BufMut) {
         match self.tx_type {
-            // legacy
+            // For legacy transactions
             0 => self.payload.encode(out),
-            // EIP-2718
+            // For EIP-2718 typed transactions
             tx_type => {
                 // prepend the EIP-2718 transaction type
                 out.put_u8(tx_type);
@@ -67,7 +67,7 @@ impl Encodable for Receipt {
         }
     }
 
-    /// Returns the length of the encoding of the receipt in bytes.
+    /// Returns the length of the encoded receipt in bytes.
     #[inline]
     fn length(&self) -> usize {
         let mut payload_length = self.payload.length();
@@ -79,6 +79,9 @@ impl Encodable for Receipt {
 }
 
 impl Receipt {
+    /// Constructs a new `Receipt`.
+    ///
+    /// This function also computes the `logs_bloom` based on the provided logs.
     pub fn new(tx_type: u8, success: bool, cumulative_gas_used: U256, logs: Vec<Log>) -> Receipt {
         let mut logs_bloom = Bloom::default();
         for log in &logs {

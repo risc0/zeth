@@ -56,7 +56,7 @@ impl BuildFromCachedAuthDbStrategy {
         self.debug_storage_tries
     }
 
-    pub fn build_injected(
+    pub fn build_header(
         &mut self,
         mut block_builder: BlockBuilder<CachedAuthDb>,
     ) -> Result<Header> {
@@ -142,7 +142,7 @@ impl BlockBuildStrategy for BuildFromCachedAuthDbStrategy {
     type Output = Header;
 
     fn build(block_builder: BlockBuilder<Self::Db>) -> Result<Self::Output> {
-        BuildFromCachedAuthDbStrategy::without_debugging().build_injected(block_builder)
+        BuildFromCachedAuthDbStrategy::without_debugging().build_header(block_builder)
     }
 }
 
@@ -154,7 +154,7 @@ impl BlockBuildStrategy for DebugBuildFromCachedAuthDbStrategy {
 
     fn build(block_builder: BlockBuilder<Self::Db>) -> Result<Self::Output> {
         let mut strategy = BuildFromCachedAuthDbStrategy::with_debugging();
-        let header = strategy.build_injected(block_builder)?;
+        let header = strategy.build_header(block_builder)?;
         Ok((header, strategy.take_storage_trace().unwrap()))
     }
 }

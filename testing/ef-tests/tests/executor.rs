@@ -39,6 +39,7 @@ fn executor(
 ) {
     let _ = env_logger::builder()
         .filter_level(log::LevelFilter::Debug)
+        .filter_module("risc0_zkvm", log::LevelFilter::Info) // reduce noise
         .is_test(true)
         .try_init();
 

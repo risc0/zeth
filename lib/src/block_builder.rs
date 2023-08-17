@@ -50,6 +50,16 @@ where
         self
     }
 
+    /// Returns a reference to the database.
+    pub fn db(&self) -> Option<&D> {
+        self.db.as_ref()
+    }
+
+    /// Returns a mutable reference to the database.
+    pub fn mut_db(&mut self) -> Option<&mut D> {
+        self.db.as_mut()
+    }
+
     /// Initializes the database from the input tries.
     pub fn initialize_database<T: DbInitStrategy<Db = D>>(self) -> Result<Self> {
         T::initialize_database(self)
@@ -65,18 +75,8 @@ where
         T::execute_transactions(self)
     }
 
-    /// Builds the block and returns the header.
+    /// Builds the block and returns the output.
     pub fn build<T: BlockBuildStrategy<Db = D>>(self) -> Result<T::Output> {
         T::build(self)
-    }
-
-    /// Returns a reference to the database.
-    pub fn db(&self) -> Option<&D> {
-        self.db.as_ref()
-    }
-
-    /// Returns a mutable reference to the database.
-    pub fn mut_db(&mut self) -> Option<&mut D> {
-        self.db.as_mut()
     }
 }

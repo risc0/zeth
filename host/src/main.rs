@@ -30,10 +30,11 @@ use zeth_lib::{
     auth_db::CachedAuthDb,
     block_builder::BlockBuilder,
     consts::{Network, ETH_MAINNET_CHAIN_SPEC},
+    derivation::EthHeaderDerivationStrategy,
     execution::EthTxExecStrategy,
     finalization::BuildFromCachedAuthDbStrategy,
     initialization::CachedAuthDbFromInputStrategy,
-    validation::Input,
+    input::Input,
 };
 use zeth_primitives::BlockHash;
 
@@ -110,7 +111,7 @@ async fn main() -> Result<()> {
         let block_builder = BlockBuilder::<CachedAuthDb>::new(&ETH_MAINNET_CHAIN_SPEC, input)
             .initialize_database::<CachedAuthDbFromInputStrategy>()
             .expect("Error initializing authenticated db from Input")
-            .initialize_header()
+            .derive_header::<EthHeaderDerivationStrategy>()
             .expect("Error creating initial block header")
             .execute_transactions::<EthTxExecStrategy>()
             .expect("Error while running transactions");

@@ -40,13 +40,14 @@ use crate::{
     auth_db::{clone_storage_keys, CachedAuthDb},
     block_builder::BlockBuilder,
     consts::ETH_MAINNET_CHAIN_SPEC,
+    derivation::EthHeaderDerivationStrategy,
     execution::EthTxExecStrategy,
     host::{
         mpt::{orphaned_digests, resolve_digests, shorten_key},
         provider::{new_provider, BlockQuery},
         provider_db::{get_ancestor_headers, get_initial_proofs, get_latest_proofs, ProviderDb},
     },
-    validation::Input,
+    input::Input,
 };
 
 pub mod mpt;
@@ -126,7 +127,7 @@ pub fn get_initial_data(
     // Create the block builder, run the transactions and extract the DB
     let mut builder = BlockBuilder::new(&ETH_MAINNET_CHAIN_SPEC, input)
         .with_db(latest_db)
-        .initialize_header()?
+        .derive_header::<EthHeaderDerivationStrategy>()?
         .execute_transactions::<EthTxExecStrategy>()?;
     let latest_db = builder.mut_db().unwrap();
 

@@ -25,13 +25,14 @@ use zeth_lib::{
     auth_db::clone_storage_keys,
     block_builder::BlockBuilder,
     consts::ChainSpec,
+    derivation::EthHeaderDerivationStrategy,
     execution::EthTxExecStrategy,
     host::{
         provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
         provider_db::{get_ancestor_headers, get_initial_proofs, ProviderDb},
         Init,
     },
-    validation::Input,
+    input::Input,
 };
 use zeth_primitives::{
     access_list::{AccessList, AccessListItem},
@@ -348,7 +349,7 @@ pub fn create_input(
     // create and run the block builder once to create the initial DB
     let builder = BlockBuilder::new(chain_spec, input)
         .with_db(CacheDB::new(provider_db))
-        .initialize_header()
+        .derive_header::<EthHeaderDerivationStrategy>()
         .unwrap();
     // execute the transactions with a larger stack
     let mut builder = stacker::grow(BIG_STACK_SIZE, move || {

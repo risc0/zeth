@@ -18,8 +18,9 @@ use std::path::PathBuf;
 
 use rstest::rstest;
 use zeth_lib::{
-    auth_db::CachedAuthDb, block_builder::BlockBuilder, execution::EthTxExecStrategy,
-    finalization::BuildFromCachedAuthDbStrategy, initialization::CachedAuthDbFromInputStrategy,
+    auth_db::CachedAuthDb, block_builder::BlockBuilder, derivation::EthHeaderDerivationStrategy,
+    execution::EthTxExecStrategy, finalization::BuildFromCachedAuthDbStrategy,
+    initialization::CachedAuthDbFromInputStrategy,
 };
 use zeth_primitives::block::Header;
 use zeth_testeth::{
@@ -69,7 +70,7 @@ fn evm(
             let builder = BlockBuilder::<CachedAuthDb>::new(&chain_spec, input)
                 .initialize_database::<CachedAuthDbFromInputStrategy>()
                 .unwrap()
-                .initialize_header()
+                .derive_header::<EthHeaderDerivationStrategy>()
                 .unwrap();
             // execute the transactions with a larger stack
             let builder = stacker::grow(BIG_STACK_SIZE, move || {

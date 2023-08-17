@@ -17,9 +17,10 @@
 use risc0_zkvm::guest::env;
 use zeth_lib::{
     block_builder::BlockBuilder, consts::ChainSpec, execution::EthTxExecStrategy,
-    validation::Input,
+    input::Input,
 };
 use zeth_lib::auth_db::CachedAuthDb;
+use zeth_lib::derivation::EthHeaderDerivationStrategy;
 use zeth_lib::finalization::BuildFromCachedAuthDbStrategy;
 use zeth_lib::initialization::CachedAuthDbFromInputStrategy;
 
@@ -34,7 +35,7 @@ pub fn main() {
     let output = BlockBuilder::<CachedAuthDb>::new(&chain_spec, input)
         .initialize_database::<CachedAuthDbFromInputStrategy>()
         .expect("Failed to create authenticated evm storage")
-        .initialize_header()
+        .derive_header::<EthHeaderDerivationStrategy>()
         .expect("Failed to create the initial block header fields")
         .execute_transactions::<EthTxExecStrategy>()
         .expect("Failed to execute transactions")

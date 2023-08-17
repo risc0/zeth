@@ -17,14 +17,8 @@ use revm::{db::Database, DatabaseCommit};
 use zeth_primitives::block::Header;
 
 use crate::{
-    consts::ChainSpec,
-    execution::TxExecStrategy,
-    finalization::BlockBuildStrategy,
-    initialization::DbInitStrategy,
-    validation::{
-        compute_base_fee, compute_block_number, verify_extra_data, verify_gas_limit,
-        verify_timestamp, Input,
-    },
+    consts::ChainSpec, derivation::HeaderDerivationStrategy, execution::TxExecStrategy,
+    finalization::BlockBuildStrategy, initialization::DbInitStrategy, input::Input,
 };
 
 #[derive(Clone, Debug)]
@@ -38,7 +32,7 @@ pub struct BlockBuilder<'a, D> {
 impl<D> BlockBuilder<'_, D>
 where
     D: Database + DatabaseCommit,
-    <D as Database>::Error: std::fmt::Debug,
+    <D as Database>::Error: core::fmt::Debug,
 {
     /// Creates a new block builder.
     pub fn new(chain_spec: &ChainSpec, input: Input) -> BlockBuilder<'_, D> {
@@ -62,30 +56,8 @@ where
     }
 
     /// Initializes the header. This must be called before executing transactions.
-    pub fn initialize_header(mut self) -> Result<Self> {
-        // Verify current block
-        verify_gas_limit(self.input.gas_limit, self.input.parent_header.gas_limit)?;
-        verify_timestamp(self.input.timestamp, self.input.parent_header.timestamp)?;
-        verify_extra_data(&self.input.extra_data)?;
-        // Initialize result header
-        self.header = Some(Header {
-            // Initialize fields that we can compute from the parent
-            parent_hash: self.input.parent_header.hash(),
-            number: compute_block_number(&self.input.parent_header)?,
-            base_fee_per_gas: compute_base_fee(
-                &self.input.parent_header,
-                self.chain_spec.gas_constants(),
-            )?,
-            // Initialize metadata from input
-            beneficiary: self.input.beneficiary,
-            gas_limit: self.input.gas_limit,
-            timestamp: self.input.timestamp,
-            mix_hash: self.input.mix_hash,
-            extra_data: self.input.extra_data.clone(),
-            // do not fill the remaining fields
-            ..Default::default()
-        });
-        Ok(self)
+    pub fn derive_header<T: HeaderDerivationStrategy>(self) -> Result<Self> {
+        T::derive_header(self)
     }
 
     /// Executes the transactions.

@@ -18,20 +18,28 @@ use serde::{Deserialize, Serialize};
 
 use crate::{keccak::KECCAK_EMPTY, trie::EMPTY_ROOT};
 
-/// An Ethereum account as represented in the trie.
+/// Represents an Ethereum account within the state trie.
+///
+/// The `StateAccount` struct encapsulates key details of an Ethereum account, including
+/// its nonce, balance, storage root, and the hash of its associated bytecode. This
+/// representation is used when interacting with or querying the Ethereum state trie.
 #[derive(Debug, Clone, Serialize, Deserialize, RlpEncodable, RlpDecodable, RlpMaxEncodedLen)]
 pub struct StateAccount {
-    /// Account nonce.
+    /// The number of transactions sent from this account's address.
     pub nonce: TxNumber,
-    /// Account balance.
+    /// The current balance of the account in Wei.
     pub balance: U256,
-    /// Account's storage root.
+    /// The root of the account's storage trie, representing all stored contract data.
     pub storage_root: B256,
-    /// Hash of the account's bytecode.
+    /// The Keccak-256 hash of the account's associated bytecode (if it's a contract).
     pub code_hash: B256,
 }
 
 impl Default for StateAccount {
+    /// Provides default values for a `StateAccount`.
+    ///
+    /// The default account has a nonce of 0, a balance of 0 Wei, an empty storage root,
+    /// and an empty bytecode hash.
     fn default() -> Self {
         Self {
             nonce: 0,

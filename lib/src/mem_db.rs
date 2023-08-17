@@ -17,8 +17,6 @@ use hashbrown::{
     hash_map::{self, Entry},
     HashMap,
 };
-#[cfg(not(target_os = "zkvm"))]
-use log::debug;
 use revm::{
     primitives::{Account, AccountInfo, Bytecode, B160, B256, U256},
     Database, DatabaseCommit,
@@ -230,8 +228,6 @@ impl BlockBuilderDatabase for MemDb {
         if !new_account.is_touched {
             return;
         }
-        #[cfg(not(target_os = "zkvm"))]
-        debug!("State update {:?}: {:?}", &address, &new_account);
 
         if new_account.is_destroyed {
             // get the account we are destroying

@@ -84,7 +84,5 @@ fn evm(
             ancestor_headers.push(parent_header);
             parent_header = block_header.into();
         }
-        // log the post-state
-        dbg!(state, &json.post);
     }
 }

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::{fmt::Debug, mem::take};
+use core::mem::take;
 
 use anyhow::{anyhow, bail, Context, Result};
 #[cfg(not(target_os = "zkvm"))]
@@ -50,7 +50,7 @@ impl TxExecStrategy for EthTxExecStrategy {
     fn execute_transactions<D>(mut block_builder: BlockBuilder<D>) -> Result<BlockBuilder<D>>
     where
         D: Database + DatabaseCommit,
-        <D as Database>::Error: Debug,
+        <D as Database>::Error: core::fmt::Debug,
     {
         let header = block_builder
             .header
@@ -189,6 +189,7 @@ impl TxExecStrategy for EthTxExecStrategy {
                 debug!("  Value: {}", amount_wei);
             }
 
+            // Credit withdrawal
             let address = to_revm_b160(withdrawal.address);
             let mut withdrawal_account = block_builder
                 .db
@@ -205,7 +206,7 @@ impl TxExecStrategy for EthTxExecStrategy {
                 .db
                 .as_mut()
                 .unwrap()
-                .commit(core::iter::once((address, account)).collect());
+                .commit([(address, account)].into());
 
             // add to trie
             withdrawals_trie

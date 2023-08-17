@@ -35,29 +35,11 @@ pub trait BlockBuildStrategy {
     fn build(block_builder: BlockBuilder<Self::Db>) -> Result<Self::Output>;
 }
 
-pub struct BuildFromCachedAuthDbStrategy {
-    debug_storage_tries: Option<HashMap<Address, MptNode>>,
-}
+pub struct BuildFromCachedAuthDbStrategy {}
 
 impl BuildFromCachedAuthDbStrategy {
-    pub fn without_debugging() -> Self {
-        Self {
-            debug_storage_tries: None,
-        }
-    }
-
-    pub fn with_debugging() -> Self {
-        Self {
-            debug_storage_tries: Some(Default::default()),
-        }
-    }
-
-    pub fn take_storage_trace(self) -> Option<HashMap<Address, MptNode>> {
-        self.debug_storage_tries
-    }
-
     pub fn build_header(
-        &mut self,
+        debug_storage_tries: &mut Option<HashMap<Address, MptNode>>,
         mut block_builder: BlockBuilder<CachedAuthDb>,
     ) -> Result<Header> {
         let mut cached_db = block_builder.db.take().unwrap();
@@ -67,7 +49,7 @@ impl BuildFromCachedAuthDbStrategy {
             // if the account has not been touched, it can be ignored
             if account.account_state == AccountState::None {
                 // store the root node for debugging
-                if let Some(map) = &mut self.debug_storage_tries {
+                if let Some(map) = debug_storage_tries {
                     let storage_root = cached_db.db.get_or_create_storage_trie(*address).clone();
                     map.insert(*address, storage_root);
                 }
@@ -105,7 +87,7 @@ impl BuildFromCachedAuthDbStrategy {
             }
 
             // insert the storage trie for host debugging
-            if let Some(map) = &mut self.debug_storage_tries {
+            if let Some(map) = debug_storage_tries {
                 map.insert(*address, storage_trie.clone());
             }
 
@@ -142,7 +124,7 @@ impl BlockBuildStrategy for BuildFromCachedAuthDbStrategy {
     type Output = Header;
 
     fn build(block_builder: BlockBuilder<Self::Db>) -> Result<Self::Output> {
-        BuildFromCachedAuthDbStrategy::without_debugging().build_header(block_builder)
+        BuildFromCachedAuthDbStrategy::build_header(&mut None, block_builder)
     }
 }
 
@@ -153,8 +135,9 @@ impl BlockBuildStrategy for DebugBuildFromCachedAuthDbStrategy {
     type Output = (Header, HashMap<Address, MptNode>);
 
     fn build(block_builder: BlockBuilder<Self::Db>) -> Result<Self::Output> {
-        let mut strategy = BuildFromCachedAuthDbStrategy::with_debugging();
-        let header = strategy.build_header(block_builder)?;
-        Ok((header, strategy.take_storage_trace().unwrap()))
+        let mut storage_trace = Some(Default::default());
+        let header =
+            BuildFromCachedAuthDbStrategy::build_header(&mut storage_trace, block_builder)?;
+        Ok((header, storage_trace.unwrap()))
     }
 }

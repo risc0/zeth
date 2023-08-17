@@ -24,12 +24,14 @@ use zeth_primitives::{
     trie::{MptNode, StateAccount, EMPTY_ROOT},
 };
 
+use crate::NoHashBuilder;
+
 #[derive(Clone, Debug)]
 pub struct AuthenticatedDb {
     /// State trie of the block.
     pub state_trie: MptNode,
     /// Maps each address with its storage trie and the used storage slots.
-    pub storage_tries: HashMap<B160, MptNode>,
+    pub storage_tries: HashMap<B160, MptNode, NoHashBuilder>,
 }
 
 impl AuthenticatedDb {
@@ -47,11 +49,17 @@ impl DatabaseRef for AuthenticatedDb {
 
     #[inline(always)]
     fn basic(&self, address: B160) -> Result<Option<AccountInfo>, Self::Error> {
+        // Authenticate the storage root on every account load
         if let Some(trie_account) = self.state_trie.get_rlp::<StateAccount>(&keccak(address))? {
-            if trie_account.storage_root != EMPTY_ROOT {
-                bail!("Missing storage root!")
+            if let Some(storage_trie) = self.storage_tries.get(&address) {
+                if trie_account.storage_root != storage_trie.hash() {
+                    bail!("Invalid storage root!")
+                }
+            } else {
+                if trie_account.storage_root != EMPTY_ROOT {
+                    bail!("Missing storage root!")
+                }
             }
-
             Ok(Some(trie_account.into()))
         } else {
             Ok(None)

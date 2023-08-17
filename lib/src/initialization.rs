@@ -17,11 +17,11 @@ use core::{iter::once, mem::take};
 use anyhow::{bail, Result};
 use hashbrown::HashMap;
 use revm::{
-    db::{CacheDB, DbAccount},
-    primitives::{AccountInfo, Bytecode, B256, KECCAK_EMPTY},
+    db::CacheDB,
+    primitives::{Bytecode, B256, KECCAK_EMPTY},
 };
 use ruint::aliases::U256;
-use zeth_primitives::{keccak::keccak, revm::to_revm_b256, trie::StateAccount};
+use zeth_primitives::{keccak::keccak, revm::to_revm_b256};
 
 use crate::{
     auth_db::{AuthenticatedDb, CachedAuthDb},
@@ -81,24 +81,9 @@ impl DbInitStrategy for CachedAuthDbFromInputStrategy {
                     (hash, Bytecode::new_raw_with_hash(bytes.0, hash))
                 }),
         );
-        // authenticate/preload accounts with storage
-        let mut accounts = HashMap::with_capacity(block_builder.input.parent_storage.len());
-        for (address, storage_trie) in &block_builder.input.parent_storage {
-            let trie_account = block_builder
-                .input
-                .parent_state_trie
-                .get_rlp::<StateAccount>(&keccak(address))?
-                .unwrap();
-            if storage_trie.hash() != trie_account.storage_root {
-                bail!("Account storage root mismatch!")
-            }
-            let info: AccountInfo = trie_account.into();
-            let db_account = DbAccount::from(info);
-            accounts.insert(*address, db_account);
-        }
         // Set database
         block_builder.db = Some(CacheDB {
-            accounts,
+            accounts: HashMap::with_capacity(block_builder.input.parent_storage.len()),
             contracts: code_map,
             logs: Default::default(),
             block_hashes,

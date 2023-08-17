@@ -9,7 +9,7 @@ ef-tests = []
 [dependencies]
 anyhow = "1.0"
 ethers-core = "2.0"
-hashbrown = "0.13"
+hashbrown = { version = "0.13", features = ["inline-more"] }
 revm = { version = "3.3", default-features = false, features = ["std", "serde"] }
 serde = "1.0"
 serde_json = "1.0"

@@ -665,15 +665,20 @@ pub fn to_nibs(slice: &[u8]) -> Vec<u8> {
 
 /// Encodes a given slice of nibbles as a vector of bytes, along with additional
 /// information about the node itself.
+#[inline(always)]
 pub fn to_encoded_path(mut nibs: &[u8], is_leaf: bool) -> Vec<u8> {
     let mut prefix = (is_leaf as u8) * 0x20;
     if nibs.len() % 2 != 0 {
         prefix += 0x10 + nibs[0];
         nibs = &nibs[1..];
     }
-    iter::once(prefix)
-        .chain(nibs.chunks_exact(2).map(|byte| (byte[0] << 4) + byte[1]))
-        .collect()
+    let mut res = Vec::with_capacity(1 + nibs.len() / 2);
+    res.push(prefix);
+    res.extend(nibs.chunks_exact(2).map(|byte| (byte[0] << 4) + byte[1]));
+    res
+    // iter::once(prefix)
+    //     .chain(nibs.chunks_exact(2).map(|byte| (byte[0] << 4) + byte[1]))
+    //     .collect()
 }
 
 /// Returns the length of the common prefix.

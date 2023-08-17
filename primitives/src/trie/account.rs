@@ -14,10 +14,9 @@
 
 use alloy_primitives::{TxNumber, B256, U256};
 use alloy_rlp_derive::{RlpDecodable, RlpEncodable, RlpMaxEncodedLen};
-use revm_primitives::AccountInfo;
 use serde::{Deserialize, Serialize};
 
-use crate::{keccak::KECCAK_EMPTY, revm::to_revm_b256, trie::EMPTY_ROOT};
+use crate::{keccak::KECCAK_EMPTY, trie::EMPTY_ROOT};
 
 /// An Ethereum account as represented in the trie.
 #[derive(Debug, Clone, Serialize, Deserialize, RlpEncodable, RlpDecodable, RlpMaxEncodedLen)]
@@ -39,17 +38,6 @@ impl Default for StateAccount {
             balance: U256::ZERO,
             storage_root: EMPTY_ROOT,
             code_hash: KECCAK_EMPTY,
-        }
-    }
-}
-
-impl From<StateAccount> for AccountInfo {
-    fn from(value: StateAccount) -> Self {
-        AccountInfo {
-            balance: value.balance,
-            nonce: value.nonce,
-            code_hash: to_revm_b256(value.code_hash),
-            code: None,
         }
     }
 }

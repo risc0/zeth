@@ -47,6 +47,7 @@ pub trait TxExecStrategy {
 pub struct EthTxExecStrategy {}
 
 impl TxExecStrategy for EthTxExecStrategy {
+    #[inline(always)]
     fn execute_transactions<D>(mut block_builder: BlockBuilder<D>) -> Result<BlockBuilder<D>>
     where
         D: Database + DatabaseCommit,
@@ -233,6 +234,7 @@ impl TxExecStrategy for EthTxExecStrategy {
     }
 }
 
+#[inline(always)]
 fn fill_tx_env(tx_env: &mut TxEnv, tx: &Transaction, caller: Address) {
     match &tx.essence {
         TxEssence::Legacy(tx) => {

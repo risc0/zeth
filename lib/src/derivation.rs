@@ -31,6 +31,7 @@ pub trait HeaderDerivationStrategy {
 pub struct EthHeaderDerivationStrategy {}
 
 impl HeaderDerivationStrategy for EthHeaderDerivationStrategy {
+    #[inline(always)]
     fn derive_header<D>(mut block_builder: BlockBuilder<D>) -> Result<BlockBuilder<D>>
     where
         D: Database + DatabaseCommit,
@@ -103,6 +104,7 @@ impl HeaderDerivationStrategy for EthHeaderDerivationStrategy {
 }
 
 /// Base fee for next block. [EIP-1559](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1559.md) spec
+#[inline(always)]
 pub fn derive_base_fee(parent: &Header, eip_1559_constants: &Eip1559Constants) -> Result<U256> {
     let parent_gas_target = parent.gas_limit / eip_1559_constants.elasticity_multiplier;
 

@@ -40,6 +40,7 @@ pub struct CachedAuthDbFromInputStrategy {}
 impl DbInitStrategy for CachedAuthDbFromInputStrategy {
     type Db = CachedAuthDb;
 
+    #[inline(always)]
     fn initialize_database(
         mut block_builder: BlockBuilder<CachedAuthDb>,
     ) -> Result<BlockBuilder<CachedAuthDb>> {

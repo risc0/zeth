@@ -15,11 +15,14 @@
 //! Convert to revm types.
 
 use alloy_primitives::{B160, B256};
-use revm_primitives::{Log as RevmLog, B160 as RevmB160, B256 as RevmB256, U256 as RevmU256};
+use revm_primitives::{
+    AccountInfo, Log as RevmLog, B160 as RevmB160, B256 as RevmB256, U256 as RevmU256,
+};
 
 use crate::{
     access_list::{AccessList, AccessListItem},
     receipt::Log,
+    trie::StateAccount,
 };
 
 #[inline]
@@ -66,6 +69,17 @@ impl From<RevmLog> for Log {
             address: log.address.to_fixed_bytes().into(),
             topics: log.topics.into_iter().map(from_revm_b256).collect(),
             data: log.data.into(),
+        }
+    }
+}
+
+impl From<StateAccount> for AccountInfo {
+    fn from(value: StateAccount) -> Self {
+        AccountInfo {
+            balance: value.balance,
+            nonce: value.nonce,
+            code_hash: to_revm_b256(value.code_hash),
+            code: None,
         }
     }
 }

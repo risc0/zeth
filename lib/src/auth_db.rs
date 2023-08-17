@@ -33,6 +33,7 @@ pub struct AuthenticatedDb {
 }
 
 impl AuthenticatedDb {
+    #[inline(always)]
     pub fn get_or_create_storage_trie(&mut self, address: B160) -> &mut MptNode {
         match self.storage_tries.entry(address) {
             Entry::Occupied(entry) => entry.into_mut(),
@@ -44,6 +45,7 @@ impl AuthenticatedDb {
 impl DatabaseRef for AuthenticatedDb {
     type Error = anyhow::Error;
 
+    #[inline(always)]
     fn basic(&self, address: B160) -> Result<Option<AccountInfo>, Self::Error> {
         if let Some(trie_account) = self.state_trie.get_rlp::<StateAccount>(&keccak(address))? {
             if trie_account.storage_root != EMPTY_ROOT {
@@ -60,6 +62,7 @@ impl DatabaseRef for AuthenticatedDb {
         unimplemented!()
     }
 
+    #[inline(always)]
     fn storage(&self, address: B160, index: U256) -> Result<U256, Self::Error> {
         if let Some(storage_trie) = self.storage_tries.get(&address) {
             Ok(storage_trie

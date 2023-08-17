@@ -38,6 +38,7 @@ pub trait BlockBuildStrategy {
 pub struct BuildFromCachedAuthDbStrategy {}
 
 impl BuildFromCachedAuthDbStrategy {
+    #[inline(always)]
     pub fn build_header(
         debug_storage_tries: &mut Option<HashMap<Address, MptNode>>,
         mut block_builder: BlockBuilder<CachedAuthDb>,
@@ -104,11 +105,7 @@ impl BuildFromCachedAuthDbStrategy {
         }
 
         // update result header with the new state root
-        let mut header = block_builder
-            .header
-            .take()
-            // .expect("Header was not initialized");
-            .unwrap();
+        let mut header = block_builder.header.take().unwrap();
         header.state_root = cached_db.db.state_trie.hash();
 
         // Leak memory, save cycles
@@ -123,6 +120,7 @@ impl BlockBuildStrategy for BuildFromCachedAuthDbStrategy {
     type Db = CachedAuthDb;
     type Output = Header;
 
+    #[inline(always)]
     fn build(block_builder: BlockBuilder<Self::Db>) -> Result<Self::Output> {
         BuildFromCachedAuthDbStrategy::build_header(&mut None, block_builder)
     }

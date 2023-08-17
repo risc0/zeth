@@ -43,13 +43,12 @@ impl Default for TrieAccount {
     }
 }
 
-#[allow(clippy::from_over_into)]
-impl Into<AccountInfo> for TrieAccount {
-    fn into(self) -> AccountInfo {
+impl From<TrieAccount> for AccountInfo {
+    fn from(value: TrieAccount) -> Self {
         AccountInfo {
-            balance: self.balance,
-            nonce: self.nonce,
-            code_hash: to_revm_b256(self.code_hash),
+            balance: value.balance,
+            nonce: value.nonce,
+            code_hash: to_revm_b256(value.code_hash),
             code: None,
         }
     }

@@ -25,60 +25,91 @@ use thiserror::Error as ThisError;
 
 use crate::{keccak::keccak, trie::EMPTY_ROOT, RlpBytes};
 
-/// A node representing the root of a sparse Merkle Patricia trie. Sparse in this context
-/// means that certain unneeded parts of the trie, i.e. sub-tries, can be cut off and
-/// represented by their node hash. However, if a trie operation such as `insert`,
-/// `remove` or `get` ends up in such a truncated part, it cannot be executed and returns
-/// an error. Another difference from other Merkle Patricia trie implementations is that
-/// branches cannot store values. Due to the way how MPTs are constructed in Ethereum,
-/// this is never needed.
+/// Represents the root node of a sparse Merkle Patricia Trie.
+///
+/// The "sparse" nature of this trie allows for truncation of certain unneeded parts,
+/// representing them by their node hash. This design choice is particularly useful for
+/// optimizing storage. However, operations targeting a truncated part will fail and
+/// return an error. Another distinction of this implementation is that branches cannot
+/// store values, aligning with the construction of MPTs in Ethereum.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct MptNode {
     /// The type and data of the node.
     data: MptNodeData,
-    /// Cache for a previously computed [MptNodeReference] of this node.
+    /// Cache for a previously computed reference of this node. This is skipped during
+    /// serialization.
     #[serde(skip)]
     cached_reference: RefCell<Option<MptNodeReference>>,
 }
 
-/// Merkle Patricia trie error type.
+/// Represents custom error types for the sparse Merkle Patricia Trie (MPT).
+///
+/// These errors cover various scenarios that can occur during trie operations, such as
+/// encountering unresolved nodes, finding values in branches where they shouldn't be, and
+/// issues related to RLP (Recursive Length Prefix) encoding and decoding.
 #[derive(Debug, ThisError)]
 pub enum Error {
+    /// Triggered when an operation reaches an unresolved node. The associated `B256`
+    /// value provides details about the unresolved node.
     #[error("reached an unresolved node: {0:#}")]
     NodeNotResolved(B256),
+    /// Occurs when a value is unexpectedly found in a branch node.
     #[error("branch node with value")]
     ValueInBranch,
+    /// Represents errors related to the RLP encoding and decoding using the `alloy_rlp`
+    /// library.
     #[error("RLP error")]
     Rlp(#[from] alloy_rlp::Error),
+    /// Represents errors related to the RLP encoding and decoding, specifically legacy
+    /// errors.
     #[error("RLP error")]
     LegacyRlp(#[from] DecoderError),
 }
 
-/// The type and data of a node in a Merkle Patricia trie.
+/// Represents the various types of data that can be stored within a node in the sparse
+/// Merkle Patricia Trie (MPT).
+///
+/// Each node in the trie can be of one of several types, each with its own specific data
+/// structure. This enum provides a clear and type-safe way to represent the data
+/// associated with each node type.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum MptNodeData {
-    /// Empty trie node.
+    /// Represents an empty trie node.
     #[default]
     Null,
-    /// Node with at most 16 children.
+    /// A node that can have up to 16 children. Each child is an optional boxed `MptNode`.
     Branch([Option<Box<MptNode>>; 16]),
-    /// Leaf node with a value.
+    /// A leaf node that contains a key and a value, both represented as byte vectors.
     Leaf(Vec<u8>, Vec<u8>),
-    /// Node with exactly one child.
+    /// A node that has exactly one child and is used to represent a shared prefix of
+    /// several keys.
     Extension(Vec<u8>, Box<MptNode>),
-    /// Representation of a sub-trie by its hash.
+    /// Represents a sub-trie by its hash, allowing for efficient storage of large
+    /// sub-tries without storing their entire content.
     Digest(B256),
 }
 
-/// Reference of one node inside another node.
+/// Represents the ways in which one node can reference another node inside the sparse
+/// Merkle Patricia Trie (MPT).
+///
+/// Nodes in the MPT can reference other nodes either directly through their byte
+/// representation or indirectly through a hash of their encoding. This enum provides a
+/// clear and type-safe way to represent these references.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum MptNodeReference {
-    /// Short encodings (less than 32 bytes).
+    /// Represents a direct reference to another node using its byte encoding. Typically
+    /// used for short encodings that are less than 32 bytes in length.
     Bytes(Vec<u8>),
-    /// Keccak hash of long encodings (not less than 32 bytes).
+    /// Represents an indirect reference to another node using the Keccak hash of its long
+    /// encoding. Used for encodings that are not less than 32 bytes in length.
     Digest(B256),
 }
 
+/// Provides a conversion from `MptNodeData` to `MptNode`.
+///
+/// This implementation allows for conversion from `MptNodeData` to `MptNode`,
+/// initializing the `data` field with the provided value and setting the
+/// `cached_reference` field to `None`.
 impl From<MptNodeData> for MptNode {
     fn from(value: MptNodeData) -> Self {
         Self {
@@ -88,8 +119,15 @@ impl From<MptNodeData> for MptNode {
     }
 }
 
+/// Provides encoding functionalities for the `MptNode` type.
+///
+/// This implementation allows for the serialization of an `MptNode` into its RLP-encoded
+/// form. The encoding is done based on the type of node data (`MptNodeData`) it holds.
 impl Encodable for MptNode {
-    /// Encode the node into the `out` buffer.
+    /// Encodes the node into the provided `out` buffer.
+    ///
+    /// The encoding is done using the Recursive Length Prefix (RLP) encoding scheme. The
+    /// method handles different node data types and encodes them accordingly.
     #[inline]
     fn encode(&self, out: &mut dyn alloy_rlp::BufMut) {
         match &self.data {
@@ -134,6 +172,9 @@ impl Encodable for MptNode {
     }
 
     /// Returns the length of the encoded node in bytes.
+    ///
+    /// This method calculates the length of the RLP-encoded node. It's useful for
+    /// determining the size requirements for storage or transmission.
     #[inline]
     fn length(&self) -> usize {
         let payload_length = self.payload_length();
@@ -141,8 +182,21 @@ impl Encodable for MptNode {
     }
 }
 
+/// Provides decoding functionalities for the `MptNode` type.
+///
+/// This implementation allows for the deserialization of an RLP-encoded `MptNode` back
+/// into its original form. The decoding is done based on the prototype of the RLP data,
+/// ensuring that the node is reconstructed accurately.
+///
+/// **Note**: This implementation is still using the older RLP library and needs to be
+/// migrated to `alloy_rlp` in the future.
 // TODO: migrate to alloy_rlp
 impl Decodable for MptNode {
+    /// Decodes an RLP-encoded node from the provided `rlp` buffer.
+    ///
+    /// The method handles different RLP prototypes and reconstructs the `MptNode` based
+    /// on the encoded data. If the RLP data does not match any known prototype or if
+    /// there's an error during decoding, an error is returned.
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         match rlp.prototype()? {
             Prototype::Null | Prototype::Data(0) => Ok(MptNodeData::Null.into()),
@@ -182,24 +236,39 @@ impl Decodable for MptNode {
     }
 }
 
+/// Represents a node in the sparse Merkle Patricia Trie (MPT).
+///
+/// The `MptNode` type encapsulates the data and functionalities associated with a node in
+/// the MPT. It provides methods for manipulating the trie, such as inserting, deleting,
+/// and retrieving values, as well as utility methods for encoding, decoding, and
+/// debugging.
 impl MptNode {
-    /// Clears the trie, replacing it with [MptNodeData::Null].
+    /// Clears the trie, replacing its data with an empty node, [MptNodeData::Null].
+    ///
+    /// This method effectively removes all key-value pairs from the trie.
     pub fn clear(&mut self) {
         self.data = MptNodeData::Null;
         self.invalidate_ref_cache();
     }
 
-    /// Decodes an RLP-encoded [MptNode].
+    /// Decodes an RLP-encoded `MptNode` from the provided byte slice.
+    ///
+    /// This method allows for the deserialization of a previously serialized `MptNode`.
     pub fn decode(bytes: impl AsRef<[u8]>) -> Result<MptNode, Error> {
         rlp::decode(bytes.as_ref()).map_err(Error::from)
     }
 
-    /// Returns the type and data of the node.
+    /// Retrieves the underlying data of the node.
+    ///
+    /// This method provides a reference to the node's data, allowing for inspection and
+    /// manipulation.
     pub fn as_data(&self) -> &MptNodeData {
         &self.data
     }
 
-    /// Returns the 256-bit hash of the node.
+    /// Computes and returns the 256-bit hash of the node.
+    ///
+    /// This method provides a unique identifier for the node based on its content.
     pub fn hash(&self) -> B256 {
         match self.data {
             MptNodeData::Null => EMPTY_ROOT,
@@ -210,7 +279,11 @@ impl MptNode {
         }
     }
 
-    /// Returns the [MptNodeReference] of this node when referenced inside another node.
+    /// Retrieves the [MptNodeReference] reference of the node when it's referenced inside
+    /// another node.
+    ///
+    /// This method provides a way to obtain a compact representation of the node for
+    /// storage or transmission purposes.
     pub fn reference(&self) -> MptNodeReference {
         self.cached_reference
             .borrow_mut()
@@ -260,17 +333,25 @@ impl MptNode {
         }
     }
 
-    /// Returns whether the trie is empty.
+    /// Determines if the trie is empty.
+    ///
+    /// This method checks if the node represents an empty trie, i.e., it doesn't contain
+    /// any key-value pairs.
     pub fn is_empty(&self) -> bool {
         matches!(&self.data, MptNodeData::Null)
     }
 
-    /// Returns whether the node is a digest.
+    /// Determines if the node represents a digest.
+    ///
+    /// A digest is a compact representation of a sub-trie, represented by its hash.
     pub fn is_digest(&self) -> bool {
         matches!(&self.data, MptNodeData::Digest(_))
     }
 
-    /// Returns the nibbles corresponding to the node's prefix.
+    /// Retrieves the nibbles corresponding to the node's prefix.
+    ///
+    /// Nibbles are half-bytes, and in the context of the MPT, they represent parts of
+    /// keys.
     pub fn nibs(&self) -> Vec<u8> {
         match &self.data {
             MptNodeData::Null | MptNodeData::Branch(_) | MptNodeData::Digest(_) => vec![],
@@ -293,14 +374,19 @@ impl MptNode {
         }
     }
 
-    /// Returns a reference to the value corresponding to the key.
-    /// If [None] is returned, the key is provably not in the trie.
+    /// Retrieves the value associated with a given key in the trie.
+    ///
+    /// If the key is not present in the trie, this method returns `None`. Otherwise, it
+    /// returns a reference to the associated value. If [None] is returned, the key is
+    /// provably not in the trie.
     pub fn get(&self, key: &[u8]) -> Result<Option<&[u8]>, Error> {
         self.get_internal(&to_nibs(key))
     }
 
-    /// Returns the RLP-decoded value corresponding to the key.
-    /// If [None] is returned, the key is provably not in the trie.
+    /// Retrieves the RLP-decoded value corresponding to the key.
+    ///
+    /// If the key is not present in the trie, this method returns `None`. Otherwise, it
+    /// returns the RLP-decoded value.
     pub fn get_rlp<T: alloy_rlp::Decodable>(&self, key: &[u8]) -> Result<Option<T>, Error> {
         match self.get(key)? {
             Some(mut bytes) => Ok(Some(T::decode(&mut bytes)?)),
@@ -342,8 +428,10 @@ impl MptNode {
         }
     }
 
-    // Removes a key from the trie. It returns `true` when that key had a value associated
-    // with it, or `false` if the key was provably not in the trie.
+    /// Removes a key from the trie.
+    ///
+    /// This method attempts to remove a key-value pair from the trie. If the key is
+    /// present, it returns `true`. Otherwise, it returns `false`.
     pub fn delete(&mut self, key: &[u8]) -> Result<bool, Error> {
         self.delete_internal(&to_nibs(key))
     }
@@ -455,7 +543,11 @@ impl MptNode {
         Ok(true)
     }
 
-    /// Inserts a key-value pair into the trie returning whether the trie has changed.
+    /// Inserts a key-value pair into the trie.
+    ///
+    /// This method attempts to insert a new key-value pair into the trie. If the
+    /// insertion is successful, it returns `true`. If the key already exists, it updates
+    /// the value and returns `false`.
     pub fn insert(&mut self, key: &[u8], value: Vec<u8>) -> Result<bool, Error> {
         if value.is_empty() {
             panic!("value must not be empty");
@@ -463,7 +555,9 @@ impl MptNode {
         self.insert_internal(&to_nibs(key), value)
     }
 
-    /// Inserts an RLP-encoded value into the trie returning whether the trie has changed.
+    /// Inserts an RLP-encoded value into the trie.
+    ///
+    /// This method inserts a value that's been encoded using RLP into the trie.
     pub fn insert_rlp(&mut self, key: &[u8], value: impl Encodable) -> Result<bool, Error> {
         self.insert_internal(&to_nibs(key), value.to_rlp())
     }
@@ -586,6 +680,9 @@ impl MptNode {
     }
 
     /// Returns the number of traversable nodes in the trie.
+    ///
+    /// This method provides a count of all the nodes that can be traversed within the
+    /// trie.
     pub fn size(&self) -> usize {
         match self.as_data() {
             MptNodeData::Null => 0,
@@ -598,7 +695,10 @@ impl MptNode {
         }
     }
 
-    /// Formats the trie as string list, where each line corresponds to a trie leaf.
+    /// Formats the trie as a string list, where each line corresponds to a trie leaf.
+    ///
+    /// This method is primarily used for debugging purposes, providing a visual
+    /// representation of the trie's structure.
     pub fn debug_rlp<T: alloy_rlp::Decodable + Debug>(&self) -> Vec<String> {
         let nibs: String = self.nibs().iter().map(|n| format!("{:x}", n)).collect();
         match self.as_data() {
@@ -652,7 +752,10 @@ impl MptNode {
     }
 }
 
-/// Converts a byte slice to nibs.
+/// Converts a byte slice into a vector of nibbles.
+///
+/// A nibble is 4 bits or half of an 8-bit byte. This function takes each byte from the
+/// input slice, splits it into two nibbles, and appends them to the resulting vector.
 pub fn to_nibs(slice: &[u8]) -> Vec<u8> {
     let mut result = Vec::with_capacity(2 * slice.len());
     for byte in slice {
@@ -662,8 +765,16 @@ pub fn to_nibs(slice: &[u8]) -> Vec<u8> {
     result
 }
 
-/// Encodes a given slice of nibbles as a vector of bytes, along with additional
-/// information about the node itself.
+/// Encodes a slice of nibbles into a vector of bytes, with an additional prefix to
+/// indicate the type of node (leaf or extension).
+///
+/// The function starts by determining the type of node based on the `is_leaf` parameter.
+/// If the node is a leaf, the prefix is set to `0x20`. If the length of the nibbles is
+/// odd, the prefix is adjusted and the first nibble is incorporated into it.
+///
+/// The remaining nibbles are then combined into bytes, with each pair of nibbles forming
+/// a single byte. The resulting vector starts with the prefix, followed by the encoded
+/// bytes.
 pub fn to_encoded_path(mut nibs: &[u8], is_leaf: bool) -> Vec<u8> {
     let mut prefix = (is_leaf as u8) * 0x20;
     if nibs.len() % 2 != 0 {

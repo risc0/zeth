@@ -170,7 +170,7 @@ impl TxExecStrategy for EthTxExecStrategy {
                 .context("failed to insert receipt")?;
         }
 
-        block_builder.db = Some(evm.take_db());
+        let mut db = evm.take_db();
 
         // process withdrawals unconditionally after any transactions
         let mut withdrawals_trie = MptNode::default();
@@ -192,10 +192,7 @@ impl TxExecStrategy for EthTxExecStrategy {
 
             // Credit withdrawal
             let address = to_revm_b160(withdrawal.address);
-            let mut withdrawal_account = block_builder
-                .db
-                .as_mut()
-                .unwrap()
+            let mut withdrawal_account = db
                 .basic(address)
                 .map_err(|db_err| anyhow!("Error at withdrawal {}: {:?}", i, db_err))?
                 .unwrap_or_default();
@@ -203,11 +200,7 @@ impl TxExecStrategy for EthTxExecStrategy {
                 withdrawal_account.balance.checked_add(amount_wei).unwrap();
             let mut account = Account::from(withdrawal_account);
             account.is_touched = true;
-            block_builder
-                .db
-                .as_mut()
-                .unwrap()
-                .commit([(address, account)].into());
+            db.commit([(address, account)].into());
 
             // add to trie
             withdrawals_trie
@@ -230,6 +223,8 @@ impl TxExecStrategy for EthTxExecStrategy {
         guest_mem_forget([tx_trie, receipt_trie, withdrawals_trie]);
         guest_mem_forget(evm);
 
+        // Return block builder with updated database
+        block_builder.db = Some(db);
         Ok(block_builder)
     }
 }

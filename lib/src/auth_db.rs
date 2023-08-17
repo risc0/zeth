@@ -51,6 +51,7 @@ impl DatabaseRef for AuthenticatedDb {
     fn basic(&self, address: B160) -> Result<Option<AccountInfo>, Self::Error> {
         // Authenticate the storage root on every account load
         if let Some(trie_account) = self.state_trie.get_rlp::<StateAccount>(&keccak(address))? {
+            // If an account exists in the trie, its non-empty storage trie root must be provided
             if let Some(storage_trie) = self.storage_tries.get(&address) {
                 if trie_account.storage_root != storage_trie.hash() {
                     bail!("Invalid storage root!")
@@ -62,6 +63,10 @@ impl DatabaseRef for AuthenticatedDb {
             }
             Ok(Some(trie_account.into()))
         } else {
+            // Non-existing accounts must not have a storage trie root provided
+            if self.storage_tries.contains_key(&address) {
+                bail!("Unverified storage root!")
+            }
             Ok(None)
         }
     }

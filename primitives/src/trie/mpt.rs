@@ -676,9 +676,6 @@ pub fn to_encoded_path(mut nibs: &[u8], is_leaf: bool) -> Vec<u8> {
     res.push(prefix);
     res.extend(nibs.chunks_exact(2).map(|byte| (byte[0] << 4) + byte[1]));
     res
-    // iter::once(prefix)
-    //     .chain(nibs.chunks_exact(2).map(|byte| (byte[0] << 4) + byte[1]))
-    //     .collect()
 }
 
 /// Returns the length of the common prefix.

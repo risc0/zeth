@@ -27,13 +27,6 @@ pub const KECCAK_EMPTY: B256 =
 /// This function is a thin wrapper around the Keccak256 hashing algorithm
 /// and is optimized for performance.
 ///
-/// # Parameters
-/// - `data`: The data to be hashed. This can be any type that implements the
-///   `AsRef<[u8]>` trait, which includes most common byte container types.
-///
-/// # Returns
-/// - A 32-byte array representing the Keccak-256 hash of the input data.
-///
 /// # TODO
 /// - Consider switching the return type to `B256` for consistency with other parts of the
 ///   codebase.

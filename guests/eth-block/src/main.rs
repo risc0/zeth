@@ -17,9 +17,10 @@
 use risc0_zkvm::guest::env;
 use zeth_lib::{
     block_builder::BlockBuilder, consts::ETH_MAINNET_CHAIN_SPEC, execution::EthTxExecStrategy,
-    mem_db::MemDb, validation::Input,
+    mem_db::MemDb, input::Input,
 };
 use zeth_lib::finalization::BuildFromMemDbStrategy;
+use zeth_lib::initialization::MemDbInitStrategy;
 use zeth_lib::preparation::EthHeaderPrepStrategy;
 
 risc0_zkvm::guest::entry!(main);
@@ -29,7 +30,7 @@ pub fn main() {
     let input: Input = env::read();
     // Build the resulting block
     let output = BlockBuilder::<MemDb>::new(&ETH_MAINNET_CHAIN_SPEC, input)
-        .initialize_db()
+        .initialize_database::<MemDbInitStrategy>()
         .expect("Failed to create in-memory evm storage")
         .prepare_header::<EthHeaderPrepStrategy>()
         .expect("Failed to create the initial block header fields")

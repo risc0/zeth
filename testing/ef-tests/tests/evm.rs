@@ -19,7 +19,8 @@ use std::path::PathBuf;
 use rstest::rstest;
 use zeth_lib::{
     block_builder::BlockBuilder, execution::EthTxExecStrategy,
-    finalization::BuildFromMemDbStrategy, mem_db::MemDb, preparation::EthHeaderPrepStrategy,
+    finalization::BuildFromMemDbStrategy, initialization::MemDbInitStrategy, mem_db::MemDb,
+    preparation::EthHeaderPrepStrategy,
 };
 use zeth_primitives::block::Header;
 use zeth_testeth::{
@@ -67,7 +68,7 @@ fn evm(
                 block.withdrawals.unwrap_or_default(),
             );
             let builder = BlockBuilder::<MemDb>::new(&chain_spec, input)
-                .initialize_db()
+                .initialize_database::<MemDbInitStrategy>()
                 .unwrap()
                 .prepare_header::<EthHeaderPrepStrategy>()
                 .unwrap();

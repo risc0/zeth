@@ -12,27 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::mem;
-
 use anyhow::Result;
 use hashbrown::{hash_map, HashMap};
-use revm::primitives::{Account, AccountInfo, Address, Bytecode, B160, B256, U256};
-use zeth_primitives::{
-    block::Header,
-    keccak::{keccak, KECCAK_EMPTY},
-    revm::to_revm_b256,
-    trie::StateAccount,
-    Bytes,
-};
+use revm::primitives::{Account, Address, B160, B256, U256};
+use zeth_primitives::block::Header;
 
 use crate::{
-    consts::ChainSpec,
-    execution::TxExecStrategy,
-    finalization::BlockBuildStrategy,
-    guest_mem_forget,
-    mem_db::{AccountState, DbAccount},
+    consts::ChainSpec, execution::TxExecStrategy, finalization::BlockBuildStrategy,
+    initialization::DbInitStrategy, input::Input, mem_db::DbAccount,
     preparation::HeaderPrepStrategy,
-    validation::{verify_parent_chain, verify_state_trie, verify_storage_trie, Input},
 };
 
 pub trait BlockBuilderDatabase: revm::Database + Sized {
@@ -76,73 +64,8 @@ where
     }
 
     /// Initializes the database from the input tries.
-    pub fn initialize_db(mut self) -> Result<Self> {
-        verify_state_trie(
-            &self.input.parent_state_trie,
-            &self.input.parent_header.state_root,
-        )?;
-
-        // hash all the contract code
-        let contracts: HashMap<B256, Bytes> = mem::take(&mut self.input.contracts)
-            .into_iter()
-            .map(|bytes| (keccak(&bytes).into(), bytes))
-            .collect();
-
-        // Load account data into db
-        let mut accounts = HashMap::with_capacity(self.input.parent_storage.len());
-        for (address, (storage_trie, slots)) in &mut self.input.parent_storage {
-            // consume the slots, as they are no longer needed afterwards
-            let slots = mem::take(slots);
-
-            // load the account from the state trie or empty if it does not exist
-            let state_account = self
-                .input
-                .parent_state_trie
-                .get_rlp::<StateAccount>(&keccak(address))?
-                .unwrap_or_default();
-            verify_storage_trie(address, storage_trie, &state_account.storage_root)?;
-
-            // load the corresponding code
-            let code_hash = to_revm_b256(state_account.code_hash);
-            let bytecode = if code_hash.0 == KECCAK_EMPTY.0 {
-                Bytecode::new()
-            } else {
-                let bytes = contracts.get(&code_hash).unwrap().clone();
-                unsafe { Bytecode::new_raw_with_hash(bytes.0, code_hash) }
-            };
-
-            // load storage reads
-            let mut storage = HashMap::with_capacity(slots.len());
-            for slot in slots {
-                let value: zeth_primitives::U256 = storage_trie
-                    .get_rlp(&keccak(slot.to_be_bytes::<32>()))?
-                    .unwrap_or_default();
-                storage.insert(slot, value);
-            }
-
-            let mem_account = DbAccount {
-                info: AccountInfo {
-                    balance: state_account.balance,
-                    nonce: state_account.nonce,
-                    code_hash: to_revm_b256(state_account.code_hash),
-                    code: Some(bytecode),
-                },
-                state: AccountState::None,
-                storage,
-            };
-
-            accounts.insert(*address, mem_account);
-        }
-        guest_mem_forget(contracts);
-
-        // prepare block hash history
-        let block_hashes =
-            verify_parent_chain(&self.input.parent_header, &self.input.ancestor_headers)?;
-
-        // Store database
-        self.db = Some(D::load(accounts, block_hashes));
-
-        Ok(self)
+    pub fn initialize_database<T: DbInitStrategy<Db = D>>(self) -> Result<Self> {
+        T::initialize_database(self)
     }
 
     /// Initializes the header. This must be called before executing transactions.

@@ -184,7 +184,7 @@ impl DatabaseCommit for MemDb {
         for (address, new_account) in changes {
             // if nothing was touched, there is nothing to do
             if !new_account.is_touched {
-                return;
+                continue;
             }
 
             if new_account.is_destroyed {
@@ -195,7 +195,7 @@ impl DatabaseCommit for MemDb {
                         // destruction of a non-existing account, so there is nothing to do
                         // a) the account was created and destroyed in the same transaction
                         // b) or it was destroyed without reading and thus not cached
-                        return;
+                        continue;
                     }
                 };
 
@@ -207,7 +207,7 @@ impl DatabaseCommit for MemDb {
                 db_account.state = AccountState::Deleted;
                 db_account.info = AccountInfo::default();
 
-                return;
+                continue;
             }
 
             // empty accounts cannot have any non-zero storage
@@ -227,12 +227,12 @@ impl DatabaseCommit for MemDb {
                         db_account.state = AccountState::Deleted;
                         db_account.info = AccountInfo::default();
 
-                        return;
+                        continue;
                     }
 
                     // create account only if it is not empty
                     if db_account.info.is_empty() && new_account.is_empty() {
-                        return;
+                        continue;
                     }
 
                     // update the account info
@@ -242,7 +242,7 @@ impl DatabaseCommit for MemDb {
                 Entry::Vacant(entry) => {
                     // create a new account only if it is not empty
                     if new_account.is_empty() {
-                        return;
+                        continue;
                     }
 
                     // create new non-empty account

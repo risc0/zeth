@@ -28,6 +28,7 @@ use zeth_lib::{
         Init,
     },
     mem_db::DbAccount,
+    preparation::EthHeaderPrepStrategy,
     validation::Input,
 };
 use zeth_primitives::{
@@ -335,7 +336,7 @@ pub fn create_input(
     // create and run the block builder once to create the initial DB
     let builder = BlockBuilder::new(chain_spec, input)
         .with_db(provider_db)
-        .initialize_header()
+        .prepare_header::<EthHeaderPrepStrategy>()
         .unwrap();
     // execute the transactions with a larger stack
     let mut builder = stacker::grow(BIG_STACK_SIZE, move || {

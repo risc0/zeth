@@ -20,14 +20,15 @@ use revm::primitives::{Account, AccountInfo, Address, Bytecode, B160, B256, U256
 use zeth_primitives::{
     block::Header,
     keccak::{keccak, KECCAK_EMPTY},
-    revm::{from_revm_b256, to_revm_b256},
-    trie::{MptNode, StateAccount},
+    revm::to_revm_b256,
+    trie::StateAccount,
     Bytes,
 };
 
 use crate::{
     consts::ChainSpec,
     execution::TxExecStrategy,
+    finalization::BlockBuildStrategy,
     guest_mem_forget,
     mem_db::{AccountState, DbAccount},
     preparation::HeaderPrepStrategy,
@@ -56,7 +57,7 @@ pub struct BlockBuilder<'a, D> {
 impl<D> BlockBuilder<'_, D>
 where
     D: BlockBuilderDatabase,
-    <D as revm::Database>::Error: std::fmt::Debug,
+    <D as revm::Database>::Error: core::fmt::Debug,
 {
     /// Creates a new block builder.
     pub fn new(chain_spec: &ChainSpec, input: Input) -> BlockBuilder<'_, D> {
@@ -155,79 +156,8 @@ where
     }
 
     /// Builds the block and returns the header.
-    pub fn build(
-        mut self,
-        mut debug_storage_tries: Option<&mut HashMap<Address, MptNode>>,
-    ) -> Result<Header> {
-        let db = self.db.as_ref().unwrap();
-
-        // apply state updates
-        let state_trie = &mut self.input.parent_state_trie;
-        for (address, account) in db.accounts() {
-            // if the account has not been touched, it can be ignored
-            if account.state == AccountState::None {
-                if let Some(map) = &mut debug_storage_tries {
-                    let storage_root = self.input.parent_storage.get(address).unwrap().0.clone();
-                    map.insert(*address, storage_root);
-                }
-                continue;
-            }
-
-            // compute the index of the current account in the state trie
-            let state_trie_index = keccak(address);
-
-            // remove deleted accounts from the state trie
-            if account.state == AccountState::Deleted {
-                state_trie.delete(&state_trie_index)?;
-                continue;
-            }
-
-            // otherwise, compute the updated storage root for that account
-            let state_storage = &account.storage;
-            let storage_root = {
-                // getting a mutable reference is more efficient than calling remove
-                // every account must have an entry, even newly created accounts
-                let (storage_trie, _) = self.input.parent_storage.get_mut(address).unwrap();
-                // for cleared accounts always start from the empty trie
-                if account.state == AccountState::StorageCleared {
-                    storage_trie.clear();
-                }
-
-                // apply all new storage entries for the current account (address)
-                for (key, value) in state_storage {
-                    let storage_trie_index = keccak(key.to_be_bytes::<32>());
-                    if value == &U256::ZERO {
-                        storage_trie.delete(&storage_trie_index)?;
-                    } else {
-                        storage_trie.insert_rlp(&storage_trie_index, *value)?;
-                    }
-                }
-
-                // insert the storage trie for host debugging
-                if let Some(map) = &mut debug_storage_tries {
-                    map.insert(*address, storage_trie.clone());
-                }
-
-                storage_trie.hash()
-            };
-
-            let state_account = StateAccount {
-                nonce: account.info.nonce,
-                balance: account.info.balance,
-                storage_root,
-                code_hash: from_revm_b256(account.info.code_hash),
-            };
-            state_trie.insert_rlp(&state_trie_index, state_account)?;
-        }
-
-        // update result header with the new state root
-        let mut header = self.header.take().expect("Header was not initialized");
-        header.state_root = state_trie.hash();
-
-        // Leak memory, save cycles
-        guest_mem_forget(self);
-
-        Ok(header)
+    pub fn build<T: BlockBuildStrategy<Db = D>>(self) -> Result<T::Output> {
+        T::build(self)
     }
 
     /// Returns a reference to the database.

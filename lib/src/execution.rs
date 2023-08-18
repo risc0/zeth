@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
+use core::fmt::Debug;
 
 use anyhow::{anyhow, bail, Context, Result};
 #[cfg(not(target_os = "zkvm"))]
@@ -41,7 +41,7 @@ pub trait TxExecStrategy {
     fn execute_transactions<D>(block_builder: BlockBuilder<D>) -> Result<BlockBuilder<D>>
     where
         D: BlockBuilderDatabase,
-        <D as revm::Database>::Error: std::fmt::Debug;
+        <D as Database>::Error: Debug;
 }
 
 pub struct EthTxExecStrategy {}

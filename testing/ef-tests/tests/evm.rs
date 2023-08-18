@@ -18,8 +18,8 @@ use std::path::PathBuf;
 
 use rstest::rstest;
 use zeth_lib::{
-    block_builder::BlockBuilder, execution::EthTxExecStrategy, mem_db::MemDb,
-    preparation::EthHeaderPrepStrategy,
+    block_builder::BlockBuilder, execution::EthTxExecStrategy,
+    finalization::BuildFromMemDbStrategy, mem_db::MemDb, preparation::EthHeaderPrepStrategy,
 };
 use zeth_primitives::block::Header;
 use zeth_testeth::{
@@ -78,7 +78,7 @@ fn evm(
             // update the state
             state = builder.db().unwrap().into();
 
-            let result_header = builder.build(None).unwrap();
+            let result_header = builder.build::<BuildFromMemDbStrategy>()?.unwrap();
             // the headers should match
             assert_eq!(result_header.state_root, expected_header.state_root);
             assert_eq!(result_header, expected_header);

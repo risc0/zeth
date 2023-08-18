@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::fmt::Debug;
-
 use anyhow::Result;
 use hashbrown::HashMap;
-use revm::{primitives::Address, Database, DatabaseCommit};
+use revm::primitives::Address;
 use zeth_primitives::{
     block::Header,
     keccak::keccak,
@@ -35,10 +33,7 @@ pub trait BlockBuildStrategy {
     type Db;
     type Output;
 
-    fn build(block_builder: BlockBuilder<Self::Db>) -> Result<Self::Output>
-    where
-        Self::Db: Database + DatabaseCommit,
-        <Self::Db as Database>::Error: Debug;
+    fn build(block_builder: BlockBuilder<Self::Db>) -> Result<Self::Output>;
 }
 
 pub struct BuildFromMemDbStrategy {}

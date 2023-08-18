@@ -461,7 +461,7 @@ impl From<Init> for Input {
             transactions: value.fini_transactions,
             withdrawals: value.fini_withdrawals,
             parent_state_trie: state_trie,
-            parent_storage: storage,
+            parent_storage: storage.into_iter().collect(),
             contracts: contracts.into_values().map(|bytes| bytes.into()).collect(),
             ancestor_headers: value.ancestor_headers,
         }

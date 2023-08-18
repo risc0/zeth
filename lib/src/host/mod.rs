@@ -393,20 +393,17 @@ fn resolve_orphans(
     }
 }
 
-// We implement Into here rather than From for BlockBuilder to keep this code outside of
-// the guest
-#[allow(clippy::from_over_into)]
-impl Into<Input> for Init {
-    fn into(self) -> Input {
+impl From<Init> for Input {
+    fn from(value: Init) -> Input {
         // construct the proof tries
         let (mut nodes_by_reference, mut storage) =
-            proofs_to_tries(self.init_proofs.values().cloned().collect());
+            proofs_to_tries(value.init_proofs.values().cloned().collect());
         // there should be a trie and a list of storage slots for every account
-        assert_eq!(storage.len(), self.db.accounts_len());
+        assert_eq!(storage.len(), value.db.accounts_len());
 
         // collect the code from each account
         let mut contracts = HashMap::new();
-        for account in self.db.accounts.values() {
+        for account in value.db.accounts.values() {
             let code = account.info.code.clone().unwrap();
             if !code.is_empty() {
                 contracts.insert(code.hash, code.bytecode);
@@ -414,7 +411,7 @@ impl Into<Input> for Init {
         }
 
         // extract the state trie
-        let state_root = self.init_block.state_root;
+        let state_root = value.init_block.state_root;
         let state_trie = nodes_by_reference
             .remove(&MptNodeReference::Digest(state_root))
             .expect("State root node not found");
@@ -427,7 +424,7 @@ impl Into<Input> for Init {
             orphans.extend(orphaned_digests(&root));
         }
         // resolve those orphans using the proofs of the final state
-        for fini_proof in self.fini_proofs.values() {
+        for fini_proof in value.fini_proofs.values() {
             resolve_orphans(
                 &fini_proof.account_proof,
                 &mut orphans,
@@ -455,18 +452,18 @@ impl Into<Input> for Init {
 
         // Create the block builder input
         Input {
-            parent_header: self.init_block,
-            beneficiary: self.fini_block.beneficiary,
-            gas_limit: self.fini_block.gas_limit,
-            timestamp: self.fini_block.timestamp,
-            extra_data: self.fini_block.extra_data.0.clone().into(),
-            mix_hash: self.fini_block.mix_hash,
-            transactions: self.fini_transactions,
-            withdrawals: self.fini_withdrawals,
+            parent_header: value.init_block,
+            beneficiary: value.fini_block.beneficiary,
+            gas_limit: value.fini_block.gas_limit,
+            timestamp: value.fini_block.timestamp,
+            extra_data: value.fini_block.extra_data.0.clone().into(),
+            mix_hash: value.fini_block.mix_hash,
+            transactions: value.fini_transactions,
+            withdrawals: value.fini_withdrawals,
             parent_state_trie: state_trie,
             parent_storage: storage,
             contracts: contracts.into_values().map(|bytes| bytes.into()).collect(),
-            ancestor_headers: self.ancestor_headers,
+            ancestor_headers: value.ancestor_headers,
         }
     }
 }

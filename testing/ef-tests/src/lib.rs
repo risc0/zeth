@@ -19,7 +19,7 @@ use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, NoneAsEmptyString};
 use zeth_lib::{
-    block_builder::{BlockBuilder, BlockBuilderDatabase},
+    block_builder::BlockBuilder,
     consts::ChainSpec,
     execution::EthTxExecStrategy,
     host::{
@@ -28,7 +28,7 @@ use zeth_lib::{
         Init,
     },
     input::Input,
-    mem_db::DbAccount,
+    mem_db::{DbAccount, MemDb},
     preparation::EthHeaderPrepStrategy,
 };
 use zeth_primitives::{
@@ -47,7 +47,7 @@ use zeth_primitives::{
     Bloom, Bytes, RlpBytes, StorageKey, B160, B256, B64, U256, U64,
 };
 
-use crate::ethers::{get_proofs, TestProvider};
+use crate::ethers::{get_state_update_proofs, TestProvider};
 
 pub mod ethers;
 
@@ -108,13 +108,20 @@ impl From<DbAccount> for TestAccount {
 #[serde(rename_all = "camelCase")]
 pub struct TestState(pub HashMap<B160, TestAccount>);
 
-impl<D: BlockBuilderDatabase> From<&D> for TestState {
-    fn from(db: &D) -> Self {
+impl From<&MemDb> for TestState {
+    fn from(db: &MemDb) -> Self {
         TestState(
-            db.accounts()
+            db.accounts
+                .iter()
                 .map(|(addr, account)| (from_revm_b160(*addr), account.clone().into()))
                 .collect(),
         )
+    }
+}
+
+impl From<&ProviderDb> for TestState {
+    fn from(db: &ProviderDb) -> Self {
+        (&db.latest_db).into()
     }
 }
 
@@ -345,7 +352,8 @@ pub fn create_input(
     let provider_db = builder.mut_db().unwrap();
 
     let init_proofs = provider_db.get_initial_proofs().unwrap();
-    let fini_proofs = get_proofs(provider_db, provider_db.get_latest_db().storage_keys()).unwrap();
+    let fini_proofs =
+        get_state_update_proofs(provider_db, provider_db.get_latest_db().storage_keys()).unwrap();
     let ancestor_headers = provider_db.get_ancestor_headers().unwrap();
 
     Init {

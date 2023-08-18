@@ -15,24 +15,23 @@
 use std::collections::BTreeSet;
 
 use ethers_core::types::{EIP1186ProofResponse, H160, H256};
-use hashbrown::{hash_map, HashMap};
+use hashbrown::HashMap;
 use revm::{
     primitives::{Account, AccountInfo, Bytecode, B160, B256, U256},
-    Database,
+    Database, DatabaseCommit,
 };
 use zeth_primitives::block::Header;
 
 use crate::{
-    block_builder::BlockBuilderDatabase,
     host::provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
-    mem_db::{DbAccount, DbError, MemDb},
+    mem_db::{DbError, MemDb},
 };
 
 pub struct ProviderDb {
-    provider: Box<dyn Provider>,
-    block_no: u64,
-    initial_db: MemDb,
-    latest_db: MemDb,
+    pub provider: Box<dyn Provider>,
+    pub block_no: u64,
+    pub initial_db: MemDb,
+    pub latest_db: MemDb,
 }
 
 impl ProviderDb {
@@ -219,24 +218,8 @@ impl Database for ProviderDb {
     }
 }
 
-impl BlockBuilderDatabase for ProviderDb {
-    fn load(_accounts: HashMap<B160, DbAccount>, _block_hashes: HashMap<u64, B256>) -> Self {
-        unimplemented!()
-    }
-
-    fn accounts(&self) -> hash_map::Iter<B160, DbAccount> {
-        self.latest_db.accounts()
-    }
-
-    fn increase_balance(&mut self, address: B160, amount: U256) -> Result<(), Self::Error> {
-        // ensure that the address is loaded into the latest_db
-        if let Some(account_info) = self.basic(address)? {
-            self.latest_db.insert_account_info(address, account_info);
-        }
-        Ok(self.latest_db.increase_balance(address, amount)?)
-    }
-
-    fn update(&mut self, address: B160, account: Account) {
-        self.latest_db.update(address, account);
+impl DatabaseCommit for ProviderDb {
+    fn commit(&mut self, changes: HashMap<B160, Account>) {
+        self.latest_db.commit(changes)
     }
 }

@@ -18,7 +18,7 @@ use anyhow::{bail, Result};
 use hashbrown::HashMap;
 use revm::{
     primitives::{AccountInfo, Bytecode, B256},
-    Database,
+    Database, DatabaseCommit,
 };
 use zeth_primitives::{
     keccak::{keccak, KECCAK_EMPTY},
@@ -28,7 +28,7 @@ use zeth_primitives::{
 };
 
 use crate::{
-    block_builder::{BlockBuilder, BlockBuilderDatabase},
+    block_builder::BlockBuilder,
     consts::MAX_BLOCK_HASH_AGE,
     guest_mem_forget,
     mem_db::{AccountState, DbAccount, MemDb},
@@ -39,7 +39,7 @@ pub trait DbInitStrategy {
 
     fn initialize_database(block_builder: BlockBuilder<Self::Db>) -> Result<BlockBuilder<Self::Db>>
     where
-        Self::Db: BlockBuilderDatabase,
+        Self::Db: Database + DatabaseCommit,
         <Self::Db as Database>::Error: Debug;
 }
 
@@ -52,7 +52,7 @@ impl DbInitStrategy for MemDbInitStrategy {
         mut block_builder: BlockBuilder<Self::Db>,
     ) -> Result<BlockBuilder<Self::Db>>
     where
-        Self::Db: BlockBuilderDatabase,
+        Self::Db: Database + DatabaseCommit,
         <Self::Db as Database>::Error: Debug,
     {
         // Verify state trie root
@@ -158,8 +158,9 @@ impl DbInitStrategy for MemDbInitStrategy {
         }
 
         // Store database
-        block_builder.db = Some(Self::Db::load(accounts, block_hashes));
-
-        Ok(block_builder)
+        Ok(block_builder.with_db(MemDb {
+            accounts,
+            block_hashes,
+        }))
     }
 }

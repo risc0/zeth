@@ -200,11 +200,11 @@ fn get_proof(
 }
 
 /// Get EIP-1186 proofs for a set of addresses and storage keys.
-pub fn get_proofs(
-    state: &impl BlockBuilderDatabase,
+pub fn get_state_update_proofs(
+    provider: &ProviderDb,
     storage_keys: HashMap<RevmB160, Vec<LibU256>>,
 ) -> Result<HashMap<RevmB160, EIP1186ProofResponse>, anyhow::Error> {
-    let state = state.into();
+    let state = provider.into();
 
     let mut result = HashMap::new();
     for (address, indices) in storage_keys {

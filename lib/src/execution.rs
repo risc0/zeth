@@ -18,8 +18,10 @@ use anyhow::{anyhow, bail, Context, Result};
 #[cfg(not(target_os = "zkvm"))]
 use log::{debug, info};
 use revm::{
-    primitives::{Address, BlockEnv, CfgEnv, ResultAndState, SpecId, TransactTo, TxEnv, U256},
-    Database, EVM,
+    primitives::{
+        Account, Address, BlockEnv, CfgEnv, ResultAndState, SpecId, TransactTo, TxEnv, U256,
+    },
+    Database, DatabaseCommit, EVM,
 };
 use zeth_primitives::{
     receipt::Receipt,
@@ -30,7 +32,7 @@ use zeth_primitives::{
 };
 
 use crate::{
-    block_builder::{BlockBuilder, BlockBuilderDatabase},
+    block_builder::BlockBuilder,
     consts,
     consts::{GWEI_TO_WEI, MIN_SPEC_ID},
     guest_mem_forget,
@@ -39,7 +41,7 @@ use crate::{
 pub trait TxExecStrategy {
     fn execute_transactions<D>(block_builder: BlockBuilder<D>) -> Result<BlockBuilder<D>>
     where
-        D: BlockBuilderDatabase,
+        D: Database + DatabaseCommit,
         <D as Database>::Error: Debug;
 }
 
@@ -48,7 +50,7 @@ pub struct EthTxExecStrategy {}
 impl TxExecStrategy for EthTxExecStrategy {
     fn execute_transactions<D>(mut block_builder: BlockBuilder<D>) -> Result<BlockBuilder<D>>
     where
-        D: BlockBuilderDatabase,
+        D: Database + DatabaseCommit,
         <D as Database>::Error: Debug,
     {
         let header = block_builder
@@ -166,9 +168,8 @@ impl TxExecStrategy for EthTxExecStrategy {
                 .context("failed to insert receipt")?;
 
             // update account states
-            let db = evm.db().unwrap();
-            for (address, account) in state {
-                #[cfg(not(target_os = "zkvm"))]
+            #[cfg(not(target_os = "zkvm"))]
+            for (address, account) in &state {
                 if account.is_touched {
                     // log account
                     debug!(
@@ -193,12 +194,12 @@ impl TxExecStrategy for EthTxExecStrategy {
                         }
                     }
                 }
-
-                db.update(address, account);
             }
+
+            evm.db().unwrap().commit(state);
         }
 
-        block_builder.db = Some(evm.take_db());
+        let mut db = evm.take_db();
 
         // process withdrawals unconditionally after any transactions
         let mut withdrawals_trie = MptNode::default();
@@ -214,15 +215,23 @@ impl TxExecStrategy for EthTxExecStrategy {
                 debug!("  Recipient: {:?}", withdrawal.address);
                 debug!("  Value: {}", amount_wei);
             }
-
-            block_builder
-                .db
-                .as_mut()
-                .unwrap()
-                .increase_balance(to_revm_b160(withdrawal.address), amount_wei)
+            // Read account from database
+            let withdrawal_address = to_revm_b160(withdrawal.address);
+            let mut withdrawal_account: Account = db
+                .basic(withdrawal_address)
+                .map_err(|db_err| anyhow!("Error at withdrawal {}: {:?}", i, db_err))?
+                .unwrap_or_default()
+                .into();
+            // Credit withdrawal amount
+            withdrawal_account.info.balance = withdrawal_account
+                .info
+                .balance
+                .checked_add(amount_wei)
                 .unwrap();
-
-            // add to trie
+            withdrawal_account.is_touched = true;
+            // Commit changes to database
+            db.commit([(withdrawal_address, withdrawal_account)].into());
+            // Add withdrawal to trie
             withdrawals_trie
                 .insert_rlp(&i.to_rlp(), withdrawal)
                 .context("failed to insert withdrawal")?;
@@ -241,8 +250,8 @@ impl TxExecStrategy for EthTxExecStrategy {
 
         // Leak memory, save cycles
         guest_mem_forget([tx_trie, receipt_trie, withdrawals_trie]);
-
-        Ok(block_builder)
+        // Return block builder with updated database
+        Ok(block_builder.with_db(db))
     }
 }
 

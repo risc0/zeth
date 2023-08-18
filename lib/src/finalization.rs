@@ -16,7 +16,7 @@ use core::fmt::Debug;
 
 use anyhow::Result;
 use hashbrown::HashMap;
-use revm::{primitives::Address, Database};
+use revm::{primitives::Address, Database, DatabaseCommit};
 use zeth_primitives::{
     block::Header,
     keccak::keccak,
@@ -26,7 +26,7 @@ use zeth_primitives::{
 };
 
 use crate::{
-    block_builder::{BlockBuilder, BlockBuilderDatabase},
+    block_builder::BlockBuilder,
     guest_mem_forget,
     mem_db::{AccountState, MemDb},
 };
@@ -37,7 +37,7 @@ pub trait BlockBuildStrategy {
 
     fn build(block_builder: BlockBuilder<Self::Db>) -> Result<Self::Output>
     where
-        Self::Db: BlockBuilderDatabase,
+        Self::Db: Database + DatabaseCommit,
         <Self::Db as Database>::Error: Debug;
 }
 
@@ -52,7 +52,7 @@ impl BuildFromMemDbStrategy {
 
         // apply state updates
         let state_trie = &mut block_builder.input.parent_state_trie;
-        for (address, account) in db.accounts() {
+        for (address, account) in &db.accounts {
             // if the account has not been touched, it can be ignored
             if account.state == AccountState::None {
                 if let Some(map) = debug_storage_tries {

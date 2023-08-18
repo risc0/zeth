@@ -189,20 +189,23 @@ impl TxExecStrategy for EthTxExecStrategy {
                 debug!("  Recipient: {:?}", withdrawal.address);
                 debug!("  Value: {}", amount_wei);
             }
-
-            // Credit withdrawal
-            let address = to_revm_b160(withdrawal.address);
-            let mut withdrawal_account = db
-                .basic(address)
+            // Read account from database
+            let withdrawal_address = to_revm_b160(withdrawal.address);
+            let mut withdrawal_account: Account = db
+                .basic(withdrawal_address)
                 .map_err(|db_err| anyhow!("Error at withdrawal {}: {:?}", i, db_err))?
-                .unwrap_or_default();
-            withdrawal_account.balance =
-                withdrawal_account.balance.checked_add(amount_wei).unwrap();
-            let mut account = Account::from(withdrawal_account);
-            account.is_touched = true;
-            db.commit([(address, account)].into());
-
-            // add to trie
+                .unwrap_or_default()
+                .into();
+            // Credit withdrawal amount
+            withdrawal_account.info.balance = withdrawal_account
+                .info
+                .balance
+                .checked_add(amount_wei)
+                .unwrap();
+            withdrawal_account.is_touched = true;
+            // Commit changes to database
+            db.commit([(withdrawal_address, withdrawal_account)].into());
+            // Add withdrawal to trie
             withdrawals_trie
                 .insert_rlp(&i.to_rlp(), withdrawal)
                 .context("failed to insert withdrawal")?;

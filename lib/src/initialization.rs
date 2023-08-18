@@ -81,8 +81,9 @@ impl DbInitStrategy for CachedAuthDbFromInputStrategy {
                     (hash, Bytecode::new_raw_with_hash(bytes.0, hash))
                 }),
         );
-        // Set database
-        block_builder.db = Some(CacheDB {
+        // todo: Preload accounts and storage to minimize cache misses
+        // Create database
+        let db = CacheDB {
             accounts: HashMap::with_capacity(block_builder.input.parent_storage.len()),
             contracts: code_map,
             logs: Default::default(),
@@ -91,8 +92,9 @@ impl DbInitStrategy for CachedAuthDbFromInputStrategy {
                 state_trie: take(&mut block_builder.input.parent_state_trie),
                 storage_tries: take(&mut block_builder.input.parent_storage),
             },
-        });
-        // Give back builder
+        };
+        // Give back builder with database
+        block_builder.db = Some(db);
         Ok(block_builder)
     }
 }

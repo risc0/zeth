@@ -19,6 +19,7 @@ use zeth_lib::{
     block_builder::BlockBuilder, consts::ChainSpec, execution::EthTxExecStrategy, mem_db::MemDb,
     validation::Input,
 };
+use zeth_lib::finalization::BuildFromMemDbStrategy;
 use zeth_lib::preparation::EthHeaderPrepStrategy;
 
 risc0_zkvm::guest::entry!(main);
@@ -36,7 +37,7 @@ pub fn main() {
         .expect("Failed to create the initial block header fields")
         .execute_transactions::<EthTxExecStrategy>()
         .expect("Failed to execute transactions")
-        .build(None)
+        .build::<BuildFromMemDbStrategy>()
         .expect("Failed to build the resulting block");
     // Output the resulting block's hash to the journal
     env::commit(&output.hash());

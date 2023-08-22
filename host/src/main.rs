@@ -30,6 +30,7 @@ use zeth_lib::{
     block_builder::BlockBuilder,
     consts::{Network, ETH_MAINNET_CHAIN_SPEC},
     execution::EthTxExecStrategy,
+    finalization::DebugBuildFromMemDbStrategy,
     mem_db::MemDb,
     preparation::EthHeaderPrepStrategy,
     validation::Input,
@@ -117,9 +118,8 @@ async fn main() -> Result<()> {
         let fini_db = block_builder.db().unwrap().clone();
         let accounts_len = fini_db.accounts_len();
 
-        let mut storage_deltas = Default::default();
-        let validated_header = block_builder
-            .build(Some(&mut storage_deltas))
+        let (validated_header, storage_deltas) = block_builder
+            .build::<DebugBuildFromMemDbStrategy>()
             .expect("Error while verifying final state");
 
         info!(

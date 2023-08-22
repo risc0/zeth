@@ -35,21 +35,25 @@ use crate::{
     withdrawal::Withdrawal,
 };
 
+/// Convert an `EthersU256` type to the `U256` type.
 #[inline]
 pub fn from_ethers_u256(v: EthersU256) -> U256 {
     U256::from_limbs(v.0)
 }
 
+/// Convert an `EthersH160` type to the `B160` type.
 #[inline]
 pub fn from_ethers_h160(v: EthersH160) -> B160 {
     v.0.into()
 }
 
+/// Convert an `EthersH256` type to the `B256` type.
 #[inline]
 pub fn from_ethers_h256(v: EthersH256) -> B256 {
     v.0.into()
 }
 
+/// Conversion from `EthersAccessListItem` to the local [AccessListItem].
 impl From<EthersAccessListItem> for AccessListItem {
     fn from(item: EthersAccessListItem) -> Self {
         AccessListItem {
@@ -63,12 +67,14 @@ impl From<EthersAccessListItem> for AccessListItem {
     }
 }
 
+/// Conversion from `EthersAccessList` to the local [AccessList].
 impl From<EthersAccessList> for AccessList {
     fn from(list: EthersAccessList) -> Self {
         AccessList(list.0.into_iter().map(|item| item.into()).collect())
     }
 }
 
+/// Convert an optional `EthersH160` to the local [TransactionKind].
 impl From<Option<EthersH160>> for TransactionKind {
     fn from(addr: Option<EthersH160>) -> Self {
         match addr {
@@ -78,6 +84,8 @@ impl From<Option<EthersH160>> for TransactionKind {
     }
 }
 
+/// Conversion from `EthersBlock` to the local [Header].
+/// This conversion may fail if certain expected fields are missing.
 impl<T> TryFrom<EthersBlock<T>> for Header {
     type Error = anyhow::Error;
 
@@ -108,6 +116,8 @@ impl<T> TryFrom<EthersBlock<T>> for Header {
     }
 }
 
+/// Conversion from `EthersTransaction` to the local [Transaction].
+/// This conversion may fail if certain expected fields are missing.
 impl TryFrom<EthersTransaction> for Transaction {
     type Error = anyhow::Error;
 
@@ -184,6 +194,8 @@ impl TryFrom<EthersTransaction> for Transaction {
     }
 }
 
+/// Conversion from `EthersWithdrawal` to the local [Withdrawal].
+/// This conversion may fail if certain expected fields are missing.
 impl TryFrom<EthersWithdrawal> for Withdrawal {
     type Error = anyhow::Error;
 

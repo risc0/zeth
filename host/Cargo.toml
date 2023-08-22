@@ -11,7 +11,7 @@ bytemuck = "1.13"
 clap = { version = "4.0", features = ["derive"] }
 env_logger = "0.10"
 ethers-core = "2.0"
-hashbrown = "0.13"
+hashbrown = { version = "0.13", features = ["inline-more"] }
 hex = "0.4.3"
 log = "0.4"
 revm = { version = "3.0", default-features = false, features = ["std", "serde"] }

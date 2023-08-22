@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{keccak::keccak, trie::EMPTY_ROOT};
 
-/// Keccak-256 hash of the RLP of an empty list, keccak256("\xc0").
+/// Keccak-256 hash of the RLP of an empty list.
 pub const EMPTY_LIST_HASH: B256 =
     b256!("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347");
 
@@ -29,27 +29,27 @@ pub struct Header {
     pub parent_hash: BlockHash,
     /// Unused 256-bit hash, always [EMPTY_LIST_HASH].
     pub ommers_hash: B256,
-    /// Address to which the priority fees of each transaction is transferred.
+    /// Address that receives the priority fees of each transaction in the block.
     pub beneficiary: B160,
-    /// Hash of the root node of the state trie, after all transactions are executed.
+    /// Root hash of the state trie after all transactions in the block are executed.
     pub state_root: B256,
-    /// Hash of the root node of the trie populated with each transaction in the block.
+    /// Root hash of the trie containing all transactions in the block.
     pub transactions_root: B256,
-    /// Hash of the root node of the trie populated with the receipts of each transaction.
+    /// Root hash of the trie containing the receipts of each transaction in the block.
     pub receipts_root: B256,
-    /// Bloom filter composed from indexable information contained in each log entry.
+    /// Bloom filter for log entries in the block.
     pub logs_bloom: Bloom,
-    /// Unused value, always `0`.
+    /// Always set to `0` as it's unused.
     pub difficulty: U256,
-    /// Number of ancestor blocks in the chain.
+    /// The block number in the chain.
     pub number: BlockNumber,
-    /// Value equal to the current limit of gas expenditure per block.
+    /// Maximum amount of gas that can be used in this block.
     pub gas_limit: U256,
-    /// Value equal to the total gas used in transactions in this block.
+    /// Total amount of gas used by all transactions in this block.
     pub gas_used: U256,
     /// Value corresponding to the seconds since Epoch at this block's inception.
     pub timestamp: U256,
-    /// Arbitrary byte array containing data relevant for this block.
+    /// Arbitrary byte array containing extra data related to the block.
     pub extra_data: Bytes,
     /// Hash previously used for the PoW now containing the RANDAO value.
     pub mix_hash: B256,
@@ -57,13 +57,14 @@ pub struct Header {
     pub nonce: B64,
     /// Base fee payed by all transactions in the block.
     pub base_fee_per_gas: U256,
-    /// Hash of the root node of the trie populated with each withdrawal in the block.
-    /// Only present after the Shanghai update.
+    /// Root hash of the trie containing all withdrawals in the block. Present after the
+    /// Shanghai update.
     #[serde(default)]
     pub withdrawals_root: Option<B256>,
 }
 
 impl Default for Header {
+    /// Provides default values for a block header.
     fn default() -> Self {
         Header {
             parent_hash: B256::ZERO,
@@ -88,7 +89,7 @@ impl Default for Header {
 }
 
 impl Header {
-    /// Calculates the block hash.
+    /// Computes the hash of the block header.
     pub fn hash(&self) -> BlockHash {
         keccak(alloy_rlp::encode(self)).into()
     }

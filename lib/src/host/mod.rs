@@ -43,9 +43,9 @@ use crate::{
         mpt::{orphaned_digests, resolve_digests, shorten_key},
         provider::{new_provider, BlockQuery},
     },
+    input::{Input, StorageEntry},
     mem_db::MemDb,
     preparation::EthHeaderPrepStrategy,
-    validation::{Input, StorageEntry},
 };
 
 pub mod mpt;

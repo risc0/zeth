@@ -27,9 +27,9 @@ use zeth_lib::{
         provider_db::ProviderDb,
         Init,
     },
+    input::Input,
     mem_db::DbAccount,
     preparation::EthHeaderPrepStrategy,
-    validation::Input,
 };
 use zeth_primitives::{
     access_list::{AccessList, AccessListItem},

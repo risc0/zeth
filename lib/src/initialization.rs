@@ -12,14 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::{fmt::Debug, mem};
+use core::mem;
 
 use anyhow::{bail, Result};
 use hashbrown::HashMap;
-use revm::{
-    primitives::{AccountInfo, Bytecode, B256},
-    Database,
-};
+use revm::primitives::{AccountInfo, Bytecode, B256};
 use zeth_primitives::{
     keccak::{keccak, KECCAK_EMPTY},
     revm::to_revm_b256,
@@ -28,7 +25,7 @@ use zeth_primitives::{
 };
 
 use crate::{
-    block_builder::{BlockBuilder, BlockBuilderDatabase},
+    block_builder::BlockBuilder,
     consts::MAX_BLOCK_HASH_AGE,
     guest_mem_forget,
     mem_db::{AccountState, DbAccount, MemDb},
@@ -37,10 +34,8 @@ use crate::{
 pub trait DbInitStrategy {
     type Db;
 
-    fn initialize_database(block_builder: BlockBuilder<Self::Db>) -> Result<BlockBuilder<Self::Db>>
-    where
-        Self::Db: BlockBuilderDatabase,
-        <Self::Db as Database>::Error: Debug;
+    fn initialize_database(block_builder: BlockBuilder<Self::Db>)
+        -> Result<BlockBuilder<Self::Db>>;
 }
 
 pub struct MemDbInitStrategy {}
@@ -50,11 +45,7 @@ impl DbInitStrategy for MemDbInitStrategy {
 
     fn initialize_database(
         mut block_builder: BlockBuilder<Self::Db>,
-    ) -> Result<BlockBuilder<Self::Db>>
-    where
-        Self::Db: BlockBuilderDatabase,
-        <Self::Db as Database>::Error: Debug,
-    {
+    ) -> Result<BlockBuilder<Self::Db>> {
         // Verify state trie root
         if block_builder.input.parent_state_trie.hash()
             != block_builder.input.parent_header.state_root
@@ -158,8 +149,9 @@ impl DbInitStrategy for MemDbInitStrategy {
         }
 
         // Store database
-        block_builder.db = Some(Self::Db::load(accounts, block_hashes));
-
-        Ok(block_builder)
+        Ok(block_builder.with_db(MemDb {
+            accounts,
+            block_hashes,
+        }))
     }
 }

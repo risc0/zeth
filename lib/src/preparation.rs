@@ -15,18 +15,18 @@
 use core::fmt::Debug;
 
 use anyhow::{bail, Context, Result};
-use revm::Database;
+use revm::{Database, DatabaseCommit};
 use zeth_primitives::{block::Header, U256};
 
 use crate::{
-    block_builder::{BlockBuilder, BlockBuilderDatabase},
+    block_builder::BlockBuilder,
     consts::{Eip1559Constants, GAS_LIMIT_BOUND_DIVISOR, MAX_EXTRA_DATA_BYTES, MIN_GAS_LIMIT, ONE},
 };
 
 pub trait HeaderPrepStrategy {
     fn prepare_header<D>(block_builder: BlockBuilder<D>) -> Result<BlockBuilder<D>>
     where
-        D: BlockBuilderDatabase,
+        D: Database + DatabaseCommit,
         <D as Database>::Error: Debug;
 }
 
@@ -35,7 +35,7 @@ pub struct EthHeaderPrepStrategy {}
 impl HeaderPrepStrategy for EthHeaderPrepStrategy {
     fn prepare_header<D>(mut block_builder: BlockBuilder<D>) -> Result<BlockBuilder<D>>
     where
-        D: BlockBuilderDatabase,
+        D: Database + DatabaseCommit,
         <D as Database>::Error: Debug,
     {
         // Validate gas limit

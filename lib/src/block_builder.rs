@@ -13,26 +13,13 @@
 // limitations under the License.
 
 use anyhow::Result;
-use hashbrown::{hash_map, HashMap};
-use revm::primitives::{Account, Address, B160, B256, U256};
+use revm::{Database, DatabaseCommit};
 use zeth_primitives::block::Header;
 
 use crate::{
     consts::ChainSpec, execution::TxExecStrategy, finalization::BlockBuildStrategy,
-    initialization::DbInitStrategy, input::Input, mem_db::DbAccount,
-    preparation::HeaderPrepStrategy,
+    initialization::DbInitStrategy, input::Input, preparation::HeaderPrepStrategy,
 };
-
-pub trait BlockBuilderDatabase: revm::Database + Sized {
-    /// Creates a new DB from the accounts and the block hashes.
-    fn load(accounts: HashMap<B160, DbAccount>, block_hashes: HashMap<u64, B256>) -> Self;
-    /// Returns all non-deleted accounts with their storage entries.
-    fn accounts(&self) -> hash_map::Iter<B160, DbAccount>;
-    /// Increases the balance of `address` by `amount`.
-    fn increase_balance(&mut self, address: Address, amount: U256) -> Result<(), Self::Error>;
-    /// Updates the account of `address`.
-    fn update(&mut self, address: Address, account: Account);
-}
 
 #[derive(Clone, Debug)]
 pub struct BlockBuilder<'a, D> {
@@ -44,8 +31,8 @@ pub struct BlockBuilder<'a, D> {
 
 impl<D> BlockBuilder<'_, D>
 where
-    D: BlockBuilderDatabase,
-    <D as revm::Database>::Error: core::fmt::Debug,
+    D: Database + DatabaseCommit,
+    <D as Database>::Error: core::fmt::Debug,
 {
     /// Creates a new block builder.
     pub fn new(chain_spec: &ChainSpec, input: Input) -> BlockBuilder<'_, D> {

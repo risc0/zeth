@@ -14,7 +14,7 @@
 
 use core::fmt::Debug;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use hashbrown::HashMap;
 use revm::primitives::{SpecId, B160 as RevmB160, B256 as RevmB256};
 use serde::{Deserialize, Serialize};
@@ -23,10 +23,7 @@ use zeth_primitives::{
     withdrawal::Withdrawal, BlockNumber, Bytes, B160, B256, U256,
 };
 
-use crate::consts::{
-    ChainSpec, Eip1559Constants, GAS_LIMIT_BOUND_DIVISOR, MAX_BLOCK_HASH_AGE, MAX_EXTRA_DATA_BYTES,
-    MIN_GAS_LIMIT, MIN_SPEC_ID, ONE,
-};
+use crate::consts::{ChainSpec, MAX_BLOCK_HASH_AGE, MIN_SPEC_ID};
 
 /// External block input.
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -58,53 +55,6 @@ pub struct Input {
 }
 
 pub type StorageEntry = (MptNode, Vec<U256>);
-
-pub fn verify_gas_limit(input_gas_limit: U256, parent_gas_limit: U256) -> Result<()> {
-    let diff = parent_gas_limit.abs_diff(input_gas_limit);
-    let limit = parent_gas_limit / GAS_LIMIT_BOUND_DIVISOR;
-    if diff >= limit {
-        bail!(
-            "Invalid gas limit: expected {} +- {}, got {}",
-            parent_gas_limit,
-            limit,
-            input_gas_limit,
-        );
-    }
-    if input_gas_limit < MIN_GAS_LIMIT {
-        bail!(
-            "Invalid gas limit: expected >= {}, got {}",
-            MIN_GAS_LIMIT,
-            input_gas_limit,
-        );
-    }
-
-    Ok(())
-}
-
-pub fn verify_timestamp(input_timestamp: U256, parent_timestamp: U256) -> Result<()> {
-    if input_timestamp <= parent_timestamp {
-        bail!(
-            "Invalid timestamp: expected > {}, got {}",
-            parent_timestamp,
-            input_timestamp,
-        );
-    }
-
-    Ok(())
-}
-
-pub fn verify_extra_data(input_extra_data: &Bytes) -> Result<()> {
-    let extra_data_bytes = input_extra_data.len();
-    if extra_data_bytes >= MAX_EXTRA_DATA_BYTES {
-        bail!(
-            "Invalid extra data: expected <= {}, got {}",
-            MAX_EXTRA_DATA_BYTES,
-            extra_data_bytes,
-        )
-    }
-
-    Ok(())
-}
 
 pub fn verify_state_trie(state_trie: &MptNode, parent_state_root: &B256) -> Result<()> {
     let state_root = state_trie.hash();
@@ -167,13 +117,6 @@ pub fn verify_parent_chain(
     Ok(block_hashes)
 }
 
-pub fn compute_block_number(parent: &Header) -> Result<BlockNumber> {
-    parent
-        .number
-        .checked_add(1)
-        .context("Invalid block number: too large")
-}
-
 pub fn compute_spec_id(chain_spec: &ChainSpec, block_number: BlockNumber) -> Result<SpecId> {
     let spec_id = chain_spec.spec_id(block_number);
     if !SpecId::enabled(spec_id, MIN_SPEC_ID) {
@@ -184,40 +127,6 @@ pub fn compute_spec_id(chain_spec: &ChainSpec, block_number: BlockNumber) -> Res
         )
     }
     Ok(spec_id)
-}
-
-/// Calculate base fee for next block. [EIP-1559](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1559.md) spec
-pub fn compute_base_fee(parent: &Header, eip_1559_constants: &Eip1559Constants) -> Result<U256> {
-    let parent_gas_target = parent.gas_limit / eip_1559_constants.elasticity_multiplier;
-
-    match parent.gas_used.cmp(&parent_gas_target) {
-        std::cmp::Ordering::Equal => Ok(parent.base_fee_per_gas),
-
-        std::cmp::Ordering::Greater => {
-            let gas_used_delta = parent.gas_used - parent_gas_target;
-            let base_fee_delta = ONE
-                .max(
-                    parent.base_fee_per_gas * gas_used_delta
-                        / parent_gas_target
-                        / eip_1559_constants.base_fee_change_denominator,
-                )
-                .min(
-                    parent.base_fee_per_gas / eip_1559_constants.base_fee_max_increase_denominator,
-                );
-            Ok(parent.base_fee_per_gas + base_fee_delta)
-        }
-
-        std::cmp::Ordering::Less => {
-            let gas_used_delta = parent_gas_target - parent.gas_used;
-            let base_fee_delta = (parent.base_fee_per_gas * gas_used_delta
-                / parent_gas_target
-                / eip_1559_constants.base_fee_change_denominator)
-                .min(
-                    parent.base_fee_per_gas / eip_1559_constants.base_fee_max_decrease_denominator,
-                );
-            Ok(parent.base_fee_per_gas - base_fee_delta)
-        }
-    }
 }
 
 #[cfg(test)]

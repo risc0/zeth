@@ -31,6 +31,7 @@ use zeth_lib::{
     consts::{Network, ETH_MAINNET_CHAIN_SPEC},
     execution::EthTxExecStrategy,
     mem_db::MemDb,
+    preparation::EthHeaderPrepStrategy,
     validation::Input,
 };
 use zeth_primitives::BlockHash;
@@ -108,7 +109,7 @@ async fn main() -> Result<()> {
         let block_builder = BlockBuilder::<MemDb>::new(&ETH_MAINNET_CHAIN_SPEC, input)
             .initialize_db()
             .expect("Error initializing MemDb from Input")
-            .initialize_header()
+            .prepare_header::<EthHeaderPrepStrategy>()
             .expect("Error creating initial block header")
             .execute_transactions::<EthTxExecStrategy>()
             .expect("Error while running transactions");

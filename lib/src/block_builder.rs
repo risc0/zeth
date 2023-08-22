@@ -30,10 +30,8 @@ use crate::{
     execution::TxExecStrategy,
     guest_mem_forget,
     mem_db::{AccountState, DbAccount},
-    validation::{
-        compute_base_fee, compute_block_number, verify_extra_data, verify_gas_limit,
-        verify_parent_chain, verify_state_trie, verify_storage_trie, verify_timestamp, Input,
-    },
+    preparation::HeaderPrepStrategy,
+    validation::{verify_parent_chain, verify_state_trie, verify_storage_trie, Input},
 };
 
 pub trait BlockBuilderDatabase: revm::Database + Sized {
@@ -147,30 +145,8 @@ where
     }
 
     /// Initializes the header. This must be called before executing transactions.
-    pub fn initialize_header(mut self) -> Result<Self> {
-        // Verify current block
-        verify_gas_limit(self.input.gas_limit, self.input.parent_header.gas_limit)?;
-        verify_timestamp(self.input.timestamp, self.input.parent_header.timestamp)?;
-        verify_extra_data(&self.input.extra_data)?;
-        // Initialize result header
-        self.header = Some(Header {
-            // Initialize fields that we can compute from the parent
-            parent_hash: self.input.parent_header.hash(),
-            number: compute_block_number(&self.input.parent_header)?,
-            base_fee_per_gas: compute_base_fee(
-                &self.input.parent_header,
-                self.chain_spec.gas_constants(),
-            )?,
-            // Initialize metadata from input
-            beneficiary: self.input.beneficiary,
-            gas_limit: self.input.gas_limit,
-            timestamp: self.input.timestamp,
-            mix_hash: self.input.mix_hash,
-            extra_data: self.input.extra_data.clone(),
-            // do not fill the remaining fields
-            ..Default::default()
-        });
-        Ok(self)
+    pub fn prepare_header<T: HeaderPrepStrategy>(self) -> Result<Self> {
+        T::prepare_header(self)
     }
 
     /// Executes the transactions.

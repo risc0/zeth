@@ -44,6 +44,7 @@ use crate::{
         provider::{new_provider, BlockQuery},
     },
     mem_db::MemDb,
+    preparation::EthHeaderPrepStrategy,
     validation::{Input, StorageEntry},
 };
 
@@ -122,7 +123,7 @@ pub fn get_initial_data(
     // Create the block builder, run the transactions and extract the DB
     let mut builder = BlockBuilder::new(&ETH_MAINNET_CHAIN_SPEC, input)
         .with_db(provider_db)
-        .initialize_header()?
+        .prepare_header::<EthHeaderPrepStrategy>()?
         .execute_transactions::<EthTxExecStrategy>()?;
     let provider_db = builder.mut_db().unwrap();
 

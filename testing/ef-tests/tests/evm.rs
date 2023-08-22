@@ -17,7 +17,10 @@
 use std::path::PathBuf;
 
 use rstest::rstest;
-use zeth_lib::{block_builder::BlockBuilder, execution::EthTxExecStrategy, mem_db::MemDb};
+use zeth_lib::{
+    block_builder::BlockBuilder, execution::EthTxExecStrategy, mem_db::MemDb,
+    preparation::EthHeaderPrepStrategy,
+};
 use zeth_primitives::block::Header;
 use zeth_testeth::{
     ethtests::{read_eth_test, EthTestCase},
@@ -66,7 +69,7 @@ fn evm(
             let builder = BlockBuilder::<MemDb>::new(&chain_spec, input)
                 .initialize_db()
                 .unwrap()
-                .initialize_header()
+                .prepare_header::<EthHeaderPrepStrategy>()
                 .unwrap();
             // execute the transactions with a larger stack
             let builder = stacker::grow(BIG_STACK_SIZE, move || {

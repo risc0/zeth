@@ -20,6 +20,8 @@ use revm::{
 };
 use thiserror::Error as ThisError;
 
+use crate::NoHashBuilder;
+
 /// Error returned by the [MemDb].
 #[derive(Debug, ThisError)]
 pub enum DbError {
@@ -79,7 +81,7 @@ impl DbAccount {
 #[derive(Clone, Debug, Default)]
 pub struct MemDb {
     /// Account info where None means it is not existing.
-    pub accounts: HashMap<B160, DbAccount>,
+    pub accounts: HashMap<B160, DbAccount, NoHashBuilder>,
     /// All cached block hashes.
     pub block_hashes: HashMap<u64, B256>,
 }

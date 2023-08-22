@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use core::fmt::Debug;
+use std::mem::take;
 
 use anyhow::{anyhow, bail, Context, Result};
 #[cfg(not(target_os = "zkvm"))]
@@ -113,7 +114,10 @@ impl TxExecStrategy for EthTxExecStrategy {
         // process all the transactions
         let mut tx_trie = MptNode::default();
         let mut receipt_trie = MptNode::default();
-        for (tx_no, tx) in block_builder.input.transactions.iter().enumerate() {
+        for (tx_no, tx) in take(&mut block_builder.input.transactions)
+            .into_iter()
+            .enumerate()
+        {
             // verify the transaction signature
             let tx_from = tx
                 .recover_from()
@@ -136,7 +140,7 @@ impl TxExecStrategy for EthTxExecStrategy {
 
             // process the transaction
             let tx_from = to_revm_b160(tx_from);
-            fill_tx_env(&mut evm.env.tx, tx, tx_from);
+            fill_tx_env(&mut evm.env.tx, &tx, tx_from);
             let ResultAndState { result, state } = evm
                 .transact()
                 .map_err(|evm_err| anyhow!("Error at transaction {}: {:?}", tx_no, evm_err))?;
@@ -203,7 +207,10 @@ impl TxExecStrategy for EthTxExecStrategy {
 
         // process withdrawals unconditionally after any transactions
         let mut withdrawals_trie = MptNode::default();
-        for (i, withdrawal) in block_builder.input.withdrawals.iter().enumerate() {
+        for (i, withdrawal) in take(&mut block_builder.input.withdrawals)
+            .into_iter()
+            .enumerate()
+        {
             // the withdrawal amount is given in Gwei
             let amount_wei = GWEI_TO_WEI
                 .checked_mul(withdrawal.amount.try_into().unwrap())

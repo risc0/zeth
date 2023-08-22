@@ -29,6 +29,7 @@ use crate::{
     consts::MAX_BLOCK_HASH_AGE,
     guest_mem_forget,
     mem_db::{AccountState, DbAccount, MemDb},
+    NoHashBuilder,
 };
 
 pub trait DbInitStrategy {
@@ -58,13 +59,17 @@ impl DbInitStrategy for MemDbInitStrategy {
         }
 
         // hash all the contract code
-        let contracts: HashMap<B256, Bytes> = mem::take(&mut block_builder.input.contracts)
-            .into_iter()
-            .map(|bytes| (keccak(&bytes).into(), bytes))
-            .collect();
+        let contracts: HashMap<B256, Bytes, NoHashBuilder> =
+            mem::take(&mut block_builder.input.contracts)
+                .into_iter()
+                .map(|bytes| (keccak(&bytes).into(), bytes))
+                .collect();
 
         // Load account data into db
-        let mut accounts = HashMap::with_capacity(block_builder.input.parent_storage.len());
+        let mut accounts = HashMap::with_capacity_and_hasher(
+            block_builder.input.parent_storage.len(),
+            NoHashBuilder::default(),
+        );
         for (address, (storage_trie, slots)) in &mut block_builder.input.parent_storage {
             // consume the slots, as they are no longer needed afterwards
             let slots = mem::take(slots);

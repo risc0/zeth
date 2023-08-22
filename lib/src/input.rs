@@ -22,6 +22,8 @@ use zeth_primitives::{
     B256, U256,
 };
 
+use crate::NoHashBuilder;
+
 /// External block input.
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct Input {
@@ -44,7 +46,7 @@ pub struct Input {
     /// State trie of the parent block.
     pub parent_state_trie: MptNode,
     /// Maps each address with its storage trie and the used storage slots.
-    pub parent_storage: HashMap<RevmB160, StorageEntry>,
+    pub parent_storage: HashMap<RevmB160, StorageEntry, NoHashBuilder>,
     /// The code of all unique contracts.
     pub contracts: Vec<Bytes>,
     /// List of at most 256 previous block headers

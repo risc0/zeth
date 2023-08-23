@@ -264,10 +264,11 @@ async fn main() -> Result<()> {
             let sys_time = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap();
-            std::fs::write(
+            tokio::fs::write(
                 format!("profile_{}.pb", sys_time.as_secs()),
                 &profiler.encode_to_vec(),
             )
+            .await
             .expect("Failed to write profiling output");
         }
 
@@ -342,7 +343,7 @@ async fn main() -> Result<()> {
                 .status(&client)
                 .expect("Could not fetch Bonsai status");
             if res.status == "RUNNING" {
-                std::thread::sleep(std::time::Duration::from_secs(15));
+                tokio::time::sleep(std::time::Duration::from_secs(15)).await;
                 continue;
             }
             if res.status == "SUCCEEDED" {

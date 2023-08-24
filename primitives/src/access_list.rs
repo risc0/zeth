@@ -16,15 +16,24 @@ use alloy_primitives::{StorageKey, B160};
 use alloy_rlp_derive::{RlpEncodable, RlpEncodableWrapper};
 use serde::{Deserialize, Serialize};
 
-/// AccessList as defined in EIP-2930.
+/// Represents an access list as defined in EIP-2930.
+///
+/// An access list is a list of addresses and storage keys that a transaction will access,
+/// allowing for gas optimizations. This structure is introduced to improve the gas cost
+/// calculations by making certain accesses cheaper if they are declared in this list.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, RlpEncodableWrapper)]
 pub struct AccessList(pub Vec<AccessListItem>);
 
-/// A list of addresses and storage keys that the transaction plans to access.
+/// Represents an item in the [AccessList].
+///
+/// Each item specifies an Ethereum address and a set of storage keys that the transaction
+/// will access. By providing this information up front, the transaction can benefit from
+/// gas cost optimizations.
 #[derive(Debug, Clone, PartialEq, Eq, Default, RlpEncodable, Serialize, Deserialize)]
 pub struct AccessListItem {
-    /// Account address.
+    /// The Ethereum address that the transaction will access.
     pub address: B160,
-    /// Storage keys for that address.
+    /// A list of storage keys associated with the given address that the transaction will
+    /// access.
     pub storage_keys: Vec<StorageKey>,
 }

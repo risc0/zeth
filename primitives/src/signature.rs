@@ -27,7 +27,11 @@ use crate::{
     transaction::{Transaction, TxEssence, TxEssenceLegacy},
 };
 
-/// A signature that can be used to recover the signing public key.
+/// Represents a cryptographic signature associated with a transaction.
+///
+/// The `TxSignature` struct encapsulates the components of an ECDSA signature: `v`, `r`,
+/// and `s`. This signature can be used to recover the public key of the signer, ensuring
+/// the authenticity of the transaction.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, RlpEncodable, RlpMaxEncodedLen)]
 pub struct TxSignature {
     pub v: u64,
@@ -36,14 +40,18 @@ pub struct TxSignature {
 }
 
 impl TxSignature {
-    /// Length of the RLP payload in bytes.
+    /// Computes the length of the RLP-encoded signature payload in bytes.
     pub(crate) fn payload_length(&self) -> usize {
         self._alloy_rlp_payload_length()
     }
 }
 
 impl Transaction {
-    /// Recover the sending party of the transaction.
+    /// Recovers the Ethereum address of the sender from the transaction's signature.
+    ///
+    /// This method uses the ECDSA recovery mechanism to derive the sender's public key
+    /// and subsequently their Ethereum address. If the recovery is unsuccessful, an
+    /// error is returned.
     pub fn recover_from(&self) -> anyhow::Result<B160> {
         let is_y_odd = self.is_y_odd().context("v invalid")?;
         let signature = K256Signature::from_scalars(
@@ -68,6 +76,11 @@ impl Transaction {
         Ok(B160::from_slice(&hash[12..]))
     }
 
+    /// Determines whether the y-coordinate of the ECDSA signature's associated public key
+    /// is odd.
+    ///
+    /// This information is derived from the `v` component of the signature and is used
+    /// during public key recovery.
     fn is_y_odd(&self) -> Option<bool> {
         match &self.essence {
             TxEssence::Legacy(TxEssenceLegacy { chain_id: None, .. }) => {
@@ -82,6 +95,12 @@ impl Transaction {
     }
 }
 
+/// Converts a given value into a boolean based on its parity.
+///
+/// Returns:
+/// - `Some(true)` if the value is 1.
+/// - `Some(false)` if the value is 0.
+/// - `None` otherwise.
 #[inline]
 fn checked_bool(v: u64) -> Option<bool> {
     match v {

@@ -16,17 +16,25 @@ use alloy_primitives::B160;
 use alloy_rlp_derive::{RlpEncodable, RlpMaxEncodedLen};
 use serde::{Deserialize, Serialize};
 
-/// A validator withdrawal from the consensus layer ([EIP-4895](https://eips.ethereum.org/EIPS/eip-4895)).
+/// Represents a validator's withdrawal from the Ethereum consensus layer.
+///
+/// The `Withdrawal` struct provides a model for the process a validator undergoes when
+/// withdrawing funds from the Ethereum consensus mechanism. This process is outlined in
+/// detail in [EIP-4895](https://eips.ethereum.org/EIPS/eip-4895). Each `Withdrawal` instance carries
+/// specific identifiers and target details to ensure the accurate and secure transfer of
+/// ether.
 #[derive(
     Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, RlpEncodable, RlpMaxEncodedLen,
 )]
 pub struct Withdrawal {
-    /// Monotonically increasing identifier assigned by consensus layer.
+    /// A unique, monotonically increasing identifier assigned by the consensus layer to
+    /// distinctly represent this withdrawal.
     pub index: u64,
-    /// Index of validator associated with withdrawal.
+    /// The distinct index of the validator initiating this withdrawal.
     pub validator_index: u64,
-    /// Target address for withdrawn ether.
+    /// The Ethereum address, encapsulated as a `B160` type, where the withdrawn ether
+    /// will be sent.
     pub address: B160,
-    /// Value of the withdrawal in gwei.
+    /// The total withdrawal amount, denominated in gwei.
     pub amount: u64,
 }

@@ -25,11 +25,11 @@ Zeth is experimental and may still contain bugs.
 
 ### Building
 
-- Install the cargo-risczero & the risc0 toolchain.
+- Install the `cargo risczero` tool and the `risc0` toolchain:
 
 ```console
-cargo install cargo-risczero
-cargo risczero install
+$ cargo install cargo-risczero
+$ cargo risczero install
 ```
 
 - Clone the repository and build with `cargo`:

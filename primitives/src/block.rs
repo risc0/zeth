@@ -55,7 +55,7 @@ pub struct Header {
     pub mix_hash: B256,
     /// Unused 64-bit hash, always zero.
     pub nonce: B64,
-    /// Base fee payed by all transactions in the block.
+    /// Base fee paid by all transactions in the block.
     pub base_fee_per_gas: U256,
     /// Root hash of the trie containing all withdrawals in the block. Present after the
     /// Shanghai update.

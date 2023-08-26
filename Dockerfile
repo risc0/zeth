@@ -7,7 +7,10 @@ FROM ubuntu:22.04 as build-environment
 ENV DEBIAN_FRONTEND=noninteractive
 
 
-RUN apt-get update && apt-get install cmake -y
+RUN apt-get update && apt-get install -y clang lld curl build-essential linux-headers-generic git libssl-dev -y \
+    && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup.sh \
+    && chmod +x ./rustup.sh \
+    && ./rustup.sh -y
 
 ARG TARGETARCH
 WORKDIR /opt

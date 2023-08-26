@@ -22,6 +22,12 @@ tokio = { version = "1.23", features = ["full"] }
 zeth-guests = { path = "../guests" }
 zeth-lib = { path = "../lib" }
 zeth-primitives = { path = "../primitives" }
+tracing = { version = "0.1", features = ["log"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt"] }
+serde_json = "1.0.105"
+actix-web = "4.3.1"
+dotenv = "0.15.0"
+reqwest = "0.11.20"
 
 [dev-dependencies]
 assert_cmd = "2.0"

@@ -42,6 +42,7 @@ use zeth_lib::{
     preparation::EthHeaderPrepStrategy,
 };
 use zeth_primitives::BlockHash;
+use actix_cors::Cors;
 // Constants
 const SERVER_ADDRESS: &str = "0.0.0.0:8000";
 
@@ -394,10 +395,28 @@ async fn verify(field: web::Json<Data>) -> impl Responder {
     }
 }
 
+// pub fn run(listener: TcpListener) -> Result<Server, Box<dyn Error>> {
+//     let server = HttpServer::new(move || App::new().service(verify))
+//         .listen(listener)?
+//         .run();
+
+//     Ok(server)
+// }
+
 pub fn run(listener: TcpListener) -> Result<Server, Box<dyn Error>> {
-    let server = HttpServer::new(move || App::new().service(verify))
-        .listen(listener)?
-        .run();
+    let server = HttpServer::new(move || {
+        App::new()
+            .wrap(
+                Cors::permissive()
+                    .allowed_origin("http://localhost:3000")
+                    .allowed_methods(vec!["GET", "POST"])
+                    .allowed_header(actix_web::http::header::CONTENT_TYPE)
+                    .max_age(3600)
+            )
+            .service(verify)
+    })
+    .listen(listener)?
+    .run();
 
     Ok(server)
 }

@@ -15,6 +15,7 @@ const app_repository = new Repository("app_repository", {});
 const app_image = new Image("app", {
     repositoryUrl: app_repository.url,
     path: "../verification-app",
+    dockerfile: "Dockerfile"
 });
 
 
@@ -22,7 +23,8 @@ const app_image = new Image("app", {
 const zeth_repository = new Repository("zeth_repository", {});
 const zeth_image = new Image("zeth", {
     repositoryUrl: zeth_repository.url,
-    path: "../",
+    path: "../zeth",
+    dockerfile: "Dockerfile"
 });
 
 
@@ -89,6 +91,7 @@ const zethService = new FargateService("zethService", {
 });
 
 // Define an endpoint that proxies HTTP requests to the services.
+// Note , we need to wait for the Load Balancer to be up otherwise this fails.
 const api = new apigateway.RestAPI("api", {
     routes: [
         {
@@ -109,7 +112,7 @@ const api = new apigateway.RestAPI("api", {
 }, { dependsOn: lb });
 
 
-export const loadbalancer_url = lb.loadBalancer;
+export const loadbalancer_url = lb.loadBalancer.dnsName;
 export const clusterURN = cluster.urn;
 export const appServiceName = appService.service.name;
 export const zethServiceName = zethService.service.name;

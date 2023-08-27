@@ -1,7 +1,7 @@
 # Dockerfile
 
 # Stage 1: Build the application
-FROM node:14 as build
+FROM node:18 as build
 
 WORKDIR /app
 
@@ -14,7 +14,7 @@ COPY . .
 RUN yarn build
 
 # Stage 2: Serve the application using a lightweight Node.js image
-FROM node:14-alpine
+FROM node:18-alpine
 
 WORKDIR /app
 

@@ -8,6 +8,21 @@ This repo contains a full deployment of Risc0's Zeth. Component includes:
 - **zeth**: I used a modified zeth instance, taking out the CLI (Clap), and converting it to a web service (actix). 
 - **infrastructure** : With typescript / Pulumi , we deploy the front end and zeth to ECS , and use an Application Gateway for rate limiting and access control (i.e. we only want the front end interacting with zeth). 
 
+```mermaid
+graph TD
+    A[Cluster] --> B[ApplicationLoadBalancer]
+    B --> C[Listener: web]
+    B --> D[Listener: zethListener]
+    E[ECR Repository: app_repository] --> F[ECR Image: app]
+    G[ECR Repository: zeth_repository] --> H[ECR Image: zeth]
+    I[FargateService: appService] --> J[Container: appServiceContainer]
+    I --> K[Container: zethServiceContainer]
+    J --> F
+    K --> H
+    L[CloudWatch LogGroup: appServiceLogGroup] --> J
+    M[CloudWatch LogGroup: zethServiceLogGroup] --> K
+```
+
 ## Running
 
 - The entire stack is deployed with [Pulumi](https://www.pulumi.com/docs/). It assumes that the repository is cloned at `$HOME/zaas`. 

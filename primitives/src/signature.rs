@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloy_primitives::{B160, U256};
+use alloy_primitives::{Address, U256};
 use alloy_rlp_derive::{RlpEncodable, RlpMaxEncodedLen};
 use anyhow::Context;
 use k256::{
@@ -52,7 +52,7 @@ impl Transaction {
     /// This method uses the ECDSA recovery mechanism to derive the sender's public key
     /// and subsequently their Ethereum address. If the recovery is unsuccessful, an
     /// error is returned.
-    pub fn recover_from(&self) -> anyhow::Result<B160> {
+    pub fn recover_from(&self) -> anyhow::Result<Address> {
         let is_y_odd = self.is_y_odd().context("v invalid")?;
         let signature = K256Signature::from_scalars(
             self.signature.r.to_be_bytes(),
@@ -73,7 +73,7 @@ impl Transaction {
         debug_assert_eq!(public_key[0], 0x04);
         let hash = keccak(&public_key[1..]);
 
-        Ok(B160::from_slice(&hash[12..]))
+        Ok(Address::from_slice(&hash[12..]))
     }
 
     /// Determines whether the y-coordinate of the ECDSA signature's associated public key

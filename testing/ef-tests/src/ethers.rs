@@ -43,7 +43,7 @@ impl Provider for TestProvider {
         Ok(Block::<H256> {
             parent_hash: self.header.parent_hash.0.into(),
             uncles_hash: self.header.ommers_hash.0.into(),
-            author: Some(self.header.beneficiary.0.into()),
+            author: Some(self.header.beneficiary.0 .0.into()),
             state_root: self.header.state_root.0.into(),
             transactions_root: self.header.transactions_root.0.into(),
             receipts_root: self.header.receipts_root.0.into(),
@@ -126,7 +126,7 @@ impl Provider for TestProvider {
     }
 }
 
-fn build_tries(state: &TestState) -> (MptNode, HashMap<B160, MptNode>) {
+fn build_tries(state: &TestState) -> (MptNode, HashMap<Address, MptNode>) {
     let mut state_trie = MptNode::default();
     let mut storage_tries = HashMap::new();
     for (address, account) in &state.0 {
@@ -157,7 +157,7 @@ fn build_tries(state: &TestState) -> (MptNode, HashMap<B160, MptNode>) {
 }
 
 fn get_proof(
-    address: B160,
+    address: Address,
     indices: impl IntoIterator<Item = LibU256>,
     state: &TestState,
 ) -> Result<EIP1186ProofResponse, anyhow::Error> {
@@ -189,7 +189,7 @@ fn get_proof(
     }
 
     Ok(EIP1186ProofResponse {
-        address: address.0.into(),
+        address: address.0 .0.into(),
         balance: account.balance.to_be_bytes().into(),
         code_hash: keccak(account.code).into(),
         nonce: account.nonce.to_be_bytes().into(),

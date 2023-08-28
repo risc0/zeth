@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloy_primitives::{Bytes, ChainId, TxHash, TxNumber, B160, B256, U256};
+use alloy_primitives::{Address, Bytes, ChainId, TxHash, TxNumber, B256, U256};
 use alloy_rlp::{Encodable, EMPTY_STRING_CODE};
 use alloy_rlp_derive::RlpEncodable;
 use serde::{Deserialize, Serialize};
@@ -312,16 +312,16 @@ pub enum TransactionKind {
     Create,
     /// Indicates that the transaction is a call to an existing contract, identified by
     /// its 160-bit address.
-    Call(B160),
+    Call(Address),
 }
 
-/// Provides a conversion from [TransactionKind] to `Option<B160>`.
+/// Provides a conversion from [TransactionKind] to `Option<Address>`.
 ///
 /// This implementation allows for a straightforward extraction of the Ethereum address
 /// from a [TransactionKind]. If the transaction kind is a `Call`, the address is wrapped
 /// in a `Some`. If it's a `Create`, the result is `None`.
-impl From<TransactionKind> for Option<B160> {
-    /// Converts a [TransactionKind] into an `Option<B160>`.
+impl From<TransactionKind> for Option<Address> {
+    /// Converts a [TransactionKind] into an `Option<Address>`.
     ///
     /// - If the transaction kind is `Create`, this returns `None`.
     /// - If the transaction kind is `Call`, this returns the address wrapped in a `Some`.
@@ -461,7 +461,7 @@ impl Transaction {
     ///
     /// For contract creation transactions, this method returns `None` as there's no
     /// recipient address.
-    pub fn to(&self) -> Option<B160> {
+    pub fn to(&self) -> Option<Address> {
         match &self.essence {
             TxEssence::Legacy(tx) => tx.to.into(),
             TxEssence::Eip2930(tx) => tx.to.into(),

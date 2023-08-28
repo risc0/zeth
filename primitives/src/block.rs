@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloy_primitives::{b256, BlockHash, BlockNumber, Bloom, Bytes, B160, B256, B64, U256};
+use alloy_primitives::{b256, Address, BlockHash, BlockNumber, Bloom, Bytes, B256, B64, U256};
 use alloy_rlp_derive::RlpEncodable;
 use serde::{Deserialize, Serialize};
 
@@ -30,7 +30,7 @@ pub struct Header {
     /// Unused 256-bit hash, always [EMPTY_LIST_HASH].
     pub ommers_hash: B256,
     /// Address that receives the priority fees of each transaction in the block.
-    pub beneficiary: B160,
+    pub beneficiary: Address,
     /// Root hash of the state trie after all transactions in the block are executed.
     pub state_root: B256,
     /// Root hash of the trie containing all transactions in the block.
@@ -69,7 +69,7 @@ impl Default for Header {
         Header {
             parent_hash: B256::ZERO,
             ommers_hash: EMPTY_LIST_HASH,
-            beneficiary: B160::ZERO,
+            beneficiary: Address::ZERO,
             state_root: EMPTY_ROOT,
             transactions_root: EMPTY_ROOT,
             receipts_root: EMPTY_ROOT,

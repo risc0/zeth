@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloy_primitives::B160;
+use alloy_primitives::Address;
 use alloy_rlp_derive::{RlpEncodable, RlpMaxEncodedLen};
 use serde::{Deserialize, Serialize};
 
@@ -32,9 +32,9 @@ pub struct Withdrawal {
     pub index: u64,
     /// The distinct index of the validator initiating this withdrawal.
     pub validator_index: u64,
-    /// The Ethereum address, encapsulated as a `B160` type, where the withdrawn ether
+    /// The Ethereum address, encapsulated as a `Address` type, where the withdrawn ether
     /// will be sent.
-    pub address: B160,
+    pub address: Address,
     /// The total withdrawal amount, denominated in gwei.
     pub amount: u64,
 }

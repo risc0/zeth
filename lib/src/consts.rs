@@ -75,7 +75,7 @@ pub enum ForkCondition {
 }
 
 impl ForkCondition {
-    /// Returns wether the condition has been met.
+    /// Returns whether the condition has been met.
     pub fn active(&self, block_number: BlockNumber) -> bool {
         match self {
             ForkCondition::Block(block) => *block <= block_number,

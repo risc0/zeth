@@ -513,6 +513,7 @@ fn rlp_join_lists(a: impl Encodable, b: impl Encodable, out: &mut dyn alloy_rlp:
 
 #[cfg(test)]
 mod tests {
+    use alloy_primitives::{address, fixed_bytes};
     use serde_json::json;
 
     use super::*;
@@ -545,13 +546,13 @@ mod tests {
             bincode::deserialize(&bincode::serialize(&transaction).unwrap()).unwrap();
 
         assert_eq!(
-            "0x5c504ed432cb51138bcf09aa5e8a410dd4a1e204ef84bfed1be16dfba1b22060",
-            transaction.hash().to_string()
+            transaction.hash(),
+            fixed_bytes!("5c504ed432cb51138bcf09aa5e8a410dd4a1e204ef84bfed1be16dfba1b22060")
         );
         let recovered = transaction.recover_from().unwrap();
         assert_eq!(
-            "0xa1e4380a3b1f749673e270229993ee55f35663b4",
-            recovered.to_string()
+            recovered,
+            address!("a1e4380a3b1f749673e270229993ee55f35663b4")
         );
     }
 
@@ -584,13 +585,13 @@ mod tests {
             bincode::deserialize(&bincode::serialize(&transaction).unwrap()).unwrap();
 
         assert_eq!(
-            "0x4540eb9c46b1654c26353ac3c65e56451f711926982ce1b02f15c50e7459caf7",
-            transaction.hash().to_string()
+            transaction.hash(),
+            fixed_bytes!("4540eb9c46b1654c26353ac3c65e56451f711926982ce1b02f15c50e7459caf7")
         );
         let recovered = transaction.recover_from().unwrap();
         assert_eq!(
-            "0x974caa59e49682cda0ad2bbe82983419a2ecc400",
-            recovered.to_string()
+            recovered,
+            address!("974caa59e49682cda0ad2bbe82983419a2ecc400")
         );
     }
 
@@ -660,13 +661,13 @@ mod tests {
             bincode::deserialize(&bincode::serialize(&transaction).unwrap()).unwrap();
 
         assert_eq!(
-            "0xbe4ef1a2244e99b1ef518aec10763b61360be22e3b649dcdf804103719b1faef",
-            transaction.hash().to_string()
+            transaction.hash(),
+            fixed_bytes!("be4ef1a2244e99b1ef518aec10763b61360be22e3b649dcdf804103719b1faef")
         );
         let recovered = transaction.recover_from().unwrap();
         assert_eq!(
-            "0x79b7a69d90c82e014bf0315e164208119b510fa0",
-            recovered.to_string()
+            recovered,
+            address!("79b7a69d90c82e014bf0315e164208119b510fa0")
         );
     }
 
@@ -701,13 +702,13 @@ mod tests {
             bincode::deserialize(&bincode::serialize(&transaction).unwrap()).unwrap();
 
         assert_eq!(
-            "0x2bcdc03343ca9c050f8dfd3c87f32db718c762ae889f56762d8d8bdb7c5d69ff",
-            transaction.hash().to_string()
+            transaction.hash(),
+            fixed_bytes!("2bcdc03343ca9c050f8dfd3c87f32db718c762ae889f56762d8d8bdb7c5d69ff")
         );
         let recovered = transaction.recover_from().unwrap();
         assert_eq!(
-            "0x4b9f4114d50e7907bff87728a060ce8d53bf4cf7",
-            recovered.to_string()
+            recovered,
+            address!("4b9f4114d50e7907bff87728a060ce8d53bf4cf7")
         );
     }
 

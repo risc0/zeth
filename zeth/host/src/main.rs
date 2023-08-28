@@ -61,25 +61,6 @@ fn cache_file_path(cache_path: &String, network: &String, block_no: u64, ext: &s
     format!("{}/{}/{}.{}", cache_path, network, block_no, ext)
 }
 
-// async fn verify_transactions(input: &Input, init: &Init) -> Result<()> {
-//     // Extract necessary data from input and init
-//     let transactions = &input.transactions;
-//     let validation_data = &init.validation_data;
-
-//     // Iterate over transactions and validate each one
-//     for transaction in transactions {
-//         // This is a placeholder for your actual validation logic
-//         let is_valid = validate_transaction(transaction, validation_data).await?;
-
-//         if !is_valid {
-//             // If a transaction is not valid, return an error
-//             return Err(anyhow::anyhow!("Transaction validation failed"));
-//         }
-//     }
-
-//     // If all transactions are valid, return Ok
-//     Ok(())
-// }
 
 async fn run_verification(args: Data, init: Init) -> Result<()> {
     let input: Input = init.clone().into();
@@ -395,17 +376,25 @@ async fn verify(field: web::Json<Data>) -> impl Responder {
     }
 }
 
+#[get("/")]
+async fn health_check() -> impl Responder {
+    HttpResponse::Ok().body("Server is running")
+}
+
 pub fn run(listener: TcpListener) -> Result<Server, Box<dyn Error>> {
     let server = HttpServer::new(move || {
         App::new()
             .wrap(
                 Cors::permissive()
-                    .allowed_origin("http://localhost:3000")
+                // TODO: Replace with DNS
+                    // .allowed_origin("http://net-lb-bd44876-1703206818.us-east-1.elb.amazonaws.com:3000")
+                    .allow_any_origin()
                     .allowed_methods(vec!["GET", "POST"])
                     .allowed_header(actix_web::http::header::CONTENT_TYPE)
                     .max_age(3600)
             )
             .service(verify)
+            .service(health_check) 
     })
     .listen(listener)?
     .run();

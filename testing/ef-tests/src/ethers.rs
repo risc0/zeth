@@ -43,7 +43,7 @@ impl Provider for TestProvider {
         Ok(Block::<H256> {
             parent_hash: self.header.parent_hash.0.into(),
             uncles_hash: self.header.ommers_hash.0.into(),
-            author: Some(self.header.beneficiary.0 .0.into()),
+            author: Some(self.header.beneficiary.into_array().into()),
             state_root: self.header.state_root.0.into(),
             transactions_root: self.header.transactions_root.0.into(),
             receipts_root: self.header.receipts_root.0.into(),
@@ -189,7 +189,7 @@ fn get_proof(
     }
 
     Ok(EIP1186ProofResponse {
-        address: address.0 .0.into(),
+        address: address.into_array().into(),
         balance: account.balance.to_be_bytes().into(),
         code_hash: keccak(account.code).into(),
         nonce: account.nonce.to_be_bytes().into(),

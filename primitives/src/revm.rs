@@ -25,7 +25,7 @@ use crate::{
 /// Converts a `Address` type to its corresponding `RevmB160` representation.
 #[inline]
 pub fn to_revm_b160(v: Address) -> RevmB160 {
-    v.0 .0.into()
+    v.into_array().into()
 }
 
 /// Converts a `B256` type to its corresponding `RevmB256` representation.

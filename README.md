@@ -10,6 +10,12 @@ This repo contains a full deployment of Risc0's Zeth. Components includes
 - [infrastructure]: With typescript / Pulumi , we deploy the front end and zeth to ECS , and use an Application Gateway for rate limiting and access control (i.e. we only want the front end interacting with zeth). 
 
 
+## Running
+
+- The entire stack is deployed with [Pulumi](). It assumes that the repository is downloaed at `$HOME/zaas`. 
+- In order to run configuration checks and set up pulumi backend , run `make setup` from the root directory.
+
+
 
 - Create s3 backend 
 
@@ -21,7 +27,7 @@ PULUMI_BACKEND=s3://pulumi-state-sd
 pulumi login s3://pulumi-state-sd
 ```
 
-- set PULUMI_CONFIG_PASSPHRASE 
+- set PULUMI_CONFIG_PASSPHRASE=<YourPassPhrase> 
 
 
 ## TODO

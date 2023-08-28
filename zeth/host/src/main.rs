@@ -395,14 +395,6 @@ async fn verify(field: web::Json<Data>) -> impl Responder {
     }
 }
 
-// pub fn run(listener: TcpListener) -> Result<Server, Box<dyn Error>> {
-//     let server = HttpServer::new(move || App::new().service(verify))
-//         .listen(listener)?
-//         .run();
-
-//     Ok(server)
-// }
-
 pub fn run(listener: TcpListener) -> Result<Server, Box<dyn Error>> {
     let server = HttpServer::new(move || {
         App::new()

@@ -18,11 +18,11 @@ FROM node:18-alpine
 
 WORKDIR /app
 
+# Copy the build directory, the public directory, and the node_modules directory from the build stage
 COPY --from=build /app/build ./build
-COPY package.json yarn.lock ./
 
-RUN yarn install --production
+RUN yarn global add serve
 
 EXPOSE 3000
 
-CMD ["yarn", "start"]
+CMD ["serve", "-s", "build", "-l", "3000"]

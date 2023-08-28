@@ -1,121 +1,98 @@
-import { ApplicationLoadBalancer } from "@pulumi/awsx/lb";
-import { Repository, Image } from "@pulumi/awsx/ecr";
-import { Vpc } from "@pulumi/awsx/ec2";
-import { SecurityGroup } from "@pulumi/aws/ec2";
-import { Cluster } from "@pulumi/aws/ecs";
-import { FargateService } from "@pulumi/awsx/ecs";
-import * as apigateway from "@pulumi/aws-apigateway";
+import * as awsx from "@pulumi/awsx";
 
+import * as aws from "@pulumi/aws";
 
-// Load Balancer
-const lb = new ApplicationLoadBalancer("lb", {});
+// Create a new log group for appService
+const appServiceLogGroup = new aws.cloudwatch.LogGroup("appServiceLogGroup", {
+    name: "/ecs/appService",
+});
+
+// Create a new log group for zethService
+const zethServiceLogGroup = new aws.cloudwatch.LogGroup("zethServiceLogGroup", {
+    name: "/ecs/zethService",
+});
+
+// Create an ECS Fargate cluster.
+const cluster = new awsx.classic.ecs.Cluster("cluster");
+
+// Define the Networking for our service.
+const alb = new awsx.classic.lb.ApplicationLoadBalancer(
+    "net-lb", { external: true, securityGroups: cluster.securityGroups });
+const web = alb.createListener("web", { port: 3000, external: true, protocol: "HTTP" });
+const zeth_listener = alb.createListener("zeth", { port: 8000, external: true, protocol: "HTTP" });
 
 // Verification App : ECR Repository and Image
-const app_repository = new Repository("app_repository", {});
-const app_image = new Image("app", {
+const app_repository = new awsx.ecr.Repository("app_repository", {
+    forceDelete: true,
+});
+const app_image = new awsx.ecr.Image("app", {
     repositoryUrl: app_repository.url,
-    path: "../verification-app",
-    dockerfile: "Dockerfile"
+    path: "/home/ubuntu/zeth/verification-app/",
+    dockerfile: "/home/ubuntu/zeth/verification-app/Dockerfile"
+
 });
 
 
-// Verification App : ECR Repository and Image
-const zeth_repository = new Repository("zeth_repository", {});
-const zeth_image = new Image("zeth", {
+// Zeth : ECR Repository and Image
+const zeth_repository = new awsx.ecr.Repository("zeth_repository", {
+    forceDelete: true,
+});
+const zeth_image = new awsx.ecr.Image("zeth", {
     repositoryUrl: zeth_repository.url,
-    path: "../zeth",
-    dockerfile: "Dockerfile"
+    path: "/home/ubuntu/zeth/zeth/",
+    dockerfile: "/home/ubuntu/zeth/zeth/Dockerfile"
 });
 
-
-// VPC and Security Group
-const vpc = new Vpc("vpc", {});
-const securityGroup = new SecurityGroup("securityGroup", {
-    vpcId: vpc.vpcId,
-    egress: [{
-        fromPort: 0,
-        toPort: 0,
-        protocol: "-1",
-        cidrBlocks: ["0.0.0.0/0"],
-        ipv6CidrBlocks: ["::/0"],
-    }],
-});
-
-// ECS Cluster and Service
-const cluster = new Cluster("cluster", {});// ECS Cluster and Service
-const appService = new FargateService("service", {
-    cluster: cluster.arn,
+const appService = new awsx.classic.ecs.FargateService("appService", {
+    cluster,
     desiredCount: 2,
-    networkConfiguration: {
-        subnets: vpc.publicSubnetIds,
-        securityGroups: [securityGroup.id],
-    },
     taskDefinitionArgs: {
         container: {
-            name: "verification_app",
             image: app_image.imageUri,
             cpu: 512,
             memory: 128,
             essential: true,
-            portMappings: [{
-                containerPort: 3000,
-                hostPort: 3000,
-                protocol: "tcp",
-            }],
+            portMappings: [web],
+            logConfiguration: {
+                logDriver: "awslogs",
+                options: {
+                    "awslogs-group": appServiceLogGroup.name,
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "ecs"
+                }
+            },
         },
     },
-});
+}, { dependsOn: alb });
 
-// ECS Cluster and Service for Zeth
-const zethService = new FargateService("zethService", {
-    cluster: cluster.arn,
+const zethService = new awsx.classic.ecs.FargateService("zethService", {
+    cluster,
     desiredCount: 2,
-    networkConfiguration: {
-        subnets: vpc.publicSubnetIds,
-        securityGroups: [securityGroup.id],
-    },
     taskDefinitionArgs: {
         container: {
-            name: "zeth",
             image: zeth_image.imageUri,
-            cpu: 512,
-            memory: 128,
+            cpu: 4096,
+            memory: 4096,
             essential: true,
-            portMappings: [{
-                containerPort: 8000,
-                hostPort: 8000,
-                protocol: "tcp",
-            }],
-        },
+            portMappings: [zeth_listener],
+            logConfiguration: {
+                logDriver: "awslogs",
+                options: {
+                    "awslogs-group" :zethServiceLogGroup.name,
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "ecs"
+                }
+            },
+        }
     },
-});
-
-// Define an endpoint that proxies HTTP requests to the services.
-// Note , we need to wait for the Load Balancer to be up otherwise this fails.
-const api = new apigateway.RestAPI("api", {
-    routes: [
-        {
-            path: "/app",
-            target: {
-                type: "http_proxy",
-                uri: lb.loadBalancer.dnsName.apply(dnsName => `http://${dnsName}:3000`),
-            },
-        },
-        {
-            path: "/zeth",
-            target: {
-                type: "http_proxy",
-                uri: lb.loadBalancer.dnsName.apply(dnsName => `http://${dnsName}:8000`),
-            },
-        },
-    ],
-}, { dependsOn: lb });
+}, { dependsOn: alb });
 
 
-export const loadbalancer_url = lb.loadBalancer.dnsName;
+
 export const clusterURN = cluster.urn;
 export const appServiceName = appService.service.name;
 export const zethServiceName = zethService.service.name;
-export const securityGroupName = securityGroup.name;
-export const imageUri = app_image.imageUri;
-export const apiGateway = api.url;
+export const appImageUri = app_image.imageUri;
+export const zethImageUri = zeth_image.imageUri;
+export const appUrl = web.endpoint.hostname;
+export const zethUrl = zeth_listener.endpoint.hostname;

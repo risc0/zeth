@@ -72,15 +72,15 @@ const VerificationForm: React.FC = () => {
             />
             <FormControlLabel
                 control={<Checkbox checked={showCache} onChange={() => setShowCache(!showCache)} />}
-                label="Show Cache"
+                label="Use Cache"
             />
             <FormControlLabel
                 control={<Checkbox checked={showLocalExec} onChange={() => setShowLocalExec(!showLocalExec)} />}
-                label="Show Local Execution"
+                label="Local Execution"
             />
             <FormControlLabel
                 control={<Checkbox checked={showReceiptUUID} onChange={() => setShowReceiptUUID(!showReceiptUUID)} />}
-                label="Show Verify Bonsai Receipt UUID"
+                label="Verify Bonsai Receipt UUID"
             />
             <form onSubmit={handleSubmit}>
                 <TextField variant="filled" label="RPC URL" name="rpc_url" onChange={handleChange} fullWidth margin="normal" sx={{ bgcolor: 'white' }} />

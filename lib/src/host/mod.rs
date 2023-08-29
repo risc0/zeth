@@ -96,6 +96,8 @@ pub fn get_initial_data(
     let provider_db =
         crate::host::provider_db::ProviderDb::new(provider, init_block.number.unwrap().as_u64());
 
+    info!("Created provider db ...");
+
     // Create input
     let input = Input {
         beneficiary: fini_block.author.map(from_ethers_h160).unwrap_or_default(),
@@ -119,6 +121,8 @@ pub fn get_initial_data(
         parent_header: init_block.clone().try_into()?,
         ..Default::default()
     };
+
+    info!("Created input: {:?}", input);
 
     // Create the block builder, run the transactions and extract the DB
     let mut builder = BlockBuilder::new(&ETH_MAINNET_CHAIN_SPEC, input)

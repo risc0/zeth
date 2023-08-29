@@ -17,6 +17,8 @@ use alloy_rlp::{Encodable, EMPTY_STRING_CODE};
 use alloy_rlp_derive::RlpEncodable;
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "optimism")]
+use crate::optimism::TxDeposit;
 use crate::{access_list::AccessList, keccak::keccak, signature::TxSignature};
 
 /// Represents a legacy Ethereum transaction as detailed in [EIP-155](https://eips.ethereum.org/EIPS/eip-155).
@@ -218,6 +220,9 @@ pub enum TxEssence {
     /// This mechanism aims to improve the predictability of gas fees and enhances the
     /// overall user experience.
     Eip1559(TxEssenceEip1559),
+    /// Optimism deposit transaction.
+    #[cfg(feature = "optimism")]
+    Deposit(TxDeposit),
 }
 
 // Implement the Encodable trait for the TxEssence enum.
@@ -232,6 +237,8 @@ impl Encodable for TxEssence {
             TxEssence::Legacy(tx) => tx.encode(out),
             TxEssence::Eip2930(tx) => tx.encode(out),
             TxEssence::Eip1559(tx) => tx.encode(out),
+            #[cfg(feature = "optimism")]
+            TxEssence::Deposit(tx) => tx.encode(out),
         }
     }
 
@@ -244,6 +251,8 @@ impl Encodable for TxEssence {
             TxEssence::Legacy(tx) => tx.length(),
             TxEssence::Eip2930(tx) => tx.length(),
             TxEssence::Eip1559(tx) => tx.length(),
+            #[cfg(feature = "optimism")]
+            TxEssence::Deposit(tx) => tx.length(),
         }
     }
 }
@@ -281,6 +290,13 @@ impl TxEssence {
                 tx.encode(&mut buf);
                 buf
             }
+            #[cfg(feature = "optimism")]
+            TxEssence::Deposit(tx) => {
+                let mut buf = Vec::with_capacity(tx.length() + 1);
+                buf.push(0x7e);
+                tx.encode(&mut buf);
+                buf
+            }
         }
     }
 
@@ -294,6 +310,8 @@ impl TxEssence {
             TxEssence::Legacy(tx) => tx.payload_length(),
             TxEssence::Eip2930(tx) => tx._alloy_rlp_payload_length(),
             TxEssence::Eip1559(tx) => tx._alloy_rlp_payload_length(),
+            #[cfg(feature = "optimism")]
+            TxEssence::Deposit(tx) => tx.payload_length(),
         }
     }
 }
@@ -442,6 +460,8 @@ impl Transaction {
             TxEssence::Legacy(_) => 0x00,
             TxEssence::Eip2930(_) => 0x01,
             TxEssence::Eip1559(_) => 0x02,
+            #[cfg(feature = "optimism")]
+            TxEssence::Deposit(_) => 0x7e,
         }
     }
 
@@ -454,6 +474,8 @@ impl Transaction {
             TxEssence::Legacy(tx) => tx.gas_limit,
             TxEssence::Eip2930(tx) => tx.gas_limit,
             TxEssence::Eip1559(tx) => tx.gas_limit,
+            #[cfg(feature = "optimism")]
+            TxEssence::Deposit(tx) => U256::from(tx.gas_limit),
         }
     }
 
@@ -466,6 +488,8 @@ impl Transaction {
             TxEssence::Legacy(tx) => tx.to.into(),
             TxEssence::Eip2930(tx) => tx.to.into(),
             TxEssence::Eip1559(tx) => tx.to.into(),
+            #[cfg(feature = "optimism")]
+            TxEssence::Deposit(tx) => tx.to.into(),
         }
     }
 }

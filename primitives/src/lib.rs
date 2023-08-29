@@ -29,6 +29,9 @@ pub mod ethers;
 #[cfg(feature = "revm")]
 pub mod revm;
 
+#[cfg(feature = "optimism")]
+pub mod optimism;
+
 pub use alloy_primitives::*;
 pub use alloy_rlp as rlp;
 

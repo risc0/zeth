@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloy_primitives::{StorageKey, B160};
+use alloy_primitives::{Address, StorageKey};
 use alloy_rlp_derive::{RlpEncodable, RlpEncodableWrapper};
 use serde::{Deserialize, Serialize};
 
@@ -32,7 +32,7 @@ pub struct AccessList(pub Vec<AccessListItem>);
 #[derive(Debug, Clone, PartialEq, Eq, Default, RlpEncodable, Serialize, Deserialize)]
 pub struct AccessListItem {
     /// The Ethereum address that the transaction will access.
-    pub address: B160,
+    pub address: Address,
     /// A list of storage keys associated with the given address that the transaction will
     /// access.
     pub storage_keys: Vec<StorageKey>,

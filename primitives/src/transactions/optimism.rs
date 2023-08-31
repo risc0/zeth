@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloy_primitives::{Bytes, B160, B256, U256};
+use alloy_primitives::{Address, Bytes, B256, U256};
 use alloy_rlp::Encodable;
 use alloy_rlp_derive::RlpEncodable;
 use bytes::BufMut;
@@ -31,7 +31,7 @@ pub struct TxEssenceOptimismDeposited {
     /// The source hash which uniquely identifies the origin of the deposit
     pub source_hash: B256,
     /// The 160-bit address of the sender.
-    pub from: B160,
+    pub from: Address,
     /// The 160-bit address of the message call's recipient or, for a contract creation
     /// transaction, ∅.
     pub to: TransactionKind,
@@ -88,14 +88,14 @@ impl TxEssence for OptimismTxEssence {
         }
     }
 
-    fn to(&self) -> Option<B160> {
+    fn to(&self) -> Option<Address> {
         match self {
             OptimismTxEssence::Ethereum(eth) => eth.to(),
             OptimismTxEssence::OptimismDeposited(op) => op.to.into(),
         }
     }
 
-    fn recover_from(&self, signature: &TxSignature) -> anyhow::Result<B160> {
+    fn recover_from(&self, signature: &TxSignature) -> anyhow::Result<Address> {
         match self {
             OptimismTxEssence::Ethereum(eth) => eth.recover_from(signature),
             OptimismTxEssence::OptimismDeposited(op) => Ok(op.from),

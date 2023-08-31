@@ -14,7 +14,7 @@
 
 //! Convert to revm types.
 
-use alloy_primitives::{B160, B256};
+use alloy_primitives::{Address, B256};
 use revm_primitives::{Log as RevmLog, B160 as RevmB160, B256 as RevmB256, U256 as RevmU256};
 
 use crate::{
@@ -22,10 +22,10 @@ use crate::{
     receipt::Log,
 };
 
-/// Converts a `B160` type to its corresponding `RevmB160` representation.
+/// Converts a `Address` type to its corresponding `RevmB160` representation.
 #[inline]
-pub fn to_revm_b160(v: B160) -> RevmB160 {
-    v.0.into()
+pub fn to_revm_b160(v: Address) -> RevmB160 {
+    v.into_array().into()
 }
 
 /// Converts a `B256` type to its corresponding `RevmB256` representation.
@@ -34,9 +34,9 @@ pub fn to_revm_b256(v: B256) -> RevmB256 {
     v.0.into()
 }
 
-/// Converts a `RevmB160` type to its corresponding `B160` representation.
+/// Converts a `RevmB160` type to its corresponding `Address` representation.
 #[inline]
-pub fn from_revm_b160(v: RevmB160) -> B160 {
+pub fn from_revm_b160(v: RevmB160) -> Address {
     v.0.into()
 }
 

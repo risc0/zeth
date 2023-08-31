@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloy_primitives::{Bytes, ChainId, TxNumber, B160, B256, U256};
+use alloy_primitives::{Address, Bytes, ChainId, TxNumber, B256, U256};
 use alloy_rlp::{Encodable, EMPTY_STRING_CODE};
 use alloy_rlp_derive::RlpEncodable;
 use anyhow::Context;
@@ -222,16 +222,16 @@ pub enum TransactionKind {
     Create,
     /// Indicates that the transaction is a call to an existing contract, identified by
     /// its 160-bit address.
-    Call(B160),
+    Call(Address),
 }
 
-/// Provides a conversion from [TransactionKind] to `Option<B160>`.
+/// Provides a conversion from [TransactionKind] to `Option<Address>`.
 ///
 /// This implementation allows for a straightforward extraction of the Ethereum address
 /// from a [TransactionKind]. If the transaction kind is a `Call`, the address is wrapped
 /// in a `Some`. If it's a `Create`, the result is `None`.
-impl From<TransactionKind> for Option<B160> {
-    /// Converts a [TransactionKind] into an `Option<B160>`.
+impl From<TransactionKind> for Option<Address> {
+    /// Converts a [TransactionKind] into an `Option<Address>`.
     ///
     /// - If the transaction kind is `Create`, this returns `None`.
     /// - If the transaction kind is `Call`, this returns the address wrapped in a `Some`.
@@ -426,7 +426,7 @@ impl TxEssence for EthereumTxEssence {
     ///
     /// For contract creation transactions, this method returns `None` as there's no
     /// recipient address.
-    fn to(&self) -> Option<B160> {
+    fn to(&self) -> Option<Address> {
         match self {
             EthereumTxEssence::Legacy(tx) => tx.to.into(),
             EthereumTxEssence::Eip2930(tx) => tx.to.into(),
@@ -438,7 +438,7 @@ impl TxEssence for EthereumTxEssence {
     /// This method uses the ECDSA recovery mechanism to derive the sender's public key
     /// and subsequently their Ethereum address. If the recovery is unsuccessful, an
     /// error is returned.
-    fn recover_from(&self, signature: &TxSignature) -> anyhow::Result<B160> {
+    fn recover_from(&self, signature: &TxSignature) -> anyhow::Result<Address> {
         let is_y_odd = self.is_y_odd(signature).context("v invalid")?;
         let signature =
             K256Signature::from_scalars(signature.r.to_be_bytes(), signature.s.to_be_bytes())
@@ -457,7 +457,7 @@ impl TxEssence for EthereumTxEssence {
         debug_assert_eq!(public_key[0], 0x04);
         let hash = keccak(&public_key[1..]);
 
-        Ok(B160::from_slice(&hash[12..]))
+        Ok(Address::from_slice(&hash[12..]))
     }
     /// Computes the length of the RLP-encoded payload in bytes for the transaction
     /// essence.

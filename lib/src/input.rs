@@ -22,7 +22,7 @@ use zeth_primitives::{
     transactions::{Transaction, TxEssence},
     trie::MptNode,
     withdrawal::Withdrawal,
-    Bytes, B160, B256, U256,
+    Address, Bytes, B256, U256,
 };
 
 use crate::NoHashBuilder;
@@ -33,7 +33,7 @@ pub struct Input<E: TxEssence> {
     /// Previous block header
     pub parent_header: Header,
     /// Address to which all priority fees in this block are transferred.
-    pub beneficiary: B160,
+    pub beneficiary: Address,
     /// Scalar equal to the current limit of gas expenditure per block.
     pub gas_limit: U256,
     /// Scalar corresponding to the seconds since Epoch at this block's inception.

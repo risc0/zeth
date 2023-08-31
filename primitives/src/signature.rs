@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloy_primitives::U256;
 use alloy_rlp_derive::{RlpEncodable, RlpMaxEncodedLen};
 use serde::{Deserialize, Serialize};
-
-use crate::U256;
 
 /// Represents a cryptographic signature associated with a transaction.
 ///

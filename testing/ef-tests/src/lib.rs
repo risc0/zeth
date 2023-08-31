@@ -46,7 +46,7 @@ use zeth_primitives::{
     },
     trie::{self, MptNode, MptNodeData, StateAccount},
     withdrawal::Withdrawal,
-    Bloom, Bytes, RlpBytes, StorageKey, B160, B256, B64, U256, U64,
+    Address, Bloom, Bytes, RlpBytes, StorageKey, B256, B64, U256, U64,
 };
 
 use crate::ethers::{get_state_update_proofs, TestProvider};
@@ -108,7 +108,7 @@ impl From<DbAccount> for TestAccount {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct TestState(pub HashMap<B160, TestAccount>);
+pub struct TestState(pub HashMap<Address, TestAccount>);
 
 impl From<&MemDb> for TestState {
     fn from(db: &MemDb) -> Self {
@@ -132,7 +132,7 @@ impl From<&ProviderDb> for TestState {
 pub struct TestHeader {
     pub base_fee_per_gas: Option<U256>,
     pub bloom: Bloom,
-    pub coinbase: B160,
+    pub coinbase: Address,
     pub extra_data: Bytes,
     pub difficulty: U256,
     pub gas_limit: U256,
@@ -186,7 +186,7 @@ pub struct TestTransaction {
     pub max_priority_fee_per_gas: Option<U256>,
     pub value: U256,
     #[serde_as(as = "NoneAsEmptyString")]
-    pub to: Option<B160>,
+    pub to: Option<Address>,
     pub nonce: U64,
     pub v: U64,
     pub r: U256,
@@ -254,7 +254,7 @@ pub struct TestAccessList(pub Vec<TestAccessListItem>);
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TestAccessListItem {
-    pub address: B160,
+    pub address: Address,
     pub storage_keys: Vec<StorageKey>,
 }
 

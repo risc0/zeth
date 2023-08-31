@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloy_primitives::{TxHash, B160};
+use alloy_primitives::{Address, TxHash};
 use alloy_rlp::Encodable;
 use serde::{Deserialize, Serialize};
 
@@ -59,13 +59,13 @@ pub trait TxEssence: Encodable {
     ///
     /// For contract creation transactions, this method returns `None` as there's no
     /// recipient address.
-    fn to(&self) -> Option<B160>;
+    fn to(&self) -> Option<Address>;
     /// Recovers the Ethereum address of the sender from the transaction's signature.
     ///
     /// This method uses the ECDSA recovery mechanism to derive the sender's public key
     /// and subsequently their Ethereum address. If the recovery is unsuccessful, an
     /// error is returned.
-    fn recover_from(&self, signature: &TxSignature) -> anyhow::Result<B160>;
+    fn recover_from(&self, signature: &TxSignature) -> anyhow::Result<Address>;
     /// Computes the length of the RLP-encoded payload in bytes.
     ///
     /// This method calculates the combined length of all the individual fields
@@ -127,7 +127,7 @@ impl<E: TxEssence> Transaction<E> {
     /// This method uses the ECDSA recovery mechanism to derive the sender's public key
     /// and subsequently their Ethereum address. If the recovery is unsuccessful, an
     /// error is returned.
-    pub fn recover_from(&self) -> anyhow::Result<B160> {
+    pub fn recover_from(&self) -> anyhow::Result<Address> {
         self.essence.recover_from(&self.signature)
     }
 }
@@ -171,8 +171,8 @@ mod tests {
         );
         let recovered = transaction.recover_from().unwrap();
         assert_eq!(
-            "0xa1e4380a3b1f749673e270229993ee55f35663b4",
-            recovered.to_string()
+            "0xa1e4380a3b1f749673e270229993ee55f35663b4".to_lowercase(),
+            recovered.to_string().to_lowercase()
         );
     }
 
@@ -210,8 +210,8 @@ mod tests {
         );
         let recovered = transaction.recover_from().unwrap();
         assert_eq!(
-            "0x974caa59e49682cda0ad2bbe82983419a2ecc400",
-            recovered.to_string()
+            "0x974caa59e49682cda0ad2bbe82983419a2ecc400".to_lowercase(),
+            recovered.to_string().to_lowercase()
         );
     }
 
@@ -286,8 +286,8 @@ mod tests {
         );
         let recovered = transaction.recover_from().unwrap();
         assert_eq!(
-            "0x79b7a69d90c82e014bf0315e164208119b510fa0",
-            recovered.to_string()
+            "0x79b7a69d90c82e014bf0315e164208119b510fa0".to_lowercase(),
+            recovered.to_string().to_lowercase()
         );
     }
 
@@ -327,8 +327,8 @@ mod tests {
         );
         let recovered = transaction.recover_from().unwrap();
         assert_eq!(
-            "0x4b9f4114d50e7907bff87728a060ce8d53bf4cf7",
-            recovered.to_string()
+            "0x4b9f4114d50e7907bff87728a060ce8d53bf4cf7".to_lowercase(),
+            recovered.to_string().to_lowercase()
         );
     }
 

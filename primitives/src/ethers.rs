@@ -14,7 +14,7 @@
 
 //! Convert from Ethers types.
 
-use alloy_primitives::{Bloom, B160, B256, U256};
+use alloy_primitives::{Address, Bloom, B256, U256};
 use anyhow::{anyhow, Context};
 use ethers_core::types::{
     transaction::eip2930::{
@@ -44,9 +44,9 @@ pub fn from_ethers_u256(v: EthersU256) -> U256 {
     U256::from_limbs(v.0)
 }
 
-/// Convert an `EthersH160` type to the `B160` type.
+/// Convert an `EthersH160` type to the `Address` type.
 #[inline]
-pub fn from_ethers_h160(v: EthersH160) -> B160 {
+pub fn from_ethers_h160(v: EthersH160) -> Address {
     v.0.into()
 }
 

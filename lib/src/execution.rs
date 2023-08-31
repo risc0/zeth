@@ -29,7 +29,7 @@ use zeth_primitives::{
     revm::{to_revm_b160, to_revm_b256},
     transactions::{
         ethereum::{EthereumTxEssence, TransactionKind},
-        Transaction,
+        Transaction, TxEssence,
     },
     trie::MptNode,
     Bloom, RlpBytes,
@@ -130,14 +130,14 @@ impl TxExecStrategy for EthTxExecStrategy {
             {
                 let tx_hash = tx.hash();
                 debug!("Tx no. {} (hash: {})", tx_no, tx_hash);
-                debug!("  Type: {}", tx.tx_type());
+                debug!("  Type: {}", tx.essence.tx_type());
                 debug!("  Fr: {:?}", tx_from);
-                debug!("  To: {:?}", tx.to().unwrap_or_default());
+                debug!("  To: {:?}", tx.essence.to().unwrap_or_default());
             }
 
             // verify transaction gas
             let block_available_gas = block_builder.input.gas_limit - cumulative_gas_used;
-            if block_available_gas < tx.gas_limit() {
+            if block_available_gas < tx.essence.gas_limit() {
                 bail!("Error at transaction {}: gas exceeds block limit", tx_no);
             }
 
@@ -156,7 +156,7 @@ impl TxExecStrategy for EthTxExecStrategy {
 
             // create the receipt from the EVM result
             let receipt = Receipt::new(
-                tx.tx_type(),
+                tx.essence.tx_type(),
                 result.is_success(),
                 cumulative_gas_used,
                 result.logs().into_iter().map(|log| log.into()).collect(),

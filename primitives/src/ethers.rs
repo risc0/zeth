@@ -27,11 +27,12 @@ use ethers_core::types::{
 use crate::{
     access_list::{AccessList, AccessListItem},
     block::Header,
+    signature::TxSignature,
     transactions::{
         ethereum::{
             EthereumTxEssence, TransactionKind, TxEssenceEip1559, TxEssenceEip2930, TxEssenceLegacy,
         },
-        Transaction, TxSignature,
+        Transaction,
     },
     withdrawal::Withdrawal,
 };

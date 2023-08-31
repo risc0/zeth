@@ -14,19 +14,10 @@
 
 use alloy_primitives::{TxHash, B160};
 use alloy_rlp::Encodable;
-use alloy_rlp_derive::{RlpEncodable, RlpMaxEncodedLen};
-use anyhow::Context;
-use k256::{
-    ecdsa::{RecoveryId, Signature as K256Signature, VerifyingKey as K256VerifyingKey},
-    elliptic_curve::sec1::ToEncodedPoint,
-    PublicKey as K256PublicKey,
-};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    keccak::keccak,
-    transactions::ethereum::{EthereumTxEssence, TxEssenceLegacy},
-    U256,
+    keccak::keccak, signature::TxSignature, transactions::ethereum::EthereumTxEssence, U256,
 };
 
 pub mod ethereum;
@@ -48,6 +39,32 @@ pub struct Transaction {
     pub signature: TxSignature,
 }
 
+pub trait TxEssence {
+    /// Determines the type of the transaction based on its essence.
+    ///
+    /// Returns a byte representing the transaction type:
+    /// - `0x00` for Legacy transactions.
+    /// - `0x01` for EIP-2930 transactions.
+    /// - `0x02` for EIP-1559 transactions.
+    fn tx_type(&self) -> u8;
+    /// Retrieves the gas limit set for the transaction.
+    ///
+    /// The gas limit represents the maximum amount of gas units that the transaction
+    /// is allowed to consume. It ensures that transactions don't run indefinitely.
+    fn gas_limit(&self) -> U256;
+    /// Retrieves the recipient address of the transaction, if available.
+    ///
+    /// For contract creation transactions, this method returns `None` as there's no
+    /// recipient address.
+    fn to(&self) -> Option<B160>;
+    /// Recovers the Ethereum address of the sender from the transaction's signature.
+    ///
+    /// This method uses the ECDSA recovery mechanism to derive the sender's public key
+    /// and subsequently their Ethereum address. If the recovery is unsuccessful, an
+    /// error is returned.
+    fn recover_from(&self, signature: &TxSignature) -> anyhow::Result<B160>;
+}
+
 /// Provides RLP encoding functionality for the [Transaction] struct.
 ///
 /// This implementation ensures that the entire transaction, including its essence and
@@ -63,7 +80,7 @@ impl Encodable for Transaction {
     #[inline]
     fn encode(&self, out: &mut dyn alloy_rlp::BufMut) {
         // prepend the EIP-2718 transaction type
-        match self.tx_type() {
+        match self.essence.tx_type() {
             0 => {}
             tx_type => out.put_u8(tx_type),
         }
@@ -81,7 +98,7 @@ impl Encodable for Transaction {
     fn length(&self) -> usize {
         let payload_length = self.essence.payload_length() + self.signature.payload_length();
         let mut length = payload_length + alloy_rlp::length_of_length(payload_length);
-        if self.tx_type() != 0 {
+        if self.essence.tx_type() != 0 {
             length += 1;
         }
         length
@@ -96,108 +113,13 @@ impl Transaction {
         keccak(alloy_rlp::encode(self)).into()
     }
 
-    /// Determines the type of the transaction based on its essence.
-    ///
-    /// Returns a byte representing the transaction type:
-    /// - `0x00` for Legacy transactions.
-    /// - `0x01` for EIP-2930 transactions.
-    /// - `0x02` for EIP-1559 transactions.
-    pub fn tx_type(&self) -> u8 {
-        match &self.essence {
-            EthereumTxEssence::Legacy(_) => 0x00,
-            EthereumTxEssence::Eip2930(_) => 0x01,
-            EthereumTxEssence::Eip1559(_) => 0x02,
-        }
-    }
-
-    /// Retrieves the gas limit set for the transaction.
-    ///
-    /// The gas limit represents the maximum amount of gas units that the transaction
-    /// is allowed to consume. It ensures that transactions don't run indefinitely.
-    pub fn gas_limit(&self) -> U256 {
-        match &self.essence {
-            EthereumTxEssence::Legacy(tx) => tx.gas_limit,
-            EthereumTxEssence::Eip2930(tx) => tx.gas_limit,
-            EthereumTxEssence::Eip1559(tx) => tx.gas_limit,
-        }
-    }
-
-    /// Retrieves the recipient address of the transaction, if available.
-    ///
-    /// For contract creation transactions, this method returns `None` as there's no
-    /// recipient address.
-    pub fn to(&self) -> Option<B160> {
-        match &self.essence {
-            EthereumTxEssence::Legacy(tx) => tx.to.into(),
-            EthereumTxEssence::Eip2930(tx) => tx.to.into(),
-            EthereumTxEssence::Eip1559(tx) => tx.to.into(),
-        }
-    }
-
     /// Recovers the Ethereum address of the sender from the transaction's signature.
     ///
     /// This method uses the ECDSA recovery mechanism to derive the sender's public key
     /// and subsequently their Ethereum address. If the recovery is unsuccessful, an
     /// error is returned.
     pub fn recover_from(&self) -> anyhow::Result<B160> {
-        let is_y_odd = self.is_y_odd().context("v invalid")?;
-        let signature = K256Signature::from_scalars(
-            self.signature.r.to_be_bytes(),
-            self.signature.s.to_be_bytes(),
-        )
-        .context("r, s invalid")?;
-
-        let verify_key = K256VerifyingKey::recover_from_prehash(
-            self.essence.signing_hash().as_slice(),
-            &signature,
-            RecoveryId::new(is_y_odd, false),
-        )
-        .context("invalid signature")?;
-
-        let public_key = K256PublicKey::from(&verify_key);
-        let public_key = public_key.to_encoded_point(false);
-        let public_key = public_key.as_bytes();
-        debug_assert_eq!(public_key[0], 0x04);
-        let hash = keccak(&public_key[1..]);
-
-        Ok(B160::from_slice(&hash[12..]))
-    }
-
-    /// Determines whether the y-coordinate of the ECDSA signature's associated public key
-    /// is odd.
-    ///
-    /// This information is derived from the `v` component of the signature and is used
-    /// during public key recovery.
-    fn is_y_odd(&self) -> Option<bool> {
-        match &self.essence {
-            EthereumTxEssence::Legacy(TxEssenceLegacy { chain_id: None, .. }) => {
-                checked_bool(self.signature.v - 27)
-            }
-            EthereumTxEssence::Legacy(TxEssenceLegacy {
-                chain_id: Some(chain_id),
-                ..
-            }) => checked_bool(self.signature.v - 35 - 2 * chain_id),
-            _ => checked_bool(self.signature.v),
-        }
-    }
-}
-
-/// Represents a cryptographic signature associated with a transaction.
-///
-/// The `TxSignature` struct encapsulates the components of an ECDSA signature: `v`, `r`,
-/// and `s`. This signature can be used to recover the public key of the signer, ensuring
-/// the authenticity of the transaction.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, RlpEncodable, RlpMaxEncodedLen)]
-pub struct TxSignature {
-    pub v: u64,
-    pub r: U256,
-    pub s: U256,
-}
-
-impl TxSignature {
-    /// Computes the length of the RLP-encoded signature payload in bytes.
-    pub(crate) fn payload_length(&self) -> usize {
-        self._alloy_rlp_payload_length()
+        self.essence.recover_from(&self.signature)
     }
 }
 
@@ -240,21 +162,6 @@ fn rlp_join_lists(a: impl Encodable, b: impl Encodable, out: &mut dyn alloy_rlp:
     .encode(out);
     out.put_slice(&a_buf[a_head_length..]); // skip the header
     out.put_slice(&b_buf[b_head_length..]); // skip the header
-}
-
-/// Converts a given value into a boolean based on its parity.
-///
-/// Returns:
-/// - `Some(true)` if the value is 1.
-/// - `Some(false)` if the value is 0.
-/// - `None` otherwise.
-#[inline]
-pub fn checked_bool(v: u64) -> Option<bool> {
-    match v {
-        0 => Some(false),
-        1 => Some(true),
-        _ => None,
-    }
 }
 
 #[cfg(test)]

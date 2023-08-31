@@ -15,9 +15,17 @@
 use alloy_primitives::{Bytes, ChainId, TxNumber, B160, B256, U256};
 use alloy_rlp::{Encodable, EMPTY_STRING_CODE};
 use alloy_rlp_derive::RlpEncodable;
+use anyhow::Context;
+use k256::{
+    ecdsa::{RecoveryId, Signature as K256Signature, VerifyingKey as K256VerifyingKey},
+    elliptic_curve::sec1::ToEncodedPoint,
+    PublicKey as K256PublicKey,
+};
 use serde::{Deserialize, Serialize};
 
-use crate::{access_list::AccessList, keccak::keccak};
+use crate::{
+    access_list::AccessList, keccak::keccak, signature::TxSignature, transactions::TxEssence,
+};
 
 /// Represents a legacy Ethereum transaction as detailed in [EIP-155](https://eips.ethereum.org/EIPS/eip-155).
 ///
@@ -377,5 +385,102 @@ impl EthereumTxEssence {
             EthereumTxEssence::Eip2930(tx) => tx.payload_length(),
             EthereumTxEssence::Eip1559(tx) => tx.payload_length(),
         }
+    }
+
+    /// Determines whether the y-coordinate of the ECDSA signature's associated public key
+    /// is odd.
+    ///
+    /// This information is derived from the `v` component of the signature and is used
+    /// during public key recovery.
+    fn is_y_odd(&self, signature: &TxSignature) -> Option<bool> {
+        match self {
+            EthereumTxEssence::Legacy(TxEssenceLegacy { chain_id: None, .. }) => {
+                checked_bool(signature.v - 27)
+            }
+            EthereumTxEssence::Legacy(TxEssenceLegacy {
+                chain_id: Some(chain_id),
+                ..
+            }) => checked_bool(signature.v - 35 - 2 * chain_id),
+            _ => checked_bool(signature.v),
+        }
+    }
+}
+
+/// Converts a given value into a boolean based on its parity.
+///
+/// Returns:
+/// - `Some(true)` if the value is 1.
+/// - `Some(false)` if the value is 0.
+/// - `None` otherwise.
+#[inline]
+pub fn checked_bool(v: u64) -> Option<bool> {
+    match v {
+        0 => Some(false),
+        1 => Some(true),
+        _ => None,
+    }
+}
+
+impl TxEssence for EthereumTxEssence {
+    /// Determines the type of the transaction based on its essence.
+    ///
+    /// Returns a byte representing the transaction type:
+    /// - `0x00` for Legacy transactions.
+    /// - `0x01` for EIP-2930 transactions.
+    /// - `0x02` for EIP-1559 transactions.
+    fn tx_type(&self) -> u8 {
+        match self {
+            EthereumTxEssence::Legacy(_) => 0x00,
+            EthereumTxEssence::Eip2930(_) => 0x01,
+            EthereumTxEssence::Eip1559(_) => 0x02,
+        }
+    }
+    /// Retrieves the gas limit set for the transaction.
+    ///
+    /// The gas limit represents the maximum amount of gas units that the transaction
+    /// is allowed to consume. It ensures that transactions don't run indefinitely.
+    fn gas_limit(&self) -> U256 {
+        match self {
+            EthereumTxEssence::Legacy(tx) => tx.gas_limit,
+            EthereumTxEssence::Eip2930(tx) => tx.gas_limit,
+            EthereumTxEssence::Eip1559(tx) => tx.gas_limit,
+        }
+    }
+    /// Retrieves the recipient address of the transaction, if available.
+    ///
+    /// For contract creation transactions, this method returns `None` as there's no
+    /// recipient address.
+    fn to(&self) -> Option<B160> {
+        match self {
+            EthereumTxEssence::Legacy(tx) => tx.to.into(),
+            EthereumTxEssence::Eip2930(tx) => tx.to.into(),
+            EthereumTxEssence::Eip1559(tx) => tx.to.into(),
+        }
+    }
+    /// Recovers the Ethereum address of the sender from the transaction's signature.
+    ///
+    /// This method uses the ECDSA recovery mechanism to derive the sender's public key
+    /// and subsequently their Ethereum address. If the recovery is unsuccessful, an
+    /// error is returned.
+    fn recover_from(&self, signature: &TxSignature) -> anyhow::Result<B160> {
+        let is_y_odd = self.is_y_odd(signature).context("v invalid")?;
+        let signature =
+            K256Signature::from_scalars(signature.r.to_be_bytes(), signature.s.to_be_bytes())
+                .context("r, s invalid")?;
+
+        let verify_key = K256VerifyingKey::recover_from_prehash(
+            self.signing_hash().as_slice(),
+            &signature,
+            RecoveryId::new(is_y_odd, false),
+        )
+        .context("invalid signature")?;
+
+        let public_key = K256PublicKey::from(&verify_key);
+        let public_key = public_key.to_encoded_point(false);
+        let public_key = public_key.as_bytes();
+        debug_assert_eq!(public_key[0], 0x04);
+        let hash = keccak(&public_key[1..]);
+
+        Ok(B160::from_slice(&hash[12..]))
     }
 }

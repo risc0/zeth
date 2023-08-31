@@ -27,10 +27,11 @@ use ethers_core::types::{
 use crate::{
     access_list::{AccessList, AccessListItem},
     block::Header,
-    signature::TxSignature,
-    transaction::{
-        Transaction, TransactionKind, TxEssence, TxEssenceEip1559, TxEssenceEip2930,
-        TxEssenceLegacy,
+    transactions::{
+        ethereum::{
+            EthereumTxEssence, TransactionKind, TxEssenceEip1559, TxEssenceEip2930, TxEssenceLegacy,
+        },
+        Transaction, TxSignature,
     },
     withdrawal::Withdrawal,
 };
@@ -123,7 +124,7 @@ impl TryFrom<EthersTransaction> for Transaction {
 
     fn try_from(tx: EthersTransaction) -> Result<Self, Self::Error> {
         let essence = match tx.transaction_type.map(|t| t.as_u64()) {
-            None | Some(0) => TxEssence::Legacy(TxEssenceLegacy {
+            None | Some(0) => EthereumTxEssence::Legacy(TxEssenceLegacy {
                 chain_id: match tx.chain_id {
                     None => None,
                     Some(chain_id) => Some(
@@ -142,7 +143,7 @@ impl TryFrom<EthersTransaction> for Transaction {
                 value: from_ethers_u256(tx.value),
                 data: tx.input.0.into(),
             }),
-            Some(1) => TxEssence::Eip2930(TxEssenceEip2930 {
+            Some(1) => EthereumTxEssence::Eip2930(TxEssenceEip2930 {
                 chain_id: tx
                     .chain_id
                     .context("chain_id missing")?
@@ -159,7 +160,7 @@ impl TryFrom<EthersTransaction> for Transaction {
                 access_list: tx.access_list.context("access_list missing")?.into(),
                 data: tx.input.0.into(),
             }),
-            Some(2) => TxEssence::Eip1559(TxEssenceEip1559 {
+            Some(2) => EthereumTxEssence::Eip1559(TxEssenceEip1559 {
                 chain_id: tx
                     .chain_id
                     .context("chain_id missing")?

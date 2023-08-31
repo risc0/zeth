@@ -37,11 +37,8 @@ use zeth_primitives::{
     ethers::from_ethers_h160,
     keccak::keccak,
     revm::from_revm_b160,
-    signature::TxSignature,
-    transaction::{
-        Transaction, TransactionKind, TxEssence, TxEssenceEip1559, TxEssenceEip2930,
-        TxEssenceLegacy,
-    },
+    transaction::{TransactionKind, TxEssenceEip1559, TxEssenceEip2930, TxEssenceLegacy},
+    transactions::{ethereum::EthereumTxEssence, Transaction, TxSignature},
     trie::{self, MptNode, MptNodeData, StateAccount},
     withdrawal::Withdrawal,
     Bloom, Bytes, RlpBytes, StorageKey, B160, B256, B64, U256, U64,
@@ -199,7 +196,7 @@ impl From<TestTransaction> for Transaction {
             s: tx.s,
         };
         let essence = if tx.access_list.is_none() {
-            TxEssence::Legacy(TxEssenceLegacy {
+            EthereumTxEssence::Legacy(TxEssenceLegacy {
                 chain_id: None,
                 nonce: tx.nonce.try_into().unwrap(),
                 gas_price: tx.gas_price.unwrap(),
@@ -212,7 +209,7 @@ impl From<TestTransaction> for Transaction {
                 data: tx.data,
             })
         } else if tx.max_fee_per_gas.is_none() {
-            TxEssence::Eip2930(TxEssenceEip2930 {
+            EthereumTxEssence::Eip2930(TxEssenceEip2930 {
                 chain_id: 1,
                 nonce: tx.nonce.try_into().unwrap(),
                 gas_price: tx.gas_price.unwrap(),
@@ -226,7 +223,7 @@ impl From<TestTransaction> for Transaction {
                 access_list: tx.access_list.unwrap().into(),
             })
         } else {
-            TxEssence::Eip1559(TxEssenceEip1559 {
+            EthereumTxEssence::Eip1559(TxEssenceEip1559 {
                 chain_id: 1,
                 nonce: tx.nonce.try_into().unwrap(),
                 max_priority_fee_per_gas: tx.max_priority_fee_per_gas.unwrap(),

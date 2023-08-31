@@ -18,8 +18,7 @@ pub mod access_list;
 pub mod block;
 pub mod keccak;
 pub mod receipt;
-pub mod signature;
-pub mod transaction;
+pub mod transactions;
 pub mod trie;
 pub mod withdrawal;
 

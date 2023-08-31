@@ -30,7 +30,7 @@ use zeth_primitives::{
     ethers::{from_ethers_h160, from_ethers_h256, from_ethers_u256},
     keccak::keccak,
     revm::to_revm_b256,
-    transaction::Transaction,
+    transactions::Transaction,
     trie::{MptNode, MptNodeData, MptNodeReference, EMPTY_ROOT},
     withdrawal::Withdrawal,
 };

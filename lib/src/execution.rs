@@ -27,7 +27,10 @@ use revm::{
 use zeth_primitives::{
     receipt::Receipt,
     revm::{to_revm_b160, to_revm_b256},
-    transaction::{Transaction, TransactionKind, TxEssence},
+    transactions::{
+        ethereum::{EthereumTxEssence, TransactionKind},
+        Transaction,
+    },
     trie::MptNode,
     Bloom, RlpBytes,
 };
@@ -264,7 +267,7 @@ impl TxExecStrategy for EthTxExecStrategy {
 
 fn fill_tx_env(tx_env: &mut TxEnv, tx: &Transaction, caller: Address) {
     match &tx.essence {
-        TxEssence::Legacy(tx) => {
+        EthereumTxEssence::Legacy(tx) => {
             tx_env.caller = caller;
             tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
             tx_env.gas_price = tx.gas_price;
@@ -280,7 +283,7 @@ fn fill_tx_env(tx_env: &mut TxEnv, tx: &Transaction, caller: Address) {
             tx_env.nonce = Some(tx.nonce);
             tx_env.access_list.clear();
         }
-        TxEssence::Eip2930(tx) => {
+        EthereumTxEssence::Eip2930(tx) => {
             tx_env.caller = caller;
             tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
             tx_env.gas_price = tx.gas_price;
@@ -296,7 +299,7 @@ fn fill_tx_env(tx_env: &mut TxEnv, tx: &Transaction, caller: Address) {
             tx_env.nonce = Some(tx.nonce);
             tx_env.access_list = tx.access_list.clone().into();
         }
-        TxEssence::Eip1559(tx) => {
+        EthereumTxEssence::Eip1559(tx) => {
             tx_env.caller = caller;
             tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
             tx_env.gas_price = tx.max_fee_per_gas;

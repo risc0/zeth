@@ -18,7 +18,7 @@ use hashbrown::HashMap;
 use revm::primitives::B160 as RevmB160;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
-    block::Header, transaction::Transaction, trie::MptNode, withdrawal::Withdrawal, Bytes, B160,
+    block::Header, transactions::Transaction, trie::MptNode, withdrawal::Withdrawal, Bytes, B160,
     B256, U256,
 };
 

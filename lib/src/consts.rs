@@ -65,6 +65,18 @@ pub static ETH_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| {
     }
 });
 
+/// The optimism mainnet specification.
+pub static OP_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
+    chain_id: 10,
+    hard_forks: BTreeMap::from([(SpecId::MERGE, ForkCondition::Block(0))]),
+    eip_1559_constants: Eip1559Constants {
+        base_fee_change_denominator: uint!(50_U256),
+        base_fee_max_increase_denominator: uint!(10_U256),
+        base_fee_max_decrease_denominator: uint!(50_U256),
+        elasticity_multiplier: uint!(6_U256),
+    },
+});
+
 /// The condition at which a fork is activated.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ForkCondition {

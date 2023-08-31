@@ -39,7 +39,7 @@ use zeth_primitives::{
 use crate::{
     block_builder::BlockBuilder,
     consts::ETH_MAINNET_CHAIN_SPEC,
-    execution::EthTxExecStrategy,
+    execution::ethereum::EthTxExecStrategy,
     host::{
         mpt::{orphaned_digests, resolve_digests, shorten_key},
         provider::{new_provider, BlockQuery},

@@ -12,24 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::fmt::Debug;
-use std::mem::take;
+use std::{fmt::Debug, mem::take};
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, Context};
 #[cfg(not(target_os = "zkvm"))]
-use log::{debug, info};
+use log::debug;
 use revm::{
     primitives::{
-        Account, Address, BlockEnv, CfgEnv, ResultAndState, SpecId, TransactTo, TxEnv, U256,
+        Account, Address, BlockEnv, CfgEnv, ResultAndState, SpecId, TransactTo, TxEnv, B160,
     },
     Database, DatabaseCommit, EVM,
 };
+use ruint::aliases::U256;
 use zeth_primitives::{
     receipt::Receipt,
     revm::{to_revm_b160, to_revm_b256},
     transactions::{
         ethereum::{EthereumTxEssence, TransactionKind},
-        EthereumTransaction, TxEssence,
+        TxEssence,
     },
     trie::MptNode,
     Bloom, RlpBytes,
@@ -39,22 +39,16 @@ use crate::{
     block_builder::BlockBuilder,
     consts,
     consts::{GWEI_TO_WEI, MIN_SPEC_ID},
+    execution::TxExecStrategy,
     guest_mem_forget,
 };
-
-pub trait TxExecStrategy<E: TxEssence> {
-    fn execute_transactions<D>(block_builder: BlockBuilder<D, E>) -> Result<BlockBuilder<D, E>>
-    where
-        D: Database + DatabaseCommit,
-        <D as Database>::Error: Debug;
-}
 
 pub struct EthTxExecStrategy {}
 
 impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
     fn execute_transactions<D>(
         mut block_builder: BlockBuilder<D, EthereumTxEssence>,
-    ) -> Result<BlockBuilder<D, EthereumTxEssence>>
+    ) -> anyhow::Result<BlockBuilder<D, EthereumTxEssence>>
     where
         D: Database + DatabaseCommit,
         <D as Database>::Error: Debug,
@@ -76,6 +70,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
         #[cfg(not(target_os = "zkvm"))]
         {
             use chrono::{TimeZone, Utc};
+            use log::info;
             let dt = Utc
                 .timestamp_opt(block_builder.input.timestamp.try_into().unwrap(), 0)
                 .unwrap();
@@ -145,7 +140,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
 
             // process the transaction
             let tx_from = to_revm_b160(tx_from);
-            fill_tx_env(&mut evm.env.tx, &tx, tx_from);
+            fill_eth_tx_env(&mut evm.env.tx, &tx.essence, tx_from);
             let ResultAndState { result, state } = evm
                 .transact()
                 .map_err(|evm_err| anyhow!("Error at transaction {}: {:?}", tx_no, evm_err))?;
@@ -227,22 +222,8 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
                 debug!("  Recipient: {:?}", withdrawal.address);
                 debug!("  Value: {}", amount_wei);
             }
-            // Read account from database
-            let withdrawal_address = to_revm_b160(withdrawal.address);
-            let mut withdrawal_account: Account = db
-                .basic(withdrawal_address)
-                .map_err(|db_err| anyhow!("Error at withdrawal {}: {:?}", i, db_err))?
-                .unwrap_or_default()
-                .into();
             // Credit withdrawal amount
-            withdrawal_account.info.balance = withdrawal_account
-                .info
-                .balance
-                .checked_add(amount_wei)
-                .unwrap();
-            withdrawal_account.is_touched = true;
-            // Commit changes to database
-            db.commit([(withdrawal_address, withdrawal_account)].into());
+            increase_account_balance(&mut db, to_revm_b160(withdrawal.address), amount_wei)?;
             // Add withdrawal to trie
             withdrawals_trie
                 .insert_rlp(&i.to_rlp(), withdrawal)
@@ -267,8 +248,8 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
     }
 }
 
-fn fill_tx_env(tx_env: &mut TxEnv, tx: &EthereumTransaction, caller: Address) {
-    match &tx.essence {
+pub fn fill_eth_tx_env(tx_env: &mut TxEnv, essence: &EthereumTxEssence, caller: Address) {
+    match essence {
         EthereumTxEssence::Legacy(tx) => {
             tx_env.caller = caller;
             tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
@@ -318,4 +299,32 @@ fn fill_tx_env(tx_env: &mut TxEnv, tx: &EthereumTransaction, caller: Address) {
             tx_env.access_list = tx.access_list.clone().into();
         }
     };
+}
+
+pub fn increase_account_balance<D>(
+    db: &mut D,
+    address: B160,
+    amount_wei: U256,
+) -> anyhow::Result<()>
+where
+    D: Database + DatabaseCommit,
+    <D as Database>::Error: Debug,
+{
+    // Read account from database
+    let mut account: Account = db
+        .basic(address)
+        .map_err(|db_err| {
+            anyhow!(
+                "Error increasing account balance for {}: {:?}",
+                address,
+                db_err
+            )
+        })?
+        .unwrap_or_default()
+        .into();
+    // Credit withdrawal amount
+    account.info.balance = account.info.balance.checked_add(amount_wei).unwrap();
+    account.is_touched = true;
+    // Commit changes to database
+    Ok(db.commit([(address, account)].into()))
 }

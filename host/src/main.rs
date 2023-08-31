@@ -29,7 +29,7 @@ use zeth_guests::{ETH_BLOCK_ELF, ETH_BLOCK_ID};
 use zeth_lib::{
     block_builder::BlockBuilder,
     consts::{Network, ETH_MAINNET_CHAIN_SPEC},
-    execution::EthTxExecStrategy,
+    execution::ethereum::EthTxExecStrategy,
     finalization::DebugBuildFromMemDbStrategy,
     initialization::MemDbInitStrategy,
     input::Input,

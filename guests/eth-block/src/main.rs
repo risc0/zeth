@@ -16,10 +16,11 @@
 
 use risc0_zkvm::guest::env;
 use zeth_lib::{
-    block_builder::BlockBuilder, consts::ETH_MAINNET_CHAIN_SPEC, execution::EthTxExecStrategy,
-    finalization::BuildFromMemDbStrategy, initialization::MemDbInitStrategy, input::Input,
-    mem_db::MemDb, preparation::EthHeaderPrepStrategy, EthereumTxEssence,
+    block_builder::BlockBuilder, consts::ETH_MAINNET_CHAIN_SPEC,
+    EthereumTxEssence, finalization::BuildFromMemDbStrategy, initialization::MemDbInitStrategy,
+    input::Input, mem_db::MemDb, preparation::EthHeaderPrepStrategy,
 };
+use zeth_lib::execution::ethereum::EthTxExecStrategy;
 
 risc0_zkvm::guest::entry!(main);
 

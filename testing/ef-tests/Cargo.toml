@@ -10,7 +10,7 @@ ef-tests = []
 anyhow = "1.0"
 ethers-core = { version = "2.0", features = ["optimism"] }
 hashbrown = { version = "0.13", features = ["inline-more"] }
-revm = { version = "3.3", default-features = false, features = ["std", "serde"] }
+revm = { version = "3.3", default-features = false, features = ["std", "serde", "optional_no_base_fee", "optional_balance_check"] }
 serde = "1.0"
 serde_json = "1.0"
 serde_with = "3.1"

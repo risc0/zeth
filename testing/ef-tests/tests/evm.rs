@@ -18,7 +18,7 @@ use std::path::PathBuf;
 
 use rstest::rstest;
 use zeth_lib::{
-    block_builder::BlockBuilder, execution::EthTxExecStrategy,
+    block_builder::BlockBuilder, execution::ethereum::EthTxExecStrategy,
     finalization::BuildFromMemDbStrategy, initialization::MemDbInitStrategy, mem_db::MemDb,
     preparation::EthHeaderPrepStrategy,
 };

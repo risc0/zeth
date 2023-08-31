@@ -21,7 +21,7 @@ use serde_with::{serde_as, NoneAsEmptyString};
 use zeth_lib::{
     block_builder::BlockBuilder,
     consts::ChainSpec,
-    execution::EthTxExecStrategy,
+    execution::ethereum::EthTxExecStrategy,
     host::{
         provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
         provider_db::ProviderDb,

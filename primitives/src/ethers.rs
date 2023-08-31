@@ -32,7 +32,7 @@ use crate::{
         ethereum::{
             EthereumTxEssence, TransactionKind, TxEssenceEip1559, TxEssenceEip2930, TxEssenceLegacy,
         },
-        Transaction,
+        EthereumTransaction,
     },
     withdrawal::Withdrawal,
 };
@@ -118,9 +118,9 @@ impl<T> TryFrom<EthersBlock<T>> for Header {
     }
 }
 
-/// Conversion from `EthersTransaction` to the local [Transaction].
+/// Conversion from `EthersTransaction` to the local [EthereumTransaction].
 /// This conversion may fail if certain expected fields are missing.
-impl TryFrom<EthersTransaction> for Transaction {
+impl TryFrom<EthersTransaction> for EthereumTransaction {
     type Error = anyhow::Error;
 
     fn try_from(tx: EthersTransaction) -> Result<Self, Self::Error> {
@@ -192,7 +192,7 @@ impl TryFrom<EthersTransaction> for Transaction {
             s: from_ethers_u256(tx.s),
         };
 
-        Ok(Transaction { essence, signature })
+        Ok(EthereumTransaction { essence, signature })
     }
 }
 

@@ -30,7 +30,7 @@ use zeth_primitives::{
     ethers::{from_ethers_h160, from_ethers_h256, from_ethers_u256},
     keccak::keccak,
     revm::to_revm_b256,
-    transactions::Transaction,
+    transactions::EthereumTransaction,
     trie::{MptNode, MptNodeData, MptNodeReference, EMPTY_ROOT},
     withdrawal::Withdrawal,
 };
@@ -58,7 +58,7 @@ pub struct Init {
     pub init_block: Header,
     pub init_proofs: HashMap<B160, EIP1186ProofResponse>,
     pub fini_block: Header,
-    pub fini_transactions: Vec<Transaction>,
+    pub fini_transactions: Vec<EthereumTransaction>,
     pub fini_withdrawals: Vec<Withdrawal>,
     pub fini_proofs: HashMap<B160, EIP1186ProofResponse>,
     pub ancestor_headers: Vec<Header>,

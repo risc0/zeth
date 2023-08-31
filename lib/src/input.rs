@@ -18,8 +18,8 @@ use hashbrown::HashMap;
 use revm::primitives::B160 as RevmB160;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
-    block::Header, transactions::Transaction, trie::MptNode, withdrawal::Withdrawal, Bytes, B160,
-    B256, U256,
+    block::Header, transactions::EthereumTransaction, trie::MptNode, withdrawal::Withdrawal, Bytes,
+    B160, B256, U256,
 };
 
 use crate::NoHashBuilder;
@@ -40,7 +40,7 @@ pub struct Input {
     /// Hash previously used for the PoW now containing the RANDAO value.
     pub mix_hash: B256,
     /// List of transactions for execution
-    pub transactions: Vec<Transaction>,
+    pub transactions: Vec<EthereumTransaction>,
     /// List of stake withdrawals for execution
     pub withdrawals: Vec<Withdrawal>,
     /// State trie of the parent block.

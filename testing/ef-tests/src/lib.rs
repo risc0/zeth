@@ -38,8 +38,12 @@ use zeth_primitives::{
     keccak::keccak,
     revm::from_revm_b160,
     signature::TxSignature,
-    transaction::{TransactionKind, TxEssenceEip1559, TxEssenceEip2930, TxEssenceLegacy},
-    transactions::{ethereum::EthereumTxEssence, Transaction},
+    transactions::{
+        ethereum::{
+            EthereumTxEssence, TransactionKind, TxEssenceEip1559, TxEssenceEip2930, TxEssenceLegacy,
+        },
+        EthereumTransaction,
+    },
     trie::{self, MptNode, MptNodeData, StateAccount},
     withdrawal::Withdrawal,
     Bloom, Bytes, RlpBytes, StorageKey, B160, B256, B64, U256, U64,
@@ -189,7 +193,7 @@ pub struct TestTransaction {
     pub s: U256,
 }
 
-impl From<TestTransaction> for Transaction {
+impl From<TestTransaction> for EthereumTransaction {
     fn from(tx: TestTransaction) -> Self {
         let signature = TxSignature {
             v: tx.v.try_into().unwrap(),
@@ -239,7 +243,7 @@ impl From<TestTransaction> for Transaction {
                 access_list: tx.access_list.unwrap().into(),
             })
         };
-        Transaction { essence, signature }
+        EthereumTransaction { essence, signature }
     }
 }
 
@@ -325,7 +329,10 @@ pub fn create_input(
         parent_header.number,
     );
 
-    let transactions: Vec<Transaction> = transactions.into_iter().map(Transaction::from).collect();
+    let transactions: Vec<EthereumTransaction> = transactions
+        .into_iter()
+        .map(EthereumTransaction::from)
+        .collect();
     let input = Input {
         beneficiary: header.beneficiary,
         gas_limit: header.gas_limit,

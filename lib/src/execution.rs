@@ -29,7 +29,7 @@ use zeth_primitives::{
     revm::{to_revm_b160, to_revm_b256},
     transactions::{
         ethereum::{EthereumTxEssence, TransactionKind},
-        Transaction, TxEssence,
+        EthereumTransaction, TxEssence,
     },
     trie::MptNode,
     Bloom, RlpBytes,
@@ -265,7 +265,7 @@ impl TxExecStrategy for EthTxExecStrategy {
     }
 }
 
-fn fill_tx_env(tx_env: &mut TxEnv, tx: &Transaction, caller: Address) {
+fn fill_tx_env(tx_env: &mut TxEnv, tx: &EthereumTransaction, caller: Address) {
     match &tx.essence {
         EthereumTxEssence::Legacy(tx) => {
             tx_env.caller = caller;

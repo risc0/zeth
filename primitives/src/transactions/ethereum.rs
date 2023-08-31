@@ -374,19 +374,6 @@ impl EthereumTxEssence {
         }
     }
 
-    /// Computes the length of the RLP-encoded payload in bytes for the transaction
-    /// essence.
-    ///
-    /// This method calculates the length of the transaction data when it is RLP-encoded,
-    /// which is used for serialization and deserialization in the Ethereum network.
-    pub fn payload_length(&self) -> usize {
-        match self {
-            EthereumTxEssence::Legacy(tx) => tx.payload_length(),
-            EthereumTxEssence::Eip2930(tx) => tx.payload_length(),
-            EthereumTxEssence::Eip1559(tx) => tx.payload_length(),
-        }
-    }
-
     /// Determines whether the y-coordinate of the ECDSA signature's associated public key
     /// is odd.
     ///
@@ -482,5 +469,17 @@ impl TxEssence for EthereumTxEssence {
         let hash = keccak(&public_key[1..]);
 
         Ok(B160::from_slice(&hash[12..]))
+    }
+    /// Computes the length of the RLP-encoded payload in bytes for the transaction
+    /// essence.
+    ///
+    /// This method calculates the length of the transaction data when it is RLP-encoded,
+    /// which is used for serialization and deserialization in the Ethereum network.
+    fn payload_length(&self) -> usize {
+        match self {
+            EthereumTxEssence::Legacy(tx) => tx.payload_length(),
+            EthereumTxEssence::Eip2930(tx) => tx.payload_length(),
+            EthereumTxEssence::Eip1559(tx) => tx.payload_length(),
+        }
     }
 }

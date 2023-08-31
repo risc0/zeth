@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloy_primitives::{Bloom, BloomInput, Bytes, B160, B256, U256};
+use alloy_primitives::{Address, Bloom, BloomInput, Bytes, B256, U256};
 use alloy_rlp::Encodable;
 use alloy_rlp_derive::RlpEncodable;
 use serde::{Deserialize, Serialize};
@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, RlpEncodable)]
 pub struct Log {
     /// Contract that emitted this log.
-    pub address: B160,
+    pub address: Address,
     /// Topics of the log. The number of logs depend on what `LOG` opcode is used.
     pub topics: Vec<B256>,
     /// Arbitrary length data.

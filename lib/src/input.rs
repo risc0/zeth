@@ -18,7 +18,7 @@ use hashbrown::HashMap;
 use revm::primitives::B160 as RevmB160;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
-    block::Header, transaction::Transaction, trie::MptNode, withdrawal::Withdrawal, Bytes, B160,
+    block::Header, transaction::Transaction, trie::MptNode, withdrawal::Withdrawal, Address, Bytes,
     B256, U256,
 };
 
@@ -30,7 +30,7 @@ pub struct Input {
     /// Previous block header
     pub parent_header: Header,
     /// Address to which all priority fees in this block are transferred.
-    pub beneficiary: B160,
+    pub beneficiary: Address,
     /// Scalar equal to the current limit of gas expenditure per block.
     pub gas_limit: U256,
     /// Scalar corresponding to the seconds since Epoch at this block's inception.

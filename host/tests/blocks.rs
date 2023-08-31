@@ -22,7 +22,7 @@ use rstest::rstest;
 use tempfile::tempdir;
 use zeth_guests::ETH_BLOCK_ELF;
 use zeth_lib::input::Input;
-use zeth_primitives::trie::MptNodeData;
+use zeth_primitives::{transactions::ethereum::EthereumTxEssence, trie::MptNodeData};
 
 #[rstest]
 fn block_cli_ethereum(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
@@ -44,7 +44,7 @@ fn empty_blocks(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
     // Fetch all of the initial data
     let init = zeth_lib::host::get_initial_data(rpc_cache, None, block_no).expect("Could not init");
     // Create input object
-    let mut input: Input = init.clone().into();
+    let mut input: Input<EthereumTxEssence> = init.clone().into();
     // Take out transaction and withdrawal execution data
     input.transactions = Default::default();
     input.withdrawals = Default::default();

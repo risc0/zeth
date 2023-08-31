@@ -14,11 +14,12 @@
 
 use std::{
     collections::HashSet,
+    fmt::Debug,
     iter::{once, zip},
 };
 
 use anyhow::{Context, Result};
-use ethers_core::types::{Bytes, EIP1186ProofResponse, H256};
+use ethers_core::types::{Bytes, EIP1186ProofResponse, Transaction as EthersTransaction, H256};
 use hashbrown::HashMap;
 use log::info;
 use revm::{
@@ -30,7 +31,7 @@ use zeth_primitives::{
     ethers::{from_ethers_h160, from_ethers_h256, from_ethers_u256},
     keccak::keccak,
     revm::to_revm_b256,
-    transactions::EthereumTransaction,
+    transactions::{Transaction, TxEssence},
     trie::{MptNode, MptNodeData, MptNodeReference, EMPTY_ROOT},
     withdrawal::Withdrawal,
 };
@@ -53,22 +54,25 @@ pub mod provider;
 pub mod provider_db;
 
 #[derive(Clone)]
-pub struct Init {
+pub struct Init<E: TxEssence> {
     pub db: MemDb,
     pub init_block: Header,
     pub init_proofs: HashMap<B160, EIP1186ProofResponse>,
     pub fini_block: Header,
-    pub fini_transactions: Vec<EthereumTransaction>,
+    pub fini_transactions: Vec<Transaction<E>>,
     pub fini_withdrawals: Vec<Withdrawal>,
     pub fini_proofs: HashMap<B160, EIP1186ProofResponse>,
     pub ancestor_headers: Vec<Header>,
 }
 
-pub fn get_initial_data(
+pub fn get_initial_data<E: TxEssence + TryFrom<EthersTransaction>>(
     cache_path: Option<String>,
     rpc_url: Option<String>,
     block_no: u64,
-) -> Result<Init> {
+) -> Result<Init<E>>
+where
+    <E as TryFrom<EthersTransaction>>::Error: Debug,
+{
     let mut provider = new_provider(cache_path, rpc_url)?;
 
     // Fetch the initial block
@@ -116,8 +120,11 @@ pub fn get_initial_data(
             .into_iter()
             .map(|w| w.try_into().unwrap())
             .collect(),
+        parent_state_trie: Default::default(),
+        parent_storage: Default::default(),
+        contracts: vec![],
         parent_header: init_block.clone().try_into()?,
-        ..Default::default()
+        ancestor_headers: vec![],
     };
 
     // Create the block builder, run the transactions and extract the DB
@@ -393,8 +400,8 @@ fn resolve_orphans(
     }
 }
 
-impl From<Init> for Input {
-    fn from(value: Init) -> Input {
+impl<E: TxEssence> From<Init<E>> for Input<E> {
+    fn from(value: Init<E>) -> Input<E> {
         // construct the proof tries
         let (mut nodes_by_reference, mut storage) =
             proofs_to_tries(value.init_proofs.values().cloned().collect());

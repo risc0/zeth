@@ -18,7 +18,7 @@ use risc0_zkvm::guest::env;
 use zeth_lib::{
     block_builder::BlockBuilder, consts::ChainSpec, execution::EthTxExecStrategy,
     finalization::BuildFromMemDbStrategy, initialization::MemDbInitStrategy, input::Input,
-    mem_db::MemDb, preparation::EthHeaderPrepStrategy,
+    mem_db::MemDb, preparation::EthHeaderPrepStrategy, EthereumTxEssence,
 };
 
 risc0_zkvm::guest::entry!(main);
@@ -27,9 +27,9 @@ pub fn main() {
     // Read the test block's chain specification
     let chain_spec: ChainSpec = env::read();
     // Read the input previous block and transaction data
-    let input: Input = env::read();
+    let input: Input<EthereumTxEssence> = env::read();
     // Build the resulting block
-    let output = BlockBuilder::<MemDb>::new(&chain_spec, input)
+    let output = BlockBuilder::<MemDb, EthereumTxEssence>::new(&chain_spec, input)
         .initialize_database::<MemDbInitStrategy>()
         .expect("Failed to create in-memory evm storage")
         .prepare_header::<EthHeaderPrepStrategy>()

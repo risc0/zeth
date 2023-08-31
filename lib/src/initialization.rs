@@ -20,6 +20,7 @@ use revm::primitives::{AccountInfo, Bytecode, B256};
 use zeth_primitives::{
     keccak::{keccak, KECCAK_EMPTY},
     revm::to_revm_b256,
+    transactions::TxEssence,
     trie::StateAccount,
     Bytes,
 };
@@ -32,21 +33,22 @@ use crate::{
     NoHashBuilder,
 };
 
-pub trait DbInitStrategy {
-    type Db;
+pub trait DbInitStrategy<E: TxEssence> {
+    type Database;
 
-    fn initialize_database(block_builder: BlockBuilder<Self::Db>)
-        -> Result<BlockBuilder<Self::Db>>;
+    fn initialize_database(
+        block_builder: BlockBuilder<Self::Database, E>,
+    ) -> Result<BlockBuilder<Self::Database, E>>;
 }
 
 pub struct MemDbInitStrategy {}
 
-impl DbInitStrategy for MemDbInitStrategy {
-    type Db = MemDb;
+impl<E: TxEssence> DbInitStrategy<E> for MemDbInitStrategy {
+    type Database = MemDb;
 
     fn initialize_database(
-        mut block_builder: BlockBuilder<Self::Db>,
-    ) -> Result<BlockBuilder<Self::Db>> {
+        mut block_builder: BlockBuilder<Self::Database, E>,
+    ) -> Result<BlockBuilder<Self::Database, E>> {
         // Verify state trie root
         if block_builder.input.parent_state_trie.hash()
             != block_builder.input.parent_header.state_root

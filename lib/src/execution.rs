@@ -42,8 +42,8 @@ use crate::{
     guest_mem_forget,
 };
 
-pub trait TxExecStrategy {
-    fn execute_transactions<D>(block_builder: BlockBuilder<D>) -> Result<BlockBuilder<D>>
+pub trait TxExecStrategy<E: TxEssence> {
+    fn execute_transactions<D>(block_builder: BlockBuilder<D, E>) -> Result<BlockBuilder<D, E>>
     where
         D: Database + DatabaseCommit,
         <D as Database>::Error: Debug;
@@ -51,8 +51,10 @@ pub trait TxExecStrategy {
 
 pub struct EthTxExecStrategy {}
 
-impl TxExecStrategy for EthTxExecStrategy {
-    fn execute_transactions<D>(mut block_builder: BlockBuilder<D>) -> Result<BlockBuilder<D>>
+impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
+    fn execute_transactions<D>(
+        mut block_builder: BlockBuilder<D, EthereumTxEssence>,
+    ) -> Result<BlockBuilder<D, EthereumTxEssence>>
     where
         D: Database + DatabaseCommit,
         <D as Database>::Error: Debug,

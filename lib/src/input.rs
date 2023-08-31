@@ -18,15 +18,18 @@ use hashbrown::HashMap;
 use revm::primitives::B160 as RevmB160;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
-    block::Header, transactions::EthereumTransaction, trie::MptNode, withdrawal::Withdrawal, Bytes,
-    B160, B256, U256,
+    block::Header,
+    transactions::{Transaction, TxEssence},
+    trie::MptNode,
+    withdrawal::Withdrawal,
+    Bytes, B160, B256, U256,
 };
 
 use crate::NoHashBuilder;
 
 /// External block input.
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
-pub struct Input {
+pub struct Input<E: TxEssence> {
     /// Previous block header
     pub parent_header: Header,
     /// Address to which all priority fees in this block are transferred.
@@ -40,7 +43,7 @@ pub struct Input {
     /// Hash previously used for the PoW now containing the RANDAO value.
     pub mix_hash: B256,
     /// List of transactions for execution
-    pub transactions: Vec<EthereumTransaction>,
+    pub transactions: Vec<Transaction<E>>,
     /// List of stake withdrawals for execution
     pub withdrawals: Vec<Withdrawal>,
     /// State trie of the parent block.
@@ -57,11 +60,27 @@ pub type StorageEntry = (MptNode, Vec<U256>);
 
 #[cfg(test)]
 mod tests {
+    use zeth_primitives::transactions::ethereum::EthereumTxEssence;
+
     use super::*;
 
     #[test]
     fn input_serde_roundtrip() {
-        let input = Input::default();
-        let _: Input = bincode::deserialize(&bincode::serialize(&input).unwrap()).unwrap();
+        let input = Input::<EthereumTxEssence> {
+            parent_header: Default::default(),
+            beneficiary: Default::default(),
+            gas_limit: Default::default(),
+            timestamp: Default::default(),
+            extra_data: Default::default(),
+            mix_hash: Default::default(),
+            transactions: vec![],
+            withdrawals: vec![],
+            parent_state_trie: Default::default(),
+            parent_storage: Default::default(),
+            contracts: vec![],
+            ancestor_headers: vec![],
+        };
+        let _: Input<EthereumTxEssence> =
+            bincode::deserialize(&bincode::serialize(&input).unwrap()).unwrap();
     }
 }

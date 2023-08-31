@@ -319,7 +319,7 @@ pub fn create_input(
     header: Header,
     transactions: Vec<TestTransaction>,
     withdrawals: Vec<Withdrawal>,
-) -> Input {
+) -> Input<EthereumTxEssence> {
     // create the provider DB
     let provider_db = ProviderDb::new(
         Box::new(TestProvider {
@@ -341,8 +341,12 @@ pub fn create_input(
         mix_hash: header.mix_hash,
         transactions: transactions.clone(),
         withdrawals: withdrawals.clone(),
+        parent_state_trie: Default::default(),
+        parent_storage: Default::default(),
+        contracts: vec![],
         parent_header: parent_header.clone(),
-        ..Default::default()
+
+        ancestor_headers: vec![],
     };
 
     // create and run the block builder once to create the initial DB

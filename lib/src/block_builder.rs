@@ -14,7 +14,7 @@
 
 use anyhow::Result;
 use revm::{Database, DatabaseCommit};
-use zeth_primitives::block::Header;
+use zeth_primitives::{block::Header, transactions::TxEssence};
 
 use crate::{
     consts::ChainSpec, execution::TxExecStrategy, finalization::BlockBuildStrategy,
@@ -22,20 +22,21 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
-pub struct BlockBuilder<'a, D> {
+pub struct BlockBuilder<'a, D, E: TxEssence> {
     pub(crate) chain_spec: &'a ChainSpec,
-    pub(crate) input: Input,
+    pub(crate) input: Input<E>,
     pub(crate) db: Option<D>,
     pub(crate) header: Option<Header>,
 }
 
-impl<D> BlockBuilder<'_, D>
+impl<D, E> BlockBuilder<'_, D, E>
 where
     D: Database + DatabaseCommit,
     <D as Database>::Error: core::fmt::Debug,
+    E: TxEssence,
 {
     /// Creates a new block builder.
-    pub fn new(chain_spec: &ChainSpec, input: Input) -> BlockBuilder<'_, D> {
+    pub fn new(chain_spec: &ChainSpec, input: Input<E>) -> BlockBuilder<'_, D, E> {
         BlockBuilder {
             chain_spec,
             db: None,
@@ -51,7 +52,7 @@ where
     }
 
     /// Initializes the database from the input tries.
-    pub fn initialize_database<T: DbInitStrategy<Db = D>>(self) -> Result<Self> {
+    pub fn initialize_database<T: DbInitStrategy<E, Database = D>>(self) -> Result<Self> {
         T::initialize_database(self)
     }
 
@@ -61,12 +62,12 @@ where
     }
 
     /// Executes the transactions.
-    pub fn execute_transactions<T: TxExecStrategy>(self) -> Result<Self> {
+    pub fn execute_transactions<T: TxExecStrategy<E>>(self) -> Result<Self> {
         T::execute_transactions(self)
     }
 
     /// Builds the block and returns the header.
-    pub fn build<T: BlockBuildStrategy<Db = D>>(self) -> Result<T::Output> {
+    pub fn build<T: BlockBuildStrategy<E, Database = D>>(self) -> Result<T::Output> {
         T::build(self)
     }
 

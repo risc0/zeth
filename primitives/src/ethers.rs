@@ -32,7 +32,7 @@ use crate::{
         ethereum::{
             EthereumTxEssence, TransactionKind, TxEssenceEip1559, TxEssenceEip2930, TxEssenceLegacy,
         },
-        EthereumTransaction,
+        Transaction, TxEssence,
     },
     withdrawal::Withdrawal,
 };
@@ -118,9 +118,26 @@ impl<T> TryFrom<EthersBlock<T>> for Header {
     }
 }
 
+/// Conversion from `EthersTransaction` to the local [Transaction].
+/// This conversion may fail if certain expected fields are missing.
+impl<E: TxEssence + TryFrom<EthersTransaction>> TryFrom<EthersTransaction> for Transaction<E> {
+    type Error = <E as TryFrom<EthersTransaction>>::Error;
+
+    fn try_from(value: EthersTransaction) -> Result<Self, Self::Error> {
+        let signature = TxSignature {
+            v: value.v.as_u64(),
+            r: from_ethers_u256(value.r),
+            s: from_ethers_u256(value.s),
+        };
+        let essence = value.try_into()?;
+
+        Ok(Transaction { essence, signature })
+    }
+}
+
 /// Conversion from `EthersTransaction` to the local [EthereumTransaction].
 /// This conversion may fail if certain expected fields are missing.
-impl TryFrom<EthersTransaction> for EthereumTransaction {
+impl TryFrom<EthersTransaction> for EthereumTxEssence {
     type Error = anyhow::Error;
 
     fn try_from(tx: EthersTransaction) -> Result<Self, Self::Error> {
@@ -186,13 +203,7 @@ impl TryFrom<EthersTransaction> for EthereumTransaction {
             }),
             _ => unreachable!(),
         };
-        let signature = TxSignature {
-            v: tx.v.as_u64(),
-            r: from_ethers_u256(tx.r),
-            s: from_ethers_u256(tx.s),
-        };
-
-        Ok(EthereumTransaction { essence, signature })
+        Ok(essence)
     }
 }
 

@@ -10,7 +10,7 @@ bonsai-sdk = { workspace = true }
 bytemuck = "1.13"
 clap = { version = "4.0", features = ["derive"] }
 env_logger = "0.10"
-ethers-core = "2.0"
+ethers-core = { version = "2.0", features = ["optimism"] }
 hashbrown = { version = "0.13", features = ["inline-more"] }
 hex = "0.4.3"
 log = "0.4"

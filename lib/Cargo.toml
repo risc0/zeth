@@ -16,8 +16,8 @@ zeth-primitives = { path = "../primitives", features = ["revm"] }
 
 [target.'cfg(not(target_os = "zkvm"))'.dependencies]
 chrono = { version = "0.4", default-features = false }
-ethers-core = "2.0"
-ethers-providers =  "2.0"
+ethers-core = { version = "2.0", features = ["optimism"] }
+ethers-providers = { version = "2.0", features = ["optimism"] }
 flate2 = "1.0.26"
 log = "0.4"
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }

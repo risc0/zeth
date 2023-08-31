@@ -21,6 +21,7 @@ use crate::{
 };
 
 pub mod ethereum;
+pub mod optimism;
 
 pub type EthereumTransaction = Transaction<EthereumTxEssence>;
 
@@ -70,6 +71,8 @@ pub trait TxEssence: Encodable {
     /// This method calculates the combined length of all the individual fields
     /// of the transaction when they are RLP-encoded.
     fn payload_length(&self) -> usize;
+    /// RLP encodes the transaction essence and signature into the provided `out` buffer.
+    fn encode_with_signature(&self, signature: &TxSignature, out: &mut dyn alloy_rlp::BufMut);
 }
 
 /// Provides RLP encoding functionality for the [Transaction] struct.
@@ -91,9 +94,8 @@ impl<E: TxEssence> Encodable for Transaction<E> {
             0 => {}
             tx_type => out.put_u8(tx_type),
         }
-
-        // join the essence lists and the signature list into one
-        rlp_join_lists(&self.essence, &self.signature, out);
+        // encode according to essence type
+        self.essence.encode_with_signature(&self.signature, out);
     }
 
     /// Computes the length of the RLP-encoded [Transaction] struct in bytes.
@@ -128,47 +130,6 @@ impl<E: TxEssence> Transaction<E> {
     pub fn recover_from(&self) -> anyhow::Result<B160> {
         self.essence.recover_from(&self.signature)
     }
-}
-
-/// Joins two RLP-encoded lists into a single RLP-encoded list.
-///
-/// This function takes two RLP-encoded lists, decodes their headers to ensure they are
-/// valid lists, and then combines their payloads into a single RLP-encoded list. The
-/// resulting list is written to the provided `out` buffer.
-///
-/// # Arguments
-///
-/// * `a` - The first RLP-encoded list to be joined.
-/// * `b` - The second RLP-encoded list to be joined.
-/// * `out` - The buffer where the resulting RLP-encoded list will be written.
-///
-/// # Panics
-///
-/// This function will panic if either `a` or `b` are not valid RLP-encoded lists.
-fn rlp_join_lists(a: impl Encodable, b: impl Encodable, out: &mut dyn alloy_rlp::BufMut) {
-    let a_buf = alloy_rlp::encode(a);
-    let header = alloy_rlp::Header::decode(&mut &a_buf[..]).unwrap();
-    if !header.list {
-        panic!("`a` not a list");
-    }
-    let a_head_length = header.length();
-    let a_payload_length = a_buf.len() - a_head_length;
-
-    let b_buf = alloy_rlp::encode(b);
-    let header = alloy_rlp::Header::decode(&mut &b_buf[..]).unwrap();
-    if !header.list {
-        panic!("`b` not a list");
-    }
-    let b_head_length = header.length();
-    let b_payload_length = b_buf.len() - b_head_length;
-
-    alloy_rlp::Header {
-        list: true,
-        payload_length: a_payload_length + b_payload_length,
-    }
-    .encode(out);
-    out.put_slice(&a_buf[a_head_length..]); // skip the header
-    out.put_slice(&b_buf[b_head_length..]); // skip the header
 }
 
 #[cfg(test)]

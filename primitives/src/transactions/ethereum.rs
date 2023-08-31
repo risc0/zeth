@@ -16,6 +16,7 @@ use alloy_primitives::{Bytes, ChainId, TxNumber, B160, B256, U256};
 use alloy_rlp::{Encodable, EMPTY_STRING_CODE};
 use alloy_rlp_derive::RlpEncodable;
 use anyhow::Context;
+use bytes::BufMut;
 use k256::{
     ecdsa::{RecoveryId, Signature as K256Signature, VerifyingKey as K256VerifyingKey},
     elliptic_curve::sec1::ToEncodedPoint,
@@ -173,12 +174,6 @@ pub struct TxEssenceEip2930 {
     pub access_list: AccessList,
 }
 
-impl TxEssenceEip2930 {
-    pub fn payload_length(&self) -> usize {
-        self._alloy_rlp_payload_length()
-    }
-}
-
 /// Represents an Ethereum transaction with a priority fee, as detailed in [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559).
 ///
 /// The `TxEssenceEip1559` struct encapsulates the core components of an Ethereum
@@ -211,12 +206,6 @@ pub struct TxEssenceEip1559 {
     /// A list of addresses and storage keys that the transaction will access, aiding in
     /// gas optimization.
     pub access_list: AccessList,
-}
-
-impl TxEssenceEip1559 {
-    pub fn payload_length(&self) -> usize {
-        self._alloy_rlp_payload_length()
-    }
 }
 
 /// Represents the type of an Ethereum transaction: either a contract creation or a call
@@ -478,8 +467,54 @@ impl TxEssence for EthereumTxEssence {
     fn payload_length(&self) -> usize {
         match self {
             EthereumTxEssence::Legacy(tx) => tx.payload_length(),
-            EthereumTxEssence::Eip2930(tx) => tx.payload_length(),
-            EthereumTxEssence::Eip1559(tx) => tx.payload_length(),
+            EthereumTxEssence::Eip2930(tx) => tx._alloy_rlp_payload_length(),
+            EthereumTxEssence::Eip1559(tx) => tx._alloy_rlp_payload_length(),
         }
     }
+
+    fn encode_with_signature(&self, signature: &TxSignature, out: &mut dyn BufMut) {
+        // join the essence lists and the signature list into one
+        rlp_join_lists(&self, signature, out);
+    }
+}
+
+/// Joins two RLP-encoded lists into a single RLP-encoded list.
+///
+/// This function takes two RLP-encoded lists, decodes their headers to ensure they are
+/// valid lists, and then combines their payloads into a single RLP-encoded list. The
+/// resulting list is written to the provided `out` buffer.
+///
+/// # Arguments
+///
+/// * `a` - The first RLP-encoded list to be joined.
+/// * `b` - The second RLP-encoded list to be joined.
+/// * `out` - The buffer where the resulting RLP-encoded list will be written.
+///
+/// # Panics
+///
+/// This function will panic if either `a` or `b` are not valid RLP-encoded lists.
+fn rlp_join_lists(a: impl Encodable, b: impl Encodable, out: &mut dyn alloy_rlp::BufMut) {
+    let a_buf = alloy_rlp::encode(a);
+    let header = alloy_rlp::Header::decode(&mut &a_buf[..]).unwrap();
+    if !header.list {
+        panic!("`a` not a list");
+    }
+    let a_head_length = header.length();
+    let a_payload_length = a_buf.len() - a_head_length;
+
+    let b_buf = alloy_rlp::encode(b);
+    let header = alloy_rlp::Header::decode(&mut &b_buf[..]).unwrap();
+    if !header.list {
+        panic!("`b` not a list");
+    }
+    let b_head_length = header.length();
+    let b_payload_length = b_buf.len() - b_head_length;
+
+    alloy_rlp::Header {
+        list: true,
+        payload_length: a_payload_length + b_payload_length,
+    }
+    .encode(out);
+    out.put_slice(&a_buf[a_head_length..]); // skip the header
+    out.put_slice(&b_buf[b_head_length..]); // skip the header
 }

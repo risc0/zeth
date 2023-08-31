@@ -32,6 +32,7 @@ use crate::{
         ethereum::{
             EthereumTxEssence, TransactionKind, TxEssenceEip1559, TxEssenceEip2930, TxEssenceLegacy,
         },
+        optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
         Transaction, TxEssence,
     },
     withdrawal::Withdrawal,
@@ -135,7 +136,7 @@ impl<E: TxEssence + TryFrom<EthersTransaction>> TryFrom<EthersTransaction> for T
     }
 }
 
-/// Conversion from `EthersTransaction` to the local [EthereumTransaction].
+/// Conversion from `EthersTransaction` to the local [EthereumTxEssence].
 /// This conversion may fail if certain expected fields are missing.
 impl TryFrom<EthersTransaction> for EthereumTxEssence {
     type Error = anyhow::Error;
@@ -202,6 +203,29 @@ impl TryFrom<EthersTransaction> for EthereumTxEssence {
                 data: tx.input.0.into(),
             }),
             _ => unreachable!(),
+        };
+        Ok(essence)
+    }
+}
+
+/// Conversion from `EthersTransaction` to the local [OptimismTxEssence].
+/// This conversion may fail if certain expected fields are missing.
+impl TryFrom<EthersTransaction> for OptimismTxEssence {
+    type Error = anyhow::Error;
+
+    fn try_from(tx: EthersTransaction) -> Result<Self, Self::Error> {
+        let essence = match tx.transaction_type.map(|t| t.as_u64()) {
+            Some(0x7E) => OptimismTxEssence::OptimismDeposited(TxEssenceOptimismDeposited {
+                gas_limit: from_ethers_u256(tx.gas),
+                from: tx.from.0.into(),
+                to: tx.to.into(),
+                value: from_ethers_u256(tx.value),
+                data: tx.input.0.into(),
+                source_hash: from_ethers_h256(tx.source_hash.unwrap_or_default()),
+                mint: from_ethers_u256(tx.mint.unwrap_or_default()),
+                is_system_tx: tx.is_system_tx.unwrap_or_default(),
+            }),
+            _ => OptimismTxEssence::Ethereum(tx.try_into()?),
         };
         Ok(essence)
     }

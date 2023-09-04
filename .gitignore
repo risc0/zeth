@@ -5,4 +5,5 @@ log.txt
 *.pb
 rpc_cache.json
 .idea
-node_modules
+node_modules 
+.env

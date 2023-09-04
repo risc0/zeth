@@ -16,12 +16,16 @@ extern crate core;
 
 use std::{error::Error, net::TcpListener, time::Instant};
 
+use actix::{Actor, Addr, AsyncContext, StreamHandler};
+use actix_cors::Cors;
 use actix_web::{
-    dev::Server, get, http::header::ContentType, post, web, App, HttpResponse, HttpServer,
-    Responder,
+    dev::Server, get, http::header::ContentType, post, web, web::Bytes, App, HttpRequest,
+    HttpResponse, HttpServer, Responder,
 };
+use actix_web_actors::ws;
 use anyhow::{bail, Result};
 use bonsai_sdk::alpha as bonsai_sdk;
+use dotenv::var;
 use log::{error, info};
 use risc0_zkvm::{
     serde::{from_slice, to_vec},
@@ -32,7 +36,7 @@ use tempfile::tempdir;
 use zeth_guests::{ETH_BLOCK_ELF, ETH_BLOCK_ID};
 use zeth_lib::{
     block_builder::BlockBuilder,
-    consts::{Network, ETH_MAINNET_CHAIN_SPEC},
+    consts:: ETH_MAINNET_CHAIN_SPEC,
     execution::EthTxExecStrategy,
     finalization::DebugBuildFromMemDbStrategy,
     host::Init,
@@ -42,27 +46,154 @@ use zeth_lib::{
     preparation::EthHeaderPrepStrategy,
 };
 use zeth_primitives::BlockHash;
-use actix_cors::Cors;
+
+pub struct ZethSocket;
+impl Actor for ZethSocket {
+    type Context = ws::WebsocketContext<Self>;
+}
+
+impl actix::Message for ZethSocket {
+    type Result = ();
+}
+
+impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ZethSocket {
+    fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
+        match msg {
+            Ok(ws::Message::Ping(msg)) => ctx.pong(&msg),
+            Ok(ws::Message::Text(text)) => {
+                // Parse the text into Data
+                let data: Result<Data, _> = serde_json::from_str(&text);
+                match data {
+                    Ok(data) => {
+                        // Get the Init
+                        let rpc_url = match data.network {
+                            NetworkSelection::Ethereum => var("ETHEREUM_RPC_URL").ok(),
+                            NetworkSelection::Goerli => var("GOERLI_RPC_URL").ok(),
+                            NetworkSelection::Sepolia => var("SEPOLIA_RPC_URL").ok(),
+                        };
+                        let block_no = data.block_no.clone();
+                        let cache = data.cache.as_ref().map(|dir| {
+                            cache_file_path(
+                                dir,
+                                &data.network.to_string(),
+                                data.block_no,
+                                "json.gz",
+                            )
+                        });
+                        // Spawn a new task to get the initial data
+                        let addr = ctx.address();
+                        actix::spawn(async move {
+                            let init = actix_web::web::block(move || {
+                                zeth_lib::host::get_initial_data(cache, rpc_url, block_no)
+                                    .expect("Could not init")
+                            })
+                            .await
+                            .unwrap();
+
+                            // Send a message to the actor to run verification
+                            addr.do_send(RunVerification {
+                                data,
+                                init,
+                                ctx: addr.clone(),
+                            });
+                        });
+                    }
+                    Err(e) => {
+                        // Handle the error
+                        ctx.text(format!("Error parsing user input: {}", e))
+                    }
+                }
+            }
+            Ok(ws::Message::Binary(bin)) => ctx.binary(bin),
+            _ => (),
+        }
+    }
+}
+pub struct RunVerification {
+    data: Data,
+    init: Init,
+}
+impl actix::Message for RunVerification {
+    type Result = ();
+}
+
+pub struct SendText {
+    text: String,
+}
+
+impl actix::Message for SendText {
+    type Result = ();
+}
+
+impl actix::Handler<SendText> for ZethSocket {
+    type Result = ();
+
+    fn handle(&mut self, msg: SendText, ctx: &mut Self::Context) -> Self::Result {
+        ctx.text(msg.text);
+    }
+}
+
+impl actix::Handler<RunVerification> for ZethSocket {
+    type Result = ();
+
+    fn handle(&mut self, msg: RunVerification, ctx: &mut Self::Context) -> Self::Result {
+        let addr = ctx.address();
+        actix::spawn(run_verification(msg.data, msg.init, addr));
+    }
+}
+
 // Constants
 const SERVER_ADDRESS: &str = "0.0.0.0:8000";
 
 #[derive(Deserialize, Debug, Clone)]
 struct Data {
-    rpc_url: Option<String>,
     cache: Option<String>,
-    network: Network,
+    network: NetworkSelection,
     block_no: u64,
     local_exec: Option<usize>,
     submit_to_bonsai: bool,
     verify_bonsai_receipt_uuid: Option<String>,
 }
 
+impl Default for Data {
+    fn default() -> Self {
+        Self {
+            cache: None,
+            network: NetworkSelection::Ethereum,
+            block_no: 0,
+            local_exec: None,
+            submit_to_bonsai: false,
+            verify_bonsai_receipt_uuid: None,
+        }
+    }
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub enum NetworkSelection {
+    Ethereum,
+    Sepolia,
+    Goerli,
+}
+
+impl std::fmt::Display for NetworkSelection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NetworkSelection::Ethereum => write!(f, "Ethereum"),
+            NetworkSelection::Sepolia => write!(f, "Sepolia"),
+            NetworkSelection::Goerli => write!(f, "Goerli"),
+        }
+    }
+}
+
 fn cache_file_path(cache_path: &String, network: &String, block_no: u64, ext: &str) -> String {
     format!("{}/{}/{}.{}", cache_path, network, block_no, ext)
 }
 
-
-async fn run_verification(args: Data, init: Init) -> Result<()> {
+async fn run_verification(
+    args: Data,
+    init: Init,
+    ctx: Addr<ZethSocket>,
+) -> Result<()> {
     let input: Input = init.clone().into();
 
     // Verify that the transactions run correctly
@@ -72,6 +203,11 @@ async fn run_verification(args: Data, init: Init) -> Result<()> {
                 .expect("Input deserialization failed");
 
             info!("Running from memory ...");
+            let mut message = "Running from memory ...";
+
+            ctx.do_send(SendText {
+                text: message.to_owned(),
+            });
 
             let block_builder = BlockBuilder::<MemDb>::new(&ETH_MAINNET_CHAIN_SPEC, input)
                 .initialize_database::<MemDbInitStrategy>()
@@ -93,8 +229,19 @@ async fn run_verification(args: Data, init: Init) -> Result<()> {
                 accounts_len
             );
 
+            let message = format!(
+                "Memory-backed execution is Done! Database contains {} accounts",
+                accounts_len
+            )
+            .to_owned();
+            // ctx.text(message);
+            ctx.do_send(SendText { text: message });
+
+
             // Verify final state
+            let message = "Verifying final state using provider data ...".to_owned();
             info!("Verifying final state using provider data ...");
+            ctx.do_send(SendText { text: message });
             let errors = zeth_lib::host::verify_state(fini_db, init.fini_proofs, storage_deltas)
                 .expect("Could not verify final state!");
             for (address, address_errors) in &errors {
@@ -173,7 +320,9 @@ async fn run_verification(args: Data, init: Init) -> Result<()> {
                 bail!("Invalid block hash");
             }
 
-            info!("Final block hash derived successfully. {}", found_hash)
+            info!("Final block hash derived successfully. {}", found_hash);
+            let message = format!("Final block hash derived successfully. {}", found_hash);
+            ctx.do_send(SendText { text: message });
         }
 
         // Run in the executor (if requested)
@@ -257,13 +406,21 @@ async fn run_verification(args: Data, init: Init) -> Result<()> {
 
         let mut bonsai_session_uuid = args.verify_bonsai_receipt_uuid;
 
-        // Run in Bonsai (if requested)
         if bonsai_session_uuid.is_none() && args.submit_to_bonsai {
+            // Run in Bonsai (if requested)
+            ctx.do_send(SendText {
+                text: "Verifying with Bonsai".to_owned(),
+            });
             info!("Creating Bonsai client");
             let client = bonsai_sdk::Client::from_env().expect("Could not create Bonsai client");
 
             // create the memoryImg, upload it and return the imageId
             info!("Uploading memory image");
+            // ctx.do_send("Uploading memory image".to_owned());
+            ctx.do_send(SendText {
+                text: "Uploading memory image".to_owned(),
+            });
+
             let img_id = {
                 let program = Program::load_elf(ETH_BLOCK_ELF, risc0_zkvm::MEM_SIZE as u32)
                     .expect("Could not load ELF");
@@ -331,6 +488,9 @@ async fn run_verification(args: Data, init: Init) -> Result<()> {
 
                     if found_hash == expected_hash {
                         info!("Block hash (from Bonsai): {}", found_hash);
+                        let message =
+                            format!("Block hash (from Bonsai): {}", found_hash).to_owned();
+                        ctx.do_send(SendText { text: message });
                     } else {
                         error!(
                             "Final block hash mismatch (from Bonsai) {} (expected {})",
@@ -349,66 +509,42 @@ async fn run_verification(args: Data, init: Init) -> Result<()> {
     Ok(())
 }
 
-#[post("/verify")]
-async fn verify(field: web::Json<Data>) -> impl Responder {
-    let rpc_url = field.rpc_url.clone();
-    let block_no = field.block_no.clone();
-    let cache = field
-        .cache
-        .as_ref()
-        .map(|dir| cache_file_path(dir, &field.network.to_string(), field.block_no, "json.gz"));
-
-    let init = tokio::task::spawn_blocking(move || {
-        zeth_lib::host::get_initial_data(cache, rpc_url, block_no).expect("Could not init")
-    })
-    .await
-    .unwrap();
-
-    let result = run_verification(field.into_inner(), init).await;
-
-    match result {
-        Ok(_) => HttpResponse::Ok()
-            .content_type(ContentType::json())
-            .body("Verification successful".to_string()),
-        Err(e) => HttpResponse::InternalServerError()
-            .content_type(ContentType::json())
-            .body(format!("Verification failed: {:?}", e)),
-    }
-}
-
 #[get("/")]
 async fn health_check() -> impl Responder {
     HttpResponse::Ok().body("Server is running")
 }
 
-pub fn run(listener: TcpListener) -> Result<Server, Box<dyn Error>> {
-    let server = HttpServer::new(move || {
-        App::new()
-            .wrap(
-                Cors::permissive()
-                // TODO: Replace with DNS
-                    // .allowed_origin("http://net-lb-bd44876-1703206818.us-east-1.elb.amazonaws.com:3000")
-                    .allow_any_origin()
-                    .allowed_methods(vec!["GET", "POST"])
-                    .allowed_header(actix_web::http::header::CONTENT_TYPE)
-                    .max_age(3600)
-            )
-            .service(verify)
-            .service(health_check) 
-    })
-    .listen(listener)?
-    .run();
-
-    Ok(server)
-}
-
-#[tokio::main]
+#[actix_web::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     use env_logger::Env;
 
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     let listener = TcpListener::bind(SERVER_ADDRESS)?;
-    run(listener)?.await?;
+
+    let server = HttpServer::new(move || {
+        App::new()
+            .wrap(
+                Cors::permissive()
+                    .allow_any_origin()
+                    .allowed_methods(vec!["GET", "POST"])
+                    .allowed_header(actix_web::http::header::CONTENT_TYPE)
+                    .max_age(3600),
+            )
+            // .service(verify_handler)
+            .service(health_check)
+            .route("/ws/verify", web::get().to(ws_index))
+    })
+    .listen(listener)?
+    .run();
+
+    server.await?;
 
     Ok(())
+}
+
+async fn ws_index(req: HttpRequest, stream: web::Payload) -> HttpResponse {
+    match ws::start(ZethSocket {}, &req, stream) {
+        Ok(resp) => resp,
+        Err(_) => HttpResponse::InternalServerError().finish(),
+    }
 }

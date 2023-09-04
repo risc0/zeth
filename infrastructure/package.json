@@ -8,6 +8,7 @@
         "@pulumi/aws": "^5.42.0",
         "@pulumi/aws-apigateway": "^1.0.1",
         "@pulumi/awsx": "^1.0.5",
-        "@pulumi/pulumi": "^3.0.0"
+        "@pulumi/pulumi": "^3.0.0",
+        "aws-sdk": "^2.1447.0"
     }
 }

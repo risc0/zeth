@@ -33,7 +33,6 @@ use zeth_lib::{
     finalization::DebugBuildFromMemDbStrategy,
     initialization::MemDbInitStrategy,
     input::Input,
-    mem_db::MemDb,
     preparation::EthHeaderPrepStrategy,
 };
 use zeth_primitives::{transactions::ethereum::EthereumTxEssence, BlockHash};
@@ -103,20 +102,18 @@ async fn main() -> Result<()> {
 
     // Verify that the transactions run correctly
     {
-        let input: Input<EthereumTxEssence> =
-            from_slice(&to_vec(&input).expect("Input serialization failed"))
-                .expect("Input deserialization failed");
+        let input = from_slice(&to_vec(&input).expect("Input serialization failed"))
+            .expect("Input deserialization failed");
 
         info!("Running from memory ...");
 
-        let block_builder =
-            BlockBuilder::<MemDb, EthereumTxEssence>::new(&ETH_MAINNET_CHAIN_SPEC, input)
-                .initialize_database::<MemDbInitStrategy>()
-                .expect("Error initializing MemDb from Input")
-                .prepare_header::<EthHeaderPrepStrategy>()
-                .expect("Error creating initial block header")
-                .execute_transactions::<EthTxExecStrategy>()
-                .expect("Error while running transactions");
+        let block_builder = BlockBuilder::new(&ETH_MAINNET_CHAIN_SPEC, input)
+            .initialize_database::<MemDbInitStrategy>()
+            .expect("Error initializing MemDb from Input")
+            .prepare_header::<EthHeaderPrepStrategy>()
+            .expect("Error creating initial block header")
+            .execute_transactions::<EthTxExecStrategy>()
+            .expect("Error while running transactions");
 
         let fini_db = block_builder.db().unwrap().clone();
         let accounts_len = fini_db.accounts_len();

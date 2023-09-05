@@ -19,10 +19,10 @@ use std::path::PathBuf;
 use rstest::rstest;
 use zeth_lib::{
     block_builder::BlockBuilder, execution::ethereum::EthTxExecStrategy,
-    finalization::BuildFromMemDbStrategy, initialization::MemDbInitStrategy, mem_db::MemDb,
+    finalization::BuildFromMemDbStrategy, initialization::MemDbInitStrategy,
     preparation::EthHeaderPrepStrategy,
 };
-use zeth_primitives::{block::Header, transactions::ethereum::EthereumTxEssence};
+use zeth_primitives::block::Header;
 use zeth_testeth::{
     ethtests::{read_eth_test, EthTestCase},
     *,
@@ -67,7 +67,7 @@ fn evm(
                 block.transactions,
                 block.withdrawals.unwrap_or_default(),
             );
-            let builder = BlockBuilder::<MemDb, EthereumTxEssence>::new(&chain_spec, input)
+            let builder = BlockBuilder::new(&chain_spec, input)
                 .initialize_database::<MemDbInitStrategy>()
                 .unwrap()
                 .prepare_header::<EthHeaderPrepStrategy>()

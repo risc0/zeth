@@ -14,11 +14,19 @@
 
 use anyhow::Result;
 use revm::{Database, DatabaseCommit};
-use zeth_primitives::{block::Header, transactions::TxEssence};
+use zeth_primitives::{
+    block::Header,
+    transactions::{ethereum::EthereumTxEssence, optimism::OptimismTxEssence, TxEssence},
+};
 
 use crate::{
-    consts::ChainSpec, execution::TxExecStrategy, finalization::BlockBuildStrategy,
-    initialization::DbInitStrategy, input::Input, preparation::HeaderPrepStrategy,
+    consts::ChainSpec,
+    execution::{ethereum::EthTxExecStrategy, optimism::OpTxExecStrategy, TxExecStrategy},
+    finalization::{BlockBuildStrategy, BuildFromMemDbStrategy},
+    initialization::{DbInitStrategy, MemDbInitStrategy},
+    input::Input,
+    mem_db::MemDb,
+    preparation::{EthHeaderPrepStrategy, HeaderPrepStrategy},
 };
 
 #[derive(Clone, Debug)]
@@ -81,3 +89,120 @@ where
         self.db.as_mut()
     }
 }
+
+pub trait NetworkStrategyBundle {
+    type Database;
+    type TxEssence;
+
+    type DbInitStrategy;
+    type HeaderPrepStrategy;
+    type TxExecStrategy;
+    type BlockBuildStrategy;
+}
+
+pub struct ConfiguredBlockBuilder<'a, N: NetworkStrategyBundle>(
+    BlockBuilder<'a, N::Database, N::TxEssence>,
+)
+where
+    N::TxEssence: TxEssence;
+
+impl<N: NetworkStrategyBundle> ConfiguredBlockBuilder<'_, N>
+where
+    N::Database: Database + DatabaseCommit,
+    <N::Database as Database>::Error: core::fmt::Debug,
+    N::TxEssence: TxEssence,
+
+    N::DbInitStrategy: DbInitStrategy<N::TxEssence, Database = N::Database>,
+    N::HeaderPrepStrategy: HeaderPrepStrategy,
+    N::TxExecStrategy: TxExecStrategy<N::TxEssence>,
+    N::BlockBuildStrategy: BlockBuildStrategy<N::TxEssence, Database = N::Database>,
+{
+    pub fn build_from(
+        chain_spec: &ChainSpec,
+        input: Input<N::TxEssence>,
+    ) -> Result<<N::BlockBuildStrategy as BlockBuildStrategy<N::TxEssence>>::Output> {
+        Self::new(chain_spec, input)
+            .initialize_database()?
+            .prepare_header()?
+            .execute_transactions()?
+            .build()
+    }
+
+    /// Creates a new block builder.
+    pub fn new(
+        chain_spec: &ChainSpec,
+        input: Input<N::TxEssence>,
+    ) -> ConfiguredBlockBuilder<'_, N> {
+        ConfiguredBlockBuilder(BlockBuilder::new(chain_spec, input))
+    }
+
+    /// Sets the database.
+    pub fn with_db(mut self, db: N::Database) -> Self {
+        self.0.db = Some(db);
+        self
+    }
+
+    /// Initializes the database from the input tries.
+    pub fn initialize_database(self) -> Result<Self> {
+        Ok(ConfiguredBlockBuilder(
+            N::DbInitStrategy::initialize_database(self.0)?,
+        ))
+    }
+
+    /// Initializes the header. This must be called before executing transactions.
+    pub fn prepare_header(self) -> Result<Self> {
+        Ok(ConfiguredBlockBuilder(
+            N::HeaderPrepStrategy::prepare_header(self.0)?,
+        ))
+    }
+
+    /// Executes the transactions.
+    pub fn execute_transactions(self) -> Result<Self> {
+        Ok(ConfiguredBlockBuilder(
+            N::TxExecStrategy::execute_transactions(self.0)?,
+        ))
+    }
+
+    /// Builds the block and returns the header.
+    pub fn build(
+        self,
+    ) -> Result<<N::BlockBuildStrategy as BlockBuildStrategy<N::TxEssence>>::Output> {
+        N::BlockBuildStrategy::build(self.0)
+    }
+
+    /// Returns a reference to the database.
+    pub fn db(&self) -> Option<&N::Database> {
+        self.0.db.as_ref()
+    }
+
+    /// Returns a mutable reference to the database.
+    pub fn mut_db(&mut self) -> Option<&mut N::Database> {
+        self.0.db.as_mut()
+    }
+}
+
+pub struct EthereumStrategyBundle {}
+
+impl NetworkStrategyBundle for EthereumStrategyBundle {
+    type Database = MemDb;
+    type TxEssence = EthereumTxEssence;
+    type DbInitStrategy = MemDbInitStrategy;
+    type HeaderPrepStrategy = EthHeaderPrepStrategy;
+    type TxExecStrategy = EthTxExecStrategy;
+    type BlockBuildStrategy = BuildFromMemDbStrategy;
+}
+
+pub type EthereumBlockBuilder<'a> = ConfiguredBlockBuilder<'a, EthereumStrategyBundle>;
+
+pub struct OptimismStrategyBundle {}
+
+impl NetworkStrategyBundle for OptimismStrategyBundle {
+    type Database = MemDb;
+    type TxEssence = OptimismTxEssence;
+    type DbInitStrategy = MemDbInitStrategy;
+    type HeaderPrepStrategy = EthHeaderPrepStrategy;
+    type TxExecStrategy = OpTxExecStrategy;
+    type BlockBuildStrategy = BuildFromMemDbStrategy;
+}
+
+pub type OptimismBlockBuilder<'a> = ConfiguredBlockBuilder<'a, OptimismStrategyBundle>;

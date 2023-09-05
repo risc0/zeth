@@ -159,8 +159,11 @@ impl ChainSpec {
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub enum Network {
+    /// The Ethereum Mainnet
     #[default]
     Ethereum,
+    /// The Optimism Mainnet
+    Optimism,
 }
 
 impl FromStr for Network {
@@ -178,6 +181,7 @@ impl ToString for Network {
     fn to_string(&self) -> String {
         match self {
             Network::Ethereum => String::from("ethereum"),
+            Network::Optimism => String::from("optimism"),
         }
     }
 }

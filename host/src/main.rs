@@ -28,7 +28,7 @@ use tempfile::tempdir;
 use zeth_guests::{ETH_BLOCK_ELF, ETH_BLOCK_ID};
 use zeth_lib::{
     block_builder::BlockBuilder,
-    consts::{Network, ETH_MAINNET_CHAIN_SPEC},
+    consts::{Network, ETH_MAINNET_CHAIN_SPEC, OP_MAINNET_CHAIN_SPEC},
     execution::ethereum::EthTxExecStrategy,
     finalization::DebugBuildFromMemDbStrategy,
     initialization::MemDbInitStrategy,
@@ -86,6 +86,12 @@ async fn main() -> Result<()> {
     env_logger::init();
     let args = Args::parse();
 
+    // Choose the chain spec
+    let chain_spec = match args.network {
+        Network::Ethereum => &ETH_MAINNET_CHAIN_SPEC,
+        Network::Optimism => &OP_MAINNET_CHAIN_SPEC,
+    };
+
     // Fetch all of the initial data
     let rpc_cache = args
         .cache
@@ -107,7 +113,7 @@ async fn main() -> Result<()> {
 
         info!("Running from memory ...");
 
-        let block_builder = BlockBuilder::new(&ETH_MAINNET_CHAIN_SPEC, input)
+        let block_builder = BlockBuilder::new(&chain_spec, input)
             .initialize_database::<MemDbInitStrategy>()
             .expect("Error initializing MemDb from Input")
             .prepare_header::<EthHeaderPrepStrategy>()

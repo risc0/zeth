@@ -15,7 +15,7 @@
 #![no_main]
 
 use risc0_zkvm::guest::env;
-use zeth_lib::{block_builder::EthereumBlockBuilder, consts::ETH_MAINNET_CHAIN_SPEC};
+use zeth_lib::{block_builder::OptimismBlockBuilder, consts::OP_MAINNET_CHAIN_SPEC};
 
 risc0_zkvm::guest::entry!(main);
 
@@ -23,7 +23,7 @@ pub fn main() {
     // Read the input previous block and transaction data
     let input = env::read();
     // Build the resulting block
-    let output = EthereumBlockBuilder::build_from(&ETH_MAINNET_CHAIN_SPEC, input)
+    let output = OptimismBlockBuilder::build_from(&OP_MAINNET_CHAIN_SPEC, input)
         .expect("Failed to build the resulting block");
     // Output the resulting block's hash to the journal
     env::commit(&output.hash());

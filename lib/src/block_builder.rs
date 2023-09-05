@@ -91,13 +91,13 @@ where
 }
 
 pub trait NetworkStrategyBundle {
-    type Database;
-    type TxEssence;
+    type Database: Database + DatabaseCommit;
+    type TxEssence: TxEssence;
 
-    type DbInitStrategy;
-    type HeaderPrepStrategy;
-    type TxExecStrategy;
-    type BlockBuildStrategy;
+    type DbInitStrategy: DbInitStrategy<Self::TxEssence, Database = Self::Database>;
+    type HeaderPrepStrategy: HeaderPrepStrategy;
+    type TxExecStrategy: TxExecStrategy<Self::TxEssence>;
+    type BlockBuildStrategy: BlockBuildStrategy<Self::TxEssence, Database = Self::Database>;
 }
 
 pub struct ConfiguredBlockBuilder<'a, N: NetworkStrategyBundle>(
@@ -108,14 +108,7 @@ where
 
 impl<N: NetworkStrategyBundle> ConfiguredBlockBuilder<'_, N>
 where
-    N::Database: Database + DatabaseCommit,
     <N::Database as Database>::Error: core::fmt::Debug,
-    N::TxEssence: TxEssence,
-
-    N::DbInitStrategy: DbInitStrategy<N::TxEssence, Database = N::Database>,
-    N::HeaderPrepStrategy: HeaderPrepStrategy,
-    N::TxExecStrategy: TxExecStrategy<N::TxEssence>,
-    N::BlockBuildStrategy: BlockBuildStrategy<N::TxEssence, Database = N::Database>,
 {
     pub fn build_from(
         chain_spec: &ChainSpec,

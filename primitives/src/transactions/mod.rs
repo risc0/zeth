@@ -42,7 +42,7 @@ pub struct Transaction<E: TxEssence> {
     pub signature: TxSignature,
 }
 
-pub trait TxEssence: Encodable {
+pub trait TxEssence: Encodable + Clone {
     /// Determines the type of the transaction based on its essence.
     ///
     /// Returns a byte representing the transaction type:

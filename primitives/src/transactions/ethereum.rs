@@ -25,7 +25,10 @@ use k256::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    access_list::AccessList, keccak::keccak, signature::TxSignature, transactions::TxEssence,
+    access_list::AccessList,
+    keccak::keccak,
+    signature::TxSignature,
+    transactions::{Transaction, TxEssence},
 };
 
 /// Represents a legacy Ethereum transaction as detailed in [EIP-155](https://eips.ethereum.org/EIPS/eip-155).
@@ -475,6 +478,17 @@ impl TxEssence for EthereumTxEssence {
     fn encode_with_signature(&self, signature: &TxSignature, out: &mut dyn BufMut) {
         // join the essence lists and the signature list into one
         rlp_join_lists(&self, signature, out);
+    }
+
+    #[inline]
+    fn length(transaction: &Transaction<Self>) -> usize {
+        let payload_length =
+            transaction.essence.payload_length() + transaction.signature.payload_length();
+        let mut length = payload_length + alloy_rlp::length_of_length(payload_length);
+        if transaction.essence.tx_type() != 0 {
+            length += 1;
+        }
+        length
     }
 }
 

@@ -98,7 +98,7 @@ async fn main() -> Result<()> {
         Network::Ethereum => {
             run_with_bundle::<EthereumStrategyBundle>(
                 args,
-                &ETH_MAINNET_CHAIN_SPEC,
+                ETH_MAINNET_CHAIN_SPEC.clone(),
                 ETH_BLOCK_ELF,
                 ETH_BLOCK_ID,
                 ETH_BLOCK_PATH,
@@ -108,7 +108,7 @@ async fn main() -> Result<()> {
         Network::Optimism => {
             run_with_bundle::<OptimismStrategyBundle>(
                 args,
-                &OP_MAINNET_CHAIN_SPEC,
+                OP_MAINNET_CHAIN_SPEC.clone(),
                 OP_BLOCK_ELF,
                 OP_BLOCK_ID,
                 OP_BLOCK_PATH,
@@ -120,7 +120,7 @@ async fn main() -> Result<()> {
 
 async fn run_with_bundle<N: NetworkStrategyBundle>(
     args: Args,
-    chain_spec: &ChainSpec,
+    chain_spec: ChainSpec,
     guest_elf: &[u8],
     guest_id: [u32; risc0_zkvm::sha::DIGEST_WORDS],
     guest_path: &str,
@@ -136,8 +136,9 @@ where
         .as_ref()
         .map(|dir| cache_file_path(dir, &args.network.to_string(), args.block_no, "json.gz"));
 
+    let init_spec = chain_spec.clone();
     let init = tokio::task::spawn_blocking(move || {
-        zeth_lib::host::get_initial_data(rpc_cache, args.rpc_url, args.block_no)
+        zeth_lib::host::get_initial_data::<N>(init_spec, rpc_cache, args.rpc_url, args.block_no)
             .expect("Could not init")
     })
     .await?;
@@ -149,7 +150,7 @@ where
         info!("Running from memory ...");
 
         // todo: extend to use [ConfiguredBlockBuilder]
-        let block_builder = BlockBuilder::new(chain_spec, input.clone())
+        let block_builder = BlockBuilder::new(&chain_spec, input.clone())
             .initialize_database::<MemDbInitStrategy>()
             .expect("Error initializing MemDb from Input")
             .prepare_header::<N::HeaderPrepStrategy>()
@@ -174,7 +175,7 @@ where
         let errors = zeth_lib::host::verify_state(fini_db, init.fini_proofs, storage_deltas)
             .expect("Could not verify final state!");
         for (address, address_errors) in &errors {
-            info!(
+            error!(
                 "Verify found {:?} error(s) for address {:?}",
                 address_errors.len(),
                 address

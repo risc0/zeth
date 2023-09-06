@@ -73,6 +73,12 @@ pub trait TxEssence: Encodable + Clone {
     fn payload_length(&self) -> usize;
     /// RLP encodes the transaction essence and signature into the provided `out` buffer.
     fn encode_with_signature(&self, signature: &TxSignature, out: &mut dyn alloy_rlp::BufMut);
+    /// Computes the length of an encompassing RLP-encoded [Transaction] struct in bytes.
+    ///
+    /// The computed length includes the lengths of the encoded transaction essence and
+    /// signature. If the transaction type (as per EIP-2718) is not zero, an
+    /// additional byte is added to the length.
+    fn length(transaction: &Transaction<Self>) -> usize;
 }
 
 /// Provides RLP encoding functionality for the [Transaction] struct.
@@ -105,12 +111,7 @@ impl<E: TxEssence> Encodable for Transaction<E> {
     /// additional byte is added to the length.
     #[inline]
     fn length(&self) -> usize {
-        let payload_length = self.essence.payload_length() + self.signature.payload_length();
-        let mut length = payload_length + alloy_rlp::length_of_length(payload_length);
-        if self.essence.tx_type() != 0 {
-            length += 1;
-        }
-        length
+        <E as TxEssence>::length(self)
     }
 }
 

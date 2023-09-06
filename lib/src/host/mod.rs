@@ -37,16 +37,14 @@ use zeth_primitives::{
 };
 
 use crate::{
-    block_builder::BlockBuilder,
-    consts::ETH_MAINNET_CHAIN_SPEC,
-    execution::ethereum::EthTxExecStrategy,
+    block_builder::{BlockBuilder, NetworkStrategyBundle},
+    consts::ChainSpec,
     host::{
         mpt::{orphaned_digests, resolve_digests, shorten_key},
         provider::{new_provider, BlockQuery},
     },
     input::{Input, StorageEntry},
     mem_db::MemDb,
-    preparation::EthHeaderPrepStrategy,
 };
 
 pub mod mpt;
@@ -65,13 +63,15 @@ pub struct Init<E: TxEssence> {
     pub ancestor_headers: Vec<Header>,
 }
 
-pub fn get_initial_data<E: TxEssence + TryFrom<EthersTransaction>>(
+pub fn get_initial_data<N: NetworkStrategyBundle>(
+    chain_spec: ChainSpec,
     cache_path: Option<String>,
     rpc_url: Option<String>,
     block_no: u64,
-) -> Result<Init<E>>
+) -> Result<Init<N::TxEssence>>
 where
-    <E as TryFrom<EthersTransaction>>::Error: Debug,
+    N::TxEssence: TryFrom<EthersTransaction>,
+    <N::TxEssence as TryFrom<EthersTransaction>>::Error: Debug,
 {
     let mut provider = new_provider(cache_path, rpc_url)?;
 
@@ -128,10 +128,10 @@ where
     };
 
     // Create the block builder, run the transactions and extract the DB
-    let mut builder = BlockBuilder::new(&ETH_MAINNET_CHAIN_SPEC, input)
+    let mut builder = BlockBuilder::new(&chain_spec, input)
         .with_db(provider_db)
-        .prepare_header::<EthHeaderPrepStrategy>()?
-        .execute_transactions::<EthTxExecStrategy>()?;
+        .prepare_header::<N::HeaderPrepStrategy>()?
+        .execute_transactions::<N::TxExecStrategy>()?;
     let provider_db = builder.mut_db().unwrap();
 
     info!("Gathering inclusion proofs ...");

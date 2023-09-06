@@ -251,18 +251,6 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                 result.logs().into_iter().map(|log| log.into()).collect(),
             );
 
-            // accumulate logs to the block bloom filter
-            logs_bloom.accrue_bloom(receipt.payload.logs_bloom);
-
-            // Add receipt and tx to tries
-            let trie_key = tx_no.to_rlp();
-            tx_trie
-                .insert_rlp(&trie_key, tx)
-                .context("failed to insert transaction")?;
-            receipt_trie
-                .insert_rlp(&trie_key, receipt)
-                .context("failed to insert receipt")?;
-
             // update account states
             #[cfg(not(target_os = "zkvm"))]
             for (address, account) in &state {
@@ -296,14 +284,28 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
 
             db.commit(state);
 
-            // Credit L2 base fee
-            increase_account_balance(
-                db,
-                base_fee_vault_pre_deploy,
-                gas_used * header.base_fee_per_gas,
-            )?;
-            // Credit L1 gas fee
-            increase_account_balance(db, l1_fee_vault_pre_deploy, l1_gas_fees)?;
+            if !matches!(tx.essence, OptimismTxEssence::OptimismDeposited(_)) {
+                // Credit L2 base fee
+                increase_account_balance(
+                    db,
+                    base_fee_vault_pre_deploy,
+                    gas_used * header.base_fee_per_gas,
+                )?;
+                // Credit L1 gas fee
+                increase_account_balance(db, l1_fee_vault_pre_deploy, l1_gas_fees)?;
+            }
+
+            // accumulate logs to the block bloom filter
+            logs_bloom.accrue_bloom(receipt.payload.logs_bloom);
+
+            // Add receipt and tx to tries
+            let trie_key = tx_no.to_rlp();
+            tx_trie
+                .insert_rlp(&trie_key, tx)
+                .context("failed to insert transaction")?;
+            receipt_trie
+                .insert_rlp(&trie_key, receipt)
+                .context("failed to insert receipt")?;
         }
 
         let mut db = evm.take_db();

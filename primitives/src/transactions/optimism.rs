@@ -22,7 +22,7 @@ use crate::{
     signature::TxSignature,
     transactions::{
         ethereum::{EthereumTxEssence, TransactionKind},
-        TxEssence,
+        Transaction, TxEssence,
     },
 };
 
@@ -49,6 +49,19 @@ pub struct TxEssenceOptimismDeposited {
     pub is_system_tx: bool,
     /// An unlimited size byte array specifying the transaction data.
     pub data: Bytes,
+}
+
+impl TxEssenceOptimismDeposited {
+    pub fn payload_length(&self) -> usize {
+        self.source_hash.length()
+            + self.from.length()
+            + self.to.length()
+            + self.mint.length()
+            + self.value.length()
+            + self.gas_limit.length()
+            + self.is_system_tx.length()
+            + self.data.length()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -105,7 +118,7 @@ impl TxEssence for OptimismTxEssence {
     fn payload_length(&self) -> usize {
         match self {
             OptimismTxEssence::Ethereum(eth) => eth.payload_length(),
-            OptimismTxEssence::OptimismDeposited(op) => op._alloy_rlp_payload_length(),
+            OptimismTxEssence::OptimismDeposited(op) => op.payload_length(),
         }
     }
 
@@ -114,5 +127,20 @@ impl TxEssence for OptimismTxEssence {
             OptimismTxEssence::Ethereum(eth) => eth.encode_with_signature(signature, out),
             OptimismTxEssence::OptimismDeposited(op) => op.encode(out),
         }
+    }
+
+    #[inline]
+    fn length(transaction: &Transaction<Self>) -> usize {
+        let payload_length = match &transaction.essence {
+            OptimismTxEssence::Ethereum(eth) => {
+                eth.payload_length() + transaction.signature.payload_length()
+            }
+            OptimismTxEssence::OptimismDeposited(op) => op.payload_length(),
+        };
+        let mut length = payload_length + alloy_rlp::length_of_length(payload_length);
+        if transaction.essence.tx_type() != 0 {
+            length += 1;
+        }
+        length
     }
 }

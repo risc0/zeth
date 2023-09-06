@@ -170,8 +170,9 @@ impl FromStr for Network {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
+        match s.to_lowercase().as_str() {
             "ethereum" => Ok(Network::Ethereum),
+            "optimism" => Ok(Network::Optimism),
             _ => bail!("Unknown network"),
         }
     }

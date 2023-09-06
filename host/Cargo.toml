@@ -15,7 +15,7 @@ hashbrown = { version = "0.13", features = ["inline-more"] }
 hex = "0.4.3"
 log = "0.4"
 revm = { version = "3.3", default-features = false, features = ["std", "serde", "optional_no_base_fee", "optional_balance_check"] }
-risc0-zkvm = { workspace = true, features = ["prove"] }
+risc0-zkvm = { workspace = true, features = ["prove", "profiler"] }
 serde = "1.0"
 tempfile = "3.6"
 tokio = { version = "1.23", features = ["full"] }
@@ -26,6 +26,3 @@ zeth-primitives = { path = "../primitives" }
 [dev-dependencies]
 assert_cmd = "2.0"
 rstest = "0.18"
-
-[features]
-profiler = ["risc0-zkvm/profiler"]

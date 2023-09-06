@@ -79,6 +79,10 @@ struct Args {
     #[clap(short, long, require_equals = true)]
     /// Bonsai Session UUID to use for receipt verification.
     verify_bonsai_receipt_uuid: Option<String>,
+
+    #[clap(short, long, default_value_t = false)]
+    /// Whether to profile the zkVM execution
+    profile: bool,
 }
 
 fn cache_file_path(cache_path: &String, network: &String, block_no: u64, ext: &str) -> String {
@@ -262,7 +266,6 @@ where
             input.len() * 4 / 1_000_000
         );
 
-        #[cfg(feature = "profiler")]
         let mut profiler = risc0_zkvm::Profiler::new(guest_path, guest_elf).unwrap();
 
         info!("Running the executor...");
@@ -274,8 +277,9 @@ where
                 .segment_limit_po2(segment_limit_po2)
                 .add_input(&input);
 
-            #[cfg(feature = "profiler")]
-            builder.trace_callback(profiler.make_trace_callback());
+            if args.profile {
+                builder.trace_callback(profiler.make_trace_callback());
+            }
 
             let env = builder.build().unwrap();
             let mut exec = Executor::from_elf(env, guest_elf).unwrap();
@@ -293,8 +297,7 @@ where
             start_time.elapsed()
         );
 
-        #[cfg(feature = "profiler")]
-        {
+        if args.profile {
             profiler.finalize();
 
             let sys_time = std::time::SystemTime::now()

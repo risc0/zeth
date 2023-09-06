@@ -24,6 +24,7 @@ pub mod finalization;
 pub mod initialization;
 pub mod input;
 pub mod mem_db;
+pub mod optimism;
 pub mod preparation;
 
 pub use zeth_primitives::transactions::ethereum::EthereumTxEssence;

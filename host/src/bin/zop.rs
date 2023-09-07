@@ -12,11 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use anyhow::Context;
+use std::{cell::RefCell, collections::VecDeque};
+
+use anyhow::{bail, Context, Result};
 use clap::Parser;
 use zeth_lib::{
     host::provider::{new_provider, BlockQuery},
-    optimism::{derivation::CHAIN_SPEC, epoch::BlockInput},
+    optimism::{
+        batcher_transactions::BatcherTransactions,
+        batches::Batches,
+        channels::Channels,
+        config::ChainConfig,
+        derivation::{BlockInfo, Epoch, State, CHAIN_SPEC},
+        epoch::BlockInput,
+    },
 };
 use zeth_primitives::block::Header;
 
@@ -70,8 +79,20 @@ fn cache_file_path(cache_path: &String, network: &str, block_no: u64, ext: &str)
     format!("{}/{}/{}.{}", cache_path, network, block_no, ext)
 }
 
+fn eth_cache_path(args: &Args, block_no: u64) -> Option<String> {
+    args.cache
+        .as_ref()
+        .map(|dir| cache_file_path(dir, "ethereum", block_no, "json.gz"))
+}
+
+fn op_cache_path(args: &Args, block_no: u64) -> Option<String> {
+    args.cache
+        .as_ref()
+        .map(|dir| cache_file_path(dir, "optimism", block_no, "json.gz"))
+}
+
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> Result<()> {
     env_logger::init();
     let args = Args::parse();
 
@@ -80,13 +101,46 @@ async fn main() -> anyhow::Result<()> {
     let mut op_block_no = args.block_no;
     // let mut op_inputs: vec![];
 
-    while op_block_no < args.block_no + args.blocks {
-        let eth_rpc_cache = args
-            .cache
-            .as_ref()
-            .map(|dir| cache_file_path(dir, "ethereum", eth_block_no, "json.gz"));
+    // Create dynamic block derivation struct
+    let op_head = new_provider(op_cache_path(&args, op_block_no), args.op_rpc_url.clone())?
+        .get_partial_block(&BlockQuery {
+            block_no: op_block_no,
+        })?;
+    let eth_head = new_provider(
+        eth_cache_path(&args, eth_block_no),
+        args.eth_rpc_url.clone(),
+    )?
+    .get_partial_block(&BlockQuery {
+        block_no: eth_block_no,
+    })?;
+    let op_state = RefCell::new(State {
+        current_l1_block: eth_block_no,
+        safe_head: BlockInfo {
+            hash: op_head.hash.unwrap().0.into(),
+            timestamp: op_head.timestamp.try_into().unwrap(),
+        },
+        epoch: Epoch {
+            number: eth_block_no,
+            hash: eth_head.hash.unwrap().0.into(),
+            timestamp: eth_head.timestamp.try_into().unwrap(),
+        },
+        next_epoch: None,
+    });
+    let op_buffer = RefCell::new(VecDeque::new());
+    let op_chain_config = ChainConfig::optimism();
+    let mut op_system_config = op_chain_config.system_config.clone();
+    let mut op_batches = Batches::new(
+        Channels::new(BatcherTransactions::new(&op_buffer), &op_chain_config),
+        &op_state,
+        &op_chain_config,
+    );
+    let mut op_epoch_queue = VecDeque::new();
 
-        let mut eth_provider = new_provider(eth_rpc_cache, args.eth_rpc_url.clone())?;
+    while op_block_no < args.block_no + args.blocks {
+        let mut eth_provider = new_provider(
+            eth_cache_path(&args, eth_block_no),
+            args.eth_rpc_url.clone(),
+        )?;
 
         // get the block header
         let block_query = BlockQuery {
@@ -99,6 +153,14 @@ async fn main() -> anyhow::Result<()> {
             .clone()
             .try_into()
             .context("invalid block header")?;
+
+        let epoch = Epoch {
+            number: eth_block_no,
+            hash: eth_block.hash.unwrap().0.into(),
+            timestamp: eth_block.timestamp.as_u64(),
+        };
+        op_epoch_queue.push_back(epoch);
+        deque_next_epoch_if_none(&op_state, &mut op_epoch_queue)?;
 
         let can_contain_deposits = zeth_lib::optimism::deposits::can_contain(
             &CHAIN_SPEC.deposit_contract,
@@ -125,11 +187,7 @@ async fn main() -> anyhow::Result<()> {
             None
         };
 
-        if let Some(ref receipts) = receipts {
-            // todo: derive batches from eth block
-        };
-
-        eth_blocks.push(BlockInput {
+        let block_input = BlockInput {
             block_header: header,
             receipts: receipts.clone(),
             transactions: eth_block
@@ -137,18 +195,81 @@ async fn main() -> anyhow::Result<()> {
                 .into_iter()
                 .map(|tx| tx.try_into().unwrap())
                 .collect(),
-        });
+        };
+
+        // derive batches from eth block
+        if let Some(ref receipts) = receipts {
+            // update the system config
+            op_system_config
+                .update(&op_chain_config, &block_input)
+                .context("failed to update system config")?;
+            // process all batcher transactions
+            BatcherTransactions::process(
+                op_chain_config.batch_inbox,
+                op_system_config.batch_sender,
+                block_input.block_header.number,
+                &block_input.transactions,
+                &op_buffer,
+            )
+            .context("failed to create batcher transactions")?;
+        };
+
+        eth_blocks.push(block_input);
+
+        // todo: derive op blocks from batches
+        op_state.borrow_mut().current_l1_block = eth_block_no;
+        while let Some(op_batch) = op_batches.next() {
+            log::debug!(
+                "derived batch: t={}, ph={:?}, e={}",
+                op_batch.essence.timestamp,
+                op_batch.essence.parent_hash,
+                op_batch.essence.epoch_num
+            );
+
+            // Manage current epoch number
+            {
+                let mut op_state_ref = op_state.borrow_mut();
+                if op_batch.essence.epoch_num == op_state_ref.epoch.number + 1 {
+                    op_state_ref.epoch = op_state_ref
+                        .next_epoch
+                        .take()
+                        .expect("dequeued future batch without next epoch!");
+                }
+            }
+            deque_next_epoch_if_none(&op_state, &mut op_epoch_queue)?;
+            // Process block transactions
+            // todo: extract deposits
+            // todo: run block builder with optimism strategy bundle
+        }
+
         eth_block_no += 1;
     }
 
     for i in 0..args.blocks {
         let l2_block_no = args.block_no + i;
 
-        let l2_rpc_cache = args
-            .cache
-            .as_ref()
-            .map(|dir| cache_file_path(dir, "optimism", l2_block_no, "json.gz"));
+        let l2_rpc_cache = op_cache_path(&args, l2_block_no);
     }
 
+    Ok(())
+}
+
+fn deque_next_epoch_if_none(
+    op_state: &RefCell<State>,
+    op_epoch_queue: &mut VecDeque<Epoch>,
+) -> Result<()> {
+    let mut op_state = op_state.borrow_mut();
+    if op_state.next_epoch.is_none() {
+        while let Some(next_epoch) = op_epoch_queue.pop_front() {
+            if next_epoch.number <= op_state.epoch.number {
+                continue;
+            } else if next_epoch.number == op_state.epoch.number + 1 {
+                op_state.next_epoch = Some(next_epoch);
+                break;
+            } else {
+                bail!("epoch gap!");
+            }
+        }
+    }
     Ok(())
 }

@@ -16,7 +16,7 @@ use std::{cell::RefCell, collections::VecDeque};
 
 use anyhow::{ensure, Context, Ok};
 use serde::{Deserialize, Serialize};
-use zeth_primitives::{block::Header, keccak256, trie::MptNode, BlockNumber, RlpBytes, B256};
+use zeth_primitives::{keccak256, trie::MptNode, BlockNumber, RlpBytes, B256};
 
 use super::{
     batcher_transactions::BatcherTransactions,
@@ -26,7 +26,6 @@ use super::{
     deposits,
     epoch::{Input, Output},
 };
-use crate::optimism::{batcher_transactions::BatcherTransaction, epoch::BlockInput};
 
 pub const CHAIN_SPEC: ChainConfig = ChainConfig::optimism();
 
@@ -184,29 +183,5 @@ impl Deriver {
             l1_block_hash: prev.unwrap(),
             l2_block_hashes: l2_batch_hashes,
         })
-    }
-}
-
-pub struct DynamicDeriver<'a, 'b> {
-    batches: Batches<'b, Channels<BatcherTransactions<'a>>>,
-}
-
-impl<'a, 'b> DynamicDeriver<'a, 'b> {
-    pub fn new(
-        config: &'b ChainConfig,
-        state: &'b RefCell<State>,
-        buffer: &'a RefCell<VecDeque<BatcherTransaction>>,
-    ) -> Self {
-        Self {
-            batches: Batches::new(
-                Channels::new(BatcherTransactions::new(buffer), config),
-                state,
-                config,
-            ),
-        }
-    }
-
-    pub fn derive(&mut self, input: BlockInput) -> anyhow::Result<Header> {
-        todo!()
     }
 }

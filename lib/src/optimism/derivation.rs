@@ -16,7 +16,7 @@ use std::{cell::RefCell, collections::VecDeque};
 
 use anyhow::{ensure, Context, Ok};
 use serde::{Deserialize, Serialize};
-use zeth_primitives::{keccak256, trie::MptNode, BlockNumber, RlpBytes, B256};
+use zeth_primitives::{block::Header, keccak256, trie::MptNode, BlockNumber, RlpBytes, B256};
 
 use super::{
     batcher_transactions::BatcherTransactions,
@@ -26,6 +26,7 @@ use super::{
     deposits,
     epoch::{Input, Output},
 };
+use crate::optimism::{batcher_transactions::BatcherTransaction, epoch::BlockInput};
 
 pub const CHAIN_SPEC: ChainConfig = ChainConfig::optimism();
 
@@ -96,7 +97,7 @@ impl Deriver {
         if let Some(receipts) = &first.receipts {
             let mut receipts_trie = MptNode::default();
             for (idx, receipt) in receipts.into_iter().enumerate() {
-                receipts_trie.rlp_update(&idx.to_rlp(), receipt);
+                receipts_trie.insert_rlp(&idx.to_rlp(), receipt)?;
             }
             ensure!(
                 receipts_trie.hash() == first.block_header.receipts_root,
@@ -152,7 +153,7 @@ impl Deriver {
             {
                 let mut txs_trie = MptNode::default();
                 for (idx, tx) in block_input.transactions.into_iter().enumerate() {
-                    txs_trie.rlp_update(&idx.to_rlp(), tx);
+                    txs_trie.insert_rlp(&idx.to_rlp(), tx)?;
                 }
                 ensure!(
                     txs_trie.hash() == block_input.block_header.transactions_root,
@@ -183,5 +184,29 @@ impl Deriver {
             l1_block_hash: prev.unwrap(),
             l2_block_hashes: l2_batch_hashes,
         })
+    }
+}
+
+pub struct DynamicDeriver<'a, 'b> {
+    batches: Batches<'b, Channels<BatcherTransactions<'a>>>,
+}
+
+impl<'a, 'b> DynamicDeriver<'a, 'b> {
+    pub fn new(
+        config: &'b ChainConfig,
+        state: &'b RefCell<State>,
+        buffer: &'a RefCell<VecDeque<BatcherTransaction>>,
+    ) -> Self {
+        Self {
+            batches: Batches::new(
+                Channels::new(BatcherTransactions::new(buffer), config),
+                state,
+                config,
+            ),
+        }
+    }
+
+    pub fn derive(&mut self, input: BlockInput) -> anyhow::Result<Header> {
+        todo!()
     }
 }

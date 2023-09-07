@@ -490,6 +490,14 @@ impl TxEssence for EthereumTxEssence {
         }
         length
     }
+
+    fn data(&self) -> Bytes {
+        match self {
+            EthereumTxEssence::Legacy(tx) => tx.data.clone(),
+            EthereumTxEssence::Eip2930(tx) => tx.data.clone(),
+            EthereumTxEssence::Eip1559(tx) => tx.data.clone(),
+        }
+    }
 }
 
 /// Joins two RLP-encoded lists into a single RLP-encoded list.

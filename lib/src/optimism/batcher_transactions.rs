@@ -16,7 +16,7 @@ use std::{cell::RefCell, collections::VecDeque};
 
 use anyhow::{bail, ensure, Context};
 use zeth_primitives::{
-    transactions::{ethereum::EthereumTxEssence, Transaction},
+    transactions::{ethereum::EthereumTxEssence, Transaction, TxEssence},
     Address, BlockNumber,
 };
 
@@ -58,14 +58,14 @@ impl BatcherTransactions<'_> {
     ) -> anyhow::Result<()> {
         let buffer = &mut *buffer.borrow_mut();
         for tx in transactions {
-            if tx.to() != Some(batch_inbox.0) {
+            if tx.essence.to() != Some(batch_inbox) {
                 continue;
             }
-            if tx.recover_from()? != batch_sender.0 {
+            if tx.recover_from()? != batch_sender {
                 continue;
             }
 
-            match BatcherTransaction::new(&tx.data(), block_number) {
+            match BatcherTransaction::new(&tx.essence.data(), block_number) {
                 Ok(batcher_tx) => {
                     buffer.push_back(batcher_tx);
                     #[cfg(not(target_os = "zkvm"))]

@@ -143,4 +143,11 @@ impl TxEssence for OptimismTxEssence {
         }
         length
     }
+
+    fn data(&self) -> Bytes {
+        match self {
+            OptimismTxEssence::Ethereum(eth) => eth.data(),
+            OptimismTxEssence::OptimismDeposited(op) => op.data.clone(),
+        }
+    }
 }

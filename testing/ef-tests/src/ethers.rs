@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use ethers_core::types::{
-    Block, Bloom, Bytes, EIP1186ProofResponse, StorageProof, Transaction, H256, U256,
+    Block, Bloom, Bytes, EIP1186ProofResponse, StorageProof, Transaction, TransactionReceipt, H256,
+    U256,
 };
 use revm::primitives::B160 as RevmB160;
 use zeth_primitives::U256 as LibU256;
@@ -61,6 +62,13 @@ impl Provider for TestProvider {
             hash: Some(self.header.hash().0.into()),
             ..Default::default()
         })
+    }
+
+    fn get_block_receipts(
+        &mut self,
+        _query: &BlockQuery,
+    ) -> anyhow::Result<Vec<TransactionReceipt>> {
+        unimplemented!()
     }
 
     fn get_proof(&mut self, query: &ProofQuery) -> Result<EIP1186ProofResponse, anyhow::Error> {

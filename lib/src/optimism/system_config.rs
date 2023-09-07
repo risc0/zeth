@@ -67,7 +67,7 @@ impl SystemConfig {
             for log in &receipt.logs {
                 // the log event contract address must match the system config contract
                 // the first log event topic must match the ConfigUpdate signature
-                if log.address == config.system_config_contract.0
+                if log.address == config.system_config_contract
                     && log.topics[0] == CONFIG_UPDATE_SIGNATURE
                 {
                     updated = true;

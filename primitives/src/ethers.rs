@@ -20,13 +20,15 @@ use ethers_core::types::{
     transaction::eip2930::{
         AccessList as EthersAccessList, AccessListItem as EthersAccessListItem,
     },
-    Block as EthersBlock, Transaction as EthersTransaction, Withdrawal as EthersWithdrawal,
-    H160 as EthersH160, H256 as EthersH256, U256 as EthersU256,
+    Block as EthersBlock, Transaction as EthersTransaction, TransactionReceipt as EthersReceipt,
+    Withdrawal as EthersWithdrawal, H160 as EthersH160, H256 as EthersH256, U256 as EthersU256,
+    U64,
 };
 
 use crate::{
     access_list::{AccessList, AccessListItem},
     block::Header,
+    receipt::{Log, Receipt, ReceiptPayload},
     signature::TxSignature,
     transactions::{
         ethereum::{
@@ -245,6 +247,40 @@ impl TryFrom<EthersWithdrawal> for Withdrawal {
                 .amount
                 .try_into()
                 .map_err(|err| anyhow!("invalid amount: {}", err))?,
+        })
+    }
+}
+
+impl TryFrom<EthersReceipt> for Receipt {
+    type Error = anyhow::Error;
+
+    fn try_from(receipt: EthersReceipt) -> Result<Self, Self::Error> {
+        Ok(Receipt {
+            tx_type: receipt
+                .transaction_type
+                .context("transaction_type missing")?
+                .as_u64()
+                .try_into()
+                .context("invalid transaction_type")?,
+            payload: ReceiptPayload {
+                success: receipt.status.context("status missing")? == U64::one(),
+                cumulative_gas_used: from_ethers_u256(receipt.cumulative_gas_used),
+                logs_bloom: Bloom::from_slice(receipt.logs_bloom.as_bytes()),
+                logs: receipt
+                    .logs
+                    .into_iter()
+                    .map(|log| {
+                        let address = log.address.0.into();
+                        let topics = log.topics.into_iter().map(from_ethers_h256).collect();
+                        let data = log.data.0.into();
+                        Log {
+                            address,
+                            topics,
+                            data,
+                        }
+                    })
+                    .collect(),
+            },
         })
     }
 }

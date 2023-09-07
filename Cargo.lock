@@ -4457,6 +4457,7 @@ dependencies = [
  "clap",
  "env_logger",
  "ethers-core",
+ "ethers-providers",
  "hashbrown 0.13.2",
  "hex",
  "log",

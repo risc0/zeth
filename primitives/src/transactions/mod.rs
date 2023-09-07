@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloy_primitives::{Address, TxHash};
+use alloy_primitives::{Address, Bytes, TxHash};
 use alloy_rlp::Encodable;
 use serde::{Deserialize, Serialize};
 
@@ -79,6 +79,8 @@ pub trait TxEssence: Encodable + Clone {
     /// signature. If the transaction type (as per EIP-2718) is not zero, an
     /// additional byte is added to the length.
     fn length(transaction: &Transaction<Self>) -> usize;
+
+    fn data(&self) -> Bytes;
 }
 
 /// Provides RLP encoding functionality for the [Transaction] struct.

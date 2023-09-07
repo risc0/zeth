@@ -15,7 +15,9 @@
 use std::collections::BTreeSet;
 
 use anyhow::{anyhow, Result};
-use ethers_core::types::{Block, Bytes, EIP1186ProofResponse, Transaction, H160, H256, U256};
+use ethers_core::types::{
+    Block, Bytes, EIP1186ProofResponse, Transaction, TransactionReceipt, H160, H256, U256,
+};
 use serde::{Deserialize, Serialize};
 
 pub mod cached_rpc_provider;
@@ -52,6 +54,7 @@ pub trait Provider: Send {
 
     fn get_full_block(&mut self, query: &BlockQuery) -> Result<Block<Transaction>>;
     fn get_partial_block(&mut self, query: &BlockQuery) -> Result<Block<H256>>;
+    fn get_block_receipts(&mut self, query: &BlockQuery) -> Result<Vec<TransactionReceipt>>;
     fn get_proof(&mut self, query: &ProofQuery) -> Result<EIP1186ProofResponse>;
     fn get_transaction_count(&mut self, query: &AccountQuery) -> Result<U256>;
     fn get_balance(&mut self, query: &AccountQuery) -> Result<U256>;
@@ -62,6 +65,7 @@ pub trait Provider: Send {
 pub trait MutProvider: Provider {
     fn insert_full_block(&mut self, query: BlockQuery, val: Block<Transaction>);
     fn insert_partial_block(&mut self, query: BlockQuery, val: Block<H256>);
+    fn insert_block_receipts(&mut self, query: BlockQuery, val: Vec<TransactionReceipt>);
     fn insert_proof(&mut self, query: ProofQuery, val: EIP1186ProofResponse);
     fn insert_transaction_count(&mut self, query: AccountQuery, val: U256);
     fn insert_balance(&mut self, query: AccountQuery, val: U256);

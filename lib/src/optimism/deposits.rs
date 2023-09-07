@@ -20,7 +20,7 @@ use zeth_primitives::{
     transactions::{
         ethereum::TransactionKind,
         optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
-        Transaction, TxEssence,
+        Transaction,
     },
     Address, Bloom, BloomInput, B256, U160, U256,
 };
@@ -63,7 +63,7 @@ pub fn extract_hashes(config: &ChainConfig, input: &BlockInput) -> anyhow::Resul
 
         // parse all the logs for deposit transactions
         for log in &receipt.logs {
-            if log.address == config.deposit_contract.0
+            if log.address == config.deposit_contract
                 && log.topics[0] == TRANSACTION_DEPOSITED_SIGNATURE
             {
                 let tx = to_deposit_transaction(block_hash, log_index, log)
@@ -127,7 +127,7 @@ fn to_deposit_transaction(
     let source_hash = keccak256([U256::from(0).to_be_bytes(), h.0].concat());
 
     // construct the transaction
-    let essence = TxEssence::OptimismDeposited(TxEssenceOptimismDeposited {
+    let essence = OptimismTxEssence::OptimismDeposited(TxEssenceOptimismDeposited {
         source_hash,
         from,
         to: if is_creation {

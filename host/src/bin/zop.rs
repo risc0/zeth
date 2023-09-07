@@ -15,7 +15,7 @@
 use anyhow::Context;
 use clap::Parser;
 use zeth_lib::{
-    host::provider::new_provider,
+    host::provider::{new_provider, BlockQuery},
     optimism::{derivation::CHAIN_SPEC, epoch::BlockInput},
 };
 use zeth_primitives::block::Header;
@@ -78,7 +78,7 @@ async fn main() -> anyhow::Result<()> {
     let mut eth_block_no = args.epoch_no;
     let mut eth_blocks = vec![];
     let mut op_block_no = args.block_no;
-    let mut op_inputs: vec![];
+    // let mut op_inputs: vec![];
 
     while op_block_no < args.block_no + args.blocks {
         let eth_rpc_cache = args
@@ -86,12 +86,14 @@ async fn main() -> anyhow::Result<()> {
             .as_ref()
             .map(|dir| cache_file_path(dir, "ethereum", eth_block_no, "json.gz"));
 
-        let eth_provider = new_provider(eth_rpc_cache, args.eth_rpc_url.clone())?;
+        let mut eth_provider = new_provider(eth_rpc_cache, args.eth_rpc_url.clone())?;
 
         // get the block header
+        let block_query = BlockQuery {
+            block_no: eth_block_no,
+        };
         let eth_block = eth_provider
-            .get_block_with_txs(eth_block_no)
-            .await?
+            .get_full_block(&block_query)
             .context("block not found")?;
         let header: Header = eth_block
             .clone()
@@ -109,7 +111,9 @@ async fn main() -> anyhow::Result<()> {
 
         // include receipts when needed
         let receipts = if can_contain_config || can_contain_deposits {
-            let receipts = eth_provider.get_block_receipts(args.epoch_no).await?;
+            let receipts = eth_provider
+                .get_block_receipts(&block_query)
+                .context("block not found")?;
             Some(
                 receipts
                     .into_iter()
@@ -121,7 +125,7 @@ async fn main() -> anyhow::Result<()> {
             None
         };
 
-        if let Some(receipts) = receipts {
+        if let Some(ref receipts) = receipts {
             // todo: derive batches from eth block
         };
 

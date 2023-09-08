@@ -31,8 +31,8 @@ pub use zeth_primitives::transactions::ethereum::EthereumTxEssence;
 
 /// call forget only if running inside the guest
 pub fn guest_mem_forget<T>(_t: T) {
-    #[cfg(target_os = "zkvm")]
-    core::mem::forget(_t)
+    // #[cfg(target_os = "zkvm")]
+    // core::mem::forget(_t)
 }
 
 /// Pass-through hashing struct for using pre-hashed keys as HashMap indices

@@ -40,9 +40,9 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         match self.try_next() {
             Ok(batch) => batch,
-            Err(e) => {
+            Err(_e) => {
                 #[cfg(not(target_os = "zkvm"))]
-                log::warn!("failed to decode batch: {:#}", e);
+                log::warn!("failed to decode batch: {:#}", _e);
                 None
             }
         }

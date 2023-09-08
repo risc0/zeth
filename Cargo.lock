@@ -4464,6 +4464,7 @@ dependencies = [
  "revm",
  "risc0-zkvm",
  "rstest",
+ "ruint",
  "serde",
  "tempfile",
  "tokio",

@@ -12,22 +12,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{cell::RefCell, collections::VecDeque};
+use std::{
+    cell::RefCell,
+    collections::VecDeque,
+    iter::{once, zip},
+};
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
+use ethers_core::abi::Token;
+use ruint::aliases::U256;
 use zeth_lib::{
+    block_builder::{ConfiguredBlockBuilder, OptimismStrategyBundle},
+    consts::OP_MAINNET_CHAIN_SPEC,
     host::provider::{new_provider, BlockQuery},
+    input::Input,
     optimism::{
         batcher_transactions::BatcherTransactions,
         batches::Batches,
         channels::Channels,
         config::ChainConfig,
+        deposits,
         derivation::{BlockInfo, Epoch, State, CHAIN_SPEC},
         epoch::BlockInput,
     },
 };
-use zeth_primitives::block::Header;
+use zeth_primitives::{
+    address,
+    block::Header,
+    keccak::keccak,
+    transactions::{
+        ethereum::TransactionKind,
+        optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
+        Transaction,
+    },
+    uint, Bytes, RlpBytes,
+};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -40,7 +60,7 @@ struct Args {
     /// URL of the L2 RPC node.
     op_rpc_url: Option<String>,
 
-    #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "host/testdata")]
+    #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "host/testdata/derivation")]
     /// Use a local directory as a cache for RPC calls. Accepts a custom directory.
     /// [default: host/testdata]
     cache: Option<String>,
@@ -52,6 +72,10 @@ struct Args {
     #[clap(long, require_equals = true)]
     /// L2 block number to begin from
     block_no: u64,
+
+    #[clap(long, require_equals = true)]
+    /// L2 block sequence number to begin from
+    seq_no: u64,
 
     #[clap(long, require_equals = true)]
     /// Number of L2 blocks to provably derive.
@@ -96,31 +120,32 @@ async fn main() -> Result<()> {
     env_logger::init();
     let args = Args::parse();
 
-    tokio::task::spawn_blocking(move || get_initial_zop_data(&args)).await?;
-
-    Ok(())
+    tokio::task::spawn_blocking(move || get_initial_zop_data(&args)).await?
 }
 
 fn get_initial_zop_data(args: &Args) -> Result<()> {
     let mut eth_block_no = args.epoch_no;
-    let mut eth_blocks = vec![];
     let mut op_block_no = args.block_no;
-    // let mut op_inputs: vec![];
+    let mut op_block_seq_no = args.seq_no;
 
     // Create dynamic block derivation struct
     println!("Fetch op head {}", op_block_no);
-    let op_head = new_provider(op_cache_path(&args, op_block_no), args.op_rpc_url.clone())?
-        .get_partial_block(&BlockQuery {
-            block_no: op_block_no,
-        })?;
+    let mut op_head_provider =
+        new_provider(op_cache_path(&args, op_block_no), args.op_rpc_url.clone())?;
+    let op_head = op_head_provider.get_partial_block(&BlockQuery {
+        block_no: op_block_no,
+    })?;
+    op_head_provider.save()?;
+    // todo: read system config from op_head (seq_no/epoch_no..etc)
     println!("Fetch eth head {}", eth_block_no);
-    let eth_head = new_provider(
+    let mut eth_head_provider = new_provider(
         eth_cache_path(&args, eth_block_no),
         args.eth_rpc_url.clone(),
-    )?
-    .get_partial_block(&BlockQuery {
+    )?;
+    let eth_head = eth_head_provider.get_partial_block(&BlockQuery {
         block_no: eth_block_no,
     })?;
+    eth_head_provider.save()?;
     let op_state = RefCell::new(State {
         current_l1_block: eth_block_no,
         safe_head: BlockInfo {
@@ -143,9 +168,14 @@ fn get_initial_zop_data(args: &Args) -> Result<()> {
         &op_chain_config,
     );
     let mut op_epoch_queue = VecDeque::new();
+    let mut eth_blocks = vec![];
+    let mut op_epoch_deposit_block_ptr = 0usize;
     let target_block_no = args.block_no + args.blocks;
     while op_block_no < target_block_no {
-        println!("Process op block {}", op_block_no);
+        println!(
+            "Process op block {} as of epoch {}",
+            op_block_no, eth_block_no
+        );
         let mut eth_provider = new_provider(
             eth_cache_path(&args, eth_block_no),
             args.eth_rpc_url.clone(),
@@ -228,7 +258,7 @@ fn get_initial_zop_data(args: &Args) -> Result<()> {
 
         eth_blocks.push(block_input);
 
-        // todo: derive op blocks from batches
+        // derive op blocks from batches
         op_state.borrow_mut().current_l1_block = eth_block_no;
         while let Some(op_batch) = op_batches.next() {
             if op_block_no == target_block_no {
@@ -236,44 +266,161 @@ fn get_initial_zop_data(args: &Args) -> Result<()> {
             }
 
             println!(
-                "derived batch: t={}, ph={:?}, e={}",
+                "derived batch: t={}, ph={:?}, e={}, tx={}",
                 op_batch.essence.timestamp,
                 op_batch.essence.parent_hash,
-                op_batch.essence.epoch_num
+                op_batch.essence.epoch_num,
+                op_batch.essence.transactions.len(),
             );
 
-            // Manage current epoch number
-            {
+            // Manage current epoch number and extract deposits
+            let deposits = {
                 let mut op_state_ref = op_state.borrow_mut();
                 if op_batch.essence.epoch_num == op_state_ref.epoch.number + 1 {
                     op_state_ref.epoch = op_state_ref
                         .next_epoch
                         .take()
                         .expect("dequeued future batch without next epoch!");
+                    op_block_seq_no = 0;
+
+                    op_epoch_deposit_block_ptr += 1;
+                    let deposit_block_input = &eth_blocks[op_epoch_deposit_block_ptr];
+                    if deposit_block_input.block_header.number != op_batch.essence.epoch_num {
+                        bail!("Invalid epoch number!")
+                    };
+                    println!(
+                        "Extracting deposits from block {} for batch with epoch {}",
+                        deposit_block_input.block_header.number, op_batch.essence.epoch_num
+                    );
+                    let deposits =
+                        deposits::extract_transactions(&op_chain_config, deposit_block_input)?;
+                    println!("Extracted {} deposits", deposits.len());
+                    Some(deposits)
+                } else {
+                    println!("No deposits found!");
+                    op_block_seq_no += 1;
+                    None
                 }
-            }
+            };
             deque_next_epoch_if_none(&op_state, &mut op_epoch_queue)?;
             // Process block transactions
-            // todo: extract deposits
-            // todo: run block builder with optimism strategy bundle
             let mut op_state = op_state.borrow_mut();
             if op_batch.essence.parent_hash == op_state.safe_head.hash {
                 op_block_no += 1;
-                let new_op_head =
-                    new_provider(op_cache_path(&args, op_block_no), args.op_rpc_url.clone())?
-                        .get_partial_block(&BlockQuery {
-                            block_no: op_block_no,
-                        })?;
-                op_state.safe_head = BlockInfo {
-                    hash: new_op_head.hash.unwrap().0.into(),
-                    timestamp: new_op_head.timestamp.as_u64(),
+
+                let eth_block_header = &eth_blocks[op_epoch_deposit_block_ptr].block_header;
+                // run block builder with optimism strategy bundle
+                let new_op_head = {
+                    println!("Deriving op block");
+                    // Fetch all of the initial data
+                    let init = zeth_lib::host::get_initial_data::<OptimismStrategyBundle>(
+                        OP_MAINNET_CHAIN_SPEC.clone(),
+                        op_cache_path(&args, op_block_no),
+                        args.op_rpc_url.clone(),
+                        op_block_no,
+                    )?;
+                    let input: Input<OptimismTxEssence> = init.clone().into();
+
+                    let data = [
+                        vec![0x01, 0x5d, 0x8e, 0xb9],
+                        ethers_core::abi::encode(&[
+                            Token::Uint(eth_block_header.number.into()),
+                            Token::Uint(eth_block_header.timestamp.into()),
+                            Token::Uint(eth_block_header.base_fee_per_gas.into()),
+                            Token::FixedBytes(eth_block_header.hash().0.into()),
+                            Token::Uint(op_block_seq_no.into()),
+                            Token::Address(op_system_config.batch_sender.0 .0.into()),
+                            Token::Uint(op_system_config.l1_fee_overhead.into()),
+                            Token::Uint(op_system_config.l1_fee_scalar.into()),
+                        ]),
+                    ]
+                    .concat();
+                    let source_hash_sequencing = keccak(
+                        &[
+                            op_batch.essence.epoch_hash.to_vec(),
+                            U256::from(op_block_seq_no).to_be_bytes_vec(),
+                        ]
+                        .concat(),
+                    );
+                    let source_hash = keccak(
+                        &[
+                            [0u8; 31].as_slice(),
+                            [1u8].as_slice(),
+                            source_hash_sequencing.as_slice(),
+                        ]
+                        .concat(),
+                    );
+                    let system_transaction = Transaction {
+                        essence: OptimismTxEssence::OptimismDeposited(TxEssenceOptimismDeposited {
+                            source_hash: source_hash.into(),
+                            from: address!("deaddeaddeaddeaddeaddeaddeaddeaddead0001"),
+                            to: TransactionKind::Call(address!(
+                                "4200000000000000000000000000000000000015"
+                            )),
+                            mint: Default::default(),
+                            value: Default::default(),
+                            gas_limit: uint!(1_000_000_U256),
+                            is_system_tx: false,
+                            data: Bytes::from(data),
+                        }),
+                        signature: Default::default(),
+                    };
+
+                    let op_derived_transactions: Vec<_> = once(system_transaction.to_rlp())
+                        .chain(
+                            deposits
+                                .unwrap_or_default()
+                                .into_iter()
+                                .map(|tx| tx.to_rlp()),
+                        )
+                        .chain(op_batch.essence.transactions.iter().map(|tx| tx.to_vec()))
+                        .collect();
+                    let op_input_transactions: Vec<_> =
+                        input.transactions.iter().map(|tx| tx.to_rlp()).collect();
+
+                    if op_derived_transactions != op_input_transactions {
+                        println!(
+                            "{}/{}",
+                            op_derived_transactions.len(),
+                            op_input_transactions.len()
+                        );
+                        for (i, (derived, input)) in
+                            zip(op_derived_transactions.iter(), op_input_transactions.iter())
+                                .enumerate()
+                        {
+                            if derived != input {
+                                let der: String =
+                                    derived.iter().map(|n| format!("{:02x}", n)).collect();
+                                let inp: String =
+                                    input.iter().map(|n| format!("{:02x}", n)).collect();
+                                println!("Mismatch at index {}\n{}\n{}", i, der, inp);
+                            }
+                        }
+                        bail!("Derived transactions do not match provided input transactions!");
+                    }
+
+                    // derive
+                    ConfiguredBlockBuilder::<OptimismStrategyBundle>::build_from(
+                        &OP_MAINNET_CHAIN_SPEC,
+                        input,
+                    )?
                 };
-                println!("derived l2 block {}", new_op_head.number.unwrap());
+
+                op_state.safe_head = BlockInfo {
+                    hash: new_op_head.hash(),
+                    timestamp: new_op_head.timestamp.try_into().unwrap(),
+                };
+                println!(
+                    "derived l2 block {} w/ hash {}",
+                    new_op_head.number,
+                    new_op_head.hash()
+                );
             } else {
                 println!("skipped batch w/ timestamp {}", op_batch.essence.timestamp);
             }
         }
 
+        eth_provider.save()?;
         eth_block_no += 1;
     }
     Ok(())

@@ -71,9 +71,9 @@ impl BatcherTransactions<'_> {
                     #[cfg(not(target_os = "zkvm"))]
                     log::debug!("batcher transaction: {}", tx.hash());
                 }
-                Err(e) => {
+                Err(_e) => {
                     #[cfg(not(target_os = "zkvm"))]
-                    log::warn!("invalid batcher transaction: {}", e);
+                    log::warn!("invalid batcher transaction: {}", _e);
                 }
             }
         }

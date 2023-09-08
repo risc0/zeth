@@ -87,7 +87,7 @@ impl Deriver {
         let mut batches = Batches::new(channels, &state, &self.config);
 
         // extract deposits from the first block
-        let _deposits = deposits::extract_hashes(&self.config, first)
+        let _deposits = deposits::extract_transactions(&self.config, first)
             .context("failed to extract deposit hashes")?;
 
         let mut system_config = self.config.system_config.clone();
@@ -171,7 +171,7 @@ impl Deriver {
                 );
 
                 if batch.essence.epoch_num == epoch_number {
-                    let mut state = state.borrow_mut();
+                    let _state = state.borrow_mut();
                     // TODO: build the actual block from that batch and update the state
 
                     l2_batch_hashes.push(keccak256(batch.to_rlp()));

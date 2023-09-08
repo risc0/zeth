@@ -35,7 +35,10 @@ const TRANSACTION_DEPOSITED_SIGNATURE: B256 =
 const TRANSACTION_DEPOSITED_VERSION: B256 = B256::ZERO;
 
 /// Extracts deposits from the given block.
-pub fn extract_hashes(config: &ChainConfig, input: &BlockInput) -> anyhow::Result<Vec<B256>> {
+pub fn extract_transactions(
+    config: &ChainConfig,
+    input: &BlockInput,
+) -> anyhow::Result<Vec<Transaction<OptimismTxEssence>>> {
     let block_hash = input.block_header.hash();
 
     // if the bloom filter does not contain the corresponding topics, we have the guarantee
@@ -66,9 +69,10 @@ pub fn extract_hashes(config: &ChainConfig, input: &BlockInput) -> anyhow::Resul
             if log.address == config.deposit_contract
                 && log.topics[0] == TRANSACTION_DEPOSITED_SIGNATURE
             {
-                let tx = to_deposit_transaction(block_hash, log_index, log)
-                    .context("invalid deposit")?;
-                deposits.push(tx.hash());
+                deposits.push(
+                    to_deposit_transaction(block_hash, log_index, log)
+                        .context("invalid deposit")?,
+                );
             }
 
             log_index += 1;

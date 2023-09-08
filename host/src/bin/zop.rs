@@ -96,16 +96,24 @@ async fn main() -> Result<()> {
     env_logger::init();
     let args = Args::parse();
 
+    tokio::task::spawn_blocking(move || get_initial_zop_data(&args)).await?;
+
+    Ok(())
+}
+
+fn get_initial_zop_data(args: &Args) -> Result<()> {
     let mut eth_block_no = args.epoch_no;
     let mut eth_blocks = vec![];
     let mut op_block_no = args.block_no;
     // let mut op_inputs: vec![];
 
     // Create dynamic block derivation struct
+    println!("Fetch op head {}", op_block_no);
     let op_head = new_provider(op_cache_path(&args, op_block_no), args.op_rpc_url.clone())?
         .get_partial_block(&BlockQuery {
             block_no: op_block_no,
         })?;
+    println!("Fetch eth head {}", eth_block_no);
     let eth_head = new_provider(
         eth_cache_path(&args, eth_block_no),
         args.eth_rpc_url.clone(),
@@ -135,8 +143,9 @@ async fn main() -> Result<()> {
         &op_chain_config,
     );
     let mut op_epoch_queue = VecDeque::new();
-
-    while op_block_no < args.block_no + args.blocks {
+    let target_block_no = args.block_no + args.blocks;
+    while op_block_no < target_block_no {
+        println!("Process op block {}", op_block_no);
         let mut eth_provider = new_provider(
             eth_cache_path(&args, eth_block_no),
             args.eth_rpc_url.clone(),
@@ -146,6 +155,7 @@ async fn main() -> Result<()> {
         let block_query = BlockQuery {
             block_no: eth_block_no,
         };
+        println!("Fetch eth block {}", eth_block_no);
         let eth_block = eth_provider
             .get_full_block(&block_query)
             .context("block not found")?;
@@ -173,6 +183,7 @@ async fn main() -> Result<()> {
 
         // include receipts when needed
         let receipts = if can_contain_config || can_contain_deposits {
+            println!("Fetch eth block receipts {}", eth_block_no);
             let receipts = eth_provider
                 .get_block_receipts(&block_query)
                 .context("block not found")?;
@@ -198,7 +209,8 @@ async fn main() -> Result<()> {
         };
 
         // derive batches from eth block
-        if let Some(ref receipts) = receipts {
+        if let Some(ref _receipts) = receipts {
+            println!("Process config and batches");
             // update the system config
             op_system_config
                 .update(&op_chain_config, &block_input)
@@ -219,7 +231,11 @@ async fn main() -> Result<()> {
         // todo: derive op blocks from batches
         op_state.borrow_mut().current_l1_block = eth_block_no;
         while let Some(op_batch) = op_batches.next() {
-            log::debug!(
+            if op_block_no == target_block_no {
+                break;
+            }
+
+            println!(
                 "derived batch: t={}, ph={:?}, e={}",
                 op_batch.essence.timestamp,
                 op_batch.essence.parent_hash,
@@ -240,17 +256,26 @@ async fn main() -> Result<()> {
             // Process block transactions
             // todo: extract deposits
             // todo: run block builder with optimism strategy bundle
+            let mut op_state = op_state.borrow_mut();
+            if op_batch.essence.parent_hash == op_state.safe_head.hash {
+                op_block_no += 1;
+                let new_op_head =
+                    new_provider(op_cache_path(&args, op_block_no), args.op_rpc_url.clone())?
+                        .get_partial_block(&BlockQuery {
+                            block_no: op_block_no,
+                        })?;
+                op_state.safe_head = BlockInfo {
+                    hash: new_op_head.hash.unwrap().0.into(),
+                    timestamp: new_op_head.timestamp.as_u64(),
+                };
+                println!("derived l2 block {}", new_op_head.number.unwrap());
+            } else {
+                println!("skipped batch w/ timestamp {}", op_batch.essence.timestamp);
+            }
         }
 
         eth_block_no += 1;
     }
-
-    for i in 0..args.blocks {
-        let l2_block_no = args.block_no + i;
-
-        let l2_rpc_cache = op_cache_path(&args, l2_block_no);
-    }
-
     Ok(())
 }
 

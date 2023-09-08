@@ -20,7 +20,7 @@ use std::{
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use ethers_core::abi::Token;
+use ethers_core::abi::{ParamType, Token};
 use ruint::aliases::U256;
 use zeth_lib::{
     block_builder::{ConfiguredBlockBuilder, OptimismStrategyBundle},
@@ -46,7 +46,7 @@ use zeth_primitives::{
         optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
         Transaction,
     },
-    uint, Bytes, RlpBytes,
+    uint, Address, Bytes, RlpBytes,
 };
 
 #[derive(Parser, Debug)]
@@ -66,16 +66,8 @@ struct Args {
     cache: Option<String>,
 
     #[clap(long, require_equals = true)]
-    /// Epoch number (L1 Block number) of the L2 block to begin from.
-    epoch_no: u64,
-
-    #[clap(long, require_equals = true)]
     /// L2 block number to begin from
     block_no: u64,
-
-    #[clap(long, require_equals = true)]
-    /// L2 block sequence number to begin from
-    seq_no: u64,
 
     #[clap(long, require_equals = true)]
     /// Number of L2 blocks to provably derive.
@@ -124,19 +116,47 @@ async fn main() -> Result<()> {
 }
 
 fn get_initial_zop_data(args: &Args) -> Result<()> {
-    let mut eth_block_no = args.epoch_no;
     let mut op_block_no = args.block_no;
-    let mut op_block_seq_no = args.seq_no;
 
     // Create dynamic block derivation struct
     println!("Fetch op head {}", op_block_no);
     let mut op_head_provider =
         new_provider(op_cache_path(&args, op_block_no), args.op_rpc_url.clone())?;
-    let op_head = op_head_provider.get_partial_block(&BlockQuery {
+    let op_head = op_head_provider.get_full_block(&BlockQuery {
         block_no: op_block_no,
     })?;
     op_head_provider.save()?;
-    // todo: read system config from op_head (seq_no/epoch_no..etc)
+    // read system config from op_head (seq_no/epoch_no..etc)
+    let system_tx_data = op_head.transactions.first().unwrap().input.to_vec();
+    let decoded_data = ethers_core::abi::decode(
+        &[
+            ParamType::Uint(64),       // 0 l1 number
+            ParamType::Uint(64),       // 1 l1 timestamp
+            ParamType::Uint(256),      // 2 l1 base fee
+            ParamType::FixedBytes(32), // 3 l1 block hash
+            ParamType::Uint(64),       // 4 l2 sequence number
+            ParamType::FixedBytes(32), // 5 batcher hash
+            ParamType::Uint(256),      // 6 l1 fee overhead
+            ParamType::Uint(256),      // 7 l1 fee scalar
+        ],
+        &system_tx_data[4..],
+    )?;
+    let mut eth_block_no = decoded_data[0].clone().into_uint().unwrap().as_u64();
+    let mut op_block_seq_no = decoded_data[4].clone().into_uint().unwrap().as_u64();
+    let eth_block_hash = decoded_data[3].clone().into_fixed_bytes().unwrap();
+    let mut op_chain_config = ChainConfig::optimism();
+    op_chain_config.system_config.batch_sender = Address::from_slice(
+        &decoded_data[5]
+            .clone()
+            .into_fixed_bytes()
+            .unwrap()
+            .as_slice()[12..],
+    );
+    op_chain_config.system_config.l1_fee_overhead =
+        decoded_data[6].clone().into_uint().unwrap().into();
+    op_chain_config.system_config.l1_fee_scalar =
+        decoded_data[7].clone().into_uint().unwrap().into();
+
     println!("Fetch eth head {}", eth_block_no);
     let mut eth_head_provider = new_provider(
         eth_cache_path(&args, eth_block_no),
@@ -146,6 +166,9 @@ fn get_initial_zop_data(args: &Args) -> Result<()> {
         block_no: eth_block_no,
     })?;
     eth_head_provider.save()?;
+    if eth_head.hash.unwrap().0.as_slice() != eth_block_hash.as_slice() {
+        bail!("Ethereum head block hash mismatch.")
+    }
     let op_state = RefCell::new(State {
         current_l1_block: eth_block_no,
         safe_head: BlockInfo {
@@ -160,7 +183,6 @@ fn get_initial_zop_data(args: &Args) -> Result<()> {
         next_epoch: None,
     });
     let op_buffer = RefCell::new(VecDeque::new());
-    let op_chain_config = ChainConfig::optimism();
     let mut op_system_config = op_chain_config.system_config.clone();
     let mut op_batches = Batches::new(
         Channels::new(BatcherTransactions::new(&op_buffer), &op_chain_config),
@@ -168,8 +190,9 @@ fn get_initial_zop_data(args: &Args) -> Result<()> {
         &op_chain_config,
     );
     let mut op_epoch_queue = VecDeque::new();
-    let mut eth_blocks = vec![];
+    let mut eth_block_inputs = vec![];
     let mut op_epoch_deposit_block_ptr = 0usize;
+    let mut op_block_inputs = vec![];
     let target_block_no = args.block_no + args.blocks;
     while op_block_no < target_block_no {
         println!(
@@ -256,7 +279,7 @@ fn get_initial_zop_data(args: &Args) -> Result<()> {
             .context("failed to create batcher transactions")?;
         };
 
-        eth_blocks.push(block_input);
+        eth_block_inputs.push(block_input);
 
         // derive op blocks from batches
         op_state.borrow_mut().current_l1_block = eth_block_no;
@@ -284,7 +307,7 @@ fn get_initial_zop_data(args: &Args) -> Result<()> {
                     op_block_seq_no = 0;
 
                     op_epoch_deposit_block_ptr += 1;
-                    let deposit_block_input = &eth_blocks[op_epoch_deposit_block_ptr];
+                    let deposit_block_input = &eth_block_inputs[op_epoch_deposit_block_ptr];
                     if deposit_block_input.block_header.number != op_batch.essence.epoch_num {
                         bail!("Invalid epoch number!")
                     };
@@ -308,7 +331,7 @@ fn get_initial_zop_data(args: &Args) -> Result<()> {
             if op_batch.essence.parent_hash == op_state.safe_head.hash {
                 op_block_no += 1;
 
-                let eth_block_header = &eth_blocks[op_epoch_deposit_block_ptr].block_header;
+                let eth_block_header = &eth_block_inputs[op_epoch_deposit_block_ptr].block_header;
                 // run block builder with optimism strategy bundle
                 let new_op_head = {
                     println!("Deriving op block");
@@ -400,6 +423,7 @@ fn get_initial_zop_data(args: &Args) -> Result<()> {
                     }
 
                     // derive
+                    op_block_inputs.push(input.clone());
                     ConfiguredBlockBuilder::<OptimismStrategyBundle>::build_from(
                         &OP_MAINNET_CHAIN_SPEC,
                         input,

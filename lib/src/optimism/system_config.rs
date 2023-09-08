@@ -14,7 +14,9 @@
 
 use anyhow::{self, bail, ensure, Context, Ok};
 use serde::{Deserialize, Serialize};
-use zeth_primitives::{b256, Address, Bloom, BloomInput, B256, U256};
+use zeth_primitives::{
+    b256, transactions::ethereum::EthereumTxEssence, Address, Bloom, BloomInput, B256, U256,
+};
 
 use super::{config::ChainConfig, epoch::BlockInput};
 
@@ -43,7 +45,11 @@ pub struct SystemConfig {
 impl SystemConfig {
     /// Updates the system config based on the given input. Returns whether the config was
     /// updated.
-    pub fn update(&mut self, config: &ChainConfig, input: &BlockInput) -> anyhow::Result<bool> {
+    pub fn update(
+        &mut self,
+        config: &ChainConfig,
+        input: &BlockInput<EthereumTxEssence>,
+    ) -> anyhow::Result<bool> {
         let mut updated = false;
 
         // if the bloom filter does not contain the corresponding topics, we have the guarantee

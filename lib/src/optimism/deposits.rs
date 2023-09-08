@@ -18,7 +18,7 @@ use zeth_primitives::{
     fixed_bytes, keccak256,
     receipt::Log,
     transactions::{
-        ethereum::TransactionKind,
+        ethereum::{EthereumTxEssence, TransactionKind},
         optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
         Transaction,
     },
@@ -37,7 +37,7 @@ const TRANSACTION_DEPOSITED_VERSION: B256 = B256::ZERO;
 /// Extracts deposits from the given block.
 pub fn extract_transactions(
     config: &ChainConfig,
-    input: &BlockInput,
+    input: &BlockInput<EthereumTxEssence>,
 ) -> anyhow::Result<Vec<Transaction<OptimismTxEssence>>> {
     let block_hash = input.block_header.hash();
 

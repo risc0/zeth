@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{cell::RefCell, cmp::Ordering, collections::BTreeMap, io::Read};
+extern crate alloc;
+
+use alloc::collections::BTreeMap;
+use core::{cell::RefCell, cmp::Ordering};
+use std::io::Read;
 
 use anyhow::Context;
 use libflate::zlib::Decoder;
@@ -113,7 +117,7 @@ where
         let batch = if derived_batch.is_none() {
             let state = self.state.borrow();
 
-            let current_l1_block = state.current_l1_block;
+            let current_l1_block = state.current_l1_block_number;
             let safe_head = state.safe_head;
             let epoch = state.epoch;
             let next_epoch = state.next_epoch;

@@ -16,12 +16,17 @@ use std::{
     cell::RefCell,
     collections::VecDeque,
     iter::{once, zip},
+    time::Instant,
 };
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use ethers_core::abi::{ParamType, Token};
+use log::info;
+use risc0_zkvm::{serde::to_vec, Executor, ExecutorEnv, FileSegmentRef};
 use ruint::aliases::U256;
+use tempfile::tempdir;
+use zeth_guests::{OP_DERIVE_ELF, OP_DERIVE_PATH};
 use zeth_lib::{
     block_builder::{ConfiguredBlockBuilder, OptimismStrategyBundle},
     consts::OP_MAINNET_CHAIN_SPEC,
@@ -32,9 +37,10 @@ use zeth_lib::{
         batches::Batches,
         channels::Channels,
         config::ChainConfig,
-        deposits,
+        deposits, deque_next_epoch_if_none,
         derivation::{BlockInfo, Epoch, State, CHAIN_SPEC},
         epoch::BlockInput,
+        DerivationInput,
     },
 };
 use zeth_primitives::{
@@ -46,10 +52,10 @@ use zeth_primitives::{
         optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
         Transaction,
     },
-    uint, Address, Bytes, RlpBytes,
+    uint, Address, BlockHash, Bytes, RlpBytes,
 };
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
     #[clap(long, require_equals = true)]
@@ -112,10 +118,85 @@ async fn main() -> Result<()> {
     env_logger::init();
     let args = Args::parse();
 
-    tokio::task::spawn_blocking(move || get_initial_zop_data(&args)).await?
+    let args_clone = args.clone();
+    let input = tokio::task::spawn_blocking(move || get_initial_zop_data(&args_clone)).await??;
+
+    // validate host side
+    let _derived_transition = input.clone().process()?;
+
+    // Run in the executor (if requested)
+    if let Some(segment_limit_po2) = args.local_exec {
+        info!(
+            "Running in executor with segment_limit_po2 = {:?}",
+            segment_limit_po2
+        );
+
+        let input = to_vec(&input).expect("Could not serialize input!");
+        info!(
+            "Input size: {} words ( {} MB )",
+            input.len(),
+            input.len() * 4 / 1_000_000
+        );
+
+        let mut profiler = risc0_zkvm::Profiler::new(OP_DERIVE_PATH, OP_DERIVE_ELF).unwrap();
+
+        info!("Running the executor...");
+        let start_time = Instant::now();
+        let session = {
+            let mut builder = ExecutorEnv::builder();
+            builder
+                .session_limit(None)
+                .segment_limit_po2(segment_limit_po2)
+                .add_input(&input);
+
+            if args.profile {
+                builder.trace_callback(profiler.make_trace_callback());
+            }
+
+            let env = builder.build().unwrap();
+            let mut exec = Executor::from_elf(env, OP_DERIVE_ELF).unwrap();
+
+            let segment_dir = tempdir().unwrap();
+
+            exec.run_with_callback(|segment| {
+                Ok(Box::new(FileSegmentRef::new(&segment, segment_dir.path())?))
+            })
+            .unwrap()
+        };
+        info!(
+            "Generated {:?} segments; elapsed time: {:?}",
+            session.segments.len(),
+            start_time.elapsed()
+        );
+
+        if args.profile {
+            profiler.finalize();
+
+            let sys_time = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap();
+            tokio::fs::write(
+                format!("profile_{}.pb", sys_time.as_secs()),
+                &profiler.encode_to_vec(),
+            )
+            .await
+            .expect("Failed to write profiling output");
+        }
+
+        info!(
+            "Executor ran in (roughly) {} cycles",
+            session.segments.len() * (1 << segment_limit_po2)
+        );
+
+        // todo: validate journal output
+    }
+
+    // todo: bonsai stuff
+
+    Ok(())
 }
 
-fn get_initial_zop_data(args: &Args) -> Result<()> {
+fn get_initial_zop_data(args: &Args) -> Result<DerivationInput> {
     let mut op_block_no = args.block_no;
 
     // Create dynamic block derivation struct
@@ -170,7 +251,8 @@ fn get_initial_zop_data(args: &Args) -> Result<()> {
         bail!("Ethereum head block hash mismatch.")
     }
     let op_state = RefCell::new(State {
-        current_l1_block: eth_block_no,
+        current_l1_block_number: eth_block_no,
+        current_l1_block_hash: BlockHash::from(eth_head.hash.unwrap().0),
         safe_head: BlockInfo {
             hash: op_head.hash.unwrap().0.into(),
             timestamp: op_head.timestamp.try_into().unwrap(),
@@ -262,7 +344,7 @@ fn get_initial_zop_data(args: &Args) -> Result<()> {
         };
 
         // derive batches from eth block
-        if let Some(ref _receipts) = receipts {
+        if receipts.is_some() {
             println!("Process config and batches");
             // update the system config
             op_system_config
@@ -282,7 +364,7 @@ fn get_initial_zop_data(args: &Args) -> Result<()> {
         eth_block_inputs.push(block_input);
 
         // derive op blocks from batches
-        op_state.borrow_mut().current_l1_block = eth_block_no;
+        op_state.borrow_mut().current_l1_block_number = eth_block_no;
         while let Some(op_batch) = op_batches.next() {
             if op_block_no == target_block_no {
                 break;
@@ -447,25 +529,17 @@ fn get_initial_zop_data(args: &Args) -> Result<()> {
         eth_provider.save()?;
         eth_block_no += 1;
     }
-    Ok(())
-}
-
-fn deque_next_epoch_if_none(
-    op_state: &RefCell<State>,
-    op_epoch_queue: &mut VecDeque<Epoch>,
-) -> Result<()> {
-    let mut op_state = op_state.borrow_mut();
-    if op_state.next_epoch.is_none() {
-        while let Some(next_epoch) = op_epoch_queue.pop_front() {
-            if next_epoch.number <= op_state.epoch.number {
-                continue;
-            } else if next_epoch.number == op_state.epoch.number + 1 {
-                op_state.next_epoch = Some(next_epoch);
-                break;
-            } else {
-                bail!("epoch gap!");
-            }
-        }
-    }
-    Ok(())
+    Ok(DerivationInput {
+        eth_block_inputs,
+        op_block_inputs,
+        op_head: BlockInput {
+            block_header: op_head.clone().try_into().unwrap(),
+            transactions: op_head
+                .transactions
+                .into_iter()
+                .map(|tx| tx.try_into().unwrap())
+                .collect(),
+            receipts: None,
+        },
+    })
 }

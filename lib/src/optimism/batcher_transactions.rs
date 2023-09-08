@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{cell::RefCell, collections::VecDeque};
+extern crate alloc;
+
+use alloc::collections::vec_deque::VecDeque;
+use core::cell::RefCell;
 
 use anyhow::{bail, ensure, Context};
 use zeth_primitives::{

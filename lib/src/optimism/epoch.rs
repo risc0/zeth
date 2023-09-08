@@ -16,33 +16,19 @@ use serde::{Deserialize, Serialize};
 use zeth_primitives::{
     block::Header,
     receipt::Receipt,
-    transactions::{ethereum::EthereumTxEssence, Transaction},
-    B256,
+    transactions::{ethereum::EthereumTxEssence, Transaction, TxEssence},
 };
 
 /// Input for the L2 derivation.
-pub type Input = Vec<BlockInput>;
+pub type Input = Vec<BlockInput<EthereumTxEssence>>;
 
 /// Input for extracting deposits.
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct BlockInput {
+pub struct BlockInput<E: TxEssence> {
     /// Header of the block.
     pub block_header: Header,
     /// Transactions of the block.
-    pub transactions: Vec<Transaction<EthereumTxEssence>>,
+    pub transactions: Vec<Transaction<E>>,
     /// Transaction receipts of the block or `None` if not required.
     pub receipts: Option<Vec<Receipt>>,
-}
-
-/// Output of extracting deposits.
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
-pub struct Output {
-    // /// L2 block hash the validation started from.
-    // pub input_l2_block_hash: B256,
-    // /// L1 block hash denoting the epoch of the L2 block the validation started from.
-    // pub input_l1_block_hash: B256,
-    /// The hash of the final block.
-    pub l1_block_hash: B256,
-    /// The hashes of the derived L2 blocks.
-    pub l2_block_hashes: Vec<B256>,
 }

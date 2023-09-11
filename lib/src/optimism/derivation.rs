@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate alloc;
-
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{BlockHash, BlockNumber, B256};
 

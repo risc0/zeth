@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate alloc;
-
-use alloc::collections::BTreeMap;
 use core::{cell::RefCell, cmp::Ordering};
 use std::io::Read;
 
 use anyhow::Context;
+use heapless::{binary_heap::Min, BinaryHeap};
 use libflate::zlib::Decoder;
 use zeth_primitives::{
     batch::Batch,
@@ -27,15 +25,15 @@ use zeth_primitives::{
 
 use super::{channels::Channel, config::ChainConfig, derivation::State};
 
-pub struct Batches<'a, I> {
+pub struct Batches<'a, I, const N: usize> {
     /// Mapping of timestamps to batches
-    batches: BTreeMap<u64, Batch>,
+    batches: BinaryHeap<Batch, Min, N>,
     channel_iter: I,
     state: &'a RefCell<State>,
     config: &'a ChainConfig,
 }
 
-impl<I> Iterator for Batches<'_, I>
+impl<I, const N: usize> Iterator for Batches<'_, I, N>
 where
     I: Iterator<Item = Channel>,
 {
@@ -53,14 +51,14 @@ where
     }
 }
 
-impl<I> Batches<'_, I> {
+impl<I, const N: usize> Batches<'_, I, N> {
     pub fn new<'a>(
         channel_iter: I,
         state: &'a RefCell<State>,
         config: &'a ChainConfig,
-    ) -> Batches<'a, I> {
+    ) -> Batches<'a, I, N> {
         Batches {
-            batches: BTreeMap::new(),
+            batches: BinaryHeap::<Batch, Min, N>::new(),
             channel_iter,
             state,
             config,
@@ -68,7 +66,7 @@ impl<I> Batches<'_, I> {
     }
 }
 
-impl<I> Batches<'_, I>
+impl<I, const N: usize> Batches<'_, I, N>
 where
     I: Iterator<Item = Channel>,
 {
@@ -87,25 +85,22 @@ where
                     batch.essence.parent_hash,
                     batch.essence.epoch_num
                 );
-                self.batches.insert(batch.essence.timestamp, batch);
+                self.batches.push(batch).unwrap();
             });
         }
 
         let derived_batch = loop {
-            if let Some((_, batch)) = self.batches.first_key_value() {
-                match self.batch_status(batch) {
+            if let Some(batch) = self.batches.pop() {
+                match self.batch_status(&batch) {
                     BatchStatus::Accept => {
-                        let batch = batch.clone();
-                        self.batches.remove(&batch.essence.timestamp);
                         break Some(batch);
                     }
                     BatchStatus::Drop => {
                         #[cfg(not(target_os = "zkvm"))]
                         log::warn!("dropping invalid batch");
-                        let timestamp = batch.essence.timestamp;
-                        self.batches.remove(&timestamp);
                     }
                     BatchStatus::Future | BatchStatus::Undecided => {
+                        self.batches.push(batch).unwrap();
                         break None;
                     }
                 }

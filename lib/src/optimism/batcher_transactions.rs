@@ -12,52 +12,54 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate alloc;
-
-use alloc::collections::vec_deque::VecDeque;
 use core::cell::RefCell;
 
 use anyhow::{bail, ensure, Context};
+use heapless::spsc::Queue;
 use zeth_primitives::{
     transactions::{ethereum::EthereumTxEssence, Transaction, TxEssence},
     Address, BlockNumber,
 };
 
 #[derive(Debug, Clone)]
-pub struct BatcherTransactions<'a> {
-    txs: VecDeque<BatcherTransaction>,
-    buffer: &'a RefCell<VecDeque<BatcherTransaction>>,
+pub struct BatcherTransactions<'a, const T: usize, const N: usize> {
+    txs: Queue<BatcherTransaction, T>,
+    buffer: &'a RefCell<Queue<BatcherTransaction, N>>,
 }
 
-impl BatcherTransactions<'_> {
-    pub fn new(buffer: &RefCell<VecDeque<BatcherTransaction>>) -> BatcherTransactions<'_> {
+impl<const T: usize, const N: usize> BatcherTransactions<'_, T, N> {
+    pub fn new(buffer: &RefCell<Queue<BatcherTransaction, N>>) -> BatcherTransactions<'_, T, N> {
         BatcherTransactions {
-            txs: VecDeque::new(),
+            txs: Queue::new(),
             buffer,
         }
     }
 
     fn drain_buffer(&mut self) {
-        self.txs.append(&mut self.buffer.borrow_mut());
+        let mut buffer = self.buffer.borrow_mut();
+        while let Some(tx) = buffer.dequeue() {
+            self.txs.enqueue(tx).unwrap();
+        }
+        // self.txs.enqueue(&mut self.buffer.borrow_mut());
     }
 }
 
-impl Iterator for BatcherTransactions<'_> {
+impl<const T: usize, const N: usize> Iterator for BatcherTransactions<'_, T, N> {
     type Item = BatcherTransaction;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.drain_buffer();
-        self.txs.pop_front()
+        self.txs.dequeue()
     }
 }
 
-impl BatcherTransactions<'_> {
+impl<const T: usize, const N: usize> BatcherTransactions<'_, T, N> {
     pub fn process(
         batch_inbox: Address,
         batch_sender: Address,
         block_number: BlockNumber,
         transactions: &Vec<Transaction<EthereumTxEssence>>,
-        buffer: &RefCell<VecDeque<BatcherTransaction>>,
+        buffer: &RefCell<Queue<BatcherTransaction, N>>,
     ) -> anyhow::Result<()> {
         let buffer = &mut *buffer.borrow_mut();
         for tx in transactions {
@@ -70,7 +72,7 @@ impl BatcherTransactions<'_> {
 
             match BatcherTransaction::new(&tx.essence.data(), block_number) {
                 Ok(batcher_tx) => {
-                    buffer.push_back(batcher_tx);
+                    buffer.enqueue(batcher_tx).unwrap();
                     #[cfg(not(target_os = "zkvm"))]
                     log::debug!("batcher transaction: {}", tx.hash());
                 }

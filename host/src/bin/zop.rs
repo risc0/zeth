@@ -14,7 +14,6 @@
 
 use std::{
     cell::RefCell,
-    collections::VecDeque,
     iter::{once, zip},
     time::Instant,
 };
@@ -22,6 +21,7 @@ use std::{
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use ethers_core::abi::{ParamType, Token};
+use heapless::spsc::Queue;
 use log::info;
 use risc0_zkvm::{serde::to_vec, Executor, ExecutorEnv, FileSegmentRef};
 use ruint::aliases::U256;
@@ -264,14 +264,18 @@ fn get_initial_zop_data(args: &Args) -> Result<DerivationInput> {
         },
         next_epoch: None,
     });
-    let op_buffer = RefCell::new(VecDeque::new());
+    let op_buffer_queue = Queue::<_, 1024>::new();
+    let op_buffer = RefCell::new(op_buffer_queue);
     let mut op_system_config = op_chain_config.system_config.clone();
-    let mut op_batches = Batches::new(
-        Channels::new(BatcherTransactions::new(&op_buffer), &op_chain_config),
+    let mut op_batches: Batches<'_, _, 1024> = Batches::new(
+        Channels::new(
+            BatcherTransactions::<1024, 1024>::new(&op_buffer),
+            &op_chain_config,
+        ),
         &op_state,
         &op_chain_config,
     );
-    let mut op_epoch_queue = VecDeque::new();
+    let mut op_epoch_queue = Queue::<_, 1024>::new();
     let mut eth_block_inputs = vec![];
     let mut op_epoch_deposit_block_ptr = 0usize;
     let mut op_block_inputs = vec![];
@@ -304,7 +308,7 @@ fn get_initial_zop_data(args: &Args) -> Result<DerivationInput> {
             hash: eth_block.hash.unwrap().0.into(),
             timestamp: eth_block.timestamp.as_u64(),
         };
-        op_epoch_queue.push_back(epoch);
+        op_epoch_queue.enqueue(epoch).unwrap();
         deque_next_epoch_if_none(&op_state, &mut op_epoch_queue)?;
 
         let can_contain_deposits = zeth_lib::optimism::deposits::can_contain(
@@ -351,7 +355,7 @@ fn get_initial_zop_data(args: &Args) -> Result<DerivationInput> {
                 .update(&op_chain_config, &block_input)
                 .context("failed to update system config")?;
             // process all batcher transactions
-            BatcherTransactions::process(
+            BatcherTransactions::<1024, 1024>::process(
                 op_chain_config.batch_inbox,
                 op_system_config.batch_sender,
                 block_input.block_header.number,

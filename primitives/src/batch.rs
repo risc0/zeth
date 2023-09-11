@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
+
 use alloy_primitives::{BlockNumber, Bytes, B256};
 use alloy_rlp::{Decodable, Encodable};
 use alloy_rlp_derive::{RlpDecodable, RlpEncodable};
@@ -19,7 +21,7 @@ use bytes::Buf;
 
 pub type RawTransaction = Bytes;
 
-#[derive(Debug, Clone, RlpEncodable, RlpDecodable)]
+#[derive(Debug, Clone, Eq, PartialEq, RlpEncodable, RlpDecodable)]
 pub struct BatchEssence {
     pub parent_hash: B256,
     pub epoch_num: u64,
@@ -28,10 +30,22 @@ pub struct BatchEssence {
     pub transactions: Vec<RawTransaction>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Batch {
     pub essence: BatchEssence,
     pub l1_inclusion_block: BlockNumber,
+}
+
+impl PartialOrd<Self> for Batch {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.essence.timestamp.partial_cmp(&other.essence.timestamp)
+    }
+}
+
+impl Ord for Batch {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.essence.timestamp.cmp(&other.essence.timestamp)
+    }
 }
 
 impl Batch {

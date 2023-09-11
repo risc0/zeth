@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate alloc;
-
-use alloc::collections::vec_deque::VecDeque;
 use core::{cell::RefCell, iter::once};
 
 use anyhow::bail;
 use ethers_core::abi::{ParamType, Token};
+use heapless::spsc::Queue;
 use ruint::aliases::U256;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
@@ -129,14 +127,18 @@ impl DerivationInput {
             },
             next_epoch: None,
         });
-        let op_buffer = RefCell::new(VecDeque::new());
+        let op_buffer_queue = Queue::<_, 1024>::new();
+        let op_buffer = RefCell::new(op_buffer_queue);
         let mut op_system_config = op_chain_config.system_config.clone();
-        let mut op_batches = Batches::new(
-            Channels::new(BatcherTransactions::new(&op_buffer), &op_chain_config),
+        let mut op_batches: Batches<'_, _, 1024> = Batches::new(
+            Channels::new(
+                BatcherTransactions::<1024, 1024>::new(&op_buffer),
+                &op_chain_config,
+            ),
             &op_state,
             &op_chain_config,
         );
-        let mut op_epoch_queue = VecDeque::new();
+        let mut op_epoch_queue = Queue::<_, 1024>::new();
         let mut op_epoch_deposit_block_ptr = 0usize;
         let target_block_no = op_head_block_header.number + self.op_block_inputs.len() as u64;
         let mut eth_block_iter = self.eth_block_inputs.iter();
@@ -161,7 +163,7 @@ impl DerivationInput {
                 hash: eth_block_hash,
                 timestamp: eth_block_header.timestamp.try_into().unwrap(),
             };
-            op_epoch_queue.push_back(epoch);
+            op_epoch_queue.enqueue(epoch).unwrap();
             deque_next_epoch_if_none(&op_state, &mut op_epoch_queue)?;
 
             let can_contain_deposits =
@@ -200,7 +202,7 @@ impl DerivationInput {
                 // update the system config
                 op_system_config.update(&op_chain_config, &eth_block_input)?;
                 // process all batcher transactions
-                BatcherTransactions::process(
+                BatcherTransactions::<1024, 1024>::process(
                     op_chain_config.batch_inbox,
                     op_system_config.batch_sender,
                     eth_block_input.block_header.number,
@@ -345,13 +347,13 @@ impl DerivationInput {
     }
 }
 
-pub fn deque_next_epoch_if_none(
+pub fn deque_next_epoch_if_none<const N: usize>(
     op_state: &RefCell<State>,
-    op_epoch_queue: &mut VecDeque<Epoch>,
+    op_epoch_queue: &mut Queue<Epoch, N>,
 ) -> anyhow::Result<()> {
     let mut op_state = op_state.borrow_mut();
     if op_state.next_epoch.is_none() {
-        while let Some(next_epoch) = op_epoch_queue.pop_front() {
+        while let Some(next_epoch) = op_epoch_queue.dequeue() {
             if next_epoch.number <= op_state.epoch.number {
                 continue;
             } else if next_epoch.number == op_state.epoch.number + 1 {

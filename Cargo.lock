@@ -758,11 +758,11 @@ checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 
 [[package]]
 name = "crypto-bigint"
-version = "0.5.2"
-source = "git+https://github.com/risc0/RustCrypto-crypto-bigint?tag=v0.5.2-risc0#8b30304277cfe553b51a78a0e693f48bbb059eb3"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "740fe28e594155f10cfc383984cbefd529d7396050557148f79cb0f621204124"
 dependencies = [
  "generic-array",
- "getrandom",
  "rand_core",
  "subtle",
  "zeroize",
@@ -1800,7 +1800,8 @@ dependencies = [
 [[package]]
 name = "k256"
 version = "0.13.1"
-source = "git+https://github.com/risc0/RustCrypto-elliptic-curves?tag=k256/v0.13.1-risc0#44b1fc2b317e76bb150636cf67d0fbdfcac39601"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cadb76004ed8e97623117f3df85b17aaa6626ab0b0831e6573f104df16cd1bcc"
 dependencies = [
  "cfg-if",
  "ecdsa",
@@ -3442,7 +3443,8 @@ dependencies = [
 [[package]]
 name = "sha2"
 version = "0.10.6"
-source = "git+https://github.com/risc0/RustCrypto-hashes?tag=sha2/v0.10.6-risc0#e75cafd9f55da196061f6fadf8bc8a86778192b7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "82e6b795fe2e3b1e845bafcb27aa35405c4d47cdfc92af5fc8d3002f76cebdc0"
 dependencies = [
  "cfg-if",
  "cpufeatures",

@@ -309,7 +309,6 @@ async fn main() -> Result<()> {
 
             match client.upload_img(&image_id, image) {
                 Ok(_) => (),
-                Err(bonsai_sdk::SdkErr::ImageIdExists) => (),
                 Err(err) => panic!("Could not upload ELF: {}", err),
             };
             image_id

@@ -467,17 +467,6 @@ dependencies = [
 
 [[package]]
 name = "bonsai-sdk"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66e9fa77caf50bfb060986f967d1a17a9dc890d9f0deea7daad4f460e76741d2"
-dependencies = [
- "reqwest",
- "serde",
- "thiserror",
-]
-
-[[package]]
-name = "bonsai-sdk"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94478e373742b9d1de02e13399633348e5b230dfe6364f65e80056c7df7438c5"
@@ -2983,7 +2972,7 @@ dependencies = [
  "addr2line",
  "anyhow",
  "bincode",
- "bonsai-sdk 0.4.0",
+ "bonsai-sdk",
  "bytemuck",
  "bytes",
  "cfg-if",
@@ -4371,7 +4360,7 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "bincode",
- "bonsai-sdk 0.3.0",
+ "bonsai-sdk",
  "bytemuck",
  "clap",
  "env_logger",

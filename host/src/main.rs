@@ -307,11 +307,9 @@ async fn main() -> Result<()> {
             let image_id = hex::encode(image.compute_id());
             let image = bincode::serialize(&image).expect("Failed to serialize memory img");
 
-            match client.upload_img(&image_id, image) {
-                Ok(_) => (),
-                Err(bonsai_sdk::SdkErr::ImageIdExists) => (),
-                Err(err) => panic!("Could not upload ELF: {}", err),
-            };
+            client
+                .upload_img(&image_id, image)
+                .expect("Could not upload ELF");
             image_id
         };
 

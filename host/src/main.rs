@@ -14,27 +14,30 @@
 
 extern crate core;
 
-use std::time::Instant;
+use std::{fmt::Debug, time::Instant};
 
 use anyhow::{bail, Result};
 use bonsai_sdk::alpha as bonsai_sdk;
 use clap::Parser;
+use ethers_core::types::Transaction as EthersTransaction;
 use log::{error, info};
 use risc0_zkvm::{
     serde::{from_slice, to_vec},
     Executor, ExecutorEnv, FileSegmentRef, MemoryImage, Program, Receipt,
 };
+use serde::{Deserialize, Serialize};
 use tempfile::tempdir;
-use zeth_guests::{ETH_BLOCK_ELF, ETH_BLOCK_ID};
+use zeth_guests::{
+    ETH_BLOCK_ELF, ETH_BLOCK_ID, ETH_BLOCK_PATH, OP_BLOCK_ELF, OP_BLOCK_ID, OP_BLOCK_PATH,
+};
 use zeth_lib::{
-    block_builder::BlockBuilder,
-    consts::{Network, ETH_MAINNET_CHAIN_SPEC},
-    execution::EthTxExecStrategy,
+    block_builder::{
+        BlockBuilder, EthereumStrategyBundle, NetworkStrategyBundle, OptimismStrategyBundle,
+    },
+    consts::{ChainSpec, Network, ETH_MAINNET_CHAIN_SPEC, OP_MAINNET_CHAIN_SPEC},
     finalization::DebugBuildFromMemDbStrategy,
     initialization::MemDbInitStrategy,
     input::Input,
-    mem_db::MemDb,
-    preparation::EthHeaderPrepStrategy,
 };
 use zeth_primitives::BlockHash;
 
@@ -76,6 +79,10 @@ struct Args {
     #[clap(short, long, require_equals = true)]
     /// Bonsai Session UUID to use for receipt verification.
     verify_bonsai_receipt_uuid: Option<String>,
+
+    #[clap(short, long, default_value_t = false)]
+    /// Whether to profile the zkVM execution
+    profile: bool,
 }
 
 fn cache_file_path(cache_path: &String, network: &String, block_no: u64, ext: &str) -> String {
@@ -87,33 +94,68 @@ async fn main() -> Result<()> {
     env_logger::init();
     let args = Args::parse();
 
+    match args.network {
+        Network::Ethereum => {
+            run_with_bundle::<EthereumStrategyBundle>(
+                args,
+                ETH_MAINNET_CHAIN_SPEC.clone(),
+                ETH_BLOCK_ELF,
+                ETH_BLOCK_ID,
+                ETH_BLOCK_PATH,
+            )
+            .await
+        }
+        Network::Optimism => {
+            run_with_bundle::<OptimismStrategyBundle>(
+                args,
+                OP_MAINNET_CHAIN_SPEC.clone(),
+                OP_BLOCK_ELF,
+                OP_BLOCK_ID,
+                OP_BLOCK_PATH,
+            )
+            .await
+        }
+    }
+}
+
+async fn run_with_bundle<N: NetworkStrategyBundle>(
+    args: Args,
+    chain_spec: ChainSpec,
+    guest_elf: &[u8],
+    guest_id: [u32; risc0_zkvm::sha::DIGEST_WORDS],
+    guest_path: &str,
+) -> Result<()>
+where
+    N::TxEssence: 'static + Send + TryFrom<EthersTransaction> + Serialize + Deserialize<'static>,
+    <N::TxEssence as TryFrom<EthersTransaction>>::Error: Debug,
+    <N::Database as revm::primitives::db::Database>::Error: Debug,
+{
     // Fetch all of the initial data
     let rpc_cache = args
         .cache
         .as_ref()
         .map(|dir| cache_file_path(dir, &args.network.to_string(), args.block_no, "json.gz"));
 
+    let init_spec = chain_spec.clone();
     let init = tokio::task::spawn_blocking(move || {
-        zeth_lib::host::get_initial_data(rpc_cache, args.rpc_url, args.block_no)
+        zeth_lib::host::get_initial_data::<N>(init_spec, rpc_cache, args.rpc_url, args.block_no)
             .expect("Could not init")
     })
     .await?;
 
-    let input: Input = init.clone().into();
+    let input: Input<N::TxEssence> = init.clone().into();
 
     // Verify that the transactions run correctly
     {
-        let input: Input = from_slice(&to_vec(&input).expect("Input serialization failed"))
-            .expect("Input deserialization failed");
-
         info!("Running from memory ...");
 
-        let block_builder = BlockBuilder::<MemDb>::new(&ETH_MAINNET_CHAIN_SPEC, input)
+        // todo: extend to use [ConfiguredBlockBuilder]
+        let block_builder = BlockBuilder::new(&chain_spec, input.clone())
             .initialize_database::<MemDbInitStrategy>()
             .expect("Error initializing MemDb from Input")
-            .prepare_header::<EthHeaderPrepStrategy>()
+            .prepare_header::<N::HeaderPrepStrategy>()
             .expect("Error creating initial block header")
-            .execute_transactions::<EthTxExecStrategy>()
+            .execute_transactions::<N::TxExecStrategy>()
             .expect("Error while running transactions");
 
         let fini_db = block_builder.db().unwrap().clone();
@@ -133,7 +175,7 @@ async fn main() -> Result<()> {
         let errors = zeth_lib::host::verify_state(fini_db, init.fini_proofs, storage_deltas)
             .expect("Could not verify final state!");
         for (address, address_errors) in &errors {
-            info!(
+            error!(
                 "Verify found {:?} error(s) for address {:?}",
                 address_errors.len(),
                 address
@@ -225,9 +267,7 @@ async fn main() -> Result<()> {
             input.len() * 4 / 1_000_000
         );
 
-        #[cfg(feature = "profiler")]
-        let mut profiler =
-            risc0_zkvm::Profiler::new(zeth_guests::ETH_BLOCK_PATH, ETH_BLOCK_ELF).unwrap();
+        let mut profiler = risc0_zkvm::Profiler::new(guest_path, guest_elf).unwrap();
 
         info!("Running the executor...");
         let start_time = Instant::now();
@@ -238,11 +278,12 @@ async fn main() -> Result<()> {
                 .segment_limit_po2(segment_limit_po2)
                 .add_input(&input);
 
-            #[cfg(feature = "profiler")]
-            builder.trace_callback(profiler.make_trace_callback());
+            if args.profile {
+                builder.trace_callback(profiler.make_trace_callback());
+            }
 
             let env = builder.build().unwrap();
-            let mut exec = Executor::from_elf(env, ETH_BLOCK_ELF).unwrap();
+            let mut exec = Executor::from_elf(env, guest_elf).unwrap();
 
             let segment_dir = tempdir().unwrap();
 
@@ -257,8 +298,7 @@ async fn main() -> Result<()> {
             start_time.elapsed()
         );
 
-        #[cfg(feature = "profiler")]
-        {
+        if args.profile {
             profiler.finalize();
 
             let sys_time = std::time::SystemTime::now()
@@ -300,7 +340,7 @@ async fn main() -> Result<()> {
         // create the memoryImg, upload it and return the imageId
         info!("Uploading memory image");
         let img_id = {
-            let program = Program::load_elf(ETH_BLOCK_ELF, risc0_zkvm::MEM_SIZE as u32)
+            let program = Program::load_elf(guest_elf, risc0_zkvm::MEM_SIZE as u32)
                 .expect("Could not load ELF");
             let image = MemoryImage::new(&program, risc0_zkvm::PAGE_SIZE as u32)
                 .expect("Could not create memory image");
@@ -356,7 +396,7 @@ async fn main() -> Result<()> {
                 let receipt: Receipt =
                     bincode::deserialize(&receipt_buf).expect("Could not deserialize receipt");
                 receipt
-                    .verify(ETH_BLOCK_ID)
+                    .verify(guest_id)
                     .expect("Receipt verification failed");
 
                 let expected_hash = init.fini_block.hash();

@@ -21,7 +21,7 @@ use serde_with::{serde_as, NoneAsEmptyString};
 use zeth_lib::{
     block_builder::BlockBuilder,
     consts::ChainSpec,
-    execution::EthTxExecStrategy,
+    execution::ethereum::EthTxExecStrategy,
     host::{
         provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
         provider_db::ProviderDb,
@@ -38,9 +38,11 @@ use zeth_primitives::{
     keccak::keccak,
     revm::from_revm_b160,
     signature::TxSignature,
-    transaction::{
-        Transaction, TransactionKind, TxEssence, TxEssenceEip1559, TxEssenceEip2930,
-        TxEssenceLegacy,
+    transactions::{
+        ethereum::{
+            EthereumTxEssence, TransactionKind, TxEssenceEip1559, TxEssenceEip2930, TxEssenceLegacy,
+        },
+        EthereumTransaction,
     },
     trie::{self, MptNode, MptNodeData, StateAccount},
     withdrawal::Withdrawal,
@@ -191,7 +193,7 @@ pub struct TestTransaction {
     pub s: U256,
 }
 
-impl From<TestTransaction> for Transaction {
+impl From<TestTransaction> for EthereumTransaction {
     fn from(tx: TestTransaction) -> Self {
         let signature = TxSignature {
             v: tx.v.try_into().unwrap(),
@@ -199,7 +201,7 @@ impl From<TestTransaction> for Transaction {
             s: tx.s,
         };
         let essence = if tx.access_list.is_none() {
-            TxEssence::Legacy(TxEssenceLegacy {
+            EthereumTxEssence::Legacy(TxEssenceLegacy {
                 chain_id: None,
                 nonce: tx.nonce.try_into().unwrap(),
                 gas_price: tx.gas_price.unwrap(),
@@ -212,7 +214,7 @@ impl From<TestTransaction> for Transaction {
                 data: tx.data,
             })
         } else if tx.max_fee_per_gas.is_none() {
-            TxEssence::Eip2930(TxEssenceEip2930 {
+            EthereumTxEssence::Eip2930(TxEssenceEip2930 {
                 chain_id: 1,
                 nonce: tx.nonce.try_into().unwrap(),
                 gas_price: tx.gas_price.unwrap(),
@@ -226,7 +228,7 @@ impl From<TestTransaction> for Transaction {
                 access_list: tx.access_list.unwrap().into(),
             })
         } else {
-            TxEssence::Eip1559(TxEssenceEip1559 {
+            EthereumTxEssence::Eip1559(TxEssenceEip1559 {
                 chain_id: 1,
                 nonce: tx.nonce.try_into().unwrap(),
                 max_priority_fee_per_gas: tx.max_priority_fee_per_gas.unwrap(),
@@ -241,7 +243,7 @@ impl From<TestTransaction> for Transaction {
                 access_list: tx.access_list.unwrap().into(),
             })
         };
-        Transaction { essence, signature }
+        EthereumTransaction { essence, signature }
     }
 }
 
@@ -317,7 +319,7 @@ pub fn create_input(
     header: Header,
     transactions: Vec<TestTransaction>,
     withdrawals: Vec<Withdrawal>,
-) -> Input {
+) -> Input<EthereumTxEssence> {
     // create the provider DB
     let provider_db = ProviderDb::new(
         Box::new(TestProvider {
@@ -327,7 +329,10 @@ pub fn create_input(
         parent_header.number,
     );
 
-    let transactions: Vec<Transaction> = transactions.into_iter().map(Transaction::from).collect();
+    let transactions: Vec<EthereumTransaction> = transactions
+        .into_iter()
+        .map(EthereumTransaction::from)
+        .collect();
     let input = Input {
         beneficiary: header.beneficiary,
         gas_limit: header.gas_limit,
@@ -336,8 +341,12 @@ pub fn create_input(
         mix_hash: header.mix_hash,
         transactions: transactions.clone(),
         withdrawals: withdrawals.clone(),
+        parent_state_trie: Default::default(),
+        parent_storage: Default::default(),
+        contracts: vec![],
         parent_header: parent_header.clone(),
-        ..Default::default()
+
+        ancestor_headers: vec![],
     };
 
     // create and run the block builder once to create the initial DB

@@ -28,9 +28,12 @@ use crate::{
     access_list::{AccessList, AccessListItem},
     block::Header,
     signature::TxSignature,
-    transaction::{
-        Transaction, TransactionKind, TxEssence, TxEssenceEip1559, TxEssenceEip2930,
-        TxEssenceLegacy,
+    transactions::{
+        ethereum::{
+            EthereumTxEssence, TransactionKind, TxEssenceEip1559, TxEssenceEip2930, TxEssenceLegacy,
+        },
+        optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
+        Transaction, TxEssence,
     },
     withdrawal::Withdrawal,
 };
@@ -118,12 +121,29 @@ impl<T> TryFrom<EthersBlock<T>> for Header {
 
 /// Conversion from `EthersTransaction` to the local [Transaction].
 /// This conversion may fail if certain expected fields are missing.
-impl TryFrom<EthersTransaction> for Transaction {
+impl<E: TxEssence + TryFrom<EthersTransaction>> TryFrom<EthersTransaction> for Transaction<E> {
+    type Error = <E as TryFrom<EthersTransaction>>::Error;
+
+    fn try_from(value: EthersTransaction) -> Result<Self, Self::Error> {
+        let signature = TxSignature {
+            v: value.v.as_u64(),
+            r: from_ethers_u256(value.r),
+            s: from_ethers_u256(value.s),
+        };
+        let essence = value.try_into()?;
+
+        Ok(Transaction { essence, signature })
+    }
+}
+
+/// Conversion from `EthersTransaction` to the local [EthereumTxEssence].
+/// This conversion may fail if certain expected fields are missing.
+impl TryFrom<EthersTransaction> for EthereumTxEssence {
     type Error = anyhow::Error;
 
     fn try_from(tx: EthersTransaction) -> Result<Self, Self::Error> {
         let essence = match tx.transaction_type.map(|t| t.as_u64()) {
-            None | Some(0) => TxEssence::Legacy(TxEssenceLegacy {
+            None | Some(0) => EthereumTxEssence::Legacy(TxEssenceLegacy {
                 chain_id: match tx.chain_id {
                     None => None,
                     Some(chain_id) => Some(
@@ -142,7 +162,7 @@ impl TryFrom<EthersTransaction> for Transaction {
                 value: from_ethers_u256(tx.value),
                 data: tx.input.0.into(),
             }),
-            Some(1) => TxEssence::Eip2930(TxEssenceEip2930 {
+            Some(1) => EthereumTxEssence::Eip2930(TxEssenceEip2930 {
                 chain_id: tx
                     .chain_id
                     .context("chain_id missing")?
@@ -159,7 +179,7 @@ impl TryFrom<EthersTransaction> for Transaction {
                 access_list: tx.access_list.context("access_list missing")?.into(),
                 data: tx.input.0.into(),
             }),
-            Some(2) => TxEssence::Eip1559(TxEssenceEip1559 {
+            Some(2) => EthereumTxEssence::Eip1559(TxEssenceEip1559 {
                 chain_id: tx
                     .chain_id
                     .context("chain_id missing")?
@@ -184,13 +204,30 @@ impl TryFrom<EthersTransaction> for Transaction {
             }),
             _ => unreachable!(),
         };
-        let signature = TxSignature {
-            v: tx.v.as_u64(),
-            r: from_ethers_u256(tx.r),
-            s: from_ethers_u256(tx.s),
-        };
+        Ok(essence)
+    }
+}
 
-        Ok(Transaction { essence, signature })
+/// Conversion from `EthersTransaction` to the local [OptimismTxEssence].
+/// This conversion may fail if certain expected fields are missing.
+impl TryFrom<EthersTransaction> for OptimismTxEssence {
+    type Error = anyhow::Error;
+
+    fn try_from(tx: EthersTransaction) -> Result<Self, Self::Error> {
+        let essence = match tx.transaction_type.map(|t| t.as_u64()) {
+            Some(0x7E) => OptimismTxEssence::OptimismDeposited(TxEssenceOptimismDeposited {
+                gas_limit: from_ethers_u256(tx.gas),
+                from: tx.from.0.into(),
+                to: tx.to.into(),
+                value: from_ethers_u256(tx.value),
+                data: tx.input.0.into(),
+                source_hash: from_ethers_h256(tx.source_hash.unwrap_or_default()),
+                mint: from_ethers_u256(tx.mint.unwrap_or_default()),
+                is_system_tx: tx.is_system_tx.unwrap_or_default(),
+            }),
+            _ => OptimismTxEssence::Ethereum(tx.try_into()?),
+        };
+        Ok(essence)
     }
 }
 

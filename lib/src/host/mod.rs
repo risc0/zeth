@@ -14,11 +14,12 @@
 
 use std::{
     collections::HashSet,
+    fmt::Debug,
     iter::{once, zip},
 };
 
 use anyhow::{Context, Result};
-use ethers_core::types::{Bytes, EIP1186ProofResponse, H256};
+use ethers_core::types::{Bytes, EIP1186ProofResponse, Transaction as EthersTransaction, H256};
 use hashbrown::HashMap;
 use log::info;
 use revm::{
@@ -30,22 +31,20 @@ use zeth_primitives::{
     ethers::{from_ethers_h160, from_ethers_h256, from_ethers_u256},
     keccak::keccak,
     revm::to_revm_b256,
-    transaction::Transaction,
+    transactions::{Transaction, TxEssence},
     trie::{MptNode, MptNodeData, MptNodeReference, EMPTY_ROOT},
     withdrawal::Withdrawal,
 };
 
 use crate::{
-    block_builder::BlockBuilder,
-    consts::ETH_MAINNET_CHAIN_SPEC,
-    execution::EthTxExecStrategy,
+    block_builder::{BlockBuilder, NetworkStrategyBundle},
+    consts::ChainSpec,
     host::{
         mpt::{orphaned_digests, resolve_digests, shorten_key},
         provider::{new_provider, BlockQuery},
     },
     input::{Input, StorageEntry},
     mem_db::MemDb,
-    preparation::EthHeaderPrepStrategy,
 };
 
 pub mod mpt;
@@ -53,22 +52,27 @@ pub mod provider;
 pub mod provider_db;
 
 #[derive(Clone)]
-pub struct Init {
+pub struct Init<E: TxEssence> {
     pub db: MemDb,
     pub init_block: Header,
     pub init_proofs: HashMap<B160, EIP1186ProofResponse>,
     pub fini_block: Header,
-    pub fini_transactions: Vec<Transaction>,
+    pub fini_transactions: Vec<Transaction<E>>,
     pub fini_withdrawals: Vec<Withdrawal>,
     pub fini_proofs: HashMap<B160, EIP1186ProofResponse>,
     pub ancestor_headers: Vec<Header>,
 }
 
-pub fn get_initial_data(
+pub fn get_initial_data<N: NetworkStrategyBundle>(
+    chain_spec: ChainSpec,
     cache_path: Option<String>,
     rpc_url: Option<String>,
     block_no: u64,
-) -> Result<Init> {
+) -> Result<Init<N::TxEssence>>
+where
+    N::TxEssence: TryFrom<EthersTransaction>,
+    <N::TxEssence as TryFrom<EthersTransaction>>::Error: Debug,
+{
     let mut provider = new_provider(cache_path, rpc_url)?;
 
     // Fetch the initial block
@@ -116,15 +120,18 @@ pub fn get_initial_data(
             .into_iter()
             .map(|w| w.try_into().unwrap())
             .collect(),
+        parent_state_trie: Default::default(),
+        parent_storage: Default::default(),
+        contracts: vec![],
         parent_header: init_block.clone().try_into()?,
-        ..Default::default()
+        ancestor_headers: vec![],
     };
 
     // Create the block builder, run the transactions and extract the DB
-    let mut builder = BlockBuilder::new(&ETH_MAINNET_CHAIN_SPEC, input)
+    let mut builder = BlockBuilder::new(&chain_spec, input)
         .with_db(provider_db)
-        .prepare_header::<EthHeaderPrepStrategy>()?
-        .execute_transactions::<EthTxExecStrategy>()?;
+        .prepare_header::<N::HeaderPrepStrategy>()?
+        .execute_transactions::<N::TxExecStrategy>()?;
     let provider_db = builder.mut_db().unwrap();
 
     info!("Gathering inclusion proofs ...");
@@ -393,8 +400,8 @@ fn resolve_orphans(
     }
 }
 
-impl From<Init> for Input {
-    fn from(value: Init) -> Input {
+impl<E: TxEssence> From<Init<E>> for Input<E> {
+    fn from(value: Init<E>) -> Input<E> {
         // construct the proof tries
         let (mut nodes_by_reference, mut storage) =
             proofs_to_tries(value.init_proofs.values().cloned().collect());

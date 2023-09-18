@@ -12,21 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![no_main]
+use core::fmt::Debug;
 
-use risc0_zkvm::guest::env;
-use zeth_lib::{block_builder::EthereumBlockBuilder, consts::ETH_MAINNET_CHAIN_SPEC};
+use anyhow::Result;
+use revm::{Database, DatabaseCommit};
+use zeth_primitives::transactions::TxEssence;
 
-risc0_zkvm::guest::entry!(main);
+use crate::block_builder::BlockBuilder;
 
-pub fn main() {
-    // Read the input previous block and transaction data
-    let input = env::read();
-    // Build the resulting block
-    let output = EthereumBlockBuilder::build_from(&ETH_MAINNET_CHAIN_SPEC, input)
-        .expect("Failed to build the resulting block");
-    // Output the resulting block's hash to the journal
-    env::commit(&output.hash());
-    // Leak memory, save cycles
-    core::mem::forget(output);
+pub mod ethereum;
+pub mod optimism;
+
+pub trait TxExecStrategy<E: TxEssence> {
+    fn execute_transactions<D>(block_builder: BlockBuilder<D, E>) -> Result<BlockBuilder<D, E>>
+    where
+        D: Database + DatabaseCommit,
+        <D as Database>::Error: Debug;
 }

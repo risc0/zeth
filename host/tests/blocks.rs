@@ -21,8 +21,10 @@ use risc0_zkvm::{serde::to_vec, Executor, ExecutorEnv, FileSegmentRef};
 use rstest::rstest;
 use tempfile::tempdir;
 use zeth_guests::ETH_BLOCK_ELF;
-use zeth_lib::input::Input;
-use zeth_primitives::trie::MptNodeData;
+use zeth_lib::{
+    block_builder::EthereumStrategyBundle, consts::ETH_MAINNET_CHAIN_SPEC, input::Input,
+};
+use zeth_primitives::{transactions::ethereum::EthereumTxEssence, trie::MptNodeData};
 
 #[rstest]
 fn block_cli_ethereum(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
@@ -42,9 +44,15 @@ fn empty_blocks(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
     // Set block cache directory
     let rpc_cache = Some(format!("testdata/ethereum/{}.json.gz", block_no));
     // Fetch all of the initial data
-    let init = zeth_lib::host::get_initial_data(rpc_cache, None, block_no).expect("Could not init");
+    let init = zeth_lib::host::get_initial_data::<EthereumStrategyBundle>(
+        ETH_MAINNET_CHAIN_SPEC.clone(),
+        rpc_cache,
+        None,
+        block_no,
+    )
+    .expect("Could not init");
     // Create input object
-    let mut input: Input = init.clone().into();
+    let mut input: Input<EthereumTxEssence> = init.clone().into();
     // Take out transaction and withdrawal execution data
     input.transactions = Default::default();
     input.withdrawals = Default::default();

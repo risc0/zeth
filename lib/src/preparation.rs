@@ -16,7 +16,7 @@ use core::fmt::Debug;
 
 use anyhow::{bail, Context, Result};
 use revm::{Database, DatabaseCommit};
-use zeth_primitives::{block::Header, U256};
+use zeth_primitives::{block::Header, transactions::TxEssence, U256};
 
 use crate::{
     block_builder::BlockBuilder,
@@ -24,19 +24,21 @@ use crate::{
 };
 
 pub trait HeaderPrepStrategy {
-    fn prepare_header<D>(block_builder: BlockBuilder<D>) -> Result<BlockBuilder<D>>
+    fn prepare_header<D, E>(block_builder: BlockBuilder<D, E>) -> Result<BlockBuilder<D, E>>
     where
         D: Database + DatabaseCommit,
-        <D as Database>::Error: Debug;
+        <D as Database>::Error: Debug,
+        E: TxEssence;
 }
 
 pub struct EthHeaderPrepStrategy {}
 
 impl HeaderPrepStrategy for EthHeaderPrepStrategy {
-    fn prepare_header<D>(mut block_builder: BlockBuilder<D>) -> Result<BlockBuilder<D>>
+    fn prepare_header<D, E>(mut block_builder: BlockBuilder<D, E>) -> Result<BlockBuilder<D, E>>
     where
         D: Database + DatabaseCommit,
         <D as Database>::Error: Debug,
+        E: TxEssence,
     {
         // Validate gas limit
         let diff = block_builder

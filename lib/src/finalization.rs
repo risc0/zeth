@@ -19,6 +19,7 @@ use zeth_primitives::{
     block::Header,
     keccak::keccak,
     revm::from_revm_b256,
+    transactions::TxEssence,
     trie::{MptNode, StateAccount},
     U256,
 };
@@ -29,19 +30,19 @@ use crate::{
     mem_db::{AccountState, MemDb},
 };
 
-pub trait BlockBuildStrategy {
-    type Db;
+pub trait BlockBuildStrategy<E: TxEssence> {
+    type Database;
     type Output;
 
-    fn build(block_builder: BlockBuilder<Self::Db>) -> Result<Self::Output>;
+    fn build(block_builder: BlockBuilder<Self::Database, E>) -> Result<Self::Output>;
 }
 
 pub struct BuildFromMemDbStrategy {}
 
 impl BuildFromMemDbStrategy {
-    pub fn build_header(
+    pub fn build_header<E: TxEssence>(
         debug_storage_tries: &mut Option<HashMap<Address, MptNode>>,
-        mut block_builder: BlockBuilder<MemDb>,
+        mut block_builder: BlockBuilder<MemDb, E>,
     ) -> Result<Header> {
         let db = block_builder.db.as_ref().unwrap();
 
@@ -125,23 +126,23 @@ impl BuildFromMemDbStrategy {
     }
 }
 
-impl BlockBuildStrategy for BuildFromMemDbStrategy {
-    type Db = MemDb;
+impl<E: TxEssence> BlockBuildStrategy<E> for BuildFromMemDbStrategy {
+    type Database = MemDb;
     type Output = Header;
 
     #[inline(always)]
-    fn build(block_builder: BlockBuilder<Self::Db>) -> Result<Self::Output> {
+    fn build(block_builder: BlockBuilder<Self::Database, E>) -> Result<Self::Output> {
         BuildFromMemDbStrategy::build_header(&mut None, block_builder)
     }
 }
 
 pub struct DebugBuildFromMemDbStrategy {}
 
-impl BlockBuildStrategy for DebugBuildFromMemDbStrategy {
-    type Db = MemDb;
+impl<E: TxEssence> BlockBuildStrategy<E> for DebugBuildFromMemDbStrategy {
+    type Database = MemDb;
     type Output = (Header, HashMap<Address, MptNode>);
 
-    fn build(block_builder: BlockBuilder<Self::Db>) -> Result<Self::Output> {
+    fn build(block_builder: BlockBuilder<Self::Database, E>) -> Result<Self::Output> {
         let mut storage_trace = Some(Default::default());
         let header = BuildFromMemDbStrategy::build_header(&mut storage_trace, block_builder)?;
         Ok((header, storage_trace.unwrap()))

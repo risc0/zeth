@@ -1,5 +1,7 @@
 # zeth
 
+**NEW: Zeth now supports Optimism blocks! Just pass in `--network=optimism`!**
+
 Zeth is an open-source ZK block prover for Ethereum built on the RISC Zero zkVM.
 
 Zeth makes it possible to *prove* that a given Ethereum block is valid
@@ -47,28 +49,30 @@ Usage: zeth [OPTIONS] --block-no=<BLOCK_NO>
 
 Options:
   -r, --rpc-url=<RPC_URL>
-          URL of the chain RPC node
+          URL of the chain RPC node.
   -c, --cache[=<CACHE>]
           Use a local directory as a cache for RPC calls.
-          Accepts an optional custom directory.
+          Accepts a custom directory.
           [default: host/testdata]
   -n, --network=<NETWORK>
-          Network name [default: ethereum]
+          Network name (ethereum/optimism).
+          [default: ethereum]
   -b, --block-no=<BLOCK_NO>
-          Block number to validate
+          Block number to validate.
   -l, --local-exec[=<LOCAL_EXEC>]
           Runs the verification inside the zkvm executor locally.
-          Accepts an optional custom maximum segment cycle count
-          specified as a power of 2.
-          [default: 20 (i.e. ~1M cycles)]
+          Accepts a custom maximum segment cycle count as a power of 2. [default: 20]
   -s, --submit-to-bonsai
-          Whether to submit the proving workload to Bonsai
+          Whether to submit the proving workload to Bonsai.
   -v, --verify-bonsai-receipt-uuid=<VERIFY_BONSAI_RECEIPT_UUID>
-          Bonsai Session UUID to use for receipt verification
+          Bonsai Session UUID to use for receipt verification.
+  -p, --profile
+          Whether to profile the zkVM execution.
   -h, --help
-          Print help
+          Print help.
   -V, --version
-          Print version
+          Print version.
+
 ```
 
 Zeth primarily requires an Ethereum RPC provider.
@@ -87,12 +91,22 @@ This is the default.
 When run in this mode, Zeth does all the work needed to construct an Ethereum block and verifies the correctness
 of the result using the RPC provider.
 No proofs are generated.
+You can omit the `rpc-url` parameter if you do not change the `block-no` parameters from the below examples as the data is already cached.
 
+Ethereum:
 ```console
 $ RUST_LOG=info ./target/release/zeth \
     --rpc-url="https://eth-mainnet.g.alchemy.com/v2/YOUR_API_KEY" \
     --cache \
     --block-no=16424130
+```
+Optimism:
+```console
+$ RUST_LOG=info ./target/release/zeth \
+    --network=optimism \
+    --rpc-url="https://opt-mainnet.g.alchemy.com/v2/YOUR_API_KEY" \
+    --cache \
+    --block-no=107728767
 ```
 
 **Local executor mode**.

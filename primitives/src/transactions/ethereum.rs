@@ -436,6 +436,14 @@ impl TxEssence for EthereumTxEssence {
             EthereumTxEssence::Eip1559(tx) => tx.to.into(),
         }
     }
+
+    fn data(&self) -> Bytes {
+        match self {
+            EthereumTxEssence::Legacy(tx) => tx.data.clone(),
+            EthereumTxEssence::Eip2930(tx) => tx.data.clone(),
+            EthereumTxEssence::Eip1559(tx) => tx.data.clone(),
+        }
+    }
     /// Recovers the Ethereum address of the sender from the transaction's signature.
     ///
     /// This method uses the ECDSA recovery mechanism to derive the sender's public key
@@ -489,14 +497,6 @@ impl TxEssence for EthereumTxEssence {
             length += 1;
         }
         length
-    }
-
-    fn data(&self) -> Bytes {
-        match self {
-            EthereumTxEssence::Legacy(tx) => tx.data.clone(),
-            EthereumTxEssence::Eip2930(tx) => tx.data.clone(),
-            EthereumTxEssence::Eip1559(tx) => tx.data.clone(),
-        }
     }
 }
 

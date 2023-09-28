@@ -20,3 +20,4 @@ sha2 = { git = "https://github.com/risc0/RustCrypto-hashes", tag = "sha2/v0.10.6
 [profile.release]
 codegen-units = 1
 panic = "abort"
+lto = "thin"

@@ -21,8 +21,6 @@ use revm::{
 use thiserror::Error as ThisError;
 use zeth_primitives::{Address, B256, U256};
 
-use crate::NoHashBuilder;
-
 /// Error returned by the [MemDb].
 #[derive(Debug, ThisError)]
 pub enum DbError {
@@ -82,7 +80,7 @@ impl DbAccount {
 #[derive(Clone, Debug, Default)]
 pub struct MemDb {
     /// Account info where None means it is not existing.
-    pub accounts: HashMap<Address, DbAccount, NoHashBuilder>,
+    pub accounts: HashMap<Address, DbAccount>,
     /// All cached block hashes.
     pub block_hashes: HashMap<u64, B256>,
 }

@@ -29,7 +29,6 @@ use crate::{
     consts::MAX_BLOCK_HASH_AGE,
     guest_mem_forget,
     mem_db::{AccountState, DbAccount, MemDb},
-    NoHashBuilder,
 };
 
 pub trait DbInitStrategy<E: TxEssence> {
@@ -66,10 +65,7 @@ impl<E: TxEssence> DbInitStrategy<E> for MemDbInitStrategy {
             .collect();
 
         // Load account data into db
-        let mut accounts = HashMap::with_capacity_and_hasher(
-            block_builder.input.parent_storage.len(),
-            NoHashBuilder::default(),
-        );
+        let mut accounts = HashMap::with_capacity(block_builder.input.parent_storage.len());
         for (address, (storage_trie, slots)) in &mut block_builder.input.parent_storage {
             // consume the slots, as they are no longer needed afterwards
             let slots = mem::take(slots);

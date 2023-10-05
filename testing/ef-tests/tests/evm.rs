@@ -72,11 +72,9 @@ fn evm(
                 .initialize_database::<MemDbInitStrategy>()
                 .unwrap()
                 .prepare_header::<EthHeaderPrepStrategy>()
+                .unwrap()
+                .execute_transactions::<EthTxExecStrategy>()
                 .unwrap();
-            // execute the transactions with a larger stack
-            let builder = stacker::grow(BIG_STACK_SIZE, move || {
-                builder.execute_transactions::<EthTxExecStrategy>().unwrap()
-            });
             // update the state
             state = builder.db().unwrap().into();
 

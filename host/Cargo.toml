@@ -11,10 +11,10 @@ bytemuck = "1.13"
 clap = { version = "4.0", features = ["derive"] }
 env_logger = "0.10"
 ethers-core = { version = "2.0", features = ["optimism"] }
-hashbrown = { version = "0.13", features = ["inline-more"] }
+hashbrown = { workspace = true }
 hex = "0.4.3"
 log = "0.4"
-revm = { version = "3.3", default-features = false, features = ["std", "serde", "optional_no_base_fee", "optional_balance_check"] }
+revm = { workspace = true }
 risc0-zkvm = { workspace = true, features = ["prove", "profiler"] }
 serde = "1.0"
 tempfile = "3.6"

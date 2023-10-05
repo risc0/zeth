@@ -28,7 +28,7 @@ use zeth_lib::{
         Init,
     },
     input::Input,
-    mem_db::{DbAccount, MemDb},
+    mem_db::{AccountState, DbAccount, MemDb},
     preparation::EthHeaderPrepStrategy,
 };
 use zeth_primitives::{
@@ -36,7 +36,6 @@ use zeth_primitives::{
     block::Header,
     ethers::from_ethers_h160,
     keccak::keccak,
-    revm::from_revm_b160,
     signature::TxSignature,
     transactions::{
         ethereum::{
@@ -115,7 +114,8 @@ impl From<&MemDb> for TestState {
         TestState(
             db.accounts
                 .iter()
-                .map(|(addr, account)| (from_revm_b160(*addr), account.clone().into()))
+                .filter(|(_, account)| account.state != AccountState::Deleted)
+                .map(|(addr, account)| (*addr, account.clone().into()))
                 .collect(),
         )
     }

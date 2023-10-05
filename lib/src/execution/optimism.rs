@@ -18,15 +18,12 @@ use anyhow::{anyhow, bail, Context, Result};
 #[cfg(not(target_os = "zkvm"))]
 use log::debug;
 use revm::{
-    primitives::{
-        Account, Address, BlockEnv, CfgEnv, ResultAndState, SpecId, TransactTo, TxEnv, B160,
-    },
+    primitives::{Account, Address, ResultAndState, SpecId, TransactTo, TxEnv},
     Database, DatabaseCommit, EVM,
 };
 use ruint::aliases::U256;
 use zeth_primitives::{
     receipt::Receipt,
-    revm::{to_revm_b160, to_revm_b256},
     transactions::{
         ethereum::{EthereumTxEssence, TransactionKind},
         optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
@@ -70,6 +67,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                 spec_id,
             )
         }
+        let chain_id = block_builder.chain_spec.chain_id();
 
         #[cfg(not(target_os = "zkvm"))]
         {
@@ -93,22 +91,18 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
         // initialize the EVM
         let mut evm = EVM::new();
 
-        let chain_id = block_builder.chain_spec.chain_id();
+        // set the EVM configuration
+        evm.env.cfg.chain_id = chain_id;
+        evm.env.cfg.spec_id = spec_id;
 
-        evm.env.cfg = CfgEnv {
-            chain_id: U256::from(chain_id),
-            spec_id,
-            ..Default::default()
-        };
-        evm.env.block = BlockEnv {
-            number: header.number.try_into().unwrap(),
-            coinbase: to_revm_b160(block_builder.input.beneficiary),
-            timestamp: block_builder.input.timestamp,
-            difficulty: U256::ZERO,
-            prevrandao: Some(to_revm_b256(block_builder.input.mix_hash)),
-            basefee: header.base_fee_per_gas,
-            gas_limit: block_builder.input.gas_limit,
-        };
+        // set the EVM block environment
+        evm.env.block.number = header.number.try_into().unwrap();
+        evm.env.block.coinbase = block_builder.input.beneficiary;
+        evm.env.block.timestamp = header.timestamp;
+        evm.env.block.difficulty = U256::ZERO;
+        evm.env.block.prevrandao = Some(header.mix_hash);
+        evm.env.block.basefee = header.base_fee_per_gas;
+        evm.env.block.gas_limit = block_builder.input.gas_limit;
 
         evm.database(block_builder.db.take().unwrap());
 
@@ -167,7 +161,6 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                 bail!("Error at transaction {}: gas exceeds block limit", tx_no);
             }
 
-            let tx_from = to_revm_b160(tx_from);
             let l1_gas_fees = match &tx.essence {
                 OptimismTxEssence::OptimismDeposited(deposit) => {
                     // Disable gas fees
@@ -227,7 +220,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                     evm.env.cfg.disable_base_fee = false;
                     evm.env.cfg.disable_balance_check = false;
                     // Initialize tx environment
-                    fill_eth_tx_env(&mut evm.env.tx, &transaction, tx_from);
+                    fill_eth_tx_env(&mut evm.env.tx, transaction, tx_from);
                     l1_gas_fees
                 }
             };
@@ -254,14 +247,14 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             // update account states
             #[cfg(not(target_os = "zkvm"))]
             for (address, account) in &state {
-                if account.is_touched {
+                if account.is_touched() {
                     // log account
                     debug!(
-                        "  State {:?} (storage_cleared={}, is_destroyed={}, is_not_existing={})",
+                        "  State {:?} (is_selfdestructed={}, is_loaded_as_not_existing={}, is_created={})",
                         address,
-                        account.storage_cleared,
-                        account.is_destroyed,
-                        account.is_not_existing
+                        account.is_selfdestructed(),
+                        account.is_loaded_as_not_existing(),
+                        account.is_created()
                     );
                     // log balance changes
                     debug!(
@@ -273,8 +266,8 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                     for (addr, slot) in &account.storage {
                         if slot.is_changed() {
                             debug!("    Storage address: {:?}", addr);
-                            debug!("      Before: {:?}", slot.original_value);
-                            debug!("       After: {:?}", slot.present_value);
+                            debug!("      Before: {:?}", slot.original_value());
+                            debug!("       After: {:?}", slot.present_value());
                         }
                     }
                 }
@@ -328,9 +321,9 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                 debug!("  Value: {}", amount_wei);
             }
             // Read account from database
-            let withdrawal_address = to_revm_b160(withdrawal.address);
+            let withdrawal_address = withdrawal.address;
             let mut withdrawal_account: Account = db
-                .basic(withdrawal_address)
+                .basic(withdrawal.address)
                 .map_err(|db_err| anyhow!("Error at withdrawal {}: {:?}", i, db_err))?
                 .unwrap_or_default()
                 .into();
@@ -340,7 +333,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                 .balance
                 .checked_add(amount_wei)
                 .unwrap();
-            withdrawal_account.is_touched = true;
+            withdrawal_account.mark_touch();
             // Commit changes to database
             db.commit([(withdrawal_address, withdrawal_account)].into());
             // Add withdrawal to trie
@@ -372,7 +365,7 @@ fn read_uint<D>(
     abi_call: Vec<u8>,
     chain_id: Option<zeth_primitives::ChainId>,
     gas_limit: U256,
-    address: B160,
+    address: Address,
 ) -> Result<U256>
 where
     D: Database + DatabaseCommit,
@@ -384,7 +377,7 @@ where
             nonce: 0,
             gas_price: U256::ZERO,
             gas_limit,
-            to: TransactionKind::Call(zeth_primitives::revm::from_revm_b160(address)),
+            to: TransactionKind::Call(address),
             value: U256::ZERO,
             data: abi_call.into(),
         });
@@ -424,12 +417,12 @@ fn fill_deposit_tx_env(
     tx_env.gas_price = U256::ZERO;
     tx_env.gas_priority_fee = None;
     tx_env.transact_to = if let TransactionKind::Call(to_addr) = tx.to {
-        TransactTo::Call(to_revm_b160(to_addr))
+        TransactTo::Call(to_addr)
     } else {
         TransactTo::create()
     };
     tx_env.value = tx.value;
-    tx_env.data = tx.data.0.clone();
+    tx_env.data = tx.data.clone();
     tx_env.chain_id = None;
     tx_env.nonce = deposit_nonce;
     tx_env.access_list.clear();
@@ -437,7 +430,7 @@ fn fill_deposit_tx_env(
 
 pub fn decrease_account_balance<D>(
     db: &mut D,
-    address: B160,
+    address: Address,
     amount_wei: U256,
 ) -> anyhow::Result<()>
 where
@@ -458,7 +451,9 @@ where
         .into();
     // Credit withdrawal amount
     account.info.balance = account.info.balance.checked_sub(amount_wei).unwrap();
-    account.is_touched = true;
+    account.mark_touch();
     // Commit changes to database
-    Ok(db.commit([(address, account)].into()))
+    db.commit([(address, account)].into());
+
+    Ok(())
 }

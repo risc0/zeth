@@ -17,10 +17,14 @@ use std::collections::BTreeSet;
 use ethers_core::types::{EIP1186ProofResponse, H160, H256};
 use hashbrown::HashMap;
 use revm::{
-    primitives::{Account, AccountInfo, Bytecode, B160, B256, U256},
+    primitives::{Account, AccountInfo, Bytecode},
     Database, DatabaseCommit,
 };
-use zeth_primitives::block::Header;
+use zeth_primitives::{
+    block::Header,
+    ethers::{from_ethers_bytes, from_ethers_u256},
+    Address, B256, U256,
+};
 
 use crate::{
     host::provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
@@ -59,13 +63,13 @@ impl ProviderDb {
     fn get_proofs(
         &mut self,
         block_no: u64,
-        storage_keys: HashMap<B160, Vec<U256>>,
-    ) -> Result<HashMap<B160, EIP1186ProofResponse>, anyhow::Error> {
+        storage_keys: HashMap<Address, Vec<U256>>,
+    ) -> Result<HashMap<Address, EIP1186ProofResponse>, anyhow::Error> {
         let mut out = HashMap::new();
 
         for (address, indices) in storage_keys {
             let proof = {
-                let address: H160 = address.into();
+                let address: H160 = address.into_array().into();
                 let indices: BTreeSet<H256> = indices
                     .into_iter()
                     .map(|x| x.to_be_bytes().into())
@@ -84,13 +88,13 @@ impl ProviderDb {
 
     pub fn get_initial_proofs(
         &mut self,
-    ) -> Result<HashMap<B160, EIP1186ProofResponse>, anyhow::Error> {
+    ) -> Result<HashMap<Address, EIP1186ProofResponse>, anyhow::Error> {
         self.get_proofs(self.block_no, self.initial_db.storage_keys())
     }
 
     pub fn get_latest_proofs(
         &mut self,
-    ) -> Result<HashMap<B160, EIP1186ProofResponse>, anyhow::Error> {
+    ) -> Result<HashMap<Address, EIP1186ProofResponse>, anyhow::Error> {
         let mut storage_keys = self.initial_db.storage_keys();
 
         for (address, mut indices) in self.latest_db.storage_keys() {
@@ -129,7 +133,7 @@ impl ProviderDb {
 impl Database for ProviderDb {
     type Error = anyhow::Error;
 
-    fn basic(&mut self, address: B160) -> Result<Option<AccountInfo>, Self::Error> {
+    fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
         match self.latest_db.basic(address) {
             Ok(db_result) => return Ok(db_result),
             Err(DbError::AccountNotFound(_)) => {}
@@ -142,16 +146,21 @@ impl Database for ProviderDb {
         }
 
         let account_info = {
-            let address = H160::from(address.0);
             let query = AccountQuery {
                 block_no: self.block_no,
-                address,
+                address: address.into_array().into(),
             };
             let nonce = self.provider.get_transaction_count(&query)?;
             let balance = self.provider.get_balance(&query)?;
             let code = self.provider.get_code(&query)?;
+            let bytecode = Bytecode::new_raw(from_ethers_bytes(code));
 
-            AccountInfo::new(balance.into(), nonce.as_u64(), Bytecode::new_raw(code.0))
+            AccountInfo::new(
+                from_ethers_u256(balance),
+                nonce.as_u64(),
+                bytecode.hash_slow(),
+                bytecode,
+            )
         };
 
         self.initial_db
@@ -164,7 +173,7 @@ impl Database for ProviderDb {
         unreachable!()
     }
 
-    fn storage(&mut self, address: B160, index: U256) -> Result<U256, Self::Error> {
+    fn storage(&mut self, address: Address, index: U256) -> Result<U256, Self::Error> {
         match self.latest_db.storage(address, index) {
             Ok(db_result) => return Ok(db_result),
             Err(DbError::AccountNotFound(_)) | Err(DbError::SlotNotFound(_, _)) => {}
@@ -180,21 +189,20 @@ impl Database for ProviderDb {
         self.initial_db.basic(address)?;
 
         let storage = {
-            let address = H160::from(address.0);
             let bytes = index.to_be_bytes();
             let index = H256::from(bytes);
 
             let storage = self.provider.get_storage(&StorageQuery {
                 block_no: self.block_no,
-                address,
+                address: address.into_array().into(),
                 index,
             })?;
-            ethers_core::types::U256::from(storage.0)
+            U256::from_be_bytes(storage.to_fixed_bytes())
         };
 
         self.initial_db
-            .insert_account_storage(&address, index, storage.into());
-        Ok(storage.into())
+            .insert_account_storage(&address, index, storage);
+        Ok(storage)
     }
 
     fn block_hash(&mut self, number: U256) -> Result<B256, Self::Error> {
@@ -219,7 +227,7 @@ impl Database for ProviderDb {
 }
 
 impl DatabaseCommit for ProviderDb {
-    fn commit(&mut self, changes: HashMap<B160, Account>) {
+    fn commit(&mut self, changes: HashMap<Address, Account>) {
         self.latest_db.commit(changes)
     }
 }

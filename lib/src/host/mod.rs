@@ -22,18 +22,15 @@ use anyhow::{Context, Result};
 use ethers_core::types::{Bytes, EIP1186ProofResponse, Transaction as EthersTransaction, H256};
 use hashbrown::HashMap;
 use log::info;
-use revm::{
-    primitives::{Address, B160, B256, U256},
-    Database,
-};
+use revm::Database;
 use zeth_primitives::{
     block::Header,
     ethers::{from_ethers_h160, from_ethers_h256, from_ethers_u256},
     keccak::keccak,
-    revm::to_revm_b256,
     transactions::{Transaction, TxEssence},
     trie::{MptNode, MptNodeData, MptNodeReference, EMPTY_ROOT},
     withdrawal::Withdrawal,
+    Address, B256, U256,
 };
 
 use crate::{
@@ -55,11 +52,11 @@ pub mod provider_db;
 pub struct Init<E: TxEssence> {
     pub db: MemDb,
     pub init_block: Header,
-    pub init_proofs: HashMap<B160, EIP1186ProofResponse>,
+    pub init_proofs: HashMap<Address, EIP1186ProofResponse>,
     pub fini_block: Header,
     pub fini_transactions: Vec<Transaction<E>>,
     pub fini_withdrawals: Vec<Withdrawal>,
-    pub fini_proofs: HashMap<B160, EIP1186ProofResponse>,
+    pub fini_proofs: HashMap<Address, EIP1186ProofResponse>,
     pub ancestor_headers: Vec<Header>,
 }
 
@@ -208,9 +205,9 @@ pub enum VerifyError {
 
 pub fn verify_state(
     mut fini_db: MemDb,
-    fini_proofs: HashMap<B160, EIP1186ProofResponse>,
+    fini_proofs: HashMap<Address, EIP1186ProofResponse>,
     mut storage_deltas: HashMap<Address, MptNode>,
-) -> Result<HashMap<B160, Vec<VerifyError>>> {
+) -> Result<HashMap<Address, Vec<VerifyError>>> {
     let mut errors = HashMap::new();
     let fini_storage_keys = fini_db.storage_keys();
 
@@ -234,8 +231,8 @@ pub fn verify_state(
 
         // Account balance
         {
-            let rpc_value: U256 = account_proof.balance.into();
-            let our_value: U256 = account_info.balance;
+            let rpc_value = from_ethers_u256(account_proof.balance);
+            let our_value = account_info.balance;
             if rpc_value != our_value {
                 let difference = rpc_value.abs_diff(our_value);
                 address_errors.push(VerifyError::BalanceMismatch {
@@ -248,8 +245,8 @@ pub fn verify_state(
 
         // Nonce
         {
-            let rpc_value: u64 = account_proof.nonce.as_u64();
-            let our_value: u64 = account_info.nonce;
+            let rpc_value = account_proof.nonce.as_u64();
+            let our_value = account_info.nonce;
             if rpc_value != our_value {
                 address_errors.push(VerifyError::NonceMismatch {
                     rpc_value,
@@ -260,8 +257,8 @@ pub fn verify_state(
 
         // Code hash
         {
-            let rpc_value: B256 = account_proof.code_hash.into();
-            let our_value: B256 = account_info.code_hash;
+            let rpc_value = from_ethers_h256(account_proof.code_hash);
+            let our_value = account_info.code_hash;
             if rpc_value != our_value {
                 address_errors.push(VerifyError::CodeHashMismatch {
                     rpc_value,
@@ -273,8 +270,8 @@ pub fn verify_state(
         // Storage root
         {
             let storage_root_node = storage_deltas.get(&address).cloned().unwrap_or_default();
-            let our_value = to_revm_b256(storage_root_node.hash());
-            let rpc_value = account_proof.storage_hash.into();
+            let our_value = storage_root_node.hash();
+            let rpc_value = from_ethers_h256(account_proof.storage_hash);
             if rpc_value != our_value {
                 let expected = storage
                     .get(&address)
@@ -300,13 +297,14 @@ pub fn verify_state(
             let storage_trie = storage_deltas.get(&address).cloned().unwrap_or_default();
             for index in indices {
                 let storage_index = H256::from(index.to_be_bytes());
-                let rpc_value = account_proof
-                    .storage_proof
-                    .iter()
-                    .find(|&storage| storage_index == storage.key)
-                    .expect("Could not find storage proof")
-                    .value
-                    .into();
+                let rpc_value = from_ethers_u256(
+                    account_proof
+                        .storage_proof
+                        .iter()
+                        .find(|&storage| storage_index == storage.key)
+                        .expect("Could not find storage proof")
+                        .value,
+                );
                 let our_db_value = fini_db.storage(address, index)?;
                 let trie_index = keccak(storage_index.as_bytes());
                 let our_trie_value = storage_trie.get_rlp(&trie_index)?.unwrap_or_default();
@@ -333,7 +331,7 @@ fn proofs_to_tries(
     proofs: Vec<EIP1186ProofResponse>,
 ) -> (
     HashMap<MptNodeReference, MptNode>,
-    HashMap<B160, StorageEntry>,
+    HashMap<Address, StorageEntry>,
 ) {
     // construct the proof tries
     let mut nodes_by_reference = HashMap::new();
@@ -379,7 +377,7 @@ fn proofs_to_tries(
             .map(|p| zeth_primitives::U256::from_be_bytes(p.key.into()))
             .collect();
 
-        storage.insert(proof.address.into(), (root_node, slots));
+        storage.insert(from_ethers_h160(proof.address), (root_node, slots));
     }
     (nodes_by_reference, storage)
 }
@@ -413,7 +411,7 @@ impl<E: TxEssence> From<Init<E>> for Input<E> {
         for account in value.db.accounts.values() {
             let code = account.info.code.clone().unwrap();
             if !code.is_empty() {
-                contracts.insert(code.hash, code.bytecode);
+                contracts.insert(code.hash_slow(), code.bytecode);
             }
         }
 
@@ -469,7 +467,7 @@ impl<E: TxEssence> From<Init<E>> for Input<E> {
             withdrawals: value.fini_withdrawals,
             parent_state_trie: state_trie,
             parent_storage: storage.into_iter().collect(),
-            contracts: contracts.into_values().map(|bytes| bytes.into()).collect(),
+            contracts: contracts.into_values().collect(),
             ancestor_headers: value.ancestor_headers,
         }
     }

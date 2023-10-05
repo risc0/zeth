@@ -15,7 +15,6 @@
 use ethers_core::types::{
     Block, Bloom, Bytes, EIP1186ProofResponse, StorageProof, Transaction, H256, U256,
 };
-use revm::primitives::B160 as RevmB160;
 use zeth_primitives::U256 as LibU256;
 
 use super::*;
@@ -202,16 +201,13 @@ fn get_proof(
 /// Get EIP-1186 proofs for a set of addresses and storage keys.
 pub fn get_state_update_proofs(
     provider: &ProviderDb,
-    storage_keys: HashMap<RevmB160, Vec<LibU256>>,
-) -> Result<HashMap<RevmB160, EIP1186ProofResponse>, anyhow::Error> {
+    storage_keys: HashMap<Address, Vec<LibU256>>,
+) -> Result<HashMap<Address, EIP1186ProofResponse>, anyhow::Error> {
     let state = provider.into();
 
     let mut result = HashMap::new();
     for (address, indices) in storage_keys {
-        result.insert(
-            address,
-            get_proof(from_revm_b160(address), indices, &state)?,
-        );
+        result.insert(address, get_proof(address, indices, &state)?);
     }
     Ok(result)
 }

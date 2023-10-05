@@ -6,10 +6,10 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0"
 ethers-core = { version = "2.0", features = ["optimism"] }
-hashbrown = { version = "0.13", features = ["inline-more"] }
+hashbrown = { workspace = true }
 hex-literal = "0.4"
 once_cell = "1.18"
-revm = { version = "3.3", default-features = false, features = ["std", "serde", "optional_no_base_fee", "optional_balance_check"] }
+revm = { workspace = true }
 ruint = { version = "1.10", default-features = false }
 serde = "1.0"
 thiserror = "1.0"

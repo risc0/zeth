@@ -14,14 +14,14 @@
 
 //! Convert from Ethers types.
 
-use alloy_primitives::{Address, Bloom, B256, U256};
+use alloy_primitives::{Address, Bloom, Bytes, B256, U256};
 use anyhow::{anyhow, Context};
 use ethers_core::types::{
     transaction::eip2930::{
         AccessList as EthersAccessList, AccessListItem as EthersAccessListItem,
     },
-    Block as EthersBlock, Transaction as EthersTransaction, Withdrawal as EthersWithdrawal,
-    H160 as EthersH160, H256 as EthersH256, U256 as EthersU256,
+    Block as EthersBlock, Bytes as EthersBytes, Transaction as EthersTransaction,
+    Withdrawal as EthersWithdrawal, H160 as EthersH160, H256 as EthersH256, U256 as EthersU256,
 };
 
 use crate::{
@@ -53,6 +53,12 @@ pub fn from_ethers_h160(v: EthersH160) -> Address {
 /// Convert an `EthersH256` type to the `B256` type.
 #[inline]
 pub fn from_ethers_h256(v: EthersH256) -> B256 {
+    v.0.into()
+}
+
+/// Convert an `EthersBytes` type to the `Bytes` type.
+#[inline]
+pub fn from_ethers_bytes(v: EthersBytes) -> Bytes {
     v.0.into()
 }
 

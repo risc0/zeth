@@ -33,12 +33,12 @@ use zeth_primitives::{
 };
 
 use crate::{
-    block_builder::BlockBuilder,
-    consts,
-    consts::{GWEI_TO_WEI, MIN_SPEC_ID},
-    execution::TxExecStrategy,
+    block_builder::BlockBuilder, consts, consts::GWEI_TO_WEI, execution::TxExecStrategy,
     guest_mem_forget,
 };
+
+/// Minimum supported protocol version: Paris (Block no. 15537394).
+const MIN_SPEC_ID: SpecId = SpecId::MERGE;
 
 pub struct EthTxExecStrategy {}
 
@@ -89,6 +89,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
         // set the EVM configuration
         evm.env.cfg.chain_id = block_builder.chain_spec.chain_id();
         evm.env.cfg.spec_id = spec_id;
+        evm.env.cfg.optimism = false;
 
         // set the EVM block environment
         evm.env.block.number = header.number.try_into().unwrap();

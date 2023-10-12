@@ -289,7 +289,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             }
 
             // accumulate logs to the block bloom filter
-            logs_bloom.accrue_bloom(receipt.payload.logs_bloom);
+            logs_bloom.accrue_bloom(&receipt.payload.logs_bloom);
 
             // Add receipt and tx to tries
             let trie_key = tx_no.to_rlp();

@@ -18,7 +18,6 @@ use revm::primitives::Address;
 use zeth_primitives::{
     block::Header,
     keccak::keccak,
-    revm::from_revm_b256,
     transactions::TxEssence,
     trie::{MptNode, StateAccount},
     U256,
@@ -107,7 +106,7 @@ impl BuildFromMemDbStrategy {
                 nonce: account.info.nonce,
                 balance: account.info.balance,
                 storage_root,
-                code_hash: from_revm_b256(account.info.code_hash),
+                code_hash: account.info.code_hash,
             };
             state_trie.insert_rlp(&state_trie_index, state_account)?;
         }

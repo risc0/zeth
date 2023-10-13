@@ -15,7 +15,6 @@
 use core::fmt::Debug;
 
 use hashbrown::HashMap;
-use revm::primitives::B160 as RevmB160;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
     block::Header,
@@ -24,8 +23,6 @@ use zeth_primitives::{
     withdrawal::Withdrawal,
     Address, Bytes, B256, U256,
 };
-
-use crate::NoHashBuilder;
 
 /// External block input.
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -49,7 +46,7 @@ pub struct Input<E: TxEssence> {
     /// State trie of the parent block.
     pub parent_state_trie: MptNode,
     /// Maps each address with its storage trie and the used storage slots.
-    pub parent_storage: HashMap<RevmB160, StorageEntry, NoHashBuilder>,
+    pub parent_storage: HashMap<Address, StorageEntry>,
     /// The code of all unique contracts.
     pub contracts: Vec<Bytes>,
     /// List of at most 256 previous block headers

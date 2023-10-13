@@ -12,25 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use anyhow::Context;
+use anyhow::anyhow;
 use hashbrown::{hash_map::Entry, HashMap};
 use revm::{
-    primitives::{Account, AccountInfo, Bytecode, B160, B256, U256},
+    primitives::{Account, AccountInfo, Bytecode},
     Database, DatabaseCommit,
 };
 use thiserror::Error as ThisError;
-
-use crate::NoHashBuilder;
+use zeth_primitives::{Address, B256, U256};
 
 /// Error returned by the [MemDb].
 #[derive(Debug, ThisError)]
 pub enum DbError {
     /// Returned when an account was accessed but not loaded into the DB.
     #[error("account {0} not loaded")]
-    AccountNotFound(B160),
+    AccountNotFound(Address),
     /// Returned when storage was accessed but not loaded into the DB.
     #[error("storage {1}@{0} not loaded")]
-    SlotNotFound(B160, U256),
+    SlotNotFound(Address, U256),
     /// Returned when a block hash was accessed but not loaded into the DB.
     #[error("block {0} not loaded")]
     BlockNotFound(u64),
@@ -81,7 +80,7 @@ impl DbAccount {
 #[derive(Clone, Debug, Default)]
 pub struct MemDb {
     /// Account info where None means it is not existing.
-    pub accounts: HashMap<B160, DbAccount, NoHashBuilder>,
+    pub accounts: HashMap<Address, DbAccount>,
     /// All cached block hashes.
     pub block_hashes: HashMap<u64, B256>,
 }
@@ -91,7 +90,7 @@ impl MemDb {
         self.accounts.len()
     }
 
-    pub fn storage_keys(&self) -> HashMap<B160, Vec<U256>> {
+    pub fn storage_keys(&self) -> HashMap<Address, Vec<U256>> {
         let mut out = HashMap::new();
         for (address, account) in &self.accounts {
             out.insert(*address, account.storage.keys().cloned().collect());
@@ -102,7 +101,7 @@ impl MemDb {
 
     /// Insert account info without overriding its storage.
     /// Panics if a different account info exists.
-    pub fn insert_account_info(&mut self, address: B160, info: AccountInfo) {
+    pub fn insert_account_info(&mut self, address: Address, info: AccountInfo) {
         match self.accounts.entry(address) {
             Entry::Occupied(entry) => assert_eq!(info, entry.get().info),
             Entry::Vacant(entry) => {
@@ -113,7 +112,7 @@ impl MemDb {
 
     /// insert account storage without overriding the account info.
     /// Panics if the account does not exist.
-    pub fn insert_account_storage(&mut self, address: &B160, index: U256, data: U256) {
+    pub fn insert_account_storage(&mut self, address: &Address, index: U256, data: U256) {
         let account = self.accounts.get_mut(address).expect("account not found");
         account.storage.insert(index, data);
     }
@@ -133,7 +132,7 @@ impl Database for MemDb {
     type Error = DbError;
 
     /// Get basic account information.
-    fn basic(&mut self, address: B160) -> Result<Option<AccountInfo>, Self::Error> {
+    fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
         match self.accounts.get(&address) {
             Some(db_account) => Ok(db_account.info()),
             None => Err(DbError::AccountNotFound(address)),
@@ -147,7 +146,7 @@ impl Database for MemDb {
     }
 
     /// Get storage value of address at index.
-    fn storage(&mut self, address: B160, index: U256) -> Result<U256, Self::Error> {
+    fn storage(&mut self, address: Address, index: U256) -> Result<U256, Self::Error> {
         match self.accounts.get(&address) {
             // if we have this account in the cache, we can query its storage
             Some(account) => match account.storage.get(&index) {
@@ -167,8 +166,8 @@ impl Database for MemDb {
     }
 
     fn block_hash(&mut self, number: U256) -> Result<B256, Self::Error> {
-        let block_no: u64 = number.try_into().with_context(|| {
-            format!(
+        let block_no: u64 = number.try_into().map_err(|_| {
+            anyhow!(
                 "invalid block number: expected <= {}, got {}",
                 u64::MAX,
                 &number
@@ -182,14 +181,14 @@ impl Database for MemDb {
 }
 
 impl DatabaseCommit for MemDb {
-    fn commit(&mut self, changes: HashMap<B160, Account>) {
+    fn commit(&mut self, changes: HashMap<Address, Account>) {
         for (address, new_account) in changes {
             // if nothing was touched, there is nothing to do
-            if !new_account.is_touched {
+            if !new_account.is_touched() {
                 continue;
             }
 
-            if new_account.is_destroyed {
+            if new_account.is_selfdestructed() {
                 // get the account we are destroying
                 let db_account = match self.accounts.entry(address) {
                     Entry::Occupied(entry) => entry.into_mut(),
@@ -217,23 +216,21 @@ impl DatabaseCommit for MemDb {
                 debug_assert!(new_account.storage.is_empty());
             }
 
+            let is_newly_created = new_account.is_created();
+
             // update account info
             let db_account = match self.accounts.entry(address) {
                 Entry::Occupied(entry) => {
                     let db_account = entry.into_mut();
 
-                    // the account was touched, but it is empty, so it should be deleted
+                    // the account was touched, but it is now empty, so it should be deleted
                     // this also deletes empty accounts previously contained in the state trie
-                    if db_account.state != AccountState::Deleted && new_account.is_empty() {
+                    if new_account.is_empty() {
+                        // if the account is empty, it must be deleted
                         db_account.storage.clear();
                         db_account.state = AccountState::Deleted;
                         db_account.info = AccountInfo::default();
 
-                        continue;
-                    }
-
-                    // create account only if it is not empty
-                    if db_account.info.is_empty() && new_account.is_empty() {
                         continue;
                     }
 
@@ -253,7 +250,7 @@ impl DatabaseCommit for MemDb {
             };
 
             // set the correct state
-            db_account.state = if new_account.storage_cleared {
+            db_account.state = if is_newly_created {
                 db_account.storage.clear();
                 AccountState::StorageCleared
             } else if db_account.state == AccountState::StorageCleared {

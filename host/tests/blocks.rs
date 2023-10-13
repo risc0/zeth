@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(path_file_prefix)]
-
 use std::{path::PathBuf, str::FromStr};
 
 use assert_cmd::Command;
@@ -28,19 +26,18 @@ use zeth_primitives::{transactions::ethereum::EthereumTxEssence, trie::MptNodeDa
 
 #[rstest]
 fn block_cli_ethereum(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
-    let block_no = String::from(path.file_prefix().unwrap().to_str().unwrap());
+    let block_no = file_prefix(&path);
 
     Command::cargo_bin("zeth")
         .unwrap()
-        .args(["--cache=testdata", &format!("--block-no={}", &block_no)])
+        .args(["--cache=testdata", &format!("--block-no={}", block_no)])
         .assert()
         .success();
 }
 
 #[rstest]
 fn empty_blocks(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
-    let block_no =
-        u64::from_str(&String::from(path.file_prefix().unwrap().to_str().unwrap())).unwrap();
+    let block_no = u64::from_str(file_prefix(&path)).unwrap();
     // Set block cache directory
     let rpc_cache = Some(format!("testdata/ethereum/{}.json.gz", block_no));
     // Fetch all of the initial data
@@ -77,4 +74,9 @@ fn empty_blocks(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
         .unwrap();
     // Output segment count
     println!("Generated {} segments", session.segments.len());
+}
+
+fn file_prefix(path: &PathBuf) -> &str {
+    let file_name = path.file_name().unwrap().to_str().unwrap();
+    file_name.split('.').next().unwrap()
 }

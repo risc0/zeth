@@ -387,7 +387,11 @@ where
     evm.env.cfg.disable_balance_check = true;
     fill_eth_tx_env(&mut evm.env.tx, &op_l1_tx, Default::default());
 
-    let Ok(ResultAndState { result: execution_result, .. }) = evm.transact() else {
+    let Ok(ResultAndState {
+        result: execution_result,
+        ..
+    }) = evm.transact()
+    else {
         bail!("Error during execution");
     };
 
@@ -399,7 +403,11 @@ where
         bail!("Unsupported result");
     };
 
-    let ethers_core::abi::Token::Uint(uint_result) = ethers_core::abi::decode(&[ethers_core::abi::ParamType::Uint(256)], &result_encoded)?.pop().unwrap() else {
+    let ethers_core::abi::Token::Uint(uint_result) =
+        ethers_core::abi::decode(&[ethers_core::abi::ParamType::Uint(256)], &result_encoded)?
+            .pop()
+            .unwrap()
+    else {
         bail!("Could not decode result");
     };
 

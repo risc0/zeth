@@ -21,6 +21,7 @@ use ruint::aliases::U256;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
     address,
+    ethers::{from_ethers_u256, to_ethers_u256},
     keccak::keccak,
     transactions::{
         ethereum::{EthereumTxEssence, TransactionKind},
@@ -106,9 +107,9 @@ impl DerivationInput {
                 .as_slice()[12..],
         );
         op_chain_config.system_config.l1_fee_overhead =
-            decoded_data[6].clone().into_uint().unwrap().into();
+            from_ethers_u256(decoded_data[6].clone().into_uint().unwrap());
         op_chain_config.system_config.l1_fee_scalar =
-            decoded_data[7].clone().into_uint().unwrap().into();
+            from_ethers_u256(decoded_data[7].clone().into_uint().unwrap());
         let eth_head = &self.eth_block_inputs.first().unwrap().block_header;
         if eth_head.hash() != eth_block_hash {
             bail!("Invalid input eth head.")
@@ -262,13 +263,13 @@ impl DerivationInput {
                             vec![0x01, 0x5d, 0x8e, 0xb9],
                             ethers_core::abi::encode(&[
                                 Token::Uint(eth_block_header.number.into()),
-                                Token::Uint(eth_block_header.timestamp.into()),
-                                Token::Uint(eth_block_header.base_fee_per_gas.into()),
+                                Token::Uint(to_ethers_u256(eth_block_header.timestamp)),
+                                Token::Uint(to_ethers_u256(eth_block_header.base_fee_per_gas)),
                                 Token::FixedBytes(eth_block_header.hash().0.into()),
                                 Token::Uint(op_block_seq_no.into()),
                                 Token::Address(op_system_config.batch_sender.0 .0.into()),
-                                Token::Uint(op_system_config.l1_fee_overhead.into()),
-                                Token::Uint(op_system_config.l1_fee_scalar.into()),
+                                Token::Uint(to_ethers_u256(op_system_config.l1_fee_overhead)),
+                                Token::Uint(to_ethers_u256(op_system_config.l1_fee_scalar)),
                             ]),
                         ]
                         .concat();

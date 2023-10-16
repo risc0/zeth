@@ -485,7 +485,7 @@ impl TxEssence for EthereumTxEssence {
 
     fn encode_with_signature(&self, signature: &TxSignature, out: &mut dyn BufMut) {
         // join the essence lists and the signature list into one
-        rlp_join_lists(&self, signature, out);
+        rlp_join_lists(self, signature, out);
     }
 
     #[inline]

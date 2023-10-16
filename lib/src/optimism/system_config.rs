@@ -84,7 +84,7 @@ impl SystemConfig {
                     // the third topic determines the type of update
                     let update_type: u64 = U256::from_be_bytes(log.topics[2].0)
                         .try_into()
-                        .context("invalid update type")?;
+                        .expect("invalid update type");
 
                     // TODO: use proper ABI decoding of the data
                     match update_type {

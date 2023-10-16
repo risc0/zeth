@@ -31,6 +31,7 @@ use zeth_testeth::{
 #[rstest]
 fn evm(
     #[files("testdata/BlockchainTests/GeneralStateTests/**/*.json")]
+    #[exclude("RevertPrecompiledTouch_storage.json|RevertPrecompiledTouch.json")] // precompiles having storage is not possible
     #[exclude("stTimeConsuming")] // exclude only the time consuming tests
     path: PathBuf,
 ) {
@@ -71,17 +72,14 @@ fn evm(
                 .initialize_database::<MemDbInitStrategy>()
                 .unwrap()
                 .prepare_header::<EthHeaderPrepStrategy>()
+                .unwrap()
+                .execute_transactions::<EthTxExecStrategy>()
                 .unwrap();
-            // execute the transactions with a larger stack
-            let builder = stacker::grow(BIG_STACK_SIZE, move || {
-                builder.execute_transactions::<EthTxExecStrategy>().unwrap()
-            });
             // update the state
             state = builder.db().unwrap().into();
 
             let result_header = builder.build::<BuildFromMemDbStrategy>().unwrap();
             // the headers should match
-            assert_eq!(result_header.state_root, expected_header.state_root);
             assert_eq!(result_header, expected_header);
 
             // update the headers

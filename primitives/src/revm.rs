@@ -14,44 +14,20 @@
 
 //! Convert to revm types.
 
-use alloy_primitives::{Address, B256};
-use revm_primitives::{Log as RevmLog, B160 as RevmB160, B256 as RevmB256, U256 as RevmU256};
+use alloy_primitives::{Address, U256};
+use revm_primitives::Log as RevmLog;
 
 use crate::{
     access_list::{AccessList, AccessListItem},
     receipt::Log,
 };
 
-/// Converts a `Address` type to its corresponding `RevmB160` representation.
-#[inline]
-pub fn to_revm_b160(v: Address) -> RevmB160 {
-    v.into_array().into()
-}
-
-/// Converts a `B256` type to its corresponding `RevmB256` representation.
-#[inline]
-pub fn to_revm_b256(v: B256) -> RevmB256 {
-    v.0.into()
-}
-
-/// Converts a `RevmB160` type to its corresponding `Address` representation.
-#[inline]
-pub fn from_revm_b160(v: RevmB160) -> Address {
-    v.0.into()
-}
-
-/// Converts a `RevmB256` type to its corresponding `B256` representation.
-#[inline]
-pub fn from_revm_b256(v: RevmB256) -> B256 {
-    v.0.into()
-}
-
-/// Provides a conversion from [AccessListItem] to a tuple of `RevmB160` and a vector of
-/// `RevmU256`.
-impl From<AccessListItem> for (RevmB160, Vec<RevmU256>) {
-    fn from(item: AccessListItem) -> (RevmB160, Vec<RevmU256>) {
+/// Provides a conversion from [AccessListItem] to a tuple of `Address` and a vector of
+/// `U256`.
+impl From<AccessListItem> for (Address, Vec<U256>) {
+    fn from(item: AccessListItem) -> (Address, Vec<U256>) {
         (
-            to_revm_b160(item.address),
+            item.address,
             item.storage_keys
                 .into_iter()
                 .map(|item| item.into())
@@ -60,10 +36,10 @@ impl From<AccessListItem> for (RevmB160, Vec<RevmU256>) {
     }
 }
 
-/// Provides a conversion from [AccessList] to a vector of tuples containing `RevmB160`
-/// and a vector of `RevmU256`.
-impl From<AccessList> for Vec<(RevmB160, Vec<RevmU256>)> {
-    fn from(list: AccessList) -> Vec<(RevmB160, Vec<RevmU256>)> {
+/// Provides a conversion from [AccessList] to a vector of tuples containing `Address` and
+/// a vector of `U256`.
+impl From<AccessList> for Vec<(Address, Vec<U256>)> {
+    fn from(list: AccessList) -> Vec<(Address, Vec<U256>)> {
         list.0.into_iter().map(|item| item.into()).collect()
     }
 }
@@ -72,9 +48,9 @@ impl From<AccessList> for Vec<(RevmB160, Vec<RevmU256>)> {
 impl From<RevmLog> for Log {
     fn from(log: RevmLog) -> Self {
         Log {
-            address: log.address.to_fixed_bytes().into(),
-            topics: log.topics.into_iter().map(from_revm_b256).collect(),
-            data: log.data.into(),
+            address: log.address,
+            topics: log.topics,
+            data: log.data,
         }
     }
 }

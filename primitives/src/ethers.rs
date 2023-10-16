@@ -14,15 +14,15 @@
 
 //! Convert from Ethers types.
 
-use alloy_primitives::{Address, Bloom, B256, U256};
+use alloy_primitives::{Address, Bloom, Bytes, B256, U256};
 use anyhow::{anyhow, Context};
 use ethers_core::types::{
     transaction::eip2930::{
         AccessList as EthersAccessList, AccessListItem as EthersAccessListItem,
     },
-    Block as EthersBlock, Transaction as EthersTransaction, TransactionReceipt as EthersReceipt,
-    Withdrawal as EthersWithdrawal, H160 as EthersH160, H256 as EthersH256, U256 as EthersU256,
-    U64,
+    Block as EthersBlock, Bytes as EthersBytes, Transaction as EthersTransaction,
+    TransactionReceipt as EthersReceipt, Withdrawal as EthersWithdrawal, H160 as EthersH160,
+    H256 as EthersH256, U256 as EthersU256, U64,
 };
 
 use crate::{
@@ -46,6 +46,12 @@ pub fn from_ethers_u256(v: EthersU256) -> U256 {
     U256::from_limbs(v.0)
 }
 
+/// Convert an `U256` type to the `EthersU256` type.
+#[inline]
+pub fn to_ethers_u256(v: U256) -> EthersU256 {
+    EthersU256(v.into_limbs())
+}
+
 /// Convert an `EthersH160` type to the `Address` type.
 #[inline]
 pub fn from_ethers_h160(v: EthersH160) -> Address {
@@ -55,6 +61,12 @@ pub fn from_ethers_h160(v: EthersH160) -> Address {
 /// Convert an `EthersH256` type to the `B256` type.
 #[inline]
 pub fn from_ethers_h256(v: EthersH256) -> B256 {
+    v.0.into()
+}
+
+/// Convert an `EthersBytes` type to the `Bytes` type.
+#[inline]
+pub fn from_ethers_bytes(v: EthersBytes) -> Bytes {
     v.0.into()
 }
 

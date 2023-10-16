@@ -28,7 +28,7 @@ use zeth_lib::{
         Init,
     },
     input::Input,
-    mem_db::{DbAccount, MemDb},
+    mem_db::{AccountState, DbAccount, MemDb},
     preparation::EthHeaderPrepStrategy,
 };
 use zeth_primitives::{
@@ -36,7 +36,6 @@ use zeth_primitives::{
     block::Header,
     ethers::from_ethers_h160,
     keccak::keccak,
-    revm::from_revm_b160,
     signature::TxSignature,
     transactions::{
         ethereum::{
@@ -115,7 +114,8 @@ impl From<&MemDb> for TestState {
         TestState(
             db.accounts
                 .iter()
-                .map(|(addr, account)| (from_revm_b160(*addr), account.clone().into()))
+                .filter(|(_, account)| account.state != AccountState::Deleted)
+                .map(|(addr, account)| (*addr, account.clone().into()))
                 .collect(),
         )
     }
@@ -350,14 +350,13 @@ pub fn create_input(
     };
 
     // create and run the block builder once to create the initial DB
-    let builder = BlockBuilder::new(chain_spec, input)
+    let mut builder = BlockBuilder::new(chain_spec, input)
         .with_db(provider_db)
         .prepare_header::<EthHeaderPrepStrategy>()
+        .unwrap()
+        .execute_transactions::<EthTxExecStrategy>()
         .unwrap();
-    // execute the transactions with a larger stack
-    let mut builder = stacker::grow(BIG_STACK_SIZE, move || {
-        builder.execute_transactions::<EthTxExecStrategy>().unwrap()
-    });
+
     let provider_db = builder.mut_db().unwrap();
 
     let init_proofs = provider_db.get_initial_proofs().unwrap();

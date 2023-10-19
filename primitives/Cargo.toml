@@ -11,7 +11,7 @@ anyhow = "1.0"
 bytes = { version = "1.1", default-features = false }
 ethers-core = { version = "2.0", optional = true, features = ["optimism"] }
 k256 = { version = "=0.13.1", features = ["std", "ecdsa"], default_features = false }
-revm-primitives = { git = "https://github.com/Wollac/revm.git", branch = "fix/optimism-execution", optional = true, default_features = false }
+revm-primitives = { git = "https://github.com/bluealloy/revm.git", optional = true, default_features = false }
 rlp = "0.5.2"
 serde = { version = "1.0", features = ["derive"] }
 sha3 = "0.10"

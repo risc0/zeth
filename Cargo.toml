@@ -27,4 +27,4 @@ bonsai-sdk = "0.4"
 hashbrown = { version = "0.14", features = ["inline-more"] }
 risc0-build = "0.18"
 risc0-zkvm = { version = "0.18", default-features = false }
-revm = { git = "https://github.com/Wollac/revm.git", branch = "fix/optimism-execution", default-features = false, features = ["std", "serde", "optimism"] }
+revm = { git = "https://github.com/bluealloy/revm.git", default-features = false, features = ["std", "serde", "optimism"] }

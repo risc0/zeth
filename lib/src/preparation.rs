@@ -72,7 +72,7 @@ impl HeaderPrepStrategy for EthHeaderPrepStrategy {
         }
         // Validate extra data
         let extra_data_bytes = block_builder.input.extra_data.len();
-        if extra_data_bytes >= MAX_EXTRA_DATA_BYTES {
+        if extra_data_bytes > MAX_EXTRA_DATA_BYTES {
             bail!(
                 "Invalid extra data: expected <= {}, got {}",
                 MAX_EXTRA_DATA_BYTES,

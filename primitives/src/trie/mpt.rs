@@ -15,7 +15,12 @@
 extern crate alloc;
 
 use alloc::boxed::Box;
-use core::{cell::RefCell, cmp, fmt::Debug, iter, mem};
+use core::{
+    cell::RefCell,
+    cmp,
+    fmt::{Debug, Write},
+    iter, mem,
+};
 
 use alloy_primitives::B256;
 use alloy_rlp::Encodable;
@@ -700,7 +705,12 @@ impl MptNode {
     /// This method is primarily used for debugging purposes, providing a visual
     /// representation of the trie's structure.
     pub fn debug_rlp<T: alloy_rlp::Decodable + Debug>(&self) -> Vec<String> {
-        let nibs: String = self.nibs().iter().map(|n| format!("{:x}", n)).collect();
+        // convert the nibs to hex
+        let nibs: String = self.nibs().iter().fold(String::new(), |mut output, n| {
+            let _ = write!(output, "{:x}", n);
+            output
+        });
+
         match self.as_data() {
             MptNodeData::Null => vec![format!("{:?}", MptNodeData::Null)],
             MptNodeData::Branch(children) => children

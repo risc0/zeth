@@ -13,22 +13,21 @@
 // limitations under the License.
 
 use anyhow::{anyhow, Result};
-use ethers_core::types::{
-    Block, Bytes, EIP1186ProofResponse, Transaction, TransactionReceipt, H256, U256,
-};
-use ethers_providers::{Http, Middleware};
+use ethers_core::types::{Block, Bytes, EIP1186ProofResponse, Transaction, H256, U256};
+use ethers_providers::{Http, Middleware, RetryClient};
 use log::info;
 
 use super::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery};
 
 pub struct RpcProvider {
-    http_client: ethers_providers::Provider<Http>,
+    http_client: ethers_providers::Provider<RetryClient<Http>>,
     tokio_handle: tokio::runtime::Handle,
 }
 
 impl RpcProvider {
     pub fn new(rpc_url: String) -> Result<Self> {
-        let http_client = ethers_providers::Provider::<Http>::try_from(&rpc_url)?;
+        let http_client =
+            ethers_providers::Provider::<RetryClient<Http>>::new_client(&rpc_url, 3, 500)?;
         let tokio_handle = tokio::runtime::Handle::current();
 
         Ok(RpcProvider {

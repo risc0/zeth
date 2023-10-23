@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use anyhow::{anyhow, Result};
-use ethers_core::types::{Block, Bytes, EIP1186ProofResponse, Transaction, H256, U256};
+use ethers_core::types::{
+    Block, Bytes, EIP1186ProofResponse, Transaction, TransactionReceipt, H256, U256,
+};
 use ethers_providers::{Http, Middleware, RetryClient};
 use log::info;
 

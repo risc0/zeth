@@ -4562,7 +4562,6 @@ dependencies = [
 name = "zeth"
 version = "0.1.0"
 dependencies = [
- "alloy-sol-macro",
  "alloy-sol-types",
  "anyhow",
  "assert_cmd",

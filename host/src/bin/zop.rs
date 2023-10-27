@@ -268,7 +268,7 @@ fn get_initial_zop_data(args: &Args) -> Result<DerivationInput> {
     let op_buffer_queue = Queue::<_, 1024>::new();
     let op_buffer = RefCell::new(op_buffer_queue);
     let mut op_system_config = op_chain_config.system_config.clone();
-    let mut op_batches: Batches<'_, _, 1024> = Batches::new(
+    let mut op_batches = Batches::new(
         Channels::new(
             BatcherTransactions::<1024, 1024>::new(&op_buffer),
             &op_chain_config,

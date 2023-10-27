@@ -13,10 +13,13 @@
 // limitations under the License.
 
 use core::{cell::RefCell, cmp::Ordering};
-use std::io::Read;
+use std::{
+    collections::BinaryHeap,
+    cmp::Reverse,
+    io::Read
+};
 
 use anyhow::Context;
-use heapless::{binary_heap::Min, BinaryHeap};
 use libflate::zlib::Decoder;
 use zeth_primitives::{
     batch::Batch,
@@ -25,15 +28,15 @@ use zeth_primitives::{
 
 use super::{channels::Channel, config::ChainConfig, derivation::State};
 
-pub struct Batches<'a, I, const N: usize> {
+pub struct Batches<'a, I> {
     /// Mapping of timestamps to batches
-    batches: BinaryHeap<Batch, Min, N>,
+    batches: BinaryHeap<Reverse<Batch>>,
     channel_iter: I,
     state: &'a RefCell<State>,
     config: &'a ChainConfig,
 }
 
-impl<I, const N: usize> Iterator for Batches<'_, I, N>
+impl<I> Iterator for Batches<'_, I>
 where
     I: Iterator<Item = Channel>,
 {
@@ -51,14 +54,14 @@ where
     }
 }
 
-impl<I, const N: usize> Batches<'_, I, N> {
+impl<I> Batches<'_, I> {
     pub fn new<'a>(
         channel_iter: I,
         state: &'a RefCell<State>,
         config: &'a ChainConfig,
-    ) -> Batches<'a, I, N> {
+    ) -> Batches<'a, I> {
         Batches {
-            batches: BinaryHeap::<Batch, Min, N>::new(),
+            batches: BinaryHeap::new(),
             channel_iter,
             state,
             config,
@@ -66,7 +69,7 @@ impl<I, const N: usize> Batches<'_, I, N> {
     }
 }
 
-impl<I, const N: usize> Batches<'_, I, N>
+impl<I> Batches<'_, I>
 where
     I: Iterator<Item = Channel>,
 {
@@ -85,12 +88,12 @@ where
                     batch.essence.parent_hash,
                     batch.essence.epoch_num
                 );
-                self.batches.push(batch).unwrap();
+                self.batches.push(Reverse(batch));
             });
         }
 
         let derived_batch = loop {
-            if let Some(batch) = self.batches.pop() {
+            if let Some(Reverse(batch)) = self.batches.pop() {
                 match self.batch_status(&batch) {
                     BatchStatus::Accept => {
                         break Some(batch);
@@ -100,7 +103,7 @@ where
                         log::warn!("dropping invalid batch");
                     }
                     BatchStatus::Future | BatchStatus::Undecided => {
-                        self.batches.push(batch).unwrap();
+                        self.batches.push(Reverse(batch));
                         break None;
                     }
                 }

@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+alloy-sol-types = "0.4"
 anyhow = "1.0"
 bincode = "1.3.3"
 bonsai-sdk = { workspace = true }

@@ -13,11 +13,7 @@
 // limitations under the License.
 
 use core::{cell::RefCell, cmp::Ordering};
-use std::{
-    collections::BinaryHeap,
-    cmp::Reverse,
-    io::Read
-};
+use std::{cmp::Reverse, collections::BinaryHeap, io::Read};
 
 use anyhow::Context;
 use libflate::zlib::Decoder;

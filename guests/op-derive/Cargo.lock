@@ -51,25 +51,6 @@ checksum = "0942ffc6dcaadf03badf6e6a2d0228460359d5e34b57ccdc720b7382dfbd5ec5"
 
 [[package]]
 name = "alloy-primitives"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e416903084d3392ebd32d94735c395d6709415b76c7728e594d3f996f2b03e65"
-dependencies = [
- "alloy-rlp",
- "bytes",
- "cfg-if",
- "const-hex",
- "derive_more",
- "hex-literal",
- "itoa",
- "proptest",
- "ruint",
- "serde",
- "tiny-keccak",
-]
-
-[[package]]
-name = "alloy-primitives"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a0628ec0ba5b98b3370bb6be17b12f23bfce8ee4ad83823325a20546d9b03b78"
@@ -113,12 +94,14 @@ dependencies = [
 
 [[package]]
 name = "alloy-sol-macro"
-version = "0.3.2"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7720130c58db647103587b0c39aad4e669eea261e256040301d6c7983fdbb461"
+checksum = "8a98ad1696a2e17f010ae8e43e9f2a1e930ed176a8e3ff77acfeff6dfb07b42c"
 dependencies = [
+ "const-hex",
  "dunce",
  "heck",
+ "proc-macro-error",
  "proc-macro2",
  "quote",
  "syn 2.0.32",
@@ -128,11 +111,11 @@ dependencies = [
 
 [[package]]
 name = "alloy-sol-types"
-version = "0.3.2"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eaa7c9a4354b1ff9f1c85adf22802af046e20e4bb55e19b9dc6ca8cbc6f7f4e5"
+checksum = "98d7107bed88e8f09f0ddcc3335622d87bfb6821f3e0c7473329fb1cfad5e015"
 dependencies = [
- "alloy-primitives 0.3.3",
+ "alloy-primitives",
  "alloy-sol-macro",
  "const-hex",
  "serde",
@@ -2284,7 +2267,7 @@ version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51187b852d9e458816a2e19c81f1dd6c924077e1a8fccd16e4f044f865f299d7"
 dependencies = [
- "alloy-primitives 0.4.2",
+ "alloy-primitives",
  "alloy-rlp",
  "auto_impl",
  "bitflags 2.4.1",
@@ -2968,9 +2951,9 @@ dependencies = [
 
 [[package]]
 name = "syn-solidity"
-version = "0.3.2"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "397f229dc34c7b8231b6ef85502f9ca4e3425b8625e6d403bb74779e6b1917b5"
+checksum = "86b837ef12ab88835251726eb12237655e61ec8dc8a280085d1961cdc3dfd047"
 dependencies = [
  "paste",
  "proc-macro2",
@@ -3663,7 +3646,7 @@ dependencies = [
 name = "zeth-primitives"
 version = "0.1.0"
 dependencies = [
- "alloy-primitives 0.4.2",
+ "alloy-primitives",
  "alloy-rlp",
  "alloy-rlp-derive",
  "anyhow",

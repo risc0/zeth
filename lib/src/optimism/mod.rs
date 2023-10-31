@@ -14,6 +14,7 @@
 
 use core::{cell::RefCell, iter::once};
 
+use alloy_sol_types::sol;
 use anyhow::bail;
 use ethers_core::abi::{ParamType, Token};
 use ruint::aliases::U256;
@@ -54,6 +55,22 @@ pub mod deposits;
 pub mod derivation;
 pub mod epoch;
 pub mod system_config;
+
+sol! {
+    #[derive(Debug)]
+    interface OpSystemInfo {
+        function setL1BlockValues(
+            uint64 number,
+            uint64 timestamp,
+            uint256 basefee,
+            bytes32 hash,
+            uint64 sequence_number,
+            bytes32 batcher_hash,
+            uint256 l1_fee_overhead,
+            uint256 l1_fee_scalar
+        );
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DerivationInput {
@@ -132,10 +149,7 @@ impl DerivationInput {
         let op_buffer = RefCell::new(op_buffer_queue);
         let mut op_system_config = op_chain_config.system_config.clone();
         let mut op_batches = Batches::new(
-            Channels::new(
-                BatcherTransactions::new(&op_buffer),
-                &op_chain_config,
-            ),
+            Channels::new(BatcherTransactions::new(&op_buffer), &op_chain_config),
             &op_state,
             &op_chain_config,
         );

@@ -30,7 +30,7 @@ revm-primitives = { git = "https://github.com/johntaiko/revm", branch = "feat/ta
 
 
 [workspace.dependencies]
-bonsai-sdk = "0.4"
+bonsai-sdk = "0.5"
 hashbrown = { version = "0.14", features = ["inline-more"] }
 risc0-build = "0.18"
 risc0-zkvm = { version = "0.18", default-features = false }

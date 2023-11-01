@@ -22,8 +22,7 @@ use clap::Parser;
 use ethers_core::types::Transaction as EthersTransaction;
 use log::{error, info};
 use risc0_zkvm::{
-    serde::{from_slice, to_vec},
-    Executor, ExecutorEnv, FileSegmentRef, MemoryImage, Program, Receipt,
+    serde::to_vec, ExecutorEnv, ExecutorImpl, FileSegmentRef, MemoryImage, Program, Receipt,
 };
 use serde::{Deserialize, Serialize};
 use tempfile::tempdir;
@@ -70,7 +69,7 @@ struct Args {
     #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "20")]
     /// Runs the verification inside the zkvm executor locally. Accepts a custom maximum
     /// segment cycle count as a power of 2. [default: 20]
-    local_exec: Option<usize>,
+    local_exec: Option<u32>,
 
     #[clap(short, long, default_value_t = false)]
     /// Whether to submit the proving workload to Bonsai.
@@ -276,14 +275,14 @@ where
             builder
                 .session_limit(None)
                 .segment_limit_po2(segment_limit_po2)
-                .add_input(&input);
+                .write_slice(&input);
 
             if args.profile {
                 builder.trace_callback(profiler.make_trace_callback());
             }
 
             let env = builder.build().unwrap();
-            let mut exec = Executor::from_elf(env, guest_elf).unwrap();
+            let mut exec = ExecutorImpl::from_elf(env, guest_elf).unwrap();
 
             let segment_dir = tempdir().unwrap();
 
@@ -318,7 +317,7 @@ where
         );
 
         let expected_hash = init.fini_block.hash();
-        let found_hash: BlockHash = from_slice(&session.journal).unwrap();
+        let found_hash: BlockHash = session.journal.decode().unwrap();
 
         if found_hash == expected_hash {
             info!("Block hash (from executor): {}", found_hash);
@@ -335,12 +334,13 @@ where
     // Run in Bonsai (if requested)
     if bonsai_session_uuid.is_none() && args.submit_to_bonsai {
         info!("Creating Bonsai client");
-        let client = bonsai_sdk::Client::from_env().expect("Could not create Bonsai client");
+        let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)
+            .expect("Could not create Bonsai client");
 
         // create the memoryImg, upload it and return the imageId
         info!("Uploading memory image");
         let img_id = {
-            let program = Program::load_elf(guest_elf, risc0_zkvm::MEM_SIZE as u32)
+            let program = Program::load_elf(guest_elf, risc0_zkvm::GUEST_MAX_MEM as u32)
                 .expect("Could not load ELF");
             let image = MemoryImage::new(&program, risc0_zkvm::PAGE_SIZE as u32)
                 .expect("Could not create memory image");
@@ -373,7 +373,8 @@ where
 
     // Verify receipt from Bonsai (if requested)
     if let Some(session_uuid) = bonsai_session_uuid {
-        let client = bonsai_sdk::Client::from_env().expect("Could not create Bonsai client");
+        let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)
+            .expect("Could not create Bonsai client");
         let session = bonsai_sdk::SessionId { uuid: session_uuid };
 
         loop {
@@ -400,7 +401,7 @@ where
                     .expect("Receipt verification failed");
 
                 let expected_hash = init.fini_block.hash();
-                let found_hash: BlockHash = from_slice(&receipt.journal).unwrap();
+                let found_hash: BlockHash = receipt.journal.decode().unwrap();
 
                 if found_hash == expected_hash {
                     info!("Block hash (from Bonsai): {}", found_hash);

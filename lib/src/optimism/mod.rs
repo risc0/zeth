@@ -70,6 +70,7 @@ sol! {
 
 pub trait BatcherDb {
     fn get_full_op_block(&mut self, block_no: u64) -> Result<BlockInput<OptimismTxEssence>>;
+    fn get_op_block_header(&mut self, block_no: u64) -> Result<Header>;
     fn get_full_eth_block(&mut self, block_no: u64) -> Result<BlockInput<EthereumTxEssence>>;
     fn get_eth_block_header(&mut self, block_no: u64) -> Result<Header>;
 }
@@ -77,6 +78,7 @@ pub trait BatcherDb {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MemDb {
     pub full_op_block: HashMap<u64, BlockInput<OptimismTxEssence>>,
+    pub op_block_header: HashMap<u64, Header>,
     pub full_eth_block: HashMap<u64, BlockInput<EthereumTxEssence>>,
     pub eth_block_header: HashMap<u64, Header>,
 }
@@ -85,6 +87,7 @@ impl MemDb {
     pub fn new() -> Self {
         MemDb {
             full_op_block: HashMap::new(),
+            op_block_header: HashMap::new(),
             full_eth_block: HashMap::new(),
             eth_block_header: HashMap::new(),
         }
@@ -93,7 +96,25 @@ impl MemDb {
 
 impl BatcherDb for MemDb {
     fn get_full_op_block(&mut self, block_no: u64) -> Result<BlockInput<OptimismTxEssence>> {
-        Ok(self.full_op_block.get(&block_no).unwrap().clone())
+        let op_block = self.full_op_block.get(&block_no).unwrap();
+
+        // Validate tx list
+        {
+            let mut tx_trie = MptNode::default();
+            for (tx_no, tx) in op_block.transactions.iter().enumerate() {
+                let trie_key = tx_no.to_rlp();
+                tx_trie.insert_rlp(&trie_key, tx)?;
+            }
+            if tx_trie.hash() != op_block.block_header.transactions_root {
+                bail!("Invalid op block transaction data!")
+            }
+        }
+
+        Ok(op_block.clone())
+    }
+
+    fn get_op_block_header(&mut self, block_no: u64) -> Result<Header> {
+        Ok(self.op_block_header.get(&block_no).unwrap().clone())
     }
 
     fn get_full_eth_block(&mut self, block_no: u64) -> Result<BlockInput<EthereumTxEssence>> {
@@ -359,17 +380,14 @@ pub fn derive<D: BatcherDb>(
                     info!("Fetch op block {}", op_block_no);
                 }
                 let new_op_head = db
-                    .get_full_op_block(op_block_no)
+                    .get_op_block_header(op_block_no)
                     .context("block not found")?;
 
                 // Verify new op head has the expected parent
-                assert_eq!(
-                    new_op_head.block_header.parent_hash,
-                    op_state.safe_head.hash
-                );
+                assert_eq!(new_op_head.parent_hash, op_state.safe_head.hash);
 
                 // Verify new op head has the expected block number
-                assert_eq!(new_op_head.block_header.number, op_block_no);
+                assert_eq!(new_op_head.number, op_block_no);
 
                 // Verify that the new op head transactions are consistent with the batch transactions
                 {
@@ -444,21 +462,21 @@ pub fn derive<D: BatcherDb>(
                         let trie_key = tx_no.to_rlp();
                         tx_trie.insert(&trie_key, tx)?;
                     }
-                    if tx_trie.hash() != new_op_head.block_header.transactions_root {
+                    if tx_trie.hash() != new_op_head.transactions_root {
                         bail!("Invalid op block transaction data! Transaction trie root does not match")
                     }
                 }
 
                 op_state.safe_head = BlockInfo {
-                    hash: new_op_head.block_header.hash(),
-                    timestamp: new_op_head.block_header.timestamp.try_into().unwrap(),
+                    hash: new_op_head.hash(),
+                    timestamp: new_op_head.timestamp.try_into().unwrap(),
                 };
                 #[cfg(not(target_os = "zkvm"))]
                 {
                     info!(
                         "derived l2 block {} w/ hash {}",
-                        new_op_head.block_header.number,
-                        new_op_head.block_header.hash()
+                        new_op_head.number,
+                        new_op_head.hash()
                     );
                 }
 

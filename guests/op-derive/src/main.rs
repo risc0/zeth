@@ -15,17 +15,16 @@
 #![no_main]
 
 use risc0_zkvm::guest::env;
-use zeth_lib::optimism::DerivationInput;
+use zeth_lib::optimism::{DeriveInput, derive};
 
 risc0_zkvm::guest::entry!(main);
 
 pub fn main() {
-    // Read the input L1 and L2 data
-    let input: DerivationInput = env::read();
-    env::commit(&input.op_head.block_header.hash());
-    // Process the optimism block derivation input
-    let output = input.process().expect("Failed to process derivation input");
-    // Output the resulting block's hash to the journal
-    env::commit(&output.current_l1_block_hash);
-    env::commit(&output.safe_head.hash);
+    let mut input: DeriveInput = env::read();
+    let output = derive(
+        &mut input.mem_db,
+        input.head_block_no,
+        input.block_count
+    ).expect("Failed to process derivation input");
+    env::commit(&output);
 }

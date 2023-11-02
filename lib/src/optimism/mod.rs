@@ -32,7 +32,7 @@ use zeth_primitives::{
 };
 
 #[cfg(not(target_os = "zkvm"))]
-use log::{error, info};
+use log::info;
 
 use crate::optimism::{
     batcher_transactions::BatcherTransactions,
@@ -439,30 +439,13 @@ pub fn derive<D: BatcherDb>(
                         .chain(op_batch.essence.transactions.iter().map(|tx| tx.to_vec()))
                         .collect();
 
-                    // TODO: Why does this check work .... (continued below)
-                    {
-                        let new_op_head_transactions: Vec<_> = new_op_head
-                            .transactions
-                            .iter()
-                            .map(|tx| tx.to_rlp())
-                            .collect();
-
-                        assert_eq!(new_op_head_transactions, derived_transactions);
+                    let mut tx_trie = MptNode::default();
+                    for (tx_no, tx) in derived_transactions.into_iter().enumerate() {
+                        let trie_key = tx_no.to_rlp();
+                        tx_trie.insert(&trie_key, tx)?;
                     }
-                    // TODO: ... (continuing) but this check does not?
-                    {
-                        let mut tx_trie = MptNode::default();
-                        for (tx_no, tx) in derived_transactions.iter().enumerate() {
-                            let trie_key = tx_no.to_rlp();
-                            tx_trie.insert_rlp(&trie_key, tx)?;
-                        }
-                        if tx_trie.hash() != new_op_head.block_header.transactions_root {
-                            // TODO: change this to a bail!() after we figure out the Mpt root issue
-                            #[cfg(not(target_os = "zkvm"))]
-                            {
-                                error!("Invalid op block transaction data! Transaction trie root does not match")
-                            }
-                        }
+                    if tx_trie.hash() != new_op_head.block_header.transactions_root {
+                        bail!("Invalid op block transaction data! Transaction trie root does not match")
                     }
                 }
 

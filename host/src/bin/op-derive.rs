@@ -28,7 +28,10 @@ use std::cell::RefCell;
 use alloy_sol_types::SolInterface;
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use std::collections::{HashMap, VecDeque};
+use std::{
+    collections::{HashMap, VecDeque},
+    iter::once,
+};
 use zeth_lib::{
     host::provider::{new_provider, BlockQuery},
     optimism::{
@@ -43,10 +46,16 @@ use zeth_lib::{
     },
 };
 use zeth_primitives::{
+    address,
     batch::Batch,
     block::Header,
-    transactions::{ethereum::EthereumTxEssence, optimism::OptimismTxEssence, TxEssence},
-    Address, BlockHash,
+    keccak::keccak,
+    transactions::{
+        ethereum::{EthereumTxEssence, TransactionKind},
+        optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
+        Transaction, TxEssence,
+    },
+    uint, Address, BlockHash, FixedBytes, RlpBytes, B256, U256,
 };
 
 #[derive(Parser, Debug, Clone)]
@@ -299,9 +308,9 @@ fn derive<D: BatcherDb>(db: &mut D, head_block_no: u64, block_count: u64) -> Res
             OpSystemInfo::OpSystemInfoCalls::setL1BlockValues(x) => x,
         }
     };
-
     let mut eth_block_no = set_l1_block_values.number;
     let eth_block_hash = set_l1_block_values.hash;
+    let mut op_block_seq_no = set_l1_block_values.sequence_number;
     let mut op_chain_config = ChainConfig::optimism();
     op_chain_config.system_config.batch_sender =
         Address::from_slice(&set_l1_block_values.batcher_hash.as_slice()[12..]);
@@ -400,13 +409,14 @@ fn derive<D: BatcherDb>(db: &mut D, head_block_no: u64, block_count: u64) -> Res
             );
 
             // Manage current epoch number and extract deposits
-            let _deposits = {
+            let deposits = {
                 let mut op_state_ref = op_state.borrow_mut();
                 if op_batch.essence.epoch_num == op_state_ref.epoch.number + 1 {
                     op_state_ref.epoch = op_state_ref
                         .next_epoch
                         .take()
                         .expect("dequeued future batch without next epoch!");
+                    op_block_seq_no = 0;
 
                     op_epoch_deposit_block_ptr += 1;
                     let deposit_block_input = &eth_block_inputs[op_epoch_deposit_block_ptr];
@@ -423,6 +433,7 @@ fn derive<D: BatcherDb>(db: &mut D, head_block_no: u64, block_count: u64) -> Res
                     Some(deposits)
                 } else {
                     println!("No deposits found!");
+                    op_block_seq_no += 1;
                     None
                 }
             };
@@ -433,26 +444,107 @@ fn derive<D: BatcherDb>(db: &mut D, head_block_no: u64, block_count: u64) -> Res
             let mut op_state = op_state.borrow_mut();
             if op_batch.essence.parent_hash == op_state.safe_head.hash {
                 op_block_no += 1;
-                // TODO: check _deposits and system tx
 
-                let new_op_head: Header = {
+                let new_op_head = {
                     let block_query = BlockQuery {
                         block_no: op_block_no,
                     };
                     println!("Fetch op block {}", op_block_no);
                     db.get_full_op_block(&block_query)
                         .context("block not found")?
-                        .block_header
                 };
 
+                assert_eq!(new_op_head.block_header.number, op_block_no);
+                assert_eq!(
+                    new_op_head.block_header.parent_hash,
+                    op_state.safe_head.hash
+                );
+
+                // Verify that the new op head transactions are consistent with the batch transactions
+                {
+                    let system_tx = {
+                        let eth_block_header =
+                            &eth_block_inputs[op_epoch_deposit_block_ptr].block_header;
+                        let batcher_hash = {
+                            let all_zero: FixedBytes<12> = FixedBytes([0 as u8; 12]);
+                            all_zero.concat_const::<20, 32>(op_system_config.batch_sender.0)
+                        };
+                        let set_l1_block_values = OpSystemInfo::OpSystemInfoCalls::setL1BlockValues(
+                            OpSystemInfo::setL1BlockValuesCall {
+                                number: eth_block_header.number.into(),
+                                timestamp: eth_block_header.timestamp.try_into().unwrap(),
+                                basefee: eth_block_header.base_fee_per_gas,
+                                hash: eth_block_header.hash(),
+                                sequence_number: op_block_seq_no,
+                                batcher_hash,
+                                l1_fee_overhead: op_system_config.l1_fee_overhead,
+                                l1_fee_scalar: op_system_config.l1_fee_scalar,
+                            },
+                        );
+                        let source_hash: B256 = {
+                            let source_hash_sequencing = keccak(
+                                &[
+                                    op_batch.essence.epoch_hash.to_vec(),
+                                    U256::from(op_block_seq_no).to_be_bytes_vec(),
+                                ]
+                                .concat(),
+                            );
+                            keccak(
+                                &[
+                                    [0u8; 31].as_slice(),
+                                    [1u8].as_slice(),
+                                    source_hash_sequencing.as_slice(),
+                                ]
+                                .concat(),
+                            )
+                            .into()
+                        };
+                        Transaction {
+                            essence: OptimismTxEssence::OptimismDeposited(
+                                TxEssenceOptimismDeposited {
+                                    source_hash,
+                                    from: address!("deaddeaddeaddeaddeaddeaddeaddeaddead0001"),
+                                    to: TransactionKind::Call(address!(
+                                        "4200000000000000000000000000000000000015"
+                                    )),
+                                    mint: Default::default(),
+                                    value: Default::default(),
+                                    gas_limit: uint!(1_000_000_U256),
+                                    is_system_tx: false,
+                                    data: set_l1_block_values.abi_encode().into(),
+                                },
+                            ),
+                            signature: Default::default(),
+                        }
+                    };
+
+                    let derived_transactions: Vec<_> = once(system_tx.to_rlp())
+                        .chain(
+                            deposits
+                                .unwrap_or_default()
+                                .into_iter()
+                                .map(|tx| tx.to_rlp()),
+                        )
+                        .chain(op_batch.essence.transactions.iter().map(|tx| tx.to_vec()))
+                        .collect();
+
+                    let new_op_head_transactions: Vec<_> = new_op_head
+                        .transactions
+                        .iter()
+                        .map(|tx| tx.to_rlp())
+                        .collect();
+
+                    assert_eq!(new_op_head_transactions, derived_transactions);
+                }
+
                 op_state.safe_head = BlockInfo {
-                    hash: new_op_head.hash(),
-                    timestamp: new_op_head.timestamp.try_into().unwrap(),
+                    hash: new_op_head.block_header.hash(),
+                    timestamp: new_op_head.block_header.timestamp.try_into().unwrap(),
                 };
                 println!(
                     "derived l2 block {} w/ hash {}",
-                    new_op_head.number,
-                    new_op_head.hash()
+                    new_op_head.block_header.number,
+                    new_op_head.block_header.hash()
                 );
 
                 out_batches.push(op_batch);

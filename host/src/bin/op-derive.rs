@@ -28,7 +28,6 @@ use std::cell::RefCell;
 use alloy_sol_types::SolInterface;
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use ethers_core::types::{Block, Transaction, TransactionReceipt, H256};
 use std::collections::{HashMap, VecDeque};
 use zeth_lib::{
     host::provider::{new_provider, BlockQuery},
@@ -43,7 +42,12 @@ use zeth_lib::{
         OpSystemInfo,
     },
 };
-use zeth_primitives::{batch::Batch, block::Header, Address, BlockHash};
+use zeth_primitives::{
+    batch::Batch,
+    block::Header,
+    transactions::{ethereum::EthereumTxEssence, optimism::OptimismTxEssence, TxEssence},
+    Address, BlockHash,
+};
 
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
@@ -131,17 +135,15 @@ async fn main() -> Result<()> {
 }
 
 pub trait BatcherDb {
-    fn get_full_op_block(&mut self, query: &BlockQuery) -> Result<Block<Transaction>>;
-    fn get_full_eth_block(&mut self, query: &BlockQuery) -> Result<Block<Transaction>>;
-    fn get_partial_eth_block(&mut self, query: &BlockQuery) -> Result<Block<H256>>;
-    fn get_eth_block_receipts(&mut self, query: &BlockQuery) -> Result<Vec<TransactionReceipt>>;
+    fn get_full_op_block(&mut self, query: &BlockQuery) -> Result<BlockInput<OptimismTxEssence>>;
+    fn get_full_eth_block(&mut self, query: &BlockQuery) -> Result<BlockInput<EthereumTxEssence>>;
+    fn get_eth_block_header(&mut self, query: &BlockQuery) -> Result<Header>;
 }
 
 pub struct MemDb {
-    pub full_op_block: HashMap<BlockQuery, Block<Transaction>>,
-    pub full_eth_block: HashMap<BlockQuery, Block<Transaction>>,
-    pub partial_eth_block: HashMap<BlockQuery, Block<H256>>,
-    pub eth_block_receipts: HashMap<BlockQuery, Vec<TransactionReceipt>>,
+    pub full_op_block: HashMap<BlockQuery, BlockInput<OptimismTxEssence>>,
+    pub full_eth_block: HashMap<BlockQuery, BlockInput<EthereumTxEssence>>,
+    pub eth_block_header: HashMap<BlockQuery, Header>,
 }
 
 impl MemDb {
@@ -149,27 +151,22 @@ impl MemDb {
         MemDb {
             full_op_block: HashMap::new(),
             full_eth_block: HashMap::new(),
-            partial_eth_block: HashMap::new(),
-            eth_block_receipts: HashMap::new(),
+            eth_block_header: HashMap::new(),
         }
     }
 }
 
 impl BatcherDb for MemDb {
-    fn get_full_op_block(&mut self, query: &BlockQuery) -> Result<Block<Transaction>> {
+    fn get_full_op_block(&mut self, query: &BlockQuery) -> Result<BlockInput<OptimismTxEssence>> {
         Ok(self.full_op_block.get(query).unwrap().clone())
     }
 
-    fn get_full_eth_block(&mut self, query: &BlockQuery) -> Result<Block<Transaction>> {
+    fn get_full_eth_block(&mut self, query: &BlockQuery) -> Result<BlockInput<EthereumTxEssence>> {
         Ok(self.full_eth_block.get(query).unwrap().clone())
     }
 
-    fn get_partial_eth_block(&mut self, query: &BlockQuery) -> Result<Block<H256>> {
-        Ok(self.partial_eth_block.get(query).unwrap().clone())
-    }
-
-    fn get_eth_block_receipts(&mut self, query: &BlockQuery) -> Result<Vec<TransactionReceipt>> {
-        Ok(self.eth_block_receipts.get(query).unwrap().clone())
+    fn get_eth_block_header(&mut self, query: &BlockQuery) -> Result<Header> {
+        Ok(self.eth_block_header.get(query).unwrap().clone())
     }
 }
 
@@ -200,50 +197,81 @@ impl RpcDb {
 }
 
 impl BatcherDb for RpcDb {
-    fn get_full_op_block(&mut self, query: &BlockQuery) -> Result<Block<Transaction>> {
+    fn get_full_op_block(&mut self, query: &BlockQuery) -> Result<BlockInput<OptimismTxEssence>> {
         let mut provider = new_provider(
             op_cache_path(&self.cache, query.block_no),
             self.op_rpc_url.clone(),
         )?;
-        let block = provider.get_full_block(query)?;
+        let block = {
+            let ethers_block = provider.get_full_block(query)?;
+            BlockInput {
+                block_header: ethers_block.clone().try_into().unwrap(),
+                transactions: ethers_block
+                    .transactions
+                    .into_iter()
+                    .map(|tx| tx.try_into().unwrap())
+                    .collect(),
+                receipts: None,
+            }
+        };
         self.mem_db.full_op_block.insert(query.clone(), block);
         provider.save()?;
         self.mem_db.get_full_op_block(query)
     }
 
-    fn get_full_eth_block(&mut self, query: &BlockQuery) -> Result<Block<Transaction>> {
+    fn get_full_eth_block(&mut self, query: &BlockQuery) -> Result<BlockInput<EthereumTxEssence>> {
         let mut provider = new_provider(
             eth_cache_path(&self.cache, query.block_no),
             self.eth_rpc_url.clone(),
         )?;
-        let block = provider.get_full_block(query)?;
+        let block = {
+            let ethers_block = provider.get_full_block(query)?;
+            let block_header: Header = ethers_block.clone().try_into().unwrap();
+            // include receipts when needed
+            let can_contain_deposits = zeth_lib::optimism::deposits::can_contain(
+                &CHAIN_SPEC.deposit_contract,
+                &block_header.logs_bloom,
+            );
+            let can_contain_config = zeth_lib::optimism::system_config::can_contain(
+                &CHAIN_SPEC.system_config_contract,
+                &block_header.logs_bloom,
+            );
+            let receipts = if can_contain_config || can_contain_deposits {
+                let receipts = provider.get_block_receipts(query)?;
+                Some(
+                    receipts
+                        .into_iter()
+                        .map(|receipt| receipt.try_into())
+                        .collect::<Result<Vec<_>, _>>()
+                        .context("invalid receipt")?,
+                )
+            } else {
+                None
+            };
+            BlockInput {
+                block_header,
+                transactions: ethers_block
+                    .transactions
+                    .into_iter()
+                    .map(|tx| tx.try_into().unwrap())
+                    .collect(),
+                receipts,
+            }
+        };
         self.mem_db.full_eth_block.insert(query.clone(), block);
         provider.save()?;
         self.mem_db.get_full_eth_block(query)
     }
 
-    fn get_partial_eth_block(&mut self, query: &BlockQuery) -> Result<Block<H256>> {
+    fn get_eth_block_header(&mut self, query: &BlockQuery) -> Result<Header> {
         let mut provider = new_provider(
             eth_cache_path(&self.cache, query.block_no),
             self.eth_rpc_url.clone(),
         )?;
-        let block = provider.get_partial_block(query)?;
-        self.mem_db.partial_eth_block.insert(query.clone(), block);
+        let header = provider.get_partial_block(query)?.try_into()?;
+        self.mem_db.eth_block_header.insert(query.clone(), header);
         provider.save()?;
-        self.mem_db.get_partial_eth_block(query)
-    }
-
-    fn get_eth_block_receipts(&mut self, query: &BlockQuery) -> Result<Vec<TransactionReceipt>> {
-        let mut provider = new_provider(
-            eth_cache_path(&self.cache, query.block_no),
-            self.eth_rpc_url.clone(),
-        )?;
-        let receipts = provider.get_block_receipts(query)?;
-        self.mem_db
-            .eth_block_receipts
-            .insert(query.clone(), receipts);
-        provider.save()?;
-        self.mem_db.get_eth_block_receipts(query)
+        self.mem_db.get_eth_block_header(query)
     }
 }
 
@@ -258,7 +286,13 @@ fn derive<D: BatcherDb>(db: &mut D, head_block_no: u64, block_count: u64) -> Res
     })?;
 
     let set_l1_block_values = {
-        let system_tx_data = op_head.transactions.first().unwrap().input.to_vec();
+        let system_tx_data = op_head
+            .transactions
+            .first()
+            .unwrap()
+            .essence
+            .data()
+            .to_vec();
         let call = OpSystemInfo::OpSystemInfoCalls::abi_decode(&system_tx_data, true)
             .expect("Could not decode call data");
         match call {
@@ -275,22 +309,22 @@ fn derive<D: BatcherDb>(db: &mut D, head_block_no: u64, block_count: u64) -> Res
     op_chain_config.system_config.l1_fee_scalar = set_l1_block_values.l1_fee_scalar;
 
     println!("Fetch eth head {}", eth_block_no);
-    let eth_head = db.get_partial_eth_block(&BlockQuery {
+    let eth_head = db.get_eth_block_header(&BlockQuery {
         block_no: eth_block_no,
     })?;
-    if eth_head.hash.unwrap().0.as_slice() != eth_block_hash.as_slice() {
+    if eth_head.hash() != eth_block_hash.as_slice() {
         bail!("Ethereum head block hash mismatch.")
     }
     let op_state = RefCell::new(State {
         current_l1_block_number: eth_block_no,
-        current_l1_block_hash: BlockHash::from(eth_head.hash.unwrap().0),
+        current_l1_block_hash: BlockHash::from(eth_head.hash()),
         safe_head: BlockInfo {
-            hash: op_head.hash.unwrap().0.into(),
-            timestamp: op_head.timestamp.try_into().unwrap(),
+            hash: op_head.block_header.hash(),
+            timestamp: op_head.block_header.timestamp.try_into().unwrap(),
         },
         epoch: Epoch {
             number: eth_block_no,
-            hash: eth_head.hash.unwrap().0.into(),
+            hash: eth_head.hash(),
             timestamp: eth_head.timestamp.try_into().unwrap(),
         },
         next_epoch: None,
@@ -321,74 +355,34 @@ fn derive<D: BatcherDb>(db: &mut D, head_block_no: u64, block_count: u64) -> Res
         let eth_block = db
             .get_full_eth_block(&block_query)
             .context("block not found")?;
-        let header: Header = eth_block
-            .clone()
-            .try_into()
-            .context("invalid block header")?;
 
         let epoch = Epoch {
             number: eth_block_no,
-            hash: eth_block.hash.unwrap().0.into(),
-            timestamp: eth_block.timestamp.as_u64(),
+            hash: eth_block.block_header.hash(),
+            timestamp: eth_block.block_header.timestamp.try_into().unwrap(),
         };
         op_epoch_queue.push_back(epoch);
         deque_next_epoch_if_none(&op_state, &mut op_epoch_queue)?;
 
-        let can_contain_deposits = zeth_lib::optimism::deposits::can_contain(
-            &CHAIN_SPEC.deposit_contract,
-            &header.logs_bloom,
-        );
-        let can_contain_config = zeth_lib::optimism::system_config::can_contain(
-            &CHAIN_SPEC.system_config_contract,
-            &header.logs_bloom,
-        );
-
-        // include receipts when needed
-        let receipts = if can_contain_config || can_contain_deposits {
-            println!("Fetch eth block receipts {}", eth_block_no);
-            let receipts = db
-                .get_eth_block_receipts(&block_query)
-                .context("block not found")?;
-            Some(
-                receipts
-                    .into_iter()
-                    .map(|receipt| receipt.try_into())
-                    .collect::<Result<Vec<_>, _>>()
-                    .context("invalid receipt")?,
-            )
-        } else {
-            None
-        };
-
-        let block_input = BlockInput {
-            block_header: header,
-            receipts: receipts.clone(),
-            transactions: eth_block
-                .transactions
-                .into_iter()
-                .map(|tx| tx.try_into().unwrap())
-                .collect(),
-        };
-
         // derive batches from eth block
-        if receipts.is_some() {
+        if eth_block.receipts.is_some() {
             println!("Process config and batches");
             // update the system config
             op_system_config
-                .update(&op_chain_config, &block_input)
+                .update(&op_chain_config, &eth_block)
                 .context("failed to update system config")?;
             // process all batcher transactions
             BatcherTransactions::process(
                 op_chain_config.batch_inbox,
                 op_system_config.batch_sender,
-                block_input.block_header.number,
-                &block_input.transactions,
+                eth_block.block_header.number,
+                &eth_block.transactions,
                 &op_buffer,
             )
             .context("failed to create batcher transactions")?;
         };
 
-        eth_block_inputs.push(block_input);
+        eth_block_inputs.push(eth_block);
 
         // derive op blocks from batches
         op_state.borrow_mut().current_l1_block_number = eth_block_no;
@@ -446,10 +440,9 @@ fn derive<D: BatcherDb>(db: &mut D, head_block_no: u64, block_count: u64) -> Res
                         block_no: op_block_no,
                     };
                     println!("Fetch op block {}", op_block_no);
-                    let op_block = db
-                        .get_full_op_block(&block_query)
-                        .context("block not found")?;
-                    op_block.try_into().context("invalid block header")?
+                    db.get_full_op_block(&block_query)
+                        .context("block not found")?
+                        .block_header
                 };
 
                 op_state.safe_head = BlockInfo {

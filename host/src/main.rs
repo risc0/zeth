@@ -317,7 +317,7 @@ where
         );
 
         let expected_hash = init.fini_block.hash();
-        let found_hash: BlockHash = session.journal.decode().unwrap();
+        let found_hash: BlockHash = session.journal.unwrap().decode().unwrap();
 
         if found_hash == expected_hash {
             info!("Block hash (from executor): {}", found_hash);

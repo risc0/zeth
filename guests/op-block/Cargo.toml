@@ -6,7 +6,6 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-k256 = { version = "=0.13.1", features = ["std", "ecdsa"], default_features = false }
 risc0-zkvm = { version = "0.19", default-features = false, features = ['std'] }
 zeth-lib = { path = "../../lib", default-features = false }
 

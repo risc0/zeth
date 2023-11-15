@@ -20,8 +20,9 @@ use ethers_core::types::{
     transaction::eip2930::{
         AccessList as EthersAccessList, AccessListItem as EthersAccessListItem,
     },
-    Block as EthersBlock, Bytes as EthersBytes, Transaction as EthersTransaction,
-    Withdrawal as EthersWithdrawal, H160 as EthersH160, H256 as EthersH256, U256 as EthersU256,
+    Block as EthersBlock, Bytes as EthersBytes, EIP1186ProofResponse,
+    Transaction as EthersTransaction, Withdrawal as EthersWithdrawal, H160 as EthersH160,
+    H256 as EthersH256, U256 as EthersU256,
 };
 
 use crate::{
@@ -35,6 +36,7 @@ use crate::{
         optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
         Transaction, TxEssence,
     },
+    trie::StateAccount,
     withdrawal::Withdrawal,
 };
 
@@ -252,5 +254,17 @@ impl TryFrom<EthersWithdrawal> for Withdrawal {
                 .try_into()
                 .map_err(|err| anyhow!("invalid amount: {}", err))?,
         })
+    }
+}
+
+/// Conversion from `EIP1186ProofResponse` to the local [StateAccount].
+impl From<EIP1186ProofResponse> for StateAccount {
+    fn from(response: EIP1186ProofResponse) -> Self {
+        StateAccount {
+            nonce: response.nonce.as_u64(),
+            balance: from_ethers_u256(response.balance),
+            storage_root: from_ethers_h256(response.storage_hash),
+            code_hash: from_ethers_h256(response.code_hash),
+        }
     }
 }

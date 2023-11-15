@@ -19,17 +19,15 @@ use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, NoneAsEmptyString};
 use zeth_lib::{
-    block_builder::BlockBuilder,
+    builder::{BlockBuilder, BlockBuilderStrategy, EthereumStrategy},
     consts::ChainSpec,
-    execution::ethereum::EthTxExecStrategy,
     host::{
+        preflight::Data,
         provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
         provider_db::ProviderDb,
-        Init,
     },
     input::Input,
     mem_db::{AccountState, DbAccount, MemDb},
-    preparation::EthHeaderPrepStrategy,
 };
 use zeth_primitives::{
     access_list::{AccessList, AccessListItem},
@@ -350,29 +348,29 @@ pub fn create_input(
     };
 
     // create and run the block builder once to create the initial DB
-    let mut builder = BlockBuilder::new(chain_spec, input)
+    let mut builder = BlockBuilder::new(&chain_spec, input)
         .with_db(provider_db)
-        .prepare_header::<EthHeaderPrepStrategy>()
+        .prepare_header::<<EthereumStrategy as BlockBuilderStrategy>::HeaderPrepStrategy>()
         .unwrap()
-        .execute_transactions::<EthTxExecStrategy>()
+        .execute_transactions::<<EthereumStrategy as BlockBuilderStrategy>::TxExecStrategy>()
         .unwrap();
-
     let provider_db = builder.mut_db().unwrap();
 
-    let init_proofs = provider_db.get_initial_proofs().unwrap();
-    let fini_proofs =
+    let parent_proofs = provider_db.get_initial_proofs().unwrap();
+    let proofs =
         get_state_update_proofs(provider_db, provider_db.get_latest_db().storage_keys()).unwrap();
     let ancestor_headers = provider_db.get_ancestor_headers().unwrap();
 
-    Init {
+    let preflight_data = Data {
         db: provider_db.get_initial_db().clone(),
-        init_block: parent_header,
-        init_proofs,
-        fini_block: header,
-        fini_transactions: transactions,
-        fini_withdrawals: withdrawals,
-        fini_proofs,
+        parent_block: parent_header,
+        parent_proofs,
+        block: header,
+        transactions,
+        withdrawals,
+        proofs,
         ancestor_headers,
-    }
-    .into()
+    };
+
+    preflight_data.into()
 }

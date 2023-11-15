@@ -17,11 +17,7 @@
 use std::path::PathBuf;
 
 use rstest::rstest;
-use zeth_lib::{
-    block_builder::BlockBuilder, execution::ethereum::EthTxExecStrategy,
-    finalization::BuildFromMemDbStrategy, initialization::MemDbInitStrategy,
-    preparation::EthHeaderPrepStrategy,
-};
+use zeth_lib::builder::{BlockBuilderStrategy, EthereumStrategy};
 use zeth_primitives::block::Header;
 use zeth_testeth::{
     ethtests::{read_eth_test, EthTestCase},
@@ -41,50 +37,39 @@ fn evm(
         .try_init();
 
     for EthTestCase {
-        json,
+        mut json,
         genesis,
         chain_spec,
     } in read_eth_test(path)
     {
-        let mut state = json.pre;
-        let mut parent_header = genesis;
-        let mut ancestor_headers = vec![];
-        for block in json.blocks {
-            // skip failing tests for now
-            if let Some(message) = block.expect_exception {
-                println!("skipping ({})", message);
-                break;
-            }
+        let state = json.pre;
+        let parent_header = genesis;
+        // only one block supported for now
+        assert_eq!(json.blocks.len(), 1);
+        let block = json.blocks.pop().unwrap();
 
-            let block_header = block.block_header.unwrap();
-            let expected_header: Header = block_header.clone().into();
-            assert_eq!(&expected_header.hash(), &block_header.hash);
-
-            let input = create_input(
-                &chain_spec,
-                state,
-                parent_header.clone(),
-                expected_header.clone(),
-                block.transactions,
-                block.withdrawals.unwrap_or_default(),
-            );
-            let builder = BlockBuilder::new(&chain_spec, input)
-                .initialize_database::<MemDbInitStrategy>()
-                .unwrap()
-                .prepare_header::<EthHeaderPrepStrategy>()
-                .unwrap()
-                .execute_transactions::<EthTxExecStrategy>()
-                .unwrap();
-            // update the state
-            state = builder.db().unwrap().into();
-
-            let result_header = builder.build::<BuildFromMemDbStrategy>().unwrap();
-            // the headers should match
-            assert_eq!(result_header, expected_header);
-
-            // update the headers
-            ancestor_headers.push(parent_header);
-            parent_header = block_header.into();
+        // skip failing tests for now
+        if let Some(message) = block.expect_exception {
+            println!("skipping ({})", message);
+            break;
         }
+
+        let block_header = block.block_header.unwrap();
+        let expected_header: Header = block_header.clone().into();
+        assert_eq!(&expected_header.hash(), &block_header.hash);
+
+        let input = create_input(
+            &chain_spec,
+            state,
+            parent_header.clone(),
+            expected_header.clone(),
+            block.transactions,
+            block.withdrawals.unwrap_or_default(),
+        );
+
+        let (header, _) = EthereumStrategy::build_from(&chain_spec, input).unwrap();
+
+        // the headers should match
+        assert_eq!(header, expected_header);
     }
 }

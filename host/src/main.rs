@@ -16,7 +16,7 @@ extern crate core;
 
 use std::{fmt::Debug, time::Instant};
 
-use anyhow::{bail, Result};
+use anyhow::{Context, Result};
 use bonsai_sdk::alpha as bonsai_sdk;
 use clap::Parser;
 use ethers_core::types::Transaction as EthersTransaction;
@@ -30,12 +30,9 @@ use zeth_guests::{
     ETH_BLOCK_ELF, ETH_BLOCK_ID, ETH_BLOCK_PATH, OP_BLOCK_ELF, OP_BLOCK_ID, OP_BLOCK_PATH,
 };
 use zeth_lib::{
-    block_builder::{
-        BlockBuilder, EthereumStrategyBundle, NetworkStrategyBundle, OptimismStrategyBundle,
-    },
+    builder::{BlockBuilderStrategy, EthereumStrategy, OptimismStrategy},
     consts::{ChainSpec, Network, ETH_MAINNET_CHAIN_SPEC, OP_MAINNET_CHAIN_SPEC},
-    finalization::DebugBuildFromMemDbStrategy,
-    initialization::MemDbInitStrategy,
+    host::{preflight::Preflight, verify::Verifier},
     input::Input,
 };
 use zeth_primitives::BlockHash;
@@ -95,7 +92,7 @@ async fn main() -> Result<()> {
 
     match args.network {
         Network::Ethereum => {
-            run_with_bundle::<EthereumStrategyBundle>(
+            run::<EthereumStrategy>(
                 args,
                 ETH_MAINNET_CHAIN_SPEC.clone(),
                 ETH_BLOCK_ELF,
@@ -105,7 +102,7 @@ async fn main() -> Result<()> {
             .await
         }
         Network::Optimism => {
-            run_with_bundle::<OptimismStrategyBundle>(
+            run::<OptimismStrategy>(
                 args,
                 OP_MAINNET_CHAIN_SPEC.clone(),
                 OP_BLOCK_ELF,
@@ -117,7 +114,7 @@ async fn main() -> Result<()> {
     }
 }
 
-async fn run_with_bundle<N: NetworkStrategyBundle>(
+async fn run<N: BlockBuilderStrategy>(
     args: Args,
     chain_spec: ChainSpec,
     guest_elf: &[u8],
@@ -127,7 +124,6 @@ async fn run_with_bundle<N: NetworkStrategyBundle>(
 where
     N::TxEssence: 'static + Send + TryFrom<EthersTransaction> + Serialize + Deserialize<'static>,
     <N::TxEssence as TryFrom<EthersTransaction>>::Error: Debug,
-    <N::Database as revm::primitives::db::Database>::Error: Debug,
 {
     // Fetch all of the initial data
     let rpc_cache = args
@@ -136,121 +132,24 @@ where
         .map(|dir| cache_file_path(dir, &args.network.to_string(), args.block_no, "json.gz"));
 
     let init_spec = chain_spec.clone();
-    let init = tokio::task::spawn_blocking(move || {
-        zeth_lib::host::get_initial_data::<N>(init_spec, rpc_cache, args.rpc_url, args.block_no)
-            .expect("Could not init")
+    let preflight_result = tokio::task::spawn_blocking(move || {
+        N::run_preflight(init_spec, rpc_cache, args.rpc_url, args.block_no)
     })
     .await?;
+    let preflight_data = preflight_result.context("preflight failed")?;
 
-    let input: Input<N::TxEssence> = init.clone().into();
+    // Create the guest input from [Init]
+    let input: Input<N::TxEssence> = preflight_data.clone().into();
 
     // Verify that the transactions run correctly
-    {
-        info!("Running from memory ...");
+    info!("Running from memory ...");
+    let (header, state_trie) =
+        N::build_from(&chain_spec, input.clone()).context("Error while building block")?;
 
-        // todo: extend to use [ConfiguredBlockBuilder]
-        let block_builder = BlockBuilder::new(&chain_spec, input.clone())
-            .initialize_database::<MemDbInitStrategy>()
-            .expect("Error initializing MemDb from Input")
-            .prepare_header::<N::HeaderPrepStrategy>()
-            .expect("Error creating initial block header")
-            .execute_transactions::<N::TxExecStrategy>()
-            .expect("Error while running transactions");
+    info!("Verifying final state using provider data ...");
+    preflight_data.verify_block(&header, &state_trie)?;
 
-        let fini_db = block_builder.db().unwrap().clone();
-        let accounts_len = fini_db.accounts_len();
-
-        let (validated_header, storage_deltas) = block_builder
-            .build::<DebugBuildFromMemDbStrategy>()
-            .expect("Error while verifying final state");
-
-        info!(
-            "Memory-backed execution is Done! Database contains {} accounts",
-            accounts_len
-        );
-
-        // Verify final state
-        info!("Verifying final state using provider data ...");
-        let errors = zeth_lib::host::verify_state(fini_db, init.fini_proofs, storage_deltas)
-            .expect("Could not verify final state!");
-        for (address, address_errors) in &errors {
-            error!(
-                "Verify found {:?} error(s) for address {:?}",
-                address_errors.len(),
-                address
-            );
-            for error in address_errors {
-                match error {
-                    zeth_lib::host::VerifyError::BalanceMismatch {
-                        rpc_value,
-                        our_value,
-                        difference,
-                    } => error!(
-                        "  Error: BalanceMismatch: rpc_value={} our_value={} difference={}",
-                        rpc_value, our_value, difference
-                    ),
-                    _ => error!("  Error: {:?}", error),
-                }
-            }
-        }
-
-        let errors_len = errors.len();
-        if errors_len > 0 {
-            error!(
-                "Verify found {:?} account(s) with error(s) ({}% correct)",
-                errors_len,
-                (100.0 * (accounts_len - errors_len) as f64 / accounts_len as f64)
-            );
-        }
-
-        if validated_header.base_fee_per_gas != init.fini_block.base_fee_per_gas {
-            error!(
-                "Base fee mismatch {} (expected {})",
-                validated_header.base_fee_per_gas, init.fini_block.base_fee_per_gas
-            );
-        }
-
-        if validated_header.state_root != init.fini_block.state_root {
-            error!(
-                "State root mismatch {} (expected {})",
-                validated_header.state_root, init.fini_block.state_root
-            );
-        }
-
-        if validated_header.transactions_root != init.fini_block.transactions_root {
-            error!(
-                "Transactions root mismatch {} (expected {})",
-                validated_header.transactions_root, init.fini_block.transactions_root
-            );
-        }
-
-        if validated_header.receipts_root != init.fini_block.receipts_root {
-            error!(
-                "Receipts root mismatch {} (expected {})",
-                validated_header.receipts_root, init.fini_block.receipts_root
-            );
-        }
-
-        if validated_header.withdrawals_root != init.fini_block.withdrawals_root {
-            error!(
-                "Withdrawals root mismatch {:?} (expected {:?})",
-                validated_header.withdrawals_root, init.fini_block.withdrawals_root
-            );
-        }
-
-        let found_hash = validated_header.hash();
-        let expected_hash = init.fini_block.hash();
-        if found_hash.as_slice() != expected_hash.as_slice() {
-            error!(
-                "Final block hash mismatch {} (expected {})",
-                found_hash, expected_hash,
-            );
-
-            bail!("Invalid block hash");
-        }
-
-        info!("Final block hash derived successfully. {}", found_hash)
-    }
+    info!("Final block hash derived successfully. {}", header.hash());
 
     // Run in the executor (if requested)
     if let Some(segment_limit_po2) = args.local_exec {
@@ -316,7 +215,7 @@ where
             session.segments.len() * (1 << segment_limit_po2)
         );
 
-        let expected_hash = init.fini_block.hash();
+        let expected_hash = preflight_data.block.hash();
         let found_hash: BlockHash = session.journal.decode().unwrap();
 
         if found_hash == expected_hash {
@@ -400,7 +299,7 @@ where
                     .verify(guest_id)
                     .expect("Receipt verification failed");
 
-                let expected_hash = init.fini_block.hash();
+                let expected_hash = preflight_data.block.hash();
                 let found_hash: BlockHash = receipt.journal.decode().unwrap();
 
                 if found_hash == expected_hash {

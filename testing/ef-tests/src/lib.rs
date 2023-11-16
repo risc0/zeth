@@ -372,5 +372,5 @@ pub fn create_input(
         ancestor_headers,
     };
 
-    preflight_data.into()
+    preflight_data.try_into().unwrap()
 }

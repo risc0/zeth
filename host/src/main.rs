@@ -215,7 +215,7 @@ where
             session.segments.len() * (1 << segment_limit_po2)
         );
 
-        let expected_hash = preflight_data.block.hash();
+        let expected_hash = preflight_data.header.hash();
         let found_hash: BlockHash = session.journal.decode().unwrap();
 
         if found_hash == expected_hash {
@@ -299,7 +299,7 @@ where
                     .verify(guest_id)
                     .expect("Receipt verification failed");
 
-                let expected_hash = preflight_data.block.hash();
+                let expected_hash = preflight_data.header.hash();
                 let found_hash: BlockHash = receipt.journal.decode().unwrap();
 
                 if found_hash == expected_hash {

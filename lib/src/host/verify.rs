@@ -87,7 +87,7 @@ impl<E: TxEssence> Verifier for preflight::Data<E> {
             );
         }
 
-        verify_header(header, &self.block)
+        verify_header(header, &self.header)
     }
 }
 

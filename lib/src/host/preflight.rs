@@ -36,6 +36,7 @@ use crate::{
     host::{
         mpt::{orphaned_digests, resolve_digests, shorten_key},
         provider::{new_provider, BlockQuery},
+        provider_db::ProviderDb,
     },
     input::{Input, StorageEntry},
     mem_db::MemDb,
@@ -45,9 +46,9 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct Data<E: TxEssence> {
     pub db: MemDb,
-    pub parent_block: Header,
+    pub parent_header: Header,
     pub parent_proofs: HashMap<Address, EIP1186ProofResponse>,
-    pub block: Header,
+    pub header: Header,
     pub transactions: Vec<Transaction<E>>,
     pub withdrawals: Vec<Withdrawal>,
     pub proofs: HashMap<Address, EIP1186ProofResponse>,
@@ -89,6 +90,7 @@ where
             parent_block.number.unwrap(),
             parent_block.hash.unwrap()
         );
+        let parent_header: Header = parent_block.try_into().context("invalid parent block")?;
 
         // Fetch the target block
         let block = provider.get_full_block(&BlockQuery { block_no })?;
@@ -101,13 +103,10 @@ where
         info!("Transaction count: {:?}", block.transactions.len());
 
         // Create the provider DB
-        let provider_db = crate::host::provider_db::ProviderDb::new(
-            provider,
-            parent_block.number.unwrap().as_u64(),
-        );
+        let provider_db = ProviderDb::new(provider, parent_header.number);
 
         // Create the input data
-        let input = new_preflight_input(block.clone(), parent_block.clone()).context("context")?;
+        let input = new_preflight_input(block.clone(), parent_header.clone())?;
         let transactions = input.transactions.clone();
         let withdrawals = input.withdrawals.clone();
 
@@ -136,9 +135,9 @@ where
 
         Ok(Data {
             db: provider_db.get_initial_db().clone(),
-            parent_block: parent_block.try_into()?,
+            parent_header,
             parent_proofs,
-            block: block.try_into()?,
+            header: block.try_into().context("invalid block")?,
             transactions,
             withdrawals,
             proofs,
@@ -147,9 +146,9 @@ where
     }
 }
 
-fn new_preflight_input<E, T>(
+fn new_preflight_input<E>(
     block: EthersBlock<EthersTransaction>,
-    parent_block: EthersBlock<T>,
+    parent_header: Header,
 ) -> Result<Input<E>>
 where
     E: TxEssence + TryFrom<EthersTransaction>,
@@ -188,7 +187,7 @@ where
         parent_state_trie: Default::default(),
         parent_storage: Default::default(),
         contracts: Default::default(),
-        parent_header: parent_block.try_into().context("invalid parent block")?,
+        parent_header,
         ancestor_headers: Default::default(),
     };
     Ok(input)
@@ -212,7 +211,7 @@ impl<E: TxEssence> From<Data<E>> for Input<E> {
         }
 
         // extract the state trie
-        let state_root = data.parent_block.state_root;
+        let state_root = data.parent_header.state_root;
         let state_trie = nodes_by_reference
             .remove(&MptNodeReference::Digest(state_root))
             .expect("State root node not found");
@@ -253,12 +252,12 @@ impl<E: TxEssence> From<Data<E>> for Input<E> {
 
         // Create the block builder input
         Input {
-            parent_header: data.parent_block,
-            beneficiary: data.block.beneficiary,
-            gas_limit: data.block.gas_limit,
-            timestamp: data.block.timestamp,
-            extra_data: data.block.extra_data.0.clone().into(),
-            mix_hash: data.block.mix_hash,
+            parent_header: data.parent_header,
+            beneficiary: data.header.beneficiary,
+            gas_limit: data.header.gas_limit,
+            timestamp: data.header.timestamp,
+            extra_data: data.header.extra_data.0.clone().into(),
+            mix_hash: data.header.mix_hash,
             transactions: data.transactions,
             withdrawals: data.withdrawals,
             parent_state_trie: state_trie,

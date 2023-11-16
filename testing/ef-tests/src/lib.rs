@@ -363,9 +363,9 @@ pub fn create_input(
 
     let preflight_data = Data {
         db: provider_db.get_initial_db().clone(),
-        parent_block: parent_header,
+        parent_header,
         parent_proofs,
-        block: header,
+        header,
         transactions,
         withdrawals,
         proofs,

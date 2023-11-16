@@ -208,7 +208,8 @@ impl<E: TxEssence> TryFrom<Data<E>> for Input<E> {
             }
         }
 
-        let (state_trie, storage) = bar(
+        // construct the sparse MPTs from the inclusion proofs
+        let (state_trie, storage) = proofs_to_tries(
             data.parent_header.state_root,
             data.parent_proofs,
             data.proofs,
@@ -242,7 +243,7 @@ impl<E: TxEssence> TryFrom<Data<E>> for Input<E> {
     }
 }
 
-fn bar(
+fn proofs_to_tries(
     state_root: B256,
     parent_proofs: HashMap<Address, EIP1186ProofResponse>,
     proofs: HashMap<Address, EIP1186ProofResponse>,
@@ -253,9 +254,7 @@ fn bar(
         return Ok((MptNode::default(), storage));
     }
 
-    let mut nodes_by_reference = HashMap::new();
-    let empty_node = MptNode::default();
-    nodes_by_reference.insert(empty_node.reference(), empty_node);
+    let mut state_nodes = HashMap::new();
 
     let mut state_root_node = MptNode::default();
     for (address, proof) in parent_proofs {
@@ -263,17 +262,17 @@ fn bar(
         let proof_trie = from_proof(&proof_nodes)?;
         ensure!(proof_trie.hash() == state_root, "state root mismatch");
 
-        if let Some(n) = proof_nodes.first() {
-            state_root_node = n.clone();
+        if let Some(node) = proof_nodes.first() {
+            state_root_node = node.clone();
         }
 
         proof_nodes.into_iter().for_each(|node| {
-            nodes_by_reference.insert(node.reference(), node);
+            state_nodes.insert(node.reference(), node);
         });
 
         let fini_proofs = proofs.get(&address).unwrap();
 
-        add_deleted_nodes(address, &fini_proofs.account_proof, &mut nodes_by_reference)?;
+        add_deleted_nodes(address, &fini_proofs.account_proof, &mut state_nodes)?;
 
         let storage_root = from_ethers_h256(proof.storage_hash);
 
@@ -283,29 +282,27 @@ fn bar(
             continue;
         }
 
+        let mut storage_nodes = HashMap::new();
+
         let mut storage_root_node = MptNode::default();
         for storage_proof in &proof.storage_proof {
             let proof_nodes = parse_proof(&storage_proof.proof)?;
             let proof_trie = from_proof(&proof_nodes)?;
             ensure!(proof_trie.hash() == storage_root, "storage root mismatch");
 
-            if let Some(n) = proof_nodes.first() {
-                storage_root_node = n.clone();
+            if let Some(node) = proof_nodes.first() {
+                storage_root_node = node.clone();
             }
 
             proof_nodes.into_iter().for_each(|node| {
-                nodes_by_reference.insert(node.reference(), node);
+                storage_nodes.insert(node.reference(), node);
             });
         }
 
         for storage_proof in &fini_proofs.storage_proof {
-            add_deleted_nodes(
-                storage_proof.key,
-                &storage_proof.proof,
-                &mut nodes_by_reference,
-            )?;
+            add_deleted_nodes(storage_proof.key, &storage_proof.proof, &mut storage_nodes)?;
         }
-        let storage_trie = resolve_digests(&storage_root_node, &nodes_by_reference);
+        let storage_trie = resolve_digests(&storage_root_node, &storage_nodes);
         assert_eq!(storage_trie.hash(), storage_root);
 
         let slots = proof
@@ -315,7 +312,7 @@ fn bar(
             .collect();
         storage.insert(address, (storage_trie, slots));
     }
-    let state_trie = resolve_digests(&state_root_node, &nodes_by_reference);
+    let state_trie = resolve_digests(&state_root_node, &state_nodes);
     assert_eq!(state_trie.hash(), state_root);
 
     Ok((state_trie, storage))
@@ -330,7 +327,7 @@ fn node_from_digest(digest: B256) -> MptNode {
 
 fn add_deleted_nodes(
     key: impl AsRef<[u8]>,
-    proof: &Vec<impl AsRef<[u8]>>,
+    proof: &[impl AsRef<[u8]>],
     nodes_by_reference: &mut HashMap<MptNodeReference, MptNode>,
 ) -> Result<()> {
     if !proof.is_empty() {

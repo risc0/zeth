@@ -46,7 +46,7 @@ fn empty_blocks(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
         EthereumStrategy::run_preflight(ETH_MAINNET_CHAIN_SPEC.clone(), rpc_cache, None, block_no)
             .expect("Could not init");
     // Create input object
-    let mut input: Input<EthereumTxEssence> = init.clone().into();
+    let mut input: Input<EthereumTxEssence> = init.clone().try_into().unwrap();
     // Take out transaction and withdrawal execution data
     input.transactions = Default::default();
     input.withdrawals = Default::default();

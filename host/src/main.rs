@@ -139,7 +139,10 @@ where
     let preflight_data = preflight_result.context("preflight failed")?;
 
     // Create the guest input from [Init]
-    let input: Input<N::TxEssence> = preflight_data.clone().into();
+    let input: Input<N::TxEssence> = preflight_data
+        .clone()
+        .try_into()
+        .context("invalid preflight data")?;
 
     // Verify that the transactions run correctly
     info!("Running from memory ...");

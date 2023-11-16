@@ -12,29 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{fmt::Debug, iter::once};
+use std::fmt::Debug;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, ensure, Context, Ok, Result};
 use ethers_core::types::{
-    Block as EthersBlock, Bytes as EthersBytes, EIP1186ProofResponse,
-    Transaction as EthersTransaction,
+    Block as EthersBlock, EIP1186ProofResponse, Transaction as EthersTransaction,
 };
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashMap;
 use log::info;
 use zeth_primitives::{
     block::Header,
     ethers::{from_ethers_h160, from_ethers_h256, from_ethers_u256},
+    keccak::keccak,
     transactions::{Transaction, TxEssence},
     trie::{MptNode, MptNodeData, MptNodeReference, EMPTY_ROOT},
     withdrawal::Withdrawal,
-    Address,
+    Address, B256, U256,
 };
 
 use crate::{
     builder::{BlockBuilder, BlockBuilderStrategy},
     consts::ChainSpec,
     host::{
-        mpt::{orphaned_digests, resolve_digests, shorten_key},
+        mpt::{resolve_digests, shorten_key},
         provider::{new_provider, BlockQuery},
         provider_db::ProviderDb,
     },
@@ -193,14 +193,12 @@ where
     Ok(input)
 }
 
-impl<E: TxEssence> From<Data<E>> for Input<E> {
-    fn from(data: Data<E>) -> Input<E> {
-        // construct the proof tries
-        let (mut nodes_by_reference, mut storage) =
-            proofs_to_tries(data.parent_proofs.values().cloned().collect());
-        // there should be a trie and a list of storage slots for every account
-        assert_eq!(storage.len(), data.db.accounts_len());
+/// Converts the [Data] returned by the [Preflight] into the [Input] required by the
+/// [BlockBuilder].
+impl<E: TxEssence> TryFrom<Data<E>> for Input<E> {
+    type Error = anyhow::Error;
 
+    fn try_from(data: Data<E>) -> Result<Input<E>> {
         // collect the code from each account
         let mut contracts = HashMap::new();
         for account in data.db.accounts.values() {
@@ -210,36 +208,11 @@ impl<E: TxEssence> From<Data<E>> for Input<E> {
             }
         }
 
-        // extract the state trie
-        let state_root = data.parent_header.state_root;
-        let state_trie = nodes_by_reference
-            .remove(&MptNodeReference::Digest(state_root))
-            .expect("State root node not found");
-        assert_eq!(state_root, state_trie.hash());
-
-        // identify orphaned digests, that could lead to issues when deleting nodes
-        let mut orphans = HashSet::new();
-        for root in storage.values().map(|v| &v.0).chain(once(&state_trie)) {
-            let root = resolve_digests(root, &nodes_by_reference);
-            orphans.extend(orphaned_digests(&root));
-        }
-        // resolve those orphans using the proofs of the final state
-        for fini_proof in data.proofs.values() {
-            resolve_orphans(
-                &fini_proof.account_proof,
-                &mut orphans,
-                &mut nodes_by_reference,
-            );
-            for storage_proof in &fini_proof.storage_proof {
-                resolve_orphans(&storage_proof.proof, &mut orphans, &mut nodes_by_reference);
-            }
-        }
-
-        // resolve the pointers in the state root node and all storage root nodes
-        let state_trie = resolve_digests(&state_trie, &nodes_by_reference);
-        storage
-            .values_mut()
-            .for_each(|(n, _)| *n = resolve_digests(n, &nodes_by_reference));
+        let (state_trie, storage) = bar(
+            data.parent_header.state_root,
+            data.parent_proofs,
+            data.proofs,
+        )?;
 
         info!(
             "The partial state trie consists of {} nodes",
@@ -251,7 +224,7 @@ impl<E: TxEssence> From<Data<E>> for Input<E> {
         );
 
         // Create the block builder input
-        Input {
+        let input = Input {
             parent_header: data.parent_header,
             beneficiary: data.header.beneficiary,
             gas_limit: data.header.gas_limit,
@@ -261,80 +234,166 @@ impl<E: TxEssence> From<Data<E>> for Input<E> {
             transactions: data.transactions,
             withdrawals: data.withdrawals,
             parent_state_trie: state_trie,
-            parent_storage: storage.into_iter().collect(),
+            parent_storage: storage,
             contracts: contracts.into_values().collect(),
             ancestor_headers: data.ancestor_headers,
-        }
+        };
+        Ok(input)
     }
 }
 
-fn proofs_to_tries(
-    proofs: Vec<EIP1186ProofResponse>,
-) -> (
-    HashMap<MptNodeReference, MptNode>,
-    HashMap<Address, StorageEntry>,
-) {
-    // construct the proof tries
+fn bar(
+    state_root: B256,
+    parent_proofs: HashMap<Address, EIP1186ProofResponse>,
+    proofs: HashMap<Address, EIP1186ProofResponse>,
+) -> Result<(MptNode, HashMap<Address, StorageEntry>)> {
+    let mut storage: HashMap<Address, StorageEntry> = HashMap::with_capacity(parent_proofs.len());
+
+    if parent_proofs.is_empty() {
+        return Ok((MptNode::default(), storage));
+    }
+
     let mut nodes_by_reference = HashMap::new();
-    let mut storage = HashMap::new();
-    for proof in proofs {
-        // parse the nodes of the account proof
-        for bytes in &proof.account_proof {
-            let mpt_node = MptNode::decode(bytes).expect("Failed to decode state proof");
-            nodes_by_reference.insert(mpt_node.reference(), mpt_node);
+    let empty_node = MptNode::default();
+    nodes_by_reference.insert(empty_node.reference(), empty_node);
+
+    let mut state_root_node = MptNode::default();
+    for (address, proof) in parent_proofs {
+        let proof_nodes = parse_proof(&proof.account_proof)?;
+        let proof_trie = from_proof(&proof_nodes)?;
+        ensure!(proof_trie.hash() == state_root, "state root mismatch");
+
+        if let Some(n) = proof_nodes.first() {
+            state_root_node = n.clone();
         }
 
-        // process the proof for each storage entry
-        let mut root_node = None;
+        proof_nodes.into_iter().for_each(|node| {
+            nodes_by_reference.insert(node.reference(), node);
+        });
+
+        let fini_proofs = proofs.get(&address).unwrap();
+
+        add_deleted_nodes(address, &fini_proofs.account_proof, &mut nodes_by_reference)?;
+
+        let storage_root = from_ethers_h256(proof.storage_hash);
+
+        if proof.storage_proof.is_empty() {
+            let storage_root_node = node_from_digest(storage_root);
+            storage.insert(address, (storage_root_node, vec![]));
+            continue;
+        }
+
+        let mut storage_root_node = MptNode::default();
         for storage_proof in &proof.storage_proof {
-            // parse the nodes of the storage proof and return the root node
-            root_node = storage_proof
-                .proof
-                .iter()
-                .rev()
-                .map(|bytes| MptNode::decode(bytes).expect("Failed to decode storage proof"))
-                .inspect(|node| drop(nodes_by_reference.insert(node.reference(), node.clone())))
-                .last();
-            // the hash of the root node should match the proof's storage hash
-            assert_eq!(
-                root_node.as_ref().map_or(EMPTY_ROOT, |n| n.hash()),
-                from_ethers_h256(proof.storage_hash)
-            );
+            let proof_nodes = parse_proof(&storage_proof.proof)?;
+            let proof_trie = from_proof(&proof_nodes)?;
+            ensure!(proof_trie.hash() == storage_root, "storage root mismatch");
+
+            if let Some(n) = proof_nodes.first() {
+                storage_root_node = n.clone();
+            }
+
+            proof_nodes.into_iter().for_each(|node| {
+                nodes_by_reference.insert(node.reference(), node);
+            });
         }
 
-        let root_node = if let Some(root_node) = root_node {
-            root_node
-        } else if proof.storage_hash.0 == EMPTY_ROOT.0 {
-            MptNode::default()
-        } else {
-            // if there are no storage proofs but the root is non-empty, create a dummy
-            // as this is just the digest any tries to update this trie will fail
-            MptNodeData::Digest(from_ethers_h256(proof.storage_hash)).into()
-        };
-        // collect all storage slots with a proof
+        for storage_proof in &fini_proofs.storage_proof {
+            add_deleted_nodes(
+                storage_proof.key,
+                &storage_proof.proof,
+                &mut nodes_by_reference,
+            )?;
+        }
+        let storage_trie = resolve_digests(&storage_root_node, &nodes_by_reference);
+        assert_eq!(storage_trie.hash(), storage_root);
+
         let slots = proof
             .storage_proof
-            .into_iter()
-            .map(|p| zeth_primitives::U256::from_be_bytes(p.key.into()))
+            .iter()
+            .map(|p| U256::from_be_bytes(p.key.into()))
             .collect();
-
-        storage.insert(from_ethers_h160(proof.address), (root_node, slots));
+        storage.insert(address, (storage_trie, slots));
     }
-    (nodes_by_reference, storage)
+    let state_trie = resolve_digests(&state_root_node, &nodes_by_reference);
+    assert_eq!(state_trie.hash(), state_root);
+
+    Ok((state_trie, storage))
 }
 
-fn resolve_orphans(
-    nodes: &Vec<EthersBytes>,
-    orphans: &mut HashSet<MptNodeReference>,
+fn node_from_digest(digest: B256) -> MptNode {
+    match digest {
+        EMPTY_ROOT | B256::ZERO => MptNode::default(),
+        _ => MptNodeData::Digest(digest).into(),
+    }
+}
+
+fn add_deleted_nodes(
+    key: impl AsRef<[u8]>,
+    proof: &Vec<impl AsRef<[u8]>>,
     nodes_by_reference: &mut HashMap<MptNodeReference, MptNode>,
-) {
-    for node in nodes {
-        let mpt_node = MptNode::decode(node).expect("Failed to decode state proof");
-        for potential_orphan in shorten_key(mpt_node) {
-            let potential_orphan_hash = potential_orphan.reference();
-            if orphans.remove(&potential_orphan_hash) {
-                nodes_by_reference.insert(potential_orphan_hash, potential_orphan);
-            }
+) -> Result<()> {
+    if !proof.is_empty() {
+        let proof_nodes = parse_proof(proof)?;
+        let proof_trie = from_proof(&proof_nodes)?;
+        let value = proof_trie.get(&keccak(key))?;
+        if value.is_none() {
+            let leaf = proof_nodes.last().unwrap();
+
+            shorten_key(leaf).into_iter().for_each(|node| {
+                nodes_by_reference.insert(node.reference(), node);
+            });
         }
     }
+
+    Ok(())
+}
+
+fn parse_proof(proof: &[impl AsRef<[u8]>]) -> Result<Vec<MptNode>> {
+    Ok(proof
+        .iter()
+        .map(MptNode::decode)
+        .collect::<Result<Vec<_>, _>>()?)
+}
+
+/// Creates a Merkle Patricia tree from an EIP-1186 proof.
+pub fn from_proof(proof_nodes: &[MptNode]) -> Result<MptNode> {
+    let mut next: Option<MptNode> = None;
+    for (i, node) in proof_nodes.iter().enumerate().rev() {
+        // there is nothing to resolve in the last node of the proof
+        let Some(replacement) = next else {
+            next = Some(node.clone());
+            continue;
+        };
+
+        // otherwise, resolve the reference to the next node in the proof
+        let MptNodeReference::Digest(to_resolve) = replacement.reference() else {
+            bail!("node {} in proof is not referenced by hash", i + 1);
+        };
+
+        let resolved: MptNode = match node.as_data().clone() {
+            MptNodeData::Null | MptNodeData::Leaf(_, _) | MptNodeData::Digest(_) => {
+                bail!("node {} has no children to replace", i);
+            }
+            MptNodeData::Branch(mut children) => {
+                if let Some(child) = children.iter_mut().flatten().find(|child|
+                     matches!(child.as_data(), MptNodeData::Digest(digest) if digest == &to_resolve)) {
+                *child = Box::new(replacement);
+            } else {
+                bail!("node {} does not reference the successor", i);
+            }
+                MptNodeData::Branch(children).into()
+            }
+            MptNodeData::Extension(prefix, child) => {
+                if !matches!(child.as_data(), MptNodeData::Digest(dig) if dig == &to_resolve) {
+                    bail!("node {} does not reference the successor", i);
+                }
+                MptNodeData::Extension(prefix, Box::new(replacement)).into()
+            }
+        };
+
+        next = Some(resolved);
+    }
+
+    Ok(next.unwrap_or_default())
 }

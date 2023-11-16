@@ -47,43 +47,11 @@ pub fn resolve_digests(trie: &MptNode, node_store: &HashMap<MptNodeReference, Mp
     result
 }
 
-/// Returns all orphaned digests in the trie.
-pub fn orphaned_digests(trie: &MptNode) -> Vec<MptNodeReference> {
-    let mut result = Vec::new();
-    orphaned_digests_internal(trie, &mut result);
-    result
-}
-
-fn orphaned_digests_internal(trie: &MptNode, orphans: &mut Vec<MptNodeReference>) {
-    match trie.as_data() {
-        MptNodeData::Branch(children) => {
-            // iterate over all digest children
-            let mut digests = children.iter().flatten().filter(|node| node.is_digest());
-            // if there is exactly one digest child, it is an orphan
-            if let Some(orphan_digest) = digests.next() {
-                if digests.next().is_none() {
-                    orphans.push(orphan_digest.reference());
-                }
-            };
-            // recurse
-            children.iter().flatten().for_each(|child| {
-                orphaned_digests_internal(child, orphans);
-            });
-        }
-        MptNodeData::Extension(_, target) => {
-            orphaned_digests_internal(target, orphans);
-        }
-        MptNodeData::Null | MptNodeData::Leaf(_, _) | MptNodeData::Digest(_) => {}
-    }
-}
-
-pub fn shorten_key(node: MptNode) -> Vec<MptNode> {
+pub fn shorten_key(node: &MptNode) -> Vec<MptNode> {
     let mut res = Vec::new();
     let nibs = node.nibs();
     match node.as_data() {
-        MptNodeData::Null | MptNodeData::Branch(_) | MptNodeData::Digest(_) => {
-            res.push(node.clone())
-        }
+        MptNodeData::Null | MptNodeData::Branch(_) | MptNodeData::Digest(_) => {}
         MptNodeData::Leaf(_, value) => {
             for i in 0..=nibs.len() {
                 res.push(MptNodeData::Leaf(to_encoded_path(&nibs[i..], true), value.clone()).into())

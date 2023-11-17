@@ -18,10 +18,10 @@ use std::path::PathBuf;
 
 use rstest::rstest;
 use zeth_lib::builder::{BlockBuilderStrategy, EthereumStrategy};
-use zeth_primitives::block::Header;
+use zeth_primitives::{block::Header, trie::StateAccount};
 use zeth_testeth::{
+    create_input, ethers,
     ethtests::{read_eth_test, EthTestCase},
-    *,
 };
 
 #[rstest]
@@ -42,8 +42,6 @@ fn evm(
         chain_spec,
     } in read_eth_test(path)
     {
-        let state = json.pre;
-        let parent_header = genesis;
         // only one block supported for now
         assert_eq!(json.blocks.len(), 1);
         let block = json.blocks.pop().unwrap();
@@ -58,18 +56,41 @@ fn evm(
         let expected_header: Header = block_header.clone().into();
         assert_eq!(&expected_header.hash(), &block_header.hash);
 
+        // using the empty/default state for the input prepares all accounts for deletion
+        // this leads to larger input, but can never fail
+        let post_state = json.post.clone().unwrap_or_default();
+
         let input = create_input(
             &chain_spec,
-            state,
-            parent_header.clone(),
+            genesis,
+            json.pre,
             expected_header.clone(),
             block.transactions,
             block.withdrawals.unwrap_or_default(),
+            post_state,
         );
 
-        let (header, _) = EthereumStrategy::build_from(&chain_spec, input).unwrap();
+        let (header, state) = EthereumStrategy::build_from(&chain_spec, input).unwrap();
+
+        if let Some(post) = json.post {
+            let (exp_state, _) = ethers::build_tries(&post);
+
+            println!("diffing state trie:");
+            for diff in diff::slice(
+                &state.debug_rlp::<StateAccount>(),
+                &exp_state.debug_rlp::<StateAccount>(),
+            ) {
+                match diff {
+                    diff::Result::Left(l) => println!("✗{}", l),
+                    diff::Result::Right(r) => println!("✓{}", r),
+                    diff::Result::Both(l, _) => println!(" {}", l),
+                }
+            }
+            assert_eq!(state.hash(), exp_state.hash());
+        }
 
         // the headers should match
         assert_eq!(header, expected_header);
+        assert_eq!(header.hash(), expected_header.hash());
     }
 }

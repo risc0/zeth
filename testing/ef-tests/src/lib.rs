@@ -46,7 +46,7 @@ use zeth_primitives::{
     Address, Bloom, Bytes, RlpBytes, StorageKey, B256, B64, U256, U64,
 };
 
-use crate::ethers::{get_state_update_proofs, TestProvider};
+use crate::ethers::TestProvider;
 
 pub mod ethers;
 
@@ -103,7 +103,7 @@ impl From<DbAccount> for TestAccount {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TestState(pub HashMap<Address, TestAccount>);
 
@@ -310,17 +310,19 @@ pub const BIG_STACK_SIZE: usize = 8 * 1024 * 1024;
 
 pub fn create_input(
     chain_spec: &ChainSpec,
-    state: TestState,
     parent_header: Header,
+    parent_state: TestState,
     header: Header,
     transactions: Vec<TestTransaction>,
     withdrawals: Vec<Withdrawal>,
+    state: TestState,
 ) -> Input<EthereumTxEssence> {
     // create the provider DB
     let provider_db = ProviderDb::new(
         Box::new(TestProvider {
-            state,
+            state: parent_state,
             header: parent_header.clone(),
+            post: state,
         }),
         parent_header.number,
     );
@@ -355,8 +357,7 @@ pub fn create_input(
     let provider_db = builder.mut_db().unwrap();
 
     let parent_proofs = provider_db.get_initial_proofs().unwrap();
-    let proofs =
-        get_state_update_proofs(provider_db, provider_db.get_latest_db().storage_keys()).unwrap();
+    let proofs = provider_db.get_latest_proofs().unwrap();
     let ancestor_headers = provider_db.get_ancestor_headers().unwrap();
 
     let preflight_data = Data {

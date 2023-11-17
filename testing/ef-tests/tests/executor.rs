@@ -62,11 +62,12 @@ fn executor(
 
         let input = create_input(
             &chain_spec,
-            json.pre,
             genesis,
+            json.pre,
             expected_header.clone(),
             block.transactions,
             block.withdrawals.unwrap_or_default(),
+            json.post.unwrap(),
         );
 
         let env = ExecutorEnv::builder()

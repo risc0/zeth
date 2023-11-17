@@ -285,17 +285,15 @@ fn proof_internal(node: &MptNode, key_nibs: &[u8]) -> Result<Vec<Vec<u8>>, anyho
     let mut path: Vec<Vec<u8>> = match node.as_data() {
         MptNodeData::Null | MptNodeData::Leaf(_, _) => vec![],
         MptNodeData::Branch(children) => {
-            let mut path = Vec::new();
-            for node in children.iter().flatten() {
-                path.extend(proof_internal(node, &key_nibs[1..])?);
+            let (i, tail) = key_nibs.split_first().unwrap();
+            match &children[*i as usize] {
+                Some(child) => proof_internal(child, tail)?,
+                None => vec![],
             }
-            path
         }
         MptNodeData::Extension(_, child) => {
-            let ext_nibs = node.nibs();
-            let ext_len = ext_nibs.len();
-            if key_nibs[..ext_len] == ext_nibs {
-                proof_internal(child, &key_nibs[ext_len..])?
+            if let Some(tail) = key_nibs.strip_prefix(node.nibs().as_slice()) {
+                proof_internal(child, tail)?
             } else {
                 vec![]
             }

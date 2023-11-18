@@ -12,8 +12,53 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use anyhow::{bail, Result};
 use hashbrown::HashMap;
 use zeth_primitives::trie::{to_encoded_path, MptNode, MptNodeData, MptNodeReference};
+
+/// Creates a Merkle Patricia trie from an EIP-1186 proof.
+pub fn mpt_from_proof(proof_nodes: &[MptNode]) -> Result<MptNode> {
+    let mut next: Option<MptNode> = None;
+    for (i, node) in proof_nodes.iter().enumerate().rev() {
+        // there is nothing to replace for the last node
+        let Some(replacement) = next else {
+            next = Some(node.clone());
+            continue;
+        };
+
+        // the next node must have a digest reference
+        let MptNodeReference::Digest(ref child_ref) = replacement.reference() else {
+            bail!("node {} in proof is not referenced by hash", i + 1);
+        };
+        // find the child that references the next node
+        let resolved: MptNode = match node.as_data().clone() {
+            MptNodeData::Branch(mut children) => {
+                if let Some(child) = children.iter_mut().flatten().find(
+                    |child| matches!(child.as_data(), MptNodeData::Digest(d) if d == child_ref),
+                ) {
+                    *child = Box::new(replacement);
+                } else {
+                    bail!("node {} does not reference the successor", i);
+                }
+                MptNodeData::Branch(children).into()
+            }
+            MptNodeData::Extension(prefix, child) => {
+                if !matches!(child.as_data(), MptNodeData::Digest(d) if d == child_ref) {
+                    bail!("node {} does not reference the successor", i);
+                }
+                MptNodeData::Extension(prefix, Box::new(replacement)).into()
+            }
+            MptNodeData::Null | MptNodeData::Leaf(_, _) | MptNodeData::Digest(_) => {
+                bail!("node {} has no children to replace", i);
+            }
+        };
+
+        next = Some(resolved);
+    }
+
+    // the last node in the proof should be the root
+    Ok(next.unwrap_or_default())
+}
 
 /// Creates a new MPT trie where all the digests contained in `node_store` are resolved.
 pub fn resolve_digests(trie: &MptNode, node_store: &HashMap<MptNodeReference, MptNode>) -> MptNode {

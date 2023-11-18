@@ -44,12 +44,12 @@ use ethers_core::types::{
 use crate::{
     access_list::{AccessList, AccessListItem},
     block::Header,
-    signature::TxSignature,
     transactions::{
         ethereum::{
             EthereumTxEssence, TransactionKind, TxEssenceEip1559, TxEssenceEip2930, TxEssenceLegacy,
         },
         optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
+        signature::TxSignature,
         Transaction, TxEssence,
     },
     withdrawal::Withdrawal,

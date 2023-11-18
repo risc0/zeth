@@ -21,7 +21,9 @@ use serde::{Deserialize, Serialize};
 /// The `TxSignature` struct encapsulates the components of an ECDSA signature: `v`, `r`,
 /// and `s`. This signature can be used to recover the public key of the signer, ensuring
 /// the authenticity of the transaction.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, RlpEncodable, RlpMaxEncodedLen)]
+#[derive(
+    Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, RlpEncodable, RlpMaxEncodedLen,
+)]
 pub struct TxSignature {
     pub v: u64,
     pub r: U256,

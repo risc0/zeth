@@ -38,7 +38,7 @@ pub struct Batch {
 
 impl PartialOrd<Self> for Batch {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.essence.timestamp.partial_cmp(&other.essence.timestamp)
+        Some(self.cmp(other))
     }
 }
 

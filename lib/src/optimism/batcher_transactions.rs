@@ -69,7 +69,7 @@ impl BatcherTransactions<'_> {
                 continue;
             }
 
-            match BatcherTransaction::new(&tx.essence.data(), block_number) {
+            match BatcherTransaction::new(tx.essence.data(), block_number) {
                 Ok(batcher_tx) => {
                     buffer.push_back(batcher_tx);
                     #[cfg(not(target_os = "zkvm"))]

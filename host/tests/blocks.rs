@@ -15,7 +15,7 @@
 use std::{path::PathBuf, str::FromStr};
 
 use assert_cmd::Command;
-use risc0_zkvm::{serde::to_vec, Executor, ExecutorEnv, FileSegmentRef};
+use risc0_zkvm::{ExecutorEnv, ExecutorImpl, FileSegmentRef};
 use rstest::rstest;
 use tempfile::tempdir;
 use zeth_guests::ETH_BLOCK_ELF;
@@ -61,10 +61,11 @@ fn empty_blocks(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
     let env = ExecutorEnv::builder()
         .session_limit(None)
         .segment_limit_po2(20)
-        .add_input(&to_vec(&input).unwrap())
+        .write(&input)
+        .unwrap()
         .build()
         .unwrap();
-    let mut exec = Executor::from_elf(env, ETH_BLOCK_ELF).unwrap();
+    let mut exec = ExecutorImpl::from_elf(env, ETH_BLOCK_ELF).unwrap();
     // Run Executor
     let segment_dir = tempdir().unwrap();
     let session = exec

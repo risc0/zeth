@@ -119,6 +119,13 @@ impl TxEssence for OptimismTxEssence {
             OptimismTxEssence::OptimismDeposited(op) => op._alloy_rlp_payload_length(),
         }
     }
+    /// Returns a reference to the transaction's call data
+    fn data(&self) -> &Bytes {
+        match self {
+            OptimismTxEssence::Ethereum(eth) => eth.data(),
+            OptimismTxEssence::OptimismDeposited(op) => &op.data,
+        }
+    }
 }
 
 #[cfg(test)]

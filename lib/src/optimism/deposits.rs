@@ -103,10 +103,10 @@ fn to_deposit_transaction(
     log_index: usize,
     log: &Log,
 ) -> anyhow::Result<Transaction<OptimismTxEssence>> {
-    let from = U160::try_from_be_slice(log.topics[1].as_slice())
+    let from = U160::try_from_be_slice(&log.topics[1][12..])
         .context("invalid from")?
         .into();
-    let to = U160::try_from_be_slice(log.topics[2].as_slice())
+    let to = U160::try_from_be_slice(&log.topics[2][12..])
         .context("invalid to")?
         .into();
 

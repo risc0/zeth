@@ -309,7 +309,6 @@ impl MptNode {
     /// Computes and returns the 256-bit hash of the node.
     ///
     /// This method provides a unique identifier for the node based on its content.
-    #[inline]
     pub fn hash(&self) -> B256 {
         match self.data {
             MptNodeData::Null => EMPTY_ROOT,

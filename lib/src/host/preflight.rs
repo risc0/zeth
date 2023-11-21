@@ -34,7 +34,7 @@ use crate::{
     builder::{BlockBuilder, BlockBuilderStrategy},
     consts::ChainSpec,
     host::{
-        mpt::{mpt_from_proof, resolve_digests, shorten_key},
+        mpt::{is_not_included, mpt_from_proof, parse_proof, resolve_nodes, shorten_node_path},
         provider::{new_provider, BlockQuery},
         provider_db::ProviderDb,
     },
@@ -308,7 +308,7 @@ fn proofs_to_tries(
             add_orphaned_leafs(storage_proof.key, &storage_proof.proof, &mut storage_nodes)?;
         }
         // create the storage trie, from all the relevant nodes
-        let storage_trie = resolve_digests(&storage_root_node, &storage_nodes);
+        let storage_trie = resolve_nodes(&storage_root_node, &storage_nodes);
         assert_eq!(storage_trie.hash(), storage_root);
 
         // convert the slots to a vector of U256
@@ -319,7 +319,7 @@ fn proofs_to_tries(
             .collect();
         storage.insert(address, (storage_trie, slots));
     }
-    let state_trie = resolve_digests(&state_root_node, &state_nodes);
+    let state_trie = resolve_nodes(&state_root_node, &state_nodes);
     assert_eq!(state_trie.hash(), state_root);
 
     Ok((state_trie, storage))
@@ -333,28 +333,16 @@ fn add_orphaned_leafs(
 ) -> Result<()> {
     if !proof.is_empty() {
         let proof_nodes = parse_proof(proof).context("invalid proof encoding")?;
-        let proof_trie = mpt_from_proof(&proof_nodes).context("invalid proof")?;
-
-        // if the key is not in the trie, it has been deleted
-        let value = proof_trie.get(&keccak(key)).context("invalid proof")?;
-        if value.is_none() {
+        if is_not_included(&keccak(key), &proof_nodes)? {
             // add the leaf node to the nodes
             let leaf = proof_nodes.last().unwrap();
-            shorten_key(leaf).into_iter().for_each(|node| {
+            shorten_node_path(leaf).into_iter().for_each(|node| {
                 nodes_by_reference.insert(node.reference(), node);
             });
         }
     }
 
     Ok(())
-}
-
-/// Parses proof bytes into a vector of MPT nodes.
-fn parse_proof(proof: &[impl AsRef<[u8]>]) -> Result<Vec<MptNode>> {
-    Ok(proof
-        .iter()
-        .map(MptNode::decode)
-        .collect::<Result<Vec<_>, _>>()?)
 }
 
 /// Creates a new MPT node from a digest.

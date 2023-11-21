@@ -445,6 +445,14 @@ impl TxEssence for EthereumTxEssence {
             EthereumTxEssence::Eip1559(tx) => tx._alloy_rlp_payload_length(),
         }
     }
+    /// Returns a reference to the transaction's call data
+    fn data(&self) -> &Bytes {
+        match self {
+            EthereumTxEssence::Legacy(tx) => &tx.data,
+            EthereumTxEssence::Eip2930(tx) => &tx.data,
+            EthereumTxEssence::Eip1559(tx) => &tx.data,
+        }
+    }
 }
 
 #[cfg(test)]

@@ -294,7 +294,7 @@ impl MptNode {
                 .borrow_mut()
                 .get_or_insert_with(|| self.calc_reference())
             {
-                MptNodeReference::Digest(digest) => digest.clone(),
+                MptNodeReference::Digest(digest) => *digest,
                 MptNodeReference::Bytes(bytes) => keccak(bytes).into(),
             },
         }

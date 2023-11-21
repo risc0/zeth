@@ -94,6 +94,12 @@ impl MemDb {
     }
 }
 
+impl Default for MemDb {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BatcherDb for MemDb {
     fn get_full_op_block(&mut self, block_no: u64) -> Result<BlockInput<OptimismTxEssence>> {
         let op_block = self.full_op_block.get(&block_no).unwrap();
@@ -151,8 +157,8 @@ impl BatcherDb for MemDb {
                 &CHAIN_SPEC.system_config_contract,
                 &eth_block.block_header.logs_bloom,
             );
-            assert_eq!(can_contain_deposits, false);
-            assert_eq!(can_contain_config, false);
+            assert!(!can_contain_deposits);
+            assert!(!can_contain_config);
         }
 
         Ok(eth_block.clone())
@@ -200,7 +206,7 @@ pub fn derive<D: BatcherDb>(
     let op_head = db.get_full_op_block(op_block_no)?;
     let op_head_hash = op_head.block_header.hash();
 
-    let mut derive_output = DeriveOutput::new(op_head_hash.clone());
+    let mut derive_output = DeriveOutput::new(op_head_hash);
 
     let set_l1_block_values = {
         let system_tx_data = op_head
@@ -278,7 +284,7 @@ pub fn derive<D: BatcherDb>(
         if let Some(prev_eth_block_hash) = prev_eth_block_hash {
             assert_eq!(eth_block.block_header.parent_hash, prev_eth_block_hash);
         }
-        prev_eth_block_hash = Some(eth_block_hash.clone());
+        prev_eth_block_hash = Some(eth_block_hash);
 
         let epoch = Epoch {
             number: eth_block_no,
@@ -313,7 +319,7 @@ pub fn derive<D: BatcherDb>(
 
         // derive op blocks from batches
         op_state.borrow_mut().current_l1_block_number = eth_block_no;
-        while let Some(op_batch) = op_batches.next() {
+        for op_batch in op_batches.by_ref() {
             if op_block_no == target_block_no {
                 break;
             }
@@ -395,12 +401,12 @@ pub fn derive<D: BatcherDb>(
                         let eth_block_header =
                             &eth_block_inputs[op_epoch_deposit_block_ptr].block_header;
                         let batcher_hash = {
-                            let all_zero: FixedBytes<12> = FixedBytes([0 as u8; 12]);
+                            let all_zero: FixedBytes<12> = FixedBytes([0_u8; 12]);
                             all_zero.concat_const::<20, 32>(op_system_config.batch_sender.0)
                         };
                         let set_l1_block_values = OpSystemInfo::OpSystemInfoCalls::setL1BlockValues(
                             OpSystemInfo::setL1BlockValuesCall {
-                                number: eth_block_header.number.into(),
+                                number: eth_block_header.number,
                                 timestamp: eth_block_header.timestamp.try_into().unwrap(),
                                 basefee: eth_block_header.base_fee_per_gas,
                                 hash: eth_block_header.hash(),
@@ -480,7 +486,7 @@ pub fn derive<D: BatcherDb>(
                     );
                 }
 
-                derive_output.push(op_state.safe_head.hash.clone());
+                derive_output.push(op_state.safe_head.hash);
             } else {
                 #[cfg(not(target_os = "zkvm"))]
                 {

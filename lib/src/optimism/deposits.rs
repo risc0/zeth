@@ -84,7 +84,7 @@ pub fn extract_transactions(
 
 /// Returns whether the given Bloom filter can contain a deposit log.
 pub fn can_contain(_address: &Address, _bloom: &Bloom) -> bool {
-    return true; // TODO: remove me!
+    true // TODO: remove me!
 
     // let input = BloomInput::Raw(address.as_slice());
     // if !bloom.contains_input(input) {

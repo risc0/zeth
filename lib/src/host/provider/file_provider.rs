@@ -38,6 +38,7 @@ pub struct FileProvider {
     full_blocks: HashMap<BlockQuery, Block<Transaction>>,
     #[serde_as(as = "Vec<(_, _)>")]
     partial_blocks: HashMap<BlockQuery, Block<H256>>,
+    #[serde(default)]
     #[serde_as(as = "Vec<(_, _)>")]
     receipts: HashMap<BlockQuery, Vec<TransactionReceipt>>,
     #[serde_as(as = "Vec<(_, _)>")]

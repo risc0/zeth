@@ -13,7 +13,7 @@
 // limitations under the License.
 use core::{clone::Clone, option::Option};
 
-use alloy_primitives::{Address, TxHash};
+use alloy_primitives::{Address, Bytes, TxHash};
 use alloy_rlp::Encodable;
 use serde::{Deserialize, Serialize};
 
@@ -71,6 +71,8 @@ pub trait TxEssence: Encodable + Clone {
     /// This method calculates the combined length of all the individual fields
     /// of the transaction when they are RLP-encoded.
     fn payload_length(&self) -> usize;
+    /// Returns a reference to the transaction's call data
+    fn data(&self) -> &Bytes;
 }
 
 /// Provides RLP encoding functionality for [Transaction].

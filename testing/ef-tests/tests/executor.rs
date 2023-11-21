@@ -16,7 +16,7 @@
 
 use std::path::PathBuf;
 
-use risc0_zkvm::{serde::to_vec, ExecutorEnv, ExecutorImpl, FileSegmentRef};
+use risc0_zkvm::{ExecutorEnv, ExecutorImpl, FileSegmentRef};
 use rstest::rstest;
 use tempfile::tempdir;
 use zeth_primitives::{block::Header, BlockHash};
@@ -73,8 +73,10 @@ fn executor(
         let env = ExecutorEnv::builder()
             .session_limit(None)
             .segment_limit_po2(SEGMENT_LIMIT_PO2)
-            .write_slice(&to_vec(&chain_spec).unwrap())
-            .write_slice(&to_vec(&input).unwrap())
+            .write(&chain_spec)
+            .unwrap()
+            .write(&input)
+            .unwrap()
             .build()
             .unwrap();
         let mut exec = ExecutorImpl::from_elf(env, TEST_GUEST_ELF).unwrap();

@@ -34,11 +34,11 @@ use zeth_primitives::{
     block::Header,
     ethers::from_ethers_h160,
     keccak::keccak,
-    signature::TxSignature,
     transactions::{
         ethereum::{
             EthereumTxEssence, TransactionKind, TxEssenceEip1559, TxEssenceEip2930, TxEssenceLegacy,
         },
+        signature::TxSignature,
         EthereumTransaction,
     },
     trie::{self, MptNode, MptNodeData, StateAccount},
@@ -49,7 +49,6 @@ use zeth_primitives::{
 use crate::ethers::TestProvider;
 
 pub mod ethers;
-
 pub mod ethtests;
 
 pub mod guests {

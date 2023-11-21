@@ -28,12 +28,12 @@ use ethers_core::types::{
 use crate::{
     access_list::{AccessList, AccessListItem},
     block::Header,
-    signature::TxSignature,
     transactions::{
         ethereum::{
             EthereumTxEssence, TransactionKind, TxEssenceEip1559, TxEssenceEip2930, TxEssenceLegacy,
         },
         optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
+        signature::TxSignature,
         Transaction, TxEssence,
     },
     trie::StateAccount,
@@ -229,9 +229,9 @@ impl TryFrom<EthersTransaction> for OptimismTxEssence {
                 to: tx.to.into(),
                 value: from_ethers_u256(tx.value),
                 data: tx.input.0.into(),
-                source_hash: from_ethers_h256(tx.source_hash.unwrap_or_default()),
+                source_hash: from_ethers_h256(tx.source_hash),
                 mint: from_ethers_u256(tx.mint.unwrap_or_default()),
-                is_system_tx: tx.is_system_tx.unwrap_or_default(),
+                is_system_tx: tx.is_system_tx,
             }),
             _ => OptimismTxEssence::Ethereum(tx.try_into()?),
         };

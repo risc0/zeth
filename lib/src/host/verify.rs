@@ -24,7 +24,7 @@ use zeth_primitives::{
     Address, B256, U256,
 };
 
-use super::preflight;
+use super::{mpt, preflight};
 
 #[derive(Debug)]
 pub enum VerifyError {
@@ -51,7 +51,9 @@ pub enum VerifyError {
         rpc_value: B256,
         our_value: B256,
     },
-    DeletedAccountMismatch,
+    /// The account is not in the trie, but the RPC response proves that it is included.
+    MissingAccount,
+    /// The account cannot be resolved in the trie.
     UnresolvedAccount,
 }
 
@@ -147,17 +149,21 @@ fn verify_state_trie(
 ) -> Result<HashMap<Address, Vec<VerifyError>>> {
     let mut errors = HashMap::new();
 
-    for (address, proof_response) in proofs {
-        let rpc_account: StateAccount = proof_response.clone().into();
+    for (address, response) in proofs {
+        let account_proof = &response.account_proof;
+        let rpc_account: StateAccount = response.clone().into();
 
+        let key = keccak(address);
         let mut address_errors = Vec::new();
-        match state_trie.get_rlp::<StateAccount>(&keccak(address)) {
+        match state_trie.get_rlp::<StateAccount>(&key) {
             Ok(account) => match account {
                 // the account is not in the trie
                 None => {
-                    // the account was deleted, so the RPC account should be empty
-                    if rpc_account != Default::default() {
-                        address_errors.push(VerifyError::DeletedAccountMismatch);
+                    // the RPC response should prove that the account is not included
+                    if !account_deleted(&key, account_proof)
+                        .with_context(|| format!("invalid account_proof for {address:#}"))?
+                    {
+                        address_errors.push(VerifyError::MissingAccount);
                     }
                 }
                 Some(account_info) => {
@@ -227,4 +233,9 @@ fn verify_state_trie(
     }
 
     Ok(errors)
+}
+
+fn account_deleted(key: &[u8], proof: &[impl AsRef<[u8]>]) -> Result<bool> {
+    let proof_nodes = mpt::parse_proof(proof).context("invalid encoding")?;
+    mpt::is_not_included(key, &proof_nodes)
 }

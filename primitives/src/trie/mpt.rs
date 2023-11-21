@@ -271,19 +271,6 @@ impl MptNode {
         &self.data
     }
 
-    /// Computes and returns the 256-bit hash of the node.
-    ///
-    /// This method provides a unique identifier for the node based on its content.
-    pub fn hash(&self) -> B256 {
-        match self.data {
-            MptNodeData::Null => EMPTY_ROOT,
-            _ => match self.reference() {
-                MptNodeReference::Digest(digest) => digest,
-                MptNodeReference::Bytes(bytes) => keccak(bytes).into(),
-            },
-        }
-    }
-
     /// Retrieves the [MptNodeReference] reference of the node when it's referenced inside
     /// another node.
     ///
@@ -296,6 +283,23 @@ impl MptNode {
             .clone()
     }
 
+    /// Computes and returns the 256-bit hash of the node.
+    ///
+    /// This method provides a unique identifier for the node based on its content.
+    pub fn hash(&self) -> B256 {
+        match self.data {
+            MptNodeData::Null => EMPTY_ROOT,
+            _ => match self
+                .cached_reference
+                .borrow_mut()
+                .get_or_insert_with(|| self.calc_reference())
+            {
+                MptNodeReference::Digest(digest) => digest.clone(),
+                MptNodeReference::Bytes(bytes) => keccak(bytes).into(),
+            },
+        }
+    }
+
     /// Encodes the [MptNodeReference] of this node into the `out` buffer.
     fn reference_encode(&self, out: &mut dyn alloy_rlp::BufMut) {
         match self
@@ -303,7 +307,9 @@ impl MptNode {
             .borrow_mut()
             .get_or_insert_with(|| self.calc_reference())
         {
+            // if the reference is an RLP-encoded byte slice, copy it directly
             MptNodeReference::Bytes(bytes) => out.put_slice(bytes),
+            // if the reference is a digest, RLP-encode it with its fixed known length
             MptNodeReference::Digest(digest) => {
                 out.put_u8(alloy_rlp::EMPTY_STRING_CODE + 32);
                 out.put_slice(digest.as_slice());

@@ -137,6 +137,8 @@ impl SystemConfig {
 
 /// Returns whether the given Bloom filter can contain a config update log.
 pub fn can_contain(address: &Address, bloom: &Bloom) -> bool {
+    return true; // TODO: remove me!
+
     let input = BloomInput::Raw(address.as_slice());
     if !bloom.contains_input(input) {
         return false;

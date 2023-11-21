@@ -156,8 +156,24 @@ where
 
         // check timestamp range
         match batch.essence.timestamp.cmp(&next_timestamp) {
-            Ordering::Greater => return BatchStatus::Future,
-            Ordering::Less => return BatchStatus::Drop,
+            Ordering::Greater => {
+                #[cfg(not(target_os = "zkvm"))]
+                log::warn!(
+                    "Future batch: {} = batch.essence.timestamp > next_timestamp = {}",
+                    &batch.essence.timestamp,
+                    &next_timestamp
+                );
+                return BatchStatus::Future;
+            }
+            Ordering::Less => {
+                #[cfg(not(target_os = "zkvm"))]
+                log::warn!(
+                    "Drop batch: {} = batch.essence.timestamp < next_timestamp = {}",
+                    &batch.essence.timestamp,
+                    &next_timestamp
+                );
+                return BatchStatus::Drop;
+            }
             Ordering::Equal => (),
         }
 

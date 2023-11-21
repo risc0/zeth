@@ -99,10 +99,12 @@ async fn main() -> Result<()> {
 
     let (mut mem_db, output_1) = tokio::task::spawn_blocking(move || {
         let mut rpc_db = RpcDb::new(args.eth_rpc_url, args.op_rpc_url, args.cache);
-        let batches = derive(&mut rpc_db, args.block_no, args.blocks).unwrap();
-        (rpc_db.get_mem_db(), batches)
+        let batches =
+            derive(&mut rpc_db, args.block_no, args.blocks).context("could not derive")?;
+        let out: Result<_> = Ok((rpc_db.get_mem_db(), batches));
+        out
     })
-    .await?;
+    .await??;
 
     let output_2 = derive(&mut mem_db, args.block_no, args.blocks).unwrap();
     assert_eq!(output_1, output_2);

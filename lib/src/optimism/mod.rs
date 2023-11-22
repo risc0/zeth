@@ -304,16 +304,16 @@ pub fn derive<D: BatcherDb>(
             op_system_config
                 .update(&op_chain_config, &eth_block)
                 .context("failed to update system config")?;
-            // process all batcher transactions
-            BatcherTransactions::process(
-                op_chain_config.batch_inbox,
-                op_system_config.batch_sender,
-                eth_block.block_header.number,
-                &eth_block.transactions,
-                &op_buffer,
-            )
-            .context("failed to create batcher transactions")?;
-        };
+        }
+        // process all batcher transactions
+        BatcherTransactions::process(
+            op_chain_config.batch_inbox,
+            op_system_config.batch_sender,
+            eth_block.block_header.number,
+            &eth_block.transactions,
+            &op_buffer,
+        )
+        .context("failed to create batcher transactions")?;
 
         eth_block_inputs.push(eth_block);
 

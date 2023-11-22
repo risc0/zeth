@@ -22,7 +22,7 @@ use zeth_primitives::{
         optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
         Transaction,
     },
-    Address, Bloom, B256, U160, U256,
+    Address, Bloom, BloomInput, B256, U160, U256,
 };
 
 use super::{config::ChainConfig, epoch::BlockInput};
@@ -83,18 +83,16 @@ pub fn extract_transactions(
 }
 
 /// Returns whether the given Bloom filter can contain a deposit log.
-pub fn can_contain(_address: &Address, _bloom: &Bloom) -> bool {
-    true // TODO: remove me!
-
-    // let input = BloomInput::Raw(address.as_slice());
-    // if !bloom.contains_input(input) {
-    //     return false;
-    // }
-    // let input = BloomInput::Raw(TRANSACTION_DEPOSITED_SIGNATURE.as_slice());
-    // if !bloom.contains_input(input) {
-    //     return false;
-    // }
-    // true
+pub fn can_contain(address: &Address, bloom: &Bloom) -> bool {
+    let input = BloomInput::Raw(address.as_slice());
+    if !bloom.contains_input(input) {
+        return false;
+    }
+    let input = BloomInput::Raw(TRANSACTION_DEPOSITED_SIGNATURE.as_slice());
+    if !bloom.contains_input(input) {
+        return false;
+    }
+    true
 }
 
 /// Converts a deposit log into a transaction.

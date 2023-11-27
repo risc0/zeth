@@ -22,7 +22,8 @@ use ethers_core::types::{
     },
     Block as EthersBlock, Bytes as EthersBytes, EIP1186ProofResponse,
     Transaction as EthersTransaction, TransactionReceipt as EthersReceipt,
-    Withdrawal as EthersWithdrawal, H160 as EthersH160, H256 as EthersH256, U256 as EthersU256, U64
+    Withdrawal as EthersWithdrawal, H160 as EthersH160, H256 as EthersH256, U256 as EthersU256,
+    U64,
 };
 
 use crate::{

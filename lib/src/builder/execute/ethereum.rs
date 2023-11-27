@@ -32,11 +32,11 @@ use zeth_primitives::{
     Bloom, RlpBytes,
 };
 
+use super::TxExecStrategy;
 use crate::{
-    block_builder::BlockBuilder,
+    builder::BlockBuilder,
     consts,
     consts::{GWEI_TO_WEI, MIN_SPEC_ID},
-    execution::TxExecStrategy,
     guest_mem_forget,
 };
 

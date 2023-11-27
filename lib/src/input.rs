@@ -24,6 +24,11 @@ use zeth_primitives::{
     Address, Bytes, B256, U256,
 };
 
+/// Represents the state of an account's storage.
+/// The storage trie together with the used storage slots allow us to reconstruct all the
+/// required values.
+pub type StorageEntry = (MptNode, Vec<U256>);
+
 /// External block input.
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct Input<E: TxEssence> {
@@ -54,8 +59,6 @@ pub struct Input<E: TxEssence> {
     /// Base fee per gas
     pub base_fee_per_gas: U256,
 }
-
-pub type StorageEntry = (MptNode, Vec<U256>);
 
 #[cfg(test)]
 mod tests {

@@ -25,9 +25,18 @@ RUST_LOG=info ../zeth/target/release/op-derive \
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use log::{error, info};
+use risc0_zkvm::{
+    serde::to_vec, ExecutorEnv, ExecutorImpl, FileSegmentRef, MemoryImage, Program, Receipt,
+};
+use tempfile::tempdir;
+use zeth_guests::{OP_DERIVE_ELF, OP_DERIVE_ID, OP_DERIVE_PATH};
 use zeth_lib::{
     host::provider::{new_provider, BlockQuery},
-    optimism::{derivation::CHAIN_SPEC, derive, epoch::BlockInput, BatcherDb, MemDb},
+    optimism::{
+        derivation::CHAIN_SPEC, derive, epoch::BlockInput, BatcherDb, DeriveInput, DeriveOutput,
+        MemDb,
+    },
 };
 use zeth_primitives::{
     block::Header,
@@ -61,7 +70,7 @@ struct Args {
     #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "20")]
     /// Runs the verification inside the zkvm executor locally. Accepts a custom maximum
     /// segment cycle count as a power of 2. [default: 20]
-    local_exec: Option<usize>,
+    local_exec: Option<u32>,
 
     #[clap(short, long, default_value_t = false)]
     /// Whether to submit the proving workload to Bonsai.
@@ -97,7 +106,8 @@ async fn main() -> Result<()> {
     env_logger::init();
     let args = Args::parse();
 
-    let (mut mem_db, output_1) = tokio::task::spawn_blocking(move || {
+    info!("Fetching data ...");
+    let (mem_db, output_1) = tokio::task::spawn_blocking(move || {
         let mut rpc_db = RpcDb::new(args.eth_rpc_url, args.op_rpc_url, args.cache);
         let batches =
             derive(&mut rpc_db, args.block_no, args.blocks).context("could not derive")?;
@@ -106,12 +116,97 @@ async fn main() -> Result<()> {
     })
     .await??;
 
-    let output_2 = derive(&mut mem_db, args.block_no, args.blocks).unwrap();
-    assert_eq!(output_1, output_2);
+    info!("Running from memory ...");
+    {
+        let output_2 = derive(&mut mem_db.clone(), args.block_no, args.blocks).unwrap();
+        assert_eq!(output_1, output_2);
+    }
 
-    println!("Head: {}", output_1.head_block_hash);
-    for derived_hash in output_1.derived_blocks {
-        println!("Derived: {}", derived_hash);
+    info!("In-memory test complete");
+    info!("Head: {}", output_1.head_block_hash);
+    for derived_hash in &output_1.derived_blocks {
+        info!("Derived: {}", derived_hash);
+    }
+
+    // Run in the executor (if requested)
+    if let Some(segment_limit_po2) = args.local_exec {
+        info!(
+            "Running in executor with segment_limit_po2 = {:?}",
+            segment_limit_po2
+        );
+
+        let input = to_vec(&DeriveInput {
+            mem_db,
+            head_block_no: args.block_no,
+            block_count: args.blocks,
+        })
+        .expect("Could not serialize input!");
+        info!(
+            "Input size: {} words ( {} MB )",
+            input.len(),
+            input.len() * 4 / 1_000_000
+        );
+
+        let mut profiler = risc0_zkvm::Profiler::new(OP_DERIVE_PATH, OP_DERIVE_ELF).unwrap();
+
+        info!("Running the executor...");
+        let start_time = std::time::Instant::now();
+        let session = {
+            let mut builder = ExecutorEnv::builder();
+            builder
+                .session_limit(None)
+                .segment_limit_po2(segment_limit_po2)
+                .write_slice(&input);
+
+            if args.profile {
+                builder.trace_callback(profiler.make_trace_callback());
+            }
+
+            let env = builder.build().unwrap();
+            let mut exec = ExecutorImpl::from_elf(env, OP_DERIVE_ELF).unwrap();
+
+            let segment_dir = tempdir().unwrap();
+
+            exec.run_with_callback(|segment| {
+                Ok(Box::new(FileSegmentRef::new(&segment, segment_dir.path())?))
+            })
+            .unwrap()
+        };
+        info!(
+            "Generated {:?} segments; elapsed time: {:?}",
+            session.segments.len(),
+            start_time.elapsed()
+        );
+
+        if args.profile {
+            profiler.finalize();
+
+            let sys_time = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap();
+            tokio::fs::write(
+                format!("profile_{}.pb", sys_time.as_secs()),
+                &profiler.encode_to_vec(),
+            )
+            .await
+            .expect("Failed to write profiling output");
+        }
+
+        info!(
+            "Executor ran in (roughly) {} cycles",
+            session.segments.len() * (1 << segment_limit_po2)
+        );
+
+        let output_3: DeriveOutput = session.journal.decode().unwrap();
+
+        if output_1 == output_3 {
+            info!("Executor succeeded");
+        } else {
+            error!(
+                "Output mismatch! Executor: {:?}, expected: {:?}",
+                output_3, output_1,
+            );
+        }
     }
 
     Ok(())

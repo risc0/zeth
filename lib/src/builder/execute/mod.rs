@@ -18,10 +18,10 @@ use anyhow::Result;
 use revm::{Database, DatabaseCommit};
 use zeth_primitives::transactions::TxEssence;
 
-use crate::block_builder::BlockBuilder;
+use super::BlockBuilder;
 
-pub mod ethereum;
-pub mod optimism;
+pub(super) mod ethereum;
+pub(super) mod optimism;
 
 pub trait TxExecStrategy<E: TxEssence> {
     fn execute_transactions<D>(block_builder: BlockBuilder<D, E>) -> Result<BlockBuilder<D, E>>

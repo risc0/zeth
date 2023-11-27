@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
+
 use ethers_core::types::{
     Block, Bloom, Bytes, EIP1186ProofResponse, StorageProof, Transaction, TransactionReceipt, H256,
     U256,
@@ -24,6 +26,7 @@ use super::*;
 pub struct TestProvider {
     pub state: TestState,
     pub header: Header,
+    pub post: TestState,
 }
 
 impl Provider for TestProvider {
@@ -71,13 +74,18 @@ impl Provider for TestProvider {
     }
 
     fn get_proof(&mut self, query: &ProofQuery) -> Result<EIP1186ProofResponse, anyhow::Error> {
-        assert_eq!(query.block_no, self.header.number);
-
         let indices = query
             .indices
             .iter()
             .map(|idx| LibU256::from_be_bytes(idx.0));
-        get_proof(from_ethers_h160(query.address), indices, &self.state)
+
+        if query.block_no == self.header.number {
+            get_proof(from_ethers_h160(query.address), indices, &self.state)
+        } else if query.block_no == self.header.number + 1 {
+            get_proof(from_ethers_h160(query.address), indices, &self.post)
+        } else {
+            panic!("invalid block number: {}", query.block_no)
+        }
     }
 
     fn get_transaction_count(&mut self, query: &AccountQuery) -> Result<U256, anyhow::Error> {
@@ -133,7 +141,8 @@ impl Provider for TestProvider {
     }
 }
 
-fn build_tries(state: &TestState) -> (MptNode, HashMap<Address, MptNode>) {
+/// Builds the state trie and storage tries from the test state.
+pub fn build_tries(state: &TestState) -> (MptNode, HashMap<Address, MptNode>) {
     let mut state_trie = MptNode::default();
     let mut storage_tries = HashMap::new();
     for (address, account) in &state.0 {
@@ -177,7 +186,8 @@ fn get_proof(
         .map(|p| p.into())
         .collect();
     let mut storage_proof = vec![];
-    for index in indices {
+    let index_set = indices.into_iter().collect::<BTreeSet<_>>();
+    for index in index_set {
         let proof = StorageProof {
             key: index.to_be_bytes().into(),
             proof: mpt_proof(&storage_trie, keccak(index.to_be_bytes::<32>()))?
@@ -204,18 +214,4 @@ fn get_proof(
         account_proof,
         storage_proof,
     })
-}
-
-/// Get EIP-1186 proofs for a set of addresses and storage keys.
-pub fn get_state_update_proofs(
-    provider: &ProviderDb,
-    storage_keys: HashMap<Address, Vec<LibU256>>,
-) -> Result<HashMap<Address, EIP1186ProofResponse>, anyhow::Error> {
-    let state = provider.into();
-
-    let mut result = HashMap::new();
-    for (address, indices) in storage_keys {
-        result.insert(address, get_proof(address, indices, &state)?);
-    }
-    Ok(result)
 }

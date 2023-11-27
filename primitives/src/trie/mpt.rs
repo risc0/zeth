@@ -251,6 +251,7 @@ impl MptNode {
     /// Clears the trie, replacing its data with an empty node, [MptNodeData::Null].
     ///
     /// This method effectively removes all key-value pairs from the trie.
+    #[inline]
     pub fn clear(&mut self) {
         self.data = MptNodeData::Null;
         self.invalidate_ref_cache();
@@ -259,6 +260,7 @@ impl MptNode {
     /// Decodes an RLP-encoded [MptNode] from the provided byte slice.
     ///
     /// This method allows for the deserialization of a previously serialized [MptNode].
+    #[inline]
     pub fn decode(bytes: impl AsRef<[u8]>) -> Result<MptNode, Error> {
         rlp::decode(bytes.as_ref()).map_err(Error::from)
     }
@@ -267,6 +269,7 @@ impl MptNode {
     ///
     /// This method provides a reference to the node's data, allowing for inspection and
     /// manipulation.
+    #[inline]
     pub fn as_data(&self) -> &MptNodeData {
         &self.data
     }
@@ -276,6 +279,7 @@ impl MptNode {
     ///
     /// This method provides a way to obtain a compact representation of the node for
     /// storage or transmission purposes.
+    #[inline]
     pub fn reference(&self) -> MptNodeReference {
         self.cached_reference
             .borrow_mut()
@@ -286,6 +290,7 @@ impl MptNode {
     /// Computes and returns the 256-bit hash of the node.
     ///
     /// This method provides a unique identifier for the node based on its content.
+    #[inline]
     pub fn hash(&self) -> B256 {
         match self.data {
             MptNodeData::Null => EMPTY_ROOT,
@@ -348,6 +353,7 @@ impl MptNode {
     ///
     /// This method checks if the node represents an empty trie, i.e., it doesn't contain
     /// any key-value pairs.
+    #[inline]
     pub fn is_empty(&self) -> bool {
         matches!(&self.data, MptNodeData::Null)
     }
@@ -355,6 +361,7 @@ impl MptNode {
     /// Determines if the node represents a digest.
     ///
     /// A digest is a compact representation of a sub-trie, represented by its hash.
+    #[inline]
     pub fn is_digest(&self) -> bool {
         matches!(&self.data, MptNodeData::Digest(_))
     }
@@ -363,6 +370,7 @@ impl MptNode {
     ///
     /// Nibbles are half-bytes, and in the context of the MPT, they represent parts of
     /// keys.
+    #[inline]
     pub fn nibs(&self) -> Vec<u8> {
         match &self.data {
             MptNodeData::Null | MptNodeData::Branch(_) | MptNodeData::Digest(_) => vec![],
@@ -375,6 +383,7 @@ impl MptNode {
     /// If the key is not present in the trie, this method returns `None`. Otherwise, it
     /// returns a reference to the associated value. If [None] is returned, the key is
     /// provably not in the trie.
+    #[inline]
     pub fn get(&self, key: &[u8]) -> Result<Option<&[u8]>, Error> {
         self.get_internal(&to_nibs(key))
     }
@@ -383,6 +392,7 @@ impl MptNode {
     ///
     /// If the key is not present in the trie, this method returns `None`. Otherwise, it
     /// returns the RLP-decoded value.
+    #[inline]
     pub fn get_rlp<T: alloy_rlp::Decodable>(&self, key: &[u8]) -> Result<Option<T>, Error> {
         match self.get(key)? {
             Some(mut bytes) => Ok(Some(T::decode(&mut bytes)?)),
@@ -425,6 +435,7 @@ impl MptNode {
     ///
     /// This method attempts to remove a key-value pair from the trie. If the key is
     /// present, it returns `true`. Otherwise, it returns `false`.
+    #[inline]
     pub fn delete(&mut self, key: &[u8]) -> Result<bool, Error> {
         self.delete_internal(&to_nibs(key))
     }
@@ -457,22 +468,20 @@ impl MptNode {
                 // if there is only exactly one node left, we need to convert the branch
                 if remaining.next().is_none() {
                     let mut orphan = node.take().unwrap();
-
-                    let orphan_nibs = orphan.nibs().into_iter();
                     match &mut orphan.data {
                         // if the orphan is a leaf, prepend the corresponding nib to it
-                        MptNodeData::Leaf(_, orphan_value) => {
+                        MptNodeData::Leaf(prefix, orphan_value) => {
                             let new_nibs: Vec<_> =
-                                iter::once(index as u8).chain(orphan_nibs).collect();
+                                iter::once(index as u8).chain(prefix_nibs(prefix)).collect();
                             self.data = MptNodeData::Leaf(
                                 to_encoded_path(&new_nibs, true),
                                 mem::take(orphan_value),
                             );
                         }
                         // if the orphan is an extension, prepend the corresponding nib to it
-                        MptNodeData::Extension(_, orphan_child) => {
+                        MptNodeData::Extension(prefix, orphan_child) => {
                             let new_nibs: Vec<_> =
-                                iter::once(index as u8).chain(orphan_nibs).collect();
+                                iter::once(index as u8).chain(prefix_nibs(prefix)).collect();
                             self.data = MptNodeData::Extension(
                                 to_encoded_path(&new_nibs, false),
                                 mem::take(orphan_child),
@@ -505,28 +514,28 @@ impl MptNode {
                     return Ok(false);
                 }
 
-                // an extension can only point to a branch or a digest
-                // if this is no longer the case, it needs to be cleaned up
-                let child_nibs = child.nibs().into_iter();
+                // an extension can only point to a branch or a digest; since it's sub trie was
+                // modified, we need to make sure that this property still holds
                 match &mut child.data {
-                    // if the extension points to nothing, it can be removed as well
+                    // if the child is empty, remove the extension
                     MptNodeData::Null => {
                         self.data = MptNodeData::Null;
                     }
-                    // if the extension points to a leaf, make the leaf longer
-                    MptNodeData::Leaf(_, value) => {
-                        self_nibs.extend(child_nibs);
+                    // for a leaf, replace the extension with the extended leaf
+                    MptNodeData::Leaf(prefix, value) => {
+                        self_nibs.extend(prefix_nibs(prefix));
                         self.data =
                             MptNodeData::Leaf(to_encoded_path(&self_nibs, true), mem::take(value));
                     }
-                    // if the extension points to an extension, make the extension longer
-                    MptNodeData::Extension(_, node) => {
-                        self_nibs.extend(child_nibs);
+                    // for an extension, replace the extension with the extended extension
+                    MptNodeData::Extension(prefix, node) => {
+                        self_nibs.extend(prefix_nibs(prefix));
                         self.data = MptNodeData::Extension(
                             to_encoded_path(&self_nibs, false),
                             mem::take(node),
                         );
                     }
+                    // for a branch or digest, the extension is still correct
                     MptNodeData::Branch(_) | MptNodeData::Digest(_) => {}
                 }
             }
@@ -542,6 +551,7 @@ impl MptNode {
     /// This method attempts to insert a new key-value pair into the trie. If the
     /// insertion is successful, it returns `true`. If the key already exists, it updates
     /// the value and returns `false`.
+    #[inline]
     pub fn insert(&mut self, key: &[u8], value: Vec<u8>) -> Result<bool, Error> {
         if value.is_empty() {
             panic!("value must not be empty");
@@ -552,6 +562,7 @@ impl MptNode {
     /// Inserts an RLP-encoded value into the trie.
     ///
     /// This method inserts a value that's been encoded using RLP into the trie.
+    #[inline]
     pub fn insert_rlp(&mut self, key: &[u8], value: impl Encodable) -> Result<bool, Error> {
         self.insert_internal(&to_nibs(key), value.to_rlp())
     }

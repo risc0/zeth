@@ -18,6 +18,7 @@ zeth-lib = { path = "../../lib" }
 zeth-primitives = { path = "../../primitives" }
 
 [dev-dependencies]
+diff = "0.1"
 env_logger = "0.10"
 log = "0.4"
 risc0-zkvm = { workspace = true, features = ["prove"] }

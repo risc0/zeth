@@ -17,17 +17,13 @@ extern crate core;
 #[cfg(not(target_os = "zkvm"))]
 pub mod host;
 
-pub mod block_builder;
+pub mod builder;
 pub mod consts;
-pub mod execution;
-pub mod finalization;
-pub mod initialization;
 pub mod input;
 pub mod mem_db;
 pub mod optimism;
-pub mod preparation;
 
-pub use zeth_primitives::transactions::ethereum::EthereumTxEssence;
+pub use zeth_primitives::transactions::{ethereum::EthereumTxEssence, optimism::OptimismTxEssence};
 
 /// call forget only if running inside the guest
 pub fn guest_mem_forget<T>(_t: T) {

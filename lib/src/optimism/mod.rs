@@ -103,6 +103,7 @@ impl Default for MemDb {
 impl BatcherDb for MemDb {
     fn get_full_op_block(&mut self, block_no: u64) -> Result<BlockInput<OptimismTxEssence>> {
         let op_block = self.full_op_block.get(&block_no).unwrap();
+        assert_eq!(block_no, op_block.block_header.number);
 
         // Validate tx list
         {
@@ -120,11 +121,15 @@ impl BatcherDb for MemDb {
     }
 
     fn get_op_block_header(&mut self, block_no: u64) -> Result<Header> {
-        Ok(self.op_block_header.get(&block_no).unwrap().clone())
+        let op_block = self.op_block_header.get(&block_no).unwrap();
+        assert_eq!(block_no, op_block.number);
+
+        Ok(op_block.clone())
     }
 
     fn get_full_eth_block(&mut self, block_no: u64) -> Result<BlockInput<EthereumTxEssence>> {
         let eth_block = self.full_eth_block.get(&block_no).unwrap();
+        assert_eq!(block_no, eth_block.block_header.number);
 
         // Validate tx list
         {
@@ -165,7 +170,10 @@ impl BatcherDb for MemDb {
     }
 
     fn get_eth_block_header(&mut self, block_no: u64) -> Result<Header> {
-        Ok(self.eth_block_header.get(&block_no).unwrap().clone())
+        let eth_block = self.eth_block_header.get(&block_no).unwrap();
+        assert_eq!(block_no, eth_block.number);
+
+        Ok(eth_block.clone())
     }
 }
 

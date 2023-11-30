@@ -31,7 +31,8 @@ use super::{
     batcher_transactions::BatcherTransactions,
     channels::{Channel, Channels},
     config::ChainConfig,
-    derivation::State,
+    deposits,
+    derivation::{Epoch, State},
     epoch::BlockInput,
 };
 
@@ -56,13 +57,45 @@ impl Batches {
     }
 
     pub fn process(&mut self, eth_block: &BlockInput<EthereumTxEssence>) -> anyhow::Result<()> {
+        let eth_block_hash = eth_block.block_header.hash();
+
+        // Ensure block has correct parent
+        if self.state.current_l1_block_number < eth_block.block_header.number {
+            assert_eq!(
+                eth_block.block_header.parent_hash,
+                self.state.current_l1_block_hash,
+            );
+        }
+
+        // Update the system config
+        if eth_block.receipts.is_some() {
+            self.config
+                .system_config
+                .update(&self.config.system_config_contract, &eth_block)
+                .context("failed to update system config")?;
+        }
+
+        // Enqueue epoch
+        self.state.push_epoch(Epoch {
+            number: eth_block.block_header.number,
+            hash: eth_block_hash,
+            timestamp: eth_block.block_header.timestamp.try_into().unwrap(),
+            base_fee_per_gas: eth_block.block_header.base_fee_per_gas,
+            deposits: deposits::extract_transactions(&self.config, &eth_block)?,
+        })?;
+
         BatcherTransactions::process(
             self.config.batch_inbox,
             self.config.system_config.batch_sender,
             eth_block.block_header.number,
             &eth_block.transactions,
             &mut self.channel_iter.batcher_tx_iter.buffer,
-        )
+        )?;
+
+        self.state.current_l1_block_number = eth_block.block_header.number;
+        self.state.current_l1_block_hash = eth_block_hash;
+
+        Ok(())
     }
 }
 

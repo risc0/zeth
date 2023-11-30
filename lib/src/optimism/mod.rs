@@ -293,7 +293,17 @@ impl<D: BatcherDb> DeriveMachine<D> {
             );
 
             // Process next Eth block
-            self.process_next_eth_block()?;
+            {
+                let eth_block = self
+                    .derive_input
+                    .db
+                    .get_full_eth_block(self.eth_block_no)
+                    .context("block not found")?;
+                self.op_batches
+                    .process(&eth_block)
+                    .context("failed to create batcher transactions")?;
+                self.eth_block_no += 1;
+            }
 
             // Process batches
             while let Some(op_batch) = self.op_batches.next() {
@@ -394,55 +404,6 @@ impl<D: BatcherDb> DeriveMachine<D> {
             op_head: (self.derive_input.op_head_block_no, self.op_head_block_hash),
             derived_op_blocks,
         })
-    }
-
-    fn process_next_eth_block(&mut self) -> Result<()> {
-        let eth_block = self
-            .derive_input
-            .db
-            .get_full_eth_block(self.eth_block_no)
-            .context("block not found")?;
-        let eth_block_hash = eth_block.block_header.hash();
-
-        // Ensure block has correct parent
-        if self.op_batches.state.current_l1_block_number < self.eth_block_no {
-            assert_eq!(
-                eth_block.block_header.parent_hash,
-                self.op_batches.state.current_l1_block_hash,
-            );
-        }
-
-        // Update the system config
-        if eth_block.receipts.is_some() {
-            #[cfg(not(target_os = "zkvm"))]
-            info!("Process config");
-
-            self.op_batches
-                .config
-                .system_config
-                .update(&self.op_batches.config.system_config_contract, &eth_block)
-                .context("failed to update system config")?;
-        }
-
-        // Enqueue epoch
-        self.op_batches.state.push_epoch(Epoch {
-            number: self.eth_block_no,
-            hash: eth_block_hash,
-            timestamp: eth_block.block_header.timestamp.try_into().unwrap(),
-            base_fee_per_gas: eth_block.block_header.base_fee_per_gas,
-            deposits: deposits::extract_transactions(&self.op_batches.config, &eth_block)?,
-        })?;
-
-        // Process batcher transactions
-        self.op_batches
-            .process(&eth_block)
-            .context("failed to create batcher transactions")?;
-
-        self.op_batches.state.current_l1_block_number = self.eth_block_no;
-        self.op_batches.state.current_l1_block_hash = eth_block_hash;
-        self.eth_block_no += 1;
-
-        Ok(())
     }
 
     fn derive_system_transaction(&mut self, op_batch: &Batch) -> Transaction<OptimismTxEssence> {

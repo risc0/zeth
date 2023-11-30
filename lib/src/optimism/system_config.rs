@@ -58,6 +58,9 @@ impl SystemConfig {
             return Ok(updated);
         }
 
+        #[cfg(not(target_os = "zkvm"))]
+        log::info!("Process config");
+
         let receipts = input.receipts.as_ref().context("receipts missing")?;
         for receipt in receipts {
             let receipt = &receipt.payload;

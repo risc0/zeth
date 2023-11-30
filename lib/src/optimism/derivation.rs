@@ -13,7 +13,10 @@
 // limitations under the License.
 
 use serde::{Deserialize, Serialize};
-use zeth_primitives::{BlockHash, BlockNumber, B256, U256};
+use zeth_primitives::{
+    transactions::{optimism::OptimismTxEssence, Transaction},
+    BlockHash, BlockNumber, B256, U256,
+};
 
 use super::config::ChainConfig;
 
@@ -28,12 +31,13 @@ pub struct BlockInfo {
 }
 
 /// L1 epoch block
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Epoch {
     pub number: BlockNumber,
     pub hash: B256,
     pub timestamp: u64,
     pub base_fee_per_gas: U256,
+    pub deposits: Vec<Transaction<OptimismTxEssence>>,
 }
 
 #[derive(Debug, Clone, Default)]

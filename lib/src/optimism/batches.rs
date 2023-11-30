@@ -107,8 +107,8 @@ where
         let batch = if derived_batch.is_none() {
             let current_l1_block = self.state.current_l1_block_number;
             let safe_head = self.state.safe_head;
-            let epoch = self.state.epoch;
-            let next_epoch = self.state.next_epoch;
+            let epoch = &self.state.epoch;
+            let next_epoch = &self.state.next_epoch;
             let seq_window_size = self.config.seq_window_size;
 
             if let Some(next_epoch) = next_epoch {
@@ -141,8 +141,8 @@ where
     }
 
     fn batch_status(&self, batch: &Batch) -> BatchStatus {
-        let epoch = self.state.epoch;
-        let next_epoch = self.state.next_epoch;
+        let epoch = &self.state.epoch;
+        let next_epoch = &self.state.next_epoch;
         let head = self.state.safe_head;
         let next_timestamp = head.timestamp + self.config.blocktime;
 
@@ -187,7 +187,7 @@ where
         let batch_origin = if batch.essence.epoch_num == epoch.number {
             Some(epoch)
         } else if batch.essence.epoch_num == epoch.number + 1 {
-            next_epoch
+            next_epoch.as_ref()
         } else {
             #[cfg(not(target_os = "zkvm"))]
             log::debug!("invalid batch origin epoch number");

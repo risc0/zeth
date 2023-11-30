@@ -103,7 +103,7 @@ impl Default for MemDb {
 
 impl BatcherDb for MemDb {
     fn get_full_op_block(&mut self, block_no: u64) -> Result<BlockInput<OptimismTxEssence>> {
-        let op_block = self.full_op_block.get(&block_no).unwrap();
+        let op_block = self.full_op_block.remove(&block_no).unwrap();
         assert_eq!(block_no, op_block.block_header.number);
 
         // Validate tx list
@@ -118,18 +118,18 @@ impl BatcherDb for MemDb {
             }
         }
 
-        Ok(op_block.clone())
+        Ok(op_block)
     }
 
     fn get_op_block_header(&mut self, block_no: u64) -> Result<Header> {
-        let op_block = self.op_block_header.get(&block_no).unwrap();
+        let op_block = self.op_block_header.remove(&block_no).unwrap();
         assert_eq!(block_no, op_block.number);
 
-        Ok(op_block.clone())
+        Ok(op_block)
     }
 
     fn get_full_eth_block(&mut self, block_no: u64) -> Result<BlockInput<EthereumTxEssence>> {
-        let eth_block = self.full_eth_block.get(&block_no).unwrap();
+        let eth_block = self.full_eth_block.remove(&block_no).unwrap();
         assert_eq!(block_no, eth_block.block_header.number);
 
         // Validate tx list
@@ -167,14 +167,14 @@ impl BatcherDb for MemDb {
             assert!(!can_contain_config);
         }
 
-        Ok(eth_block.clone())
+        Ok(eth_block)
     }
 
     fn get_eth_block_header(&mut self, block_no: u64) -> Result<Header> {
-        let eth_block = self.eth_block_header.get(&block_no).unwrap();
+        let eth_block = self.eth_block_header.remove(&block_no).unwrap();
         assert_eq!(block_no, eth_block.number);
 
-        Ok(eth_block.clone())
+        Ok(eth_block)
     }
 }
 
@@ -284,6 +284,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                         hash: eth_head_hash,
                         timestamp: eth_head.timestamp.try_into().unwrap(),
                         base_fee_per_gas: eth_head.base_fee_per_gas,
+                        deposits: Vec::new(),
                     },
                     next_epoch: None,
                 },
@@ -343,10 +344,24 @@ impl<D: BatcherDb> DeriveMachine<D> {
                 let deposits =
                     if op_batch.essence.epoch_num == self.op_batches.state.epoch.number + 1 {
                         self.op_block_seq_no = 0;
-                        Some(self.derive_deposit_transactions(&op_batch)?)
+                        self.op_batches.state.epoch = self
+                            .op_batches
+                            .state
+                            .next_epoch
+                            .take()
+                            .expect("dequeued future batch without next epoch!");
+
+                        self.op_batches
+                            .state
+                            .epoch
+                            .deposits
+                            .iter()
+                            .map(|tx| tx.to_rlp())
+                            .collect()
                     } else {
                         self.op_block_seq_no += 1;
-                        None
+
+                        Vec::new()
                     };
                 self.deque_next_epoch_if_none()?;
 
@@ -369,12 +384,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                         let system_tx = self.derive_system_transaction(&op_batch);
 
                         let derived_transactions: Vec<_> = once(system_tx.to_rlp())
-                            .chain(
-                                deposits
-                                    .unwrap_or_default()
-                                    .into_iter()
-                                    .map(|tx| tx.to_rlp()),
-                            )
+                            .chain(deposits)
                             .chain(op_batch.essence.transactions.iter().map(|tx| tx.to_vec()))
                             .collect();
 
@@ -449,24 +459,27 @@ impl<D: BatcherDb> DeriveMachine<D> {
             );
         }
 
-        self.op_epoch_queue.push_back(Epoch {
-            number: self.eth_block_no,
-            hash: eth_block_hash,
-            timestamp: eth_block.block_header.timestamp.try_into().unwrap(),
-            base_fee_per_gas: eth_block.block_header.base_fee_per_gas,
-        });
-        self.deque_next_epoch_if_none()?;
-
         // Update the system config
         if eth_block.receipts.is_some() {
             #[cfg(not(target_os = "zkvm"))]
             info!("Process config");
+
             self.op_batches
                 .config
                 .system_config
                 .update(&self.op_batches.config.system_config_contract, &eth_block)
                 .context("failed to update system config")?;
         }
+
+        // Enqueue epoch
+        self.op_epoch_queue.push_back(Epoch {
+            number: self.eth_block_no,
+            hash: eth_block_hash,
+            timestamp: eth_block.block_header.timestamp.try_into().unwrap(),
+            base_fee_per_gas: eth_block.block_header.base_fee_per_gas,
+            deposits: deposits::extract_transactions(&self.op_batches.config, &eth_block)?,
+        });
+        self.deque_next_epoch_if_none()?;
 
         // Process batcher transactions
         BatcherTransactions::process(
@@ -483,34 +496,6 @@ impl<D: BatcherDb> DeriveMachine<D> {
         self.eth_block_no += 1;
 
         Ok(())
-    }
-
-    fn derive_deposit_transactions(
-        &mut self,
-        op_batch: &Batch,
-    ) -> Result<Vec<Transaction<OptimismTxEssence>>> {
-        self.op_batches.state.epoch = self
-            .op_batches
-            .state
-            .next_epoch
-            .take()
-            .expect("dequeued future batch without next epoch!");
-
-        assert_eq!(
-            self.op_batches.state.epoch.number,
-            op_batch.essence.epoch_num
-        );
-
-        let deposit_block_input = self
-            .derive_input
-            .db
-            .get_full_eth_block(self.op_batches.state.epoch.number)
-            .context("block not found")?;
-
-        Ok(deposits::extract_transactions(
-            &self.op_batches.config,
-            &deposit_block_input,
-        )?)
     }
 
     fn derive_system_transaction(&mut self, op_batch: &Batch) -> Transaction<OptimismTxEssence> {

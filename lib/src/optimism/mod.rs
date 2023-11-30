@@ -17,7 +17,7 @@ use core::iter::once;
 use alloy_sol_types::{sol, SolInterface};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use zeth_primitives::{
     address,
     batch::Batch,
@@ -195,7 +195,6 @@ pub struct DeriveMachine<D> {
     op_head_block_hash: BlockHash,
     op_block_no: u64,
     op_block_seq_no: u64,
-    op_epoch_queue: VecDeque<Epoch>,
     op_batches: Batches,
     eth_block_no: u64,
 }
@@ -252,22 +251,21 @@ impl<D: BatcherDb> DeriveMachine<D> {
 
             Batches::new(
                 op_chain_config,
-                State {
-                    current_l1_block_number: eth_block_no,
-                    current_l1_block_hash: eth_head_hash,
-                    safe_head: BlockInfo {
+                State::new(
+                    eth_block_no,
+                    eth_head_hash,
+                    BlockInfo {
                         hash: op_head_block_hash,
                         timestamp: op_head.block_header.timestamp.try_into().unwrap(),
                     },
-                    epoch: Epoch {
+                    Epoch {
                         number: eth_block_no,
                         hash: eth_head_hash,
                         timestamp: eth_head.timestamp.try_into().unwrap(),
                         base_fee_per_gas: eth_head.base_fee_per_gas,
                         deposits: Vec::new(),
                     },
-                    next_epoch: None,
-                },
+                ),
             )
         };
 
@@ -276,7 +274,6 @@ impl<D: BatcherDb> DeriveMachine<D> {
             op_head_block_hash,
             op_block_no,
             op_block_seq_no,
-            op_epoch_queue: VecDeque::new(),
             op_batches,
             eth_block_no,
         })
@@ -317,12 +314,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                 let deposits =
                     if op_batch.essence.epoch_num == self.op_batches.state.epoch.number + 1 {
                         self.op_block_seq_no = 0;
-                        self.op_batches.state.epoch = self
-                            .op_batches
-                            .state
-                            .next_epoch
-                            .take()
-                            .expect("dequeued future batch without next epoch!");
+                        self.op_batches.state.do_next_epoch()?;
 
                         self.op_batches
                             .state
@@ -336,7 +328,6 @@ impl<D: BatcherDb> DeriveMachine<D> {
 
                         Vec::new()
                     };
-                self.deque_next_epoch_if_none()?;
 
                 // Obtain new Op head
                 let new_op_head = {
@@ -405,22 +396,6 @@ impl<D: BatcherDb> DeriveMachine<D> {
         })
     }
 
-    fn deque_next_epoch_if_none(&mut self) -> anyhow::Result<()> {
-        if self.op_batches.state.next_epoch.is_none() {
-            while let Some(next_epoch) = self.op_epoch_queue.pop_front() {
-                if next_epoch.number <= self.op_batches.state.epoch.number {
-                    continue;
-                } else if next_epoch.number == self.op_batches.state.epoch.number + 1 {
-                    self.op_batches.state.next_epoch = Some(next_epoch);
-                    break;
-                } else {
-                    bail!("epoch gap!");
-                }
-            }
-        }
-        Ok(())
-    }
-
     fn process_next_eth_block(&mut self) -> Result<()> {
         let eth_block = self
             .derive_input
@@ -450,14 +425,13 @@ impl<D: BatcherDb> DeriveMachine<D> {
         }
 
         // Enqueue epoch
-        self.op_epoch_queue.push_back(Epoch {
+        self.op_batches.state.push_epoch(Epoch {
             number: self.eth_block_no,
             hash: eth_block_hash,
             timestamp: eth_block.block_header.timestamp.try_into().unwrap(),
             base_fee_per_gas: eth_block.block_header.base_fee_per_gas,
             deposits: deposits::extract_transactions(&self.op_batches.config, &eth_block)?,
-        });
-        self.deque_next_epoch_if_none()?;
+        })?;
 
         // Process batcher transactions
         self.op_batches

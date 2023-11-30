@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
+
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
     transactions::{optimism::OptimismTxEssence, Transaction},
@@ -46,5 +48,52 @@ pub struct State {
     pub current_l1_block_hash: BlockHash,
     pub safe_head: BlockInfo,
     pub epoch: Epoch,
+    pub op_epoch_queue: VecDeque<Epoch>,
     pub next_epoch: Option<Epoch>,
+}
+
+impl State {
+    pub fn new(
+        current_l1_block_number: BlockNumber,
+        current_l1_block_hash: BlockHash,
+        safe_head: BlockInfo,
+        epoch: Epoch,
+    ) -> Self {
+        State {
+            current_l1_block_number,
+            current_l1_block_hash,
+            safe_head,
+            epoch,
+            op_epoch_queue: VecDeque::new(),
+            next_epoch: None,
+        }
+    }
+
+    pub fn do_next_epoch(&mut self) -> anyhow::Result<()> {
+        self.epoch = self.next_epoch.take().expect("No next epoch!");
+        self.deque_next_epoch_if_none()?;
+        Ok(())
+    }
+
+    pub fn push_epoch(&mut self, epoch: Epoch) -> anyhow::Result<()> {
+        self.op_epoch_queue.push_back(epoch);
+        self.deque_next_epoch_if_none()?;
+        Ok(())
+    }
+
+    fn deque_next_epoch_if_none(&mut self) -> anyhow::Result<()> {
+        if self.next_epoch.is_none() {
+            while let Some(next_epoch) = self.op_epoch_queue.pop_front() {
+                if next_epoch.number <= self.epoch.number {
+                    continue;
+                } else if next_epoch.number == self.epoch.number + 1 {
+                    self.next_epoch = Some(next_epoch);
+                    break;
+                } else {
+                    anyhow::bail!("Epoch gap!");
+                }
+            }
+        }
+        Ok(())
+    }
 }

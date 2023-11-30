@@ -283,6 +283,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                         number: eth_block_no,
                         hash: eth_head_hash,
                         timestamp: eth_head.timestamp.try_into().unwrap(),
+                        base_fee_per_gas: eth_head.base_fee_per_gas,
                     },
                     next_epoch: None,
                 },
@@ -452,6 +453,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
             number: self.eth_block_no,
             hash: eth_block_hash,
             timestamp: eth_block.block_header.timestamp.try_into().unwrap(),
+            base_fee_per_gas: eth_block.block_header.base_fee_per_gas,
         });
         self.deque_next_epoch_if_none()?;
 
@@ -512,12 +514,6 @@ impl<D: BatcherDb> DeriveMachine<D> {
     }
 
     fn derive_system_transaction(&mut self, op_batch: &Batch) -> Transaction<OptimismTxEssence> {
-        let eth_block_header = &self
-            .derive_input
-            .db
-            .get_eth_block_header(self.op_batches.state.epoch.number)
-            .expect("block not found");
-
         let batcher_hash = {
             let all_zero: FixedBytes<12> = FixedBytes([0_u8; 12]);
             all_zero.concat_const::<20, 32>(self.op_batches.config.system_config.batch_sender.0)
@@ -525,10 +521,10 @@ impl<D: BatcherDb> DeriveMachine<D> {
 
         let set_l1_block_values =
             OpSystemInfo::OpSystemInfoCalls::setL1BlockValues(OpSystemInfo::setL1BlockValuesCall {
-                number: eth_block_header.number,
-                timestamp: eth_block_header.timestamp.try_into().unwrap(),
-                basefee: eth_block_header.base_fee_per_gas,
-                hash: eth_block_header.hash(),
+                number: self.op_batches.state.epoch.number,
+                timestamp: self.op_batches.state.epoch.timestamp,
+                basefee: self.op_batches.state.epoch.base_fee_per_gas,
+                hash: self.op_batches.state.epoch.hash,
                 sequence_number: self.op_block_seq_no,
                 batcher_hash,
                 l1_fee_overhead: self.op_batches.config.system_config.l1_fee_overhead,

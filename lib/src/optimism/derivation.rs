@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use serde::{Deserialize, Serialize};
-use zeth_primitives::{BlockHash, BlockNumber, B256};
+use zeth_primitives::{BlockHash, BlockNumber, B256, U256};
 
 use super::config::ChainConfig;
 
@@ -33,6 +33,7 @@ pub struct Epoch {
     pub number: BlockNumber,
     pub hash: B256,
     pub timestamp: u64,
+    pub base_fee_per_gas: U256,
 }
 
 #[derive(Debug, Clone, Default)]

@@ -18,7 +18,7 @@ use zeth_primitives::{
     b256, transactions::ethereum::EthereumTxEssence, Address, Bloom, BloomInput, B256, U256,
 };
 
-use super::{config::ChainConfig, epoch::BlockInput};
+use super::epoch::BlockInput;
 
 /// Signature of the deposit transaction event, i.e.
 /// keccak-256 hash of "ConfigUpdate(uint256,uint8,bytes)"
@@ -47,17 +47,14 @@ impl SystemConfig {
     /// updated.
     pub fn update(
         &mut self,
-        config: &ChainConfig,
+        system_config_contract: &Address,
         input: &BlockInput<EthereumTxEssence>,
     ) -> anyhow::Result<bool> {
         let mut updated = false;
 
         // if the bloom filter does not contain the corresponding topics, we have the guarantee
         // that there are no config updates in the block
-        if !can_contain(
-            &config.system_config_contract,
-            &input.block_header.logs_bloom,
-        ) {
+        if !can_contain(system_config_contract, &input.block_header.logs_bloom) {
             return Ok(updated);
         }
 
@@ -73,7 +70,7 @@ impl SystemConfig {
             for log in &receipt.logs {
                 // the log event contract address must match the system config contract
                 // the first log event topic must match the ConfigUpdate signature
-                if log.address == config.system_config_contract
+                if &log.address == system_config_contract
                     && log.topics[0] == CONFIG_UPDATE_SIGNATURE
                 {
                     updated = true;

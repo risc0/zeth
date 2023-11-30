@@ -42,7 +42,6 @@ use crate::optimism::{
     config::ChainConfig,
     derivation::{BlockInfo, Epoch, State, CHAIN_SPEC},
     epoch::BlockInput,
-    system_config::SystemConfig,
 };
 
 pub mod batcher_transactions;
@@ -210,7 +209,6 @@ pub struct DeriveMachine<D> {
     op_head_block_hash: BlockHash,
     op_block_no: u64,
     op_block_seq_no: u64,
-    op_system_config: SystemConfig,
     op_epoch_queue: VecDeque<Epoch>,
     op_epoch_deposit_block_ptr: usize,
     op_batches: Batches<Channels<BatcherTransactions>>,
@@ -294,14 +292,11 @@ impl<D: BatcherDb> DeriveMachine<D> {
             )
         };
 
-        let op_system_config = op_batches.config.system_config.clone();
-
         Ok(DeriveMachine {
             derive_input,
             op_head_block_hash,
             op_block_no,
             op_block_seq_no,
-            op_system_config,
             op_epoch_queue: VecDeque::new(),
             op_epoch_deposit_block_ptr: 0,
             op_batches,
@@ -464,15 +459,17 @@ impl<D: BatcherDb> DeriveMachine<D> {
         if eth_block.receipts.is_some() {
             #[cfg(not(target_os = "zkvm"))]
             info!("Process config");
-            self.op_system_config
-                .update(&self.op_batches.config, &eth_block)
+            self.op_batches
+                .config
+                .system_config
+                .update(&self.op_batches.config.system_config_contract, &eth_block)
                 .context("failed to update system config")?;
         }
 
         // Process batcher transactions
         BatcherTransactions::process(
             self.op_batches.config.batch_inbox,
-            self.op_system_config.batch_sender,
+            self.op_batches.config.system_config.batch_sender,
             eth_block.block_header.number,
             &eth_block.transactions,
             &mut self.op_batches.channel_iter.batcher_tx_iter.buffer,
@@ -533,7 +530,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
         let eth_block_header = &self.eth_block_inputs[self.op_epoch_deposit_block_ptr].block_header;
         let batcher_hash = {
             let all_zero: FixedBytes<12> = FixedBytes([0_u8; 12]);
-            all_zero.concat_const::<20, 32>(self.op_system_config.batch_sender.0)
+            all_zero.concat_const::<20, 32>(self.op_batches.config.system_config.batch_sender.0)
         };
         let set_l1_block_values =
             OpSystemInfo::OpSystemInfoCalls::setL1BlockValues(OpSystemInfo::setL1BlockValuesCall {
@@ -543,8 +540,8 @@ impl<D: BatcherDb> DeriveMachine<D> {
                 hash: eth_block_header.hash(),
                 sequence_number: self.op_block_seq_no,
                 batcher_hash,
-                l1_fee_overhead: self.op_system_config.l1_fee_overhead,
-                l1_fee_scalar: self.op_system_config.l1_fee_scalar,
+                l1_fee_overhead: self.op_batches.config.system_config.l1_fee_overhead,
+                l1_fee_scalar: self.op_batches.config.system_config.l1_fee_scalar,
             });
         let source_hash: B256 = {
             let source_hash_sequencing = keccak(

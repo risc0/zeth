@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::cell::RefCell;
-
 use anyhow::{bail, ensure, Context};
 use std::collections::VecDeque;
 use zeth_primitives::{
@@ -22,13 +20,13 @@ use zeth_primitives::{
 };
 
 #[derive(Debug, Clone)]
-pub struct BatcherTransactions<'a> {
+pub struct BatcherTransactions {
     txs: VecDeque<BatcherTransaction>,
-    buffer: &'a RefCell<VecDeque<BatcherTransaction>>,
+    pub buffer: VecDeque<BatcherTransaction>,
 }
 
-impl BatcherTransactions<'_> {
-    pub fn new(buffer: &RefCell<VecDeque<BatcherTransaction>>) -> BatcherTransactions<'_> {
+impl BatcherTransactions {
+    pub fn new(buffer: VecDeque<BatcherTransaction>) -> BatcherTransactions {
         BatcherTransactions {
             txs: VecDeque::new(),
             buffer,
@@ -36,14 +34,13 @@ impl BatcherTransactions<'_> {
     }
 
     fn drain_buffer(&mut self) {
-        let mut buffer = self.buffer.borrow_mut();
-        while let Some(tx) = buffer.pop_front() {
+        while let Some(tx) = self.buffer.pop_front() {
             self.txs.push_back(tx);
         }
     }
 }
 
-impl Iterator for BatcherTransactions<'_> {
+impl Iterator for BatcherTransactions {
     type Item = BatcherTransaction;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -52,15 +49,14 @@ impl Iterator for BatcherTransactions<'_> {
     }
 }
 
-impl BatcherTransactions<'_> {
+impl BatcherTransactions {
     pub fn process(
         batch_inbox: Address,
         batch_sender: Address,
         block_number: BlockNumber,
         transactions: &Vec<Transaction<EthereumTxEssence>>,
-        buffer: &RefCell<VecDeque<BatcherTransaction>>,
+        buffer: &mut VecDeque<BatcherTransaction>,
     ) -> anyhow::Result<()> {
-        let buffer = &mut *buffer.borrow_mut();
         for tx in transactions {
             if tx.essence.to() != Some(batch_inbox) {
                 continue;

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::{cell::RefCell, cmp::Ordering};
+use core::cmp::Ordering;
 use std::{cmp::Reverse, collections::BinaryHeap, io::Read};
 
 use anyhow::Context;
@@ -24,15 +24,15 @@ use zeth_primitives::{
 
 use super::{channels::Channel, config::ChainConfig, derivation::State};
 
-pub struct Batches<'a, I> {
+pub struct Batches<I> {
     /// Mapping of timestamps to batches
     batches: BinaryHeap<Reverse<Batch>>,
-    channel_iter: I,
-    state: &'a RefCell<State>,
-    config: &'a ChainConfig,
+    pub channel_iter: I,
+    pub state: State,
+    pub config: ChainConfig,
 }
 
-impl<I> Iterator for Batches<'_, I>
+impl<I> Iterator for Batches<I>
 where
     I: Iterator<Item = Channel>,
 {
@@ -50,12 +50,8 @@ where
     }
 }
 
-impl<I> Batches<'_, I> {
-    pub fn new<'a>(
-        channel_iter: I,
-        state: &'a RefCell<State>,
-        config: &'a ChainConfig,
-    ) -> Batches<'a, I> {
+impl<I> Batches<I> {
+    pub fn new(channel_iter: I, state: State, config: ChainConfig) -> Batches<I> {
         Batches {
             batches: BinaryHeap::new(),
             channel_iter,
@@ -65,7 +61,7 @@ impl<I> Batches<'_, I> {
     }
 }
 
-impl<I> Batches<'_, I>
+impl<I> Batches<I>
 where
     I: Iterator<Item = Channel>,
 {
@@ -96,7 +92,7 @@ where
                     }
                     BatchStatus::Drop => {
                         #[cfg(not(target_os = "zkvm"))]
-                        log::warn!("dropping invalid batch");
+                        log::debug!("Dropping invalid batch");
                     }
                     BatchStatus::Future | BatchStatus::Undecided => {
                         self.batches.push(Reverse(batch));
@@ -109,12 +105,10 @@ where
         };
 
         let batch = if derived_batch.is_none() {
-            let state = self.state.borrow();
-
-            let current_l1_block = state.current_l1_block_number;
-            let safe_head = state.safe_head;
-            let epoch = state.epoch;
-            let next_epoch = state.next_epoch;
+            let current_l1_block = self.state.current_l1_block_number;
+            let safe_head = self.state.safe_head;
+            let epoch = self.state.epoch;
+            let next_epoch = self.state.next_epoch;
             let seq_window_size = self.config.seq_window_size;
 
             if let Some(next_epoch) = next_epoch {
@@ -147,18 +141,16 @@ where
     }
 
     fn batch_status(&self, batch: &Batch) -> BatchStatus {
-        let state = self.state.borrow();
-
-        let epoch = state.epoch;
-        let next_epoch = state.next_epoch;
-        let head = state.safe_head;
+        let epoch = self.state.epoch;
+        let next_epoch = self.state.next_epoch;
+        let head = self.state.safe_head;
         let next_timestamp = head.timestamp + self.config.blocktime;
 
         // check timestamp range
         match batch.essence.timestamp.cmp(&next_timestamp) {
             Ordering::Greater => {
                 #[cfg(not(target_os = "zkvm"))]
-                log::warn!(
+                log::debug!(
                     "Future batch: {} = batch.essence.timestamp > next_timestamp = {}",
                     &batch.essence.timestamp,
                     &next_timestamp
@@ -167,7 +159,7 @@ where
             }
             Ordering::Less => {
                 #[cfg(not(target_os = "zkvm"))]
-                log::warn!(
+                log::debug!(
                     "Drop batch: {} = batch.essence.timestamp < next_timestamp = {}",
                     &batch.essence.timestamp,
                     &next_timestamp
@@ -180,14 +172,14 @@ where
         // check that block builds on existing chain
         if batch.essence.parent_hash != head.hash {
             #[cfg(not(target_os = "zkvm"))]
-            log::warn!("invalid parent hash");
+            log::debug!("invalid parent hash");
             return BatchStatus::Drop;
         }
 
         // check the inclusion delay
         if batch.essence.epoch_num + self.config.seq_window_size < batch.l1_inclusion_block {
             #[cfg(not(target_os = "zkvm"))]
-            log::warn!("inclusion window elapsed");
+            log::debug!("inclusion window elapsed");
             return BatchStatus::Drop;
         }
 
@@ -198,20 +190,20 @@ where
             next_epoch
         } else {
             #[cfg(not(target_os = "zkvm"))]
-            log::warn!("invalid batch origin epoch number");
+            log::debug!("invalid batch origin epoch number");
             return BatchStatus::Drop;
         };
 
         if let Some(batch_origin) = batch_origin {
             if batch.essence.epoch_hash != batch_origin.hash {
                 #[cfg(not(target_os = "zkvm"))]
-                log::warn!("invalid epoch hash");
+                log::debug!("invalid epoch hash");
                 return BatchStatus::Drop;
             }
 
             if batch.essence.timestamp < batch_origin.timestamp {
                 #[cfg(not(target_os = "zkvm"))]
-                log::warn!("batch too old");
+                log::debug!("batch too old");
                 return BatchStatus::Drop;
             }
 
@@ -222,7 +214,7 @@ where
                         if let Some(next_epoch) = next_epoch {
                             if batch.essence.timestamp >= next_epoch.timestamp {
                                 #[cfg(not(target_os = "zkvm"))]
-                                log::warn!("sequencer drift too large");
+                                log::debug!("sequencer drift too large");
                                 return BatchStatus::Drop;
                             }
                         } else {
@@ -233,7 +225,7 @@ where
                     }
                 } else {
                     #[cfg(not(target_os = "zkvm"))]
-                    log::warn!("sequencer drift too large");
+                    log::debug!("sequencer drift too large");
                     return BatchStatus::Drop;
                 }
             }
@@ -250,7 +242,7 @@ where
             .any(|tx| matches!(tx.first(), None | Some(0x7E)))
         {
             #[cfg(not(target_os = "zkvm"))]
-            log::warn!("invalid transaction");
+            log::debug!("invalid transaction");
             return BatchStatus::Drop;
         }
 

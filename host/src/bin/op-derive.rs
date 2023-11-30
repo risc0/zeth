@@ -34,8 +34,8 @@ use zeth_guests::{OP_DERIVE_ELF, OP_DERIVE_ID, OP_DERIVE_PATH};
 use zeth_lib::{
     host::provider::{new_provider, BlockQuery},
     optimism::{
-        derivation::CHAIN_SPEC, derive, epoch::BlockInput, BatcherDb, DeriveInput, DeriveOutput,
-        MemDb,
+        derivation::CHAIN_SPEC, epoch::BlockInput, BatcherDb, DeriveInput, DeriveMachine,
+        DeriveOutput, MemDb,
     },
 };
 use zeth_primitives::{
@@ -107,18 +107,31 @@ async fn main() -> Result<()> {
     let args = Args::parse();
 
     info!("Fetching data ...");
-    let (mem_db, output_1) = tokio::task::spawn_blocking(move || {
-        let mut rpc_db = RpcDb::new(args.eth_rpc_url, args.op_rpc_url, args.cache);
-        let batches =
-            derive(&mut rpc_db, args.block_no, args.blocks).context("could not derive")?;
-        let out: Result<_> = Ok((rpc_db.get_mem_db(), batches));
+    let (derive_input, output_1) = tokio::task::spawn_blocking(move || {
+        let derive_input = DeriveInput {
+            db: RpcDb::new(args.eth_rpc_url, args.op_rpc_url, args.cache),
+            op_head_block_no: args.block_no,
+            op_derive_block_count: args.blocks,
+        };
+        let mut derive_machine =
+            DeriveMachine::new(derive_input).expect("Could not create derive machine");
+        let derive_output = derive_machine.derive().context("could not derive")?;
+        let derive_input_mem = DeriveInput {
+            db: derive_machine.derive_input.db.get_mem_db(),
+            op_head_block_no: args.block_no,
+            op_derive_block_count: args.blocks,
+        };
+        let out: Result<_> = Ok((derive_input_mem, derive_output));
         out
     })
     .await??;
 
     info!("Running from memory ...");
     {
-        let output_2 = derive(&mut mem_db.clone(), args.block_no, args.blocks).unwrap();
+        let output_2 = DeriveMachine::new(derive_input.clone())
+            .expect("Could not create derive machine")
+            .derive()
+            .unwrap();
         assert_eq!(output_1, output_2);
     }
 
@@ -135,12 +148,7 @@ async fn main() -> Result<()> {
             segment_limit_po2
         );
 
-        let input = to_vec(&DeriveInput {
-            mem_db,
-            head_block_no: args.block_no,
-            block_count: args.blocks,
-        })
-        .expect("Could not serialize input!");
+        let input = to_vec(&derive_input).expect("Could not serialize input!");
         info!(
             "Input size: {} words ( {} MB )",
             input.len(),

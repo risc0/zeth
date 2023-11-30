@@ -15,16 +15,13 @@
 #![no_main]
 
 use risc0_zkvm::guest::env;
-use zeth_lib::optimism::{DeriveInput, derive};
+use zeth_lib::optimism::{DeriveInput, DeriveMachine, MemDb};
 
 risc0_zkvm::guest::entry!(main);
 
 pub fn main() {
-    let mut input: DeriveInput = env::read();
-    let output = derive(
-        &mut input.mem_db,
-        input.head_block_no,
-        input.block_count
-    ).expect("Failed to process derivation input");
+    let derive_input: DeriveInput<MemDb> = env::read();
+    let mut derive_machine = DeriveMachine::new(derive_input).expect("Could not create derive machine");
+    let output = derive_machine.derive().expect("Failed to process derivation input");
     env::commit(&output);
 }

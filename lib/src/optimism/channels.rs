@@ -18,7 +18,7 @@ use super::{
 };
 
 pub struct Channels<I> {
-    batcher_tx_iter: I,
+    pub batcher_tx_iter: I,
     /// List of incomplete channels
     pending_channels: Vec<PendingChannel>,
     /// A bank of frames and their version numbers pulled from a [BatcherTransaction]

@@ -20,7 +20,7 @@ serde = "1.0"
 tempfile = "3.6"
 tokio = { version = "1.23", features = ["full"] }
 zeth-guests = { path = "../guests" }
-zeth-lib = { path = "../lib" }
+zeth-lib = { path = "../lib", features = ["host"] }
 zeth-primitives = { path = "../primitives" }
 
 [dev-dependencies]

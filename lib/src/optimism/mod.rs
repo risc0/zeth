@@ -341,70 +341,61 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     );
                 }
 
+                // Process the batch
+                self.op_block_no += 1;
+
+                #[cfg(not(target_os = "zkvm"))]
+                info!("Processing batch for Op block no {}", self.op_block_no);
+
                 // Manage current epoch number and extract deposits
                 let deposits = self.derive_deposit_transactions(&op_batch)?;
                 self.deque_next_epoch_if_none()?;
 
-                // Ensure batch has correct parent hash; if not, skip this batch.
-                if op_batch.essence.parent_hash != self.op_batches.state.safe_head.hash {
-                    #[cfg(not(target_os = "zkvm"))]
+                // Obtain new Op head
+                let new_op_head = {
+                    let new_op_head = self
+                        .derive_input
+                        .db
+                        .get_op_block_header(self.op_block_no)
+                        .context("block not found")?;
+
+                    // Verify new op head has the expected parent
+                    assert_eq!(
+                        new_op_head.parent_hash,
+                        self.op_batches.state.safe_head.hash
+                    );
+
+                    // Verify new op head has the expected block number
+                    assert_eq!(new_op_head.number, self.op_block_no);
+
+                    // Verify that the new op head transactions are consistent with the batch transactions
                     {
-                        info!(
-                            "Skipped batch w/ timestamp {}. Batch parent: {}, safe head: {}",
-                            op_batch.essence.timestamp,
-                            op_batch.essence.parent_hash,
-                            self.op_batches.state.safe_head.hash
-                        );
+                        let system_tx = self.derive_system_transaction(&op_batch);
+
+                        let derived_transactions: Vec<_> = once(system_tx.to_rlp())
+                            .chain(
+                                deposits
+                                    .unwrap_or_default()
+                                    .into_iter()
+                                    .map(|tx| tx.to_rlp()),
+                            )
+                            .chain(op_batch.essence.transactions.iter().map(|tx| tx.to_vec()))
+                            .collect();
+
+                        let mut tx_trie = MptNode::default();
+                        for (tx_no, tx) in derived_transactions.into_iter().enumerate() {
+                            let trie_key = tx_no.to_rlp();
+                            tx_trie.insert(&trie_key, tx)?;
+                        }
+                        if tx_trie.hash() != new_op_head.transactions_root {
+                            bail!("Invalid op block transaction data! Transaction trie root does not match")
+                        }
                     }
-                    continue;
-                }
 
-                // Process the batch
-                self.op_block_no += 1;
-                #[cfg(not(target_os = "zkvm"))]
-                {
-                    info!("Processing batch for Op block no {}", self.op_block_no);
-                }
+                    new_op_head
+                };
 
-                let new_op_head = self
-                    .derive_input
-                    .db
-                    .get_op_block_header(self.op_block_no)
-                    .context("block not found")?;
                 let new_op_head_hash = new_op_head.hash();
-
-                // Verify new op head has the expected parent
-                assert_eq!(
-                    new_op_head.parent_hash,
-                    self.op_batches.state.safe_head.hash
-                );
-
-                // Verify new op head has the expected block number
-                assert_eq!(new_op_head.number, self.op_block_no);
-
-                // Verify that the new op head transactions are consistent with the batch transactions
-                {
-                    let system_tx = self.derive_system_transaction(&op_batch);
-
-                    let derived_transactions: Vec<_> = once(system_tx.to_rlp())
-                        .chain(
-                            deposits
-                                .unwrap_or_default()
-                                .into_iter()
-                                .map(|tx| tx.to_rlp()),
-                        )
-                        .chain(op_batch.essence.transactions.iter().map(|tx| tx.to_vec()))
-                        .collect();
-
-                    let mut tx_trie = MptNode::default();
-                    for (tx_no, tx) in derived_transactions.into_iter().enumerate() {
-                        let trie_key = tx_no.to_rlp();
-                        tx_trie.insert(&trie_key, tx)?;
-                    }
-                    if tx_trie.hash() != new_op_head.transactions_root {
-                        bail!("Invalid op block transaction data! Transaction trie root does not match")
-                    }
-                }
 
                 #[cfg(not(target_os = "zkvm"))]
                 {
@@ -472,9 +463,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
         // Update the system config
         if eth_block.receipts.is_some() {
             #[cfg(not(target_os = "zkvm"))]
-            {
-                info!("Process config");
-            }
+            info!("Process config");
             self.op_system_config
                 .update(&self.op_batches.config, &eth_block)
                 .context("failed to update system config")?;
@@ -515,6 +504,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
             if deposit_block_input.block_header.number != op_batch.essence.epoch_num {
                 bail!("Invalid epoch number!")
             };
+
             #[cfg(not(target_os = "zkvm"))]
             {
                 info!(
@@ -522,18 +512,18 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     deposit_block_input.block_header.number, op_batch.essence.epoch_num
                 );
             }
+
             let deposits =
                 deposits::extract_transactions(&self.op_batches.config, deposit_block_input)?;
+
             #[cfg(not(target_os = "zkvm"))]
-            {
-                info!("Batch contains {} deposits", deposits.len());
-            }
+            info!("Batch contains {} deposits", deposits.len());
+
             Ok(Some(deposits))
         } else {
             #[cfg(not(target_os = "zkvm"))]
-            {
-                info!("Batch contains 0 deposits");
-            }
+            info!("Batch contains 0 deposits");
+
             self.op_block_seq_no += 1;
             Ok(None)
         }

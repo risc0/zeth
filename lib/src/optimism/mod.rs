@@ -29,16 +29,14 @@ use zeth_primitives::{
         Transaction, TxEssence,
     },
     trie::MptNode,
-    uint, Address, BlockHash, FixedBytes, RlpBytes, B256, U256,
+    uint, Address, BlockHash, BlockNumber, FixedBytes, RlpBytes, B256, U256,
 };
 
 #[cfg(not(target_os = "zkvm"))]
 use log::info;
 
 use crate::optimism::{
-    batcher_transactions::BatcherTransactions,
     batches::Batches,
-    channels::Channels,
     config::ChainConfig,
     derivation::{BlockInfo, Epoch, State, CHAIN_SPEC},
     epoch::BlockInput,
@@ -187,21 +185,9 @@ pub struct DeriveInput<D> {
 
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DeriveOutput {
-    pub head_block_hash: BlockHash,
-    pub derived_blocks: Vec<BlockHash>,
-}
-
-impl DeriveOutput {
-    pub fn new(head_block_hash: BlockHash) -> Self {
-        DeriveOutput {
-            head_block_hash,
-            derived_blocks: Vec::new(),
-        }
-    }
-
-    pub fn push(&mut self, l2_hash: BlockHash) {
-        self.derived_blocks.push(l2_hash);
-    }
+    pub eth_tail: (BlockNumber, BlockHash),
+    pub op_head: (BlockNumber, BlockHash),
+    pub derived_op_blocks: Vec<(BlockNumber, BlockHash)>,
 }
 
 pub struct DeriveMachine<D> {
@@ -210,7 +196,7 @@ pub struct DeriveMachine<D> {
     op_block_no: u64,
     op_block_seq_no: u64,
     op_epoch_queue: VecDeque<Epoch>,
-    op_batches: Batches<Channels<BatcherTransactions>>,
+    op_batches: Batches,
     eth_block_no: u64,
 }
 
@@ -268,10 +254,8 @@ impl<D: BatcherDb> DeriveMachine<D> {
             op_chain_config.system_config.l1_fee_overhead = set_l1_block_values.l1_fee_overhead;
             op_chain_config.system_config.l1_fee_scalar = set_l1_block_values.l1_fee_scalar;
 
-            let channels =
-                Channels::new(BatcherTransactions::new(VecDeque::new()), &op_chain_config);
             Batches::new(
-                channels,
+                op_chain_config,
                 State {
                     current_l1_block_number: eth_block_no,
                     current_l1_block_hash: eth_head_hash,
@@ -288,7 +272,6 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     },
                     next_epoch: None,
                 },
-                op_chain_config,
             )
         };
 
@@ -307,7 +290,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
         let target_block_no =
             self.derive_input.op_head_block_no + self.derive_input.op_derive_block_count;
 
-        let mut derive_output = DeriveOutput::new(self.op_head_block_hash);
+        let mut derived_op_blocks = Vec::new();
 
         while self.op_block_no < target_block_no {
             #[cfg(not(target_os = "zkvm"))]
@@ -416,7 +399,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     timestamp: new_op_head.timestamp.try_into().unwrap(),
                 };
 
-                derive_output.push(new_op_head_hash);
+                derived_op_blocks.push((new_op_head.number, new_op_head_hash));
 
                 if self.op_block_no == target_block_no {
                     break;
@@ -424,7 +407,14 @@ impl<D: BatcherDb> DeriveMachine<D> {
             }
         }
 
-        Ok(derive_output)
+        Ok(DeriveOutput {
+            eth_tail: (
+                self.op_batches.state.current_l1_block_number,
+                self.op_batches.state.current_l1_block_hash,
+            ),
+            op_head: (self.derive_input.op_head_block_no, self.op_head_block_hash),
+            derived_op_blocks,
+        })
     }
 
     fn deque_next_epoch_if_none(&mut self) -> anyhow::Result<()> {
@@ -482,14 +472,9 @@ impl<D: BatcherDb> DeriveMachine<D> {
         self.deque_next_epoch_if_none()?;
 
         // Process batcher transactions
-        BatcherTransactions::process(
-            self.op_batches.config.batch_inbox,
-            self.op_batches.config.system_config.batch_sender,
-            eth_block.block_header.number,
-            &eth_block.transactions,
-            &mut self.op_batches.channel_iter.batcher_tx_iter.buffer,
-        )
-        .context("failed to create batcher transactions")?;
+        self.op_batches
+            .process(&eth_block)
+            .context("failed to create batcher transactions")?;
 
         self.op_batches.state.current_l1_block_number = self.eth_block_no;
         self.op_batches.state.current_l1_block_hash = eth_block_hash;

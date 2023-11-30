@@ -13,29 +13,60 @@
 // limitations under the License.
 
 use core::cmp::Ordering;
-use std::{cmp::Reverse, collections::BinaryHeap, io::Read};
+use std::{
+    cmp::Reverse,
+    collections::{BinaryHeap, VecDeque},
+    io::Read,
+};
 
 use anyhow::Context;
 use libflate::zlib::Decoder;
 use zeth_primitives::{
     batch::Batch,
     rlp::{Decodable, Header},
+    transactions::ethereum::EthereumTxEssence,
 };
 
-use super::{channels::Channel, config::ChainConfig, derivation::State};
+use super::{
+    batcher_transactions::BatcherTransactions,
+    channels::{Channel, Channels},
+    config::ChainConfig,
+    derivation::State,
+    epoch::BlockInput,
+};
 
-pub struct Batches<I> {
+pub struct Batches {
     /// Mapping of timestamps to batches
     batches: BinaryHeap<Reverse<Batch>>,
-    pub channel_iter: I,
+    pub channel_iter: Channels<BatcherTransactions>,
     pub state: State,
     pub config: ChainConfig,
 }
 
-impl<I> Iterator for Batches<I>
-where
-    I: Iterator<Item = Channel>,
-{
+impl Batches {
+    pub fn new(config: ChainConfig, state: State) -> Batches {
+        let channel_iter = Channels::new(BatcherTransactions::new(VecDeque::new()), &config);
+
+        Batches {
+            batches: BinaryHeap::new(),
+            channel_iter,
+            state,
+            config,
+        }
+    }
+
+    pub fn process(&mut self, eth_block: &BlockInput<EthereumTxEssence>) -> anyhow::Result<()> {
+        BatcherTransactions::process(
+            self.config.batch_inbox,
+            self.config.system_config.batch_sender,
+            eth_block.block_header.number,
+            &eth_block.transactions,
+            &mut self.channel_iter.batcher_tx_iter.buffer,
+        )
+    }
+}
+
+impl Iterator for Batches {
     type Item = Batch;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -50,21 +81,7 @@ where
     }
 }
 
-impl<I> Batches<I> {
-    pub fn new(channel_iter: I, state: State, config: ChainConfig) -> Batches<I> {
-        Batches {
-            batches: BinaryHeap::new(),
-            channel_iter,
-            state,
-            config,
-        }
-    }
-}
-
-impl<I> Batches<I>
-where
-    I: Iterator<Item = Channel>,
-{
+impl Batches {
     fn try_next(&mut self) -> anyhow::Result<Option<Batch>> {
         let channel = self.channel_iter.next();
         if let Some(channel) = channel {

@@ -14,7 +14,7 @@
 
 extern crate core;
 
-#[cfg(not(target_os = "zkvm"))]
+#[cfg(feature = "host")]
 pub mod host;
 
 pub mod builder;

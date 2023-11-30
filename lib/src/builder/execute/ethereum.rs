@@ -15,7 +15,7 @@
 use std::{fmt::Debug, mem::take};
 
 use anyhow::{anyhow, bail, Context};
-#[cfg(not(target_os = "zkvm"))]
+#[cfg(feature = "host")]
 use log::debug;
 use revm::{
     primitives::{Account, Address, ResultAndState, SpecId, TransactTo, TxEnv},
@@ -64,7 +64,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             )
         }
 
-        #[cfg(not(target_os = "zkvm"))]
+        #[cfg(feature = "host")]
         {
             use chrono::{TimeZone, Utc};
             use log::info;
@@ -118,7 +118,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
                 .recover_from()
                 .with_context(|| format!("Error recovering address for transaction {}", tx_no))?;
 
-            #[cfg(not(target_os = "zkvm"))]
+            #[cfg(feature = "host")]
             {
                 let tx_hash = tx.hash();
                 debug!("Tx no. {} (hash: {})", tx_no, tx_hash);
@@ -142,7 +142,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             let gas_used = result.gas_used().try_into().unwrap();
             cumulative_gas_used = cumulative_gas_used.checked_add(gas_used).unwrap();
 
-            #[cfg(not(target_os = "zkvm"))]
+            #[cfg(feature = "host")]
             debug!("  Ok: {:?}", result);
 
             // create the receipt from the EVM result
@@ -166,7 +166,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
                 .context("failed to insert receipt")?;
 
             // update account states
-            #[cfg(not(target_os = "zkvm"))]
+            #[cfg(feature = "host")]
             for (address, account) in &state {
                 if account.is_touched() {
                     // log account
@@ -211,7 +211,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
                 .checked_mul(withdrawal.amount.try_into().unwrap())
                 .unwrap();
 
-            #[cfg(not(target_os = "zkvm"))]
+            #[cfg(feature = "host")]
             {
                 debug!("Withdrawal no. {}", withdrawal.index);
                 debug!("  Recipient: {:?}", withdrawal.address);

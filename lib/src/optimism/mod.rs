@@ -210,10 +210,8 @@ pub struct DeriveMachine<D> {
     op_block_no: u64,
     op_block_seq_no: u64,
     op_epoch_queue: VecDeque<Epoch>,
-    op_epoch_deposit_block_ptr: usize,
     op_batches: Batches<Channels<BatcherTransactions>>,
     eth_block_no: u64,
-    eth_block_inputs: Vec<BlockInput<EthereumTxEssence>>,
 }
 
 impl<D: BatcherDb> DeriveMachine<D> {
@@ -298,10 +296,8 @@ impl<D: BatcherDb> DeriveMachine<D> {
             op_block_no,
             op_block_seq_no,
             op_epoch_queue: VecDeque::new(),
-            op_epoch_deposit_block_ptr: 0,
             op_batches,
             eth_block_no,
-            eth_block_inputs: Vec::new(),
         })
     }
 
@@ -445,10 +441,10 @@ impl<D: BatcherDb> DeriveMachine<D> {
         let eth_block_hash = eth_block.block_header.hash();
 
         // Ensure block has correct parent
-        if let Some(parent_block) = self.eth_block_inputs.last() {
+        if self.op_batches.state.current_l1_block_number < self.eth_block_no {
             assert_eq!(
                 eth_block.block_header.parent_hash,
-                parent_block.block_header.hash(),
+                self.op_batches.state.current_l1_block_hash,
             );
         }
 
@@ -482,7 +478,6 @@ impl<D: BatcherDb> DeriveMachine<D> {
 
         self.op_batches.state.current_l1_block_number = self.eth_block_no;
         self.op_batches.state.current_l1_block_hash = eth_block_hash;
-        self.eth_block_inputs.push(eth_block);
         self.eth_block_no += 1;
 
         Ok(())
@@ -499,29 +494,35 @@ impl<D: BatcherDb> DeriveMachine<D> {
             .take()
             .expect("dequeued future batch without next epoch!");
 
-        self.op_epoch_deposit_block_ptr += 1;
-        let deposit_block_input = &self.eth_block_inputs[self.op_epoch_deposit_block_ptr];
-        if deposit_block_input.block_header.number != op_batch.essence.epoch_num {
-            bail!("Invalid epoch number!")
-        };
+        assert_eq!(
+            self.op_batches.state.epoch.number,
+            op_batch.essence.epoch_num
+        );
 
-        #[cfg(not(target_os = "zkvm"))]
-        {
-            info!(
-                "Extracting deposits from block {} for batch with epoch {}",
-                deposit_block_input.block_header.number, op_batch.essence.epoch_num
-            );
-        }
+        let deposit_block_input = self
+            .derive_input
+            .db
+            .get_full_eth_block(self.op_batches.state.epoch.number)
+            .context("block not found")?;
 
-        Ok(deposits::extract_transactions(&self.op_batches.config, deposit_block_input)?)
+        Ok(deposits::extract_transactions(
+            &self.op_batches.config,
+            &deposit_block_input,
+        )?)
     }
 
-    fn derive_system_transaction(&self, op_batch: &Batch) -> Transaction<OptimismTxEssence> {
-        let eth_block_header = &self.eth_block_inputs[self.op_epoch_deposit_block_ptr].block_header;
+    fn derive_system_transaction(&mut self, op_batch: &Batch) -> Transaction<OptimismTxEssence> {
+        let eth_block_header = &self
+            .derive_input
+            .db
+            .get_eth_block_header(self.op_batches.state.epoch.number)
+            .expect("block not found");
+
         let batcher_hash = {
             let all_zero: FixedBytes<12> = FixedBytes([0_u8; 12]);
             all_zero.concat_const::<20, 32>(self.op_batches.config.system_config.batch_sender.0)
         };
+
         let set_l1_block_values =
             OpSystemInfo::OpSystemInfoCalls::setL1BlockValues(OpSystemInfo::setL1BlockValuesCall {
                 number: eth_block_header.number,
@@ -533,6 +534,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                 l1_fee_overhead: self.op_batches.config.system_config.l1_fee_overhead,
                 l1_fee_scalar: self.op_batches.config.system_config.l1_fee_scalar,
             });
+
         let source_hash: B256 = {
             let source_hash_sequencing = keccak(
                 &[
@@ -551,6 +553,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
             )
             .into()
         };
+
         Transaction {
             essence: OptimismTxEssence::OptimismDeposited(TxEssenceOptimismDeposited {
                 source_hash,

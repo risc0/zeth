@@ -107,7 +107,7 @@ async fn main() -> Result<()> {
     let args = Args::parse();
 
     info!("Fetching data ...");
-    let (derive_input, output_1) = tokio::task::spawn_blocking(move || {
+    let (derive_input, output) = tokio::task::spawn_blocking(move || {
         let derive_input = DeriveInput {
             db: RpcDb::new(args.eth_rpc_url, args.op_rpc_url, args.cache),
             op_head_block_no: args.block_no,
@@ -128,17 +128,17 @@ async fn main() -> Result<()> {
 
     info!("Running from memory ...");
     {
-        let output_2 = DeriveMachine::new(derive_input.clone())
+        let output_mem = DeriveMachine::new(derive_input.clone())
             .expect("Could not create derive machine")
             .derive()
             .unwrap();
-        assert_eq!(output_1, output_2);
+        assert_eq!(output, output_mem);
     }
 
     info!("In-memory test complete");
-    info!("Eth tail: {} {}", output_1.eth_tail.0, output_1.eth_tail.1);
-    info!("Op Head: {} {}", output_1.op_head.0, output_1.op_head.1);
-    for derived_block in &output_1.derived_op_blocks {
+    info!("Eth tail: {} {}", output.eth_tail.0, output.eth_tail.1);
+    info!("Op Head: {} {}", output.op_head.0, output.op_head.1);
+    for derived_block in &output.derived_op_blocks {
         info!("Derived: {} {}", derived_block.0, derived_block.1);
     }
 
@@ -206,14 +206,14 @@ async fn main() -> Result<()> {
             session.segments.len() * (1 << segment_limit_po2)
         );
 
-        let output_3: DeriveOutput = session.journal.decode().unwrap();
+        let output_guest: DeriveOutput = session.journal.decode().unwrap();
 
-        if output_1 == output_3 {
+        if output == output_guest {
             info!("Executor succeeded");
         } else {
             error!(
                 "Output mismatch! Executor: {:?}, expected: {:?}",
-                output_3, output_1,
+                output_guest, output,
             );
         }
     }

@@ -209,12 +209,10 @@ impl<D: BatcherDb> DeriveMachine<D> {
         let op_head_block_hash = op_head.block_header.hash();
 
         #[cfg(not(target_os = "zkvm"))]
-        {
-            info!(
-                "Fetched Op head (block no {}) {}",
-                derive_input.op_head_block_no, op_head_block_hash
-            );
-        }
+        info!(
+            "Fetched Op head (block no {}) {}",
+            derive_input.op_head_block_no, op_head_block_hash
+        );
 
         let set_l1_block_values = {
             let system_tx_data = op_head
@@ -240,12 +238,10 @@ impl<D: BatcherDb> DeriveMachine<D> {
             bail!("Ethereum head block hash mismatch.")
         }
         #[cfg(not(target_os = "zkvm"))]
-        {
-            info!(
-                "Fetched Eth head (block no {}) {}",
-                eth_block_no, set_l1_block_values.hash
-            );
-        }
+        info!(
+            "Fetched Eth head (block no {}) {}",
+            eth_block_no, set_l1_block_values.hash
+        );
 
         let op_batches = {
             let mut op_chain_config = ChainConfig::optimism();
@@ -294,34 +290,28 @@ impl<D: BatcherDb> DeriveMachine<D> {
 
         while self.op_block_no < target_block_no {
             #[cfg(not(target_os = "zkvm"))]
-            {
-                info!(
-                    "op_block_no = {}, eth_block_no = {}",
-                    self.op_block_no, self.eth_block_no
-                );
-            }
+            info!(
+                "op_block_no = {}, eth_block_no = {}",
+                self.op_block_no, self.eth_block_no
+            );
 
             // Process next Eth block
             self.process_next_eth_block()?;
 
             // Process batches
             while let Some(op_batch) = self.op_batches.next() {
-                #[cfg(not(target_os = "zkvm"))]
-                {
-                    info!(
-                        "Read batch: timestamp={}, epoch={}, tx count={}, parent hash={:?}",
-                        op_batch.essence.timestamp,
-                        op_batch.essence.epoch_num,
-                        op_batch.essence.transactions.len(),
-                        op_batch.essence.parent_hash,
-                    );
-                }
-
                 // Process the batch
                 self.op_block_no += 1;
 
                 #[cfg(not(target_os = "zkvm"))]
-                info!("Processing batch for Op block no {}", self.op_block_no);
+                info!(
+                    "Read batch for Op block {}: timestamp={}, epoch={}, tx count={}, parent hash={:?}",
+                    self.op_block_no,
+                    op_batch.essence.timestamp,
+                    op_batch.essence.epoch_num,
+                    op_batch.essence.transactions.len(),
+                    op_batch.essence.parent_hash,
+                );
 
                 // Update sequence number (and fetch deposits if start of new epoch)
                 let deposits =
@@ -387,12 +377,10 @@ impl<D: BatcherDb> DeriveMachine<D> {
                 let new_op_head_hash = new_op_head.hash();
 
                 #[cfg(not(target_os = "zkvm"))]
-                {
-                    info!(
-                        "Derived Op block {} w/ hash {}",
-                        new_op_head.number, new_op_head_hash
-                    );
-                }
+                info!(
+                    "Derived Op block {} w/ hash {}",
+                    new_op_head.number, new_op_head_hash
+                );
 
                 self.op_batches.state.safe_head = BlockInfo {
                     hash: new_op_head_hash,

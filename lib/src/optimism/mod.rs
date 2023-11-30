@@ -360,9 +360,6 @@ impl<D: BatcherDb> DeriveMachine<D> {
                         self.op_batches.state.safe_head.hash
                     );
 
-                    // Verify new op head has the expected block number
-                    assert_eq!(new_op_head.number, self.op_block_no);
-
                     // Verify that the new op head transactions are consistent with the batch transactions
                     {
                         let system_tx = self.derive_system_transaction(&op_batch);

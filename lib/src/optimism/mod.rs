@@ -276,7 +276,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                 channels,
                 State {
                     current_l1_block_number: eth_block_no,
-                    current_l1_block_hash: BlockHash::from(eth_head_hash),
+                    current_l1_block_hash: eth_head_hash,
                     safe_head: BlockInfo {
                         hash: op_head_block_hash,
                         timestamp: op_head.block_header.timestamp.try_into().unwrap(),
@@ -342,8 +342,15 @@ impl<D: BatcherDb> DeriveMachine<D> {
                 #[cfg(not(target_os = "zkvm"))]
                 info!("Processing batch for Op block no {}", self.op_block_no);
 
-                // Manage current epoch number and extract deposits
-                let deposits = self.derive_deposit_transactions(&op_batch)?;
+                // Update sequence number (and fetch deposits if start of new epoch)
+                let deposits =
+                    if op_batch.essence.epoch_num == self.op_batches.state.epoch.number + 1 {
+                        self.op_block_seq_no = 0;
+                        Some(self.derive_deposit_transactions(&op_batch)?)
+                    } else {
+                        self.op_block_seq_no += 1;
+                        None
+                    };
                 self.deque_next_epoch_if_none()?;
 
                 // Obtain new Op head
@@ -474,6 +481,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
         .context("failed to create batcher transactions")?;
 
         self.op_batches.state.current_l1_block_number = self.eth_block_no;
+        self.op_batches.state.current_l1_block_hash = eth_block_hash;
         self.eth_block_inputs.push(eth_block);
         self.eth_block_no += 1;
 
@@ -483,44 +491,29 @@ impl<D: BatcherDb> DeriveMachine<D> {
     fn derive_deposit_transactions(
         &mut self,
         op_batch: &Batch,
-    ) -> Result<Option<Vec<Transaction<OptimismTxEssence>>>> {
-        if op_batch.essence.epoch_num == self.op_batches.state.epoch.number + 1 {
-            self.op_batches.state.epoch = self
-                .op_batches
-                .state
-                .next_epoch
-                .take()
-                .expect("dequeued future batch without next epoch!");
-            self.op_block_seq_no = 0;
+    ) -> Result<Vec<Transaction<OptimismTxEssence>>> {
+        self.op_batches.state.epoch = self
+            .op_batches
+            .state
+            .next_epoch
+            .take()
+            .expect("dequeued future batch without next epoch!");
 
-            self.op_epoch_deposit_block_ptr += 1;
-            let deposit_block_input = &self.eth_block_inputs[self.op_epoch_deposit_block_ptr];
-            if deposit_block_input.block_header.number != op_batch.essence.epoch_num {
-                bail!("Invalid epoch number!")
-            };
+        self.op_epoch_deposit_block_ptr += 1;
+        let deposit_block_input = &self.eth_block_inputs[self.op_epoch_deposit_block_ptr];
+        if deposit_block_input.block_header.number != op_batch.essence.epoch_num {
+            bail!("Invalid epoch number!")
+        };
 
-            #[cfg(not(target_os = "zkvm"))]
-            {
-                info!(
-                    "Extracting deposits from block {} for batch with epoch {}",
-                    deposit_block_input.block_header.number, op_batch.essence.epoch_num
-                );
-            }
-
-            let deposits =
-                deposits::extract_transactions(&self.op_batches.config, deposit_block_input)?;
-
-            #[cfg(not(target_os = "zkvm"))]
-            info!("Batch contains {} deposits", deposits.len());
-
-            Ok(Some(deposits))
-        } else {
-            #[cfg(not(target_os = "zkvm"))]
-            info!("Batch contains 0 deposits");
-
-            self.op_block_seq_no += 1;
-            Ok(None)
+        #[cfg(not(target_os = "zkvm"))]
+        {
+            info!(
+                "Extracting deposits from block {} for batch with epoch {}",
+                deposit_block_input.block_header.number, op_batch.essence.epoch_num
+            );
         }
+
+        Ok(deposits::extract_transactions(&self.op_batches.config, deposit_block_input)?)
     }
 
     fn derive_system_transaction(&self, op_batch: &Batch) -> Transaction<OptimismTxEssence> {

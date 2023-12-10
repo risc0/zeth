@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
+use std::{fmt::Debug, path::PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 use ethers_core::types::{
@@ -60,7 +60,7 @@ pub trait Preflight<E: TxEssence> {
     /// It returns all the data required to build and validate the block.
     fn run_preflight(
         chain_spec: ChainSpec,
-        cache_path: Option<String>,
+        cache_path: Option<PathBuf>,
         rpc_url: Option<String>,
         block_no: u64,
     ) -> Result<Data<E>>;
@@ -74,7 +74,7 @@ where
 {
     fn run_preflight(
         chain_spec: ChainSpec,
-        cache_path: Option<String>,
+        cache_path: Option<PathBuf>,
         rpc_url: Option<String>,
         block_no: u64,
     ) -> Result<Data<N::TxEssence>> {

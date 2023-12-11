@@ -8,6 +8,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  RISC0_VERSION: 0.19.1
   RISC0_TOOLCHAIN_VERSION: test-release-2
 
 concurrency:
@@ -28,7 +29,7 @@ jobs:
     - uses: risc0/cargo-install@v1
       with:
         crate: cargo-binstall
-    - run: cargo binstall -y cargo-risczero@0.19.1
+    - run: cargo binstall -y --force cargo-risczero@${{ env.RISC0_VERSION }}
     - run: cargo risczero install --version $RISC0_TOOLCHAIN_VERSION
     - run: cargo test --workspace --all-targets --all-features
 

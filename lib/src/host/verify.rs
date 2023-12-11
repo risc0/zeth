@@ -237,5 +237,5 @@ fn verify_state_trie(
 
 fn account_deleted(key: &[u8], proof: &[impl AsRef<[u8]>]) -> Result<bool> {
     let proof_nodes = mpt::parse_proof(proof).context("invalid encoding")?;
-    mpt::is_not_included(key, &proof_nodes)
+    mpt::is_not_included(&key, &proof_nodes)
 }

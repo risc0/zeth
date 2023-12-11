@@ -570,7 +570,7 @@ impl MptNode {
     fn insert_internal(&mut self, key_nibs: &[u8], value: Vec<u8>) -> Result<bool, Error> {
         match &mut self.data {
             MptNodeData::Null => {
-                self.data = MptNodeData::Leaf(to_encoded_path(&key_nibs, true), value);
+                self.data = MptNodeData::Leaf(to_encoded_path(key_nibs, true), value);
             }
             MptNodeData::Branch(children) => {
                 if let Some((i, tail)) = key_nibs.split_first() {

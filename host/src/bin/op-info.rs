@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::path::{Path, PathBuf};
+
 use alloy_sol_types::SolInterface;
 use anyhow::Result;
 use clap::Parser;
@@ -30,18 +32,21 @@ struct Args {
     #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "host/testdata")]
     /// Use a local directory as a cache for RPC calls. Accepts a custom directory.
     /// [default: host/testdata]
-    cache: Option<String>,
+    cache: Option<PathBuf>,
 
     #[clap(long, require_equals = true)]
     /// L2 block number to query
     block_no: u64,
 }
 
-fn cache_file_path(cache_path: &String, network: &str, block_no: u64, ext: &str) -> String {
-    format!("{}/{}/{}.{}", cache_path, network, block_no, ext)
+fn cache_file_path(cache_path: &Path, network: &str, block_no: u64, ext: &str) -> PathBuf {
+    cache_path
+        .join(network)
+        .join(block_no.to_string())
+        .with_extension(ext)
 }
 
-fn op_cache_path(args: &Args, block_no: u64) -> Option<String> {
+fn op_cache_path(args: &Args, block_no: u64) -> Option<PathBuf> {
     args.cache
         .as_ref()
         .map(|dir| cache_file_path(dir, "optimism", block_no, "json.gz"))

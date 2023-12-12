@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::path::PathBuf;
+
 use anyhow::Result;
 use ethers_core::types::{
     Block, Bytes, EIP1186ProofResponse, Transaction, TransactionReceipt, H256, U256,
@@ -28,7 +30,7 @@ pub struct CachedRpcProvider {
 }
 
 impl CachedRpcProvider {
-    pub fn new(cache_path: String, rpc_url: String) -> Result<Self> {
+    pub fn new(cache_path: PathBuf, rpc_url: String) -> Result<Self> {
         let cache = match FileProvider::read_from_file(cache_path.clone()) {
             Ok(provider) => provider,
             Err(_) => FileProvider::empty(cache_path),

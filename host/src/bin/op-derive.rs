@@ -23,6 +23,8 @@ RUST_LOG=info ../zeth/target/release/op-derive \
         --blocks=2
 */
 
+use std::path::{Path, PathBuf};
+
 use anyhow::{Context, Result};
 use clap::Parser;
 use log::{error, info};
@@ -57,7 +59,7 @@ struct Args {
     #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "host/testdata/derivation")]
     /// Use a local directory as a cache for RPC calls. Accepts a custom directory.
     /// [default: host/testdata/derivation]
-    cache: Option<String>,
+    cache: Option<PathBuf>,
 
     #[clap(long, require_equals = true)]
     /// L2 block number to begin from
@@ -85,17 +87,20 @@ struct Args {
     profile: bool,
 }
 
-fn cache_file_path(cache_path: &String, network: &str, block_no: u64, ext: &str) -> String {
-    format!("{}/{}/{}.{}", cache_path, network, block_no, ext)
+fn cache_file_path(cache_path: &Path, network: &str, block_no: u64, ext: &str) -> PathBuf {
+    cache_path
+        .join(network)
+        .join(block_no.to_string())
+        .with_extension(ext)
 }
 
-fn eth_cache_path(cache: &Option<String>, block_no: u64) -> Option<String> {
+fn eth_cache_path(cache: &Option<PathBuf>, block_no: u64) -> Option<PathBuf> {
     cache
         .as_ref()
         .map(|dir| cache_file_path(dir, "ethereum", block_no, "json.gz"))
 }
 
-fn op_cache_path(cache: &Option<String>, block_no: u64) -> Option<String> {
+fn op_cache_path(cache: &Option<PathBuf>, block_no: u64) -> Option<PathBuf> {
     cache
         .as_ref()
         .map(|dir| cache_file_path(dir, "optimism", block_no, "json.gz"))
@@ -224,7 +229,7 @@ async fn main() -> Result<()> {
 pub struct RpcDb {
     eth_rpc_url: Option<String>,
     op_rpc_url: Option<String>,
-    cache: Option<String>,
+    cache: Option<PathBuf>,
     mem_db: MemDb,
 }
 
@@ -232,7 +237,7 @@ impl RpcDb {
     pub fn new(
         eth_rpc_url: Option<String>,
         op_rpc_url: Option<String>,
-        cache: Option<String>,
+        cache: Option<PathBuf>,
     ) -> Self {
         RpcDb {
             eth_rpc_url,

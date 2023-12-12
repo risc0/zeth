@@ -40,7 +40,10 @@ fn block_cli_ethereum(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
 fn empty_blocks(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
     let block_no = u64::from_str(file_prefix(&path)).unwrap();
     // Set block cache directory
-    let rpc_cache = Some(format!("testdata/ethereum/{}.json.gz", block_no));
+    let rpc_cache = Some(PathBuf::from(format!(
+        "testdata/ethereum/{}.json.gz",
+        block_no
+    )));
     // Fetch all of the preflight data
     let init =
         EthereumStrategy::run_preflight(ETH_MAINNET_CHAIN_SPEC.clone(), rpc_cache, None, block_no)

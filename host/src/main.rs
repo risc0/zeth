@@ -14,7 +14,11 @@
 
 extern crate core;
 
-use std::{fmt::Debug, time::Instant};
+use std::{
+    fmt::Debug,
+    path::{Path, PathBuf},
+    time::Instant,
+};
 
 use anyhow::{Context, Result};
 use bonsai_sdk::alpha as bonsai_sdk;
@@ -47,7 +51,7 @@ struct Args {
     #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "host/testdata")]
     /// Use a local directory as a cache for RPC calls. Accepts a custom directory.
     /// [default: host/testdata]
-    cache: Option<String>,
+    cache: Option<PathBuf>,
 
     #[clap(
         short,
@@ -81,8 +85,11 @@ struct Args {
     profile: bool,
 }
 
-fn cache_file_path(cache_path: &String, network: &String, block_no: u64, ext: &str) -> String {
-    format!("{}/{}/{}.{}", cache_path, network, block_no, ext)
+fn cache_file_path(cache_path: &Path, network: &str, block_no: u64, ext: &str) -> PathBuf {
+    cache_path
+        .join(network)
+        .join(block_no.to_string())
+        .with_extension(ext)
 }
 
 #[tokio::main]

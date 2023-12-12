@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, path::PathBuf};
 
 use anyhow::{anyhow, Result};
 use ethers_core::types::{Block, Bytes, EIP1186ProofResponse, Transaction, H160, H256, U256};
@@ -69,7 +69,7 @@ pub trait MutProvider: Provider {
     fn insert_storage(&mut self, query: StorageQuery, val: H256);
 }
 
-pub fn new_file_provider(file_path: String) -> Result<Box<dyn Provider>> {
+pub fn new_file_provider(file_path: PathBuf) -> Result<Box<dyn Provider>> {
     let provider = file_provider::FileProvider::read_from_file(file_path)?;
 
     Ok(Box::new(provider))
@@ -81,14 +81,14 @@ pub fn new_rpc_provider(rpc_url: String) -> Result<Box<dyn Provider>> {
     Ok(Box::new(provider))
 }
 
-pub fn new_cached_rpc_provider(cache_path: String, rpc_url: String) -> Result<Box<dyn Provider>> {
+pub fn new_cached_rpc_provider(cache_path: PathBuf, rpc_url: String) -> Result<Box<dyn Provider>> {
     let provider = cached_rpc_provider::CachedRpcProvider::new(cache_path, rpc_url)?;
 
     Ok(Box::new(provider))
 }
 
 pub fn new_provider(
-    cache_path: Option<String>,
+    cache_path: Option<PathBuf>,
     rpc_url: Option<String>,
 ) -> Result<Box<dyn Provider>> {
     match (cache_path, rpc_url) {

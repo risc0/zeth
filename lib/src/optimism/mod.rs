@@ -458,3 +458,29 @@ impl<D: BatcherDb> DeriveMachine<D> {
         }
     }
 }
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ComposeInput<D> {
+    pub db: D,
+    pub image_id: [u8; 32],
+    pub operation: ComposeInputOperation,
+    pub eth_chain_root: [u8; 32],
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub enum ComposeInputOperation {
+    LIFT(DeriveOutput),
+    JOIN {
+        left: ComposeOutput,
+        right: ComposeOutput
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ComposeOutput {
+    pub image_id: [u8; 32],
+    pub op_head: (BlockNumber, BlockHash),
+    pub op_tail: (BlockNumber, BlockHash),
+    pub eth_tail: (BlockNumber, BlockHash),
+    pub eth_chain_root: [u8; 32],
+}

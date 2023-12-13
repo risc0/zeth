@@ -89,7 +89,7 @@ fn executor(
             .unwrap();
         println!("Generated {} segments", session.segments.len());
 
-        let found_hash: BlockHash = session.journal.decode().unwrap();
+        let found_hash: BlockHash = session.journal.unwrap().decode().unwrap();
         println!("Block hash (from executor): {}", found_hash);
         assert_eq!(found_hash, expected_header.hash());
     }

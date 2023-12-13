@@ -17,12 +17,12 @@ extern crate core;
 use std::{fmt::Debug, time::Instant};
 
 use anyhow::{Context, Result};
-use bonsai_sdk::alpha as bonsai_sdk;
+// use bonsai_sdk::alpha as bonsai_sdk;
 use clap::Parser;
 use ethers_core::types::Transaction as EthersTransaction;
 use log::{error, info};
 use risc0_zkvm::{
-    serde::to_vec, ExecutorEnv, ExecutorImpl, FileSegmentRef, MemoryImage, Program, Receipt,
+    serde::to_vec, ExecutorEnv, ExecutorImpl, FileSegmentRef, // Receipt,
 };
 use serde::{Deserialize, Serialize};
 use tempfile::tempdir;
@@ -118,8 +118,8 @@ async fn run<N: BlockBuilderStrategy>(
     args: Args,
     chain_spec: ChainSpec,
     guest_elf: &[u8],
-    guest_id: [u32; risc0_zkvm::sha::DIGEST_WORDS],
-    guest_path: &str,
+    _guest_id: [u32; risc0_zkvm::sha::DIGEST_WORDS],
+    _guest_path: &str,
 ) -> Result<()>
 where
     N::TxEssence: 'static + Send + TryFrom<EthersTransaction> + Serialize + Deserialize<'static>,
@@ -168,7 +168,7 @@ where
             input.len() * 4 / 1_000_000
         );
 
-        let mut profiler = risc0_zkvm::Profiler::new(guest_path, guest_elf).unwrap();
+        // let mut profiler = risc0_zkvm::Profiler::new(guest_path, guest_elf).unwrap();
 
         info!("Running the executor...");
         let start_time = Instant::now();
@@ -179,9 +179,9 @@ where
                 .segment_limit_po2(segment_limit_po2)
                 .write_slice(&input);
 
-            if args.profile {
-                builder.trace_callback(profiler.make_trace_callback());
-            }
+            // if args.profile {
+            //     builder.trace_callback(profiler.make_trace_callback());
+            // }
 
             let env = builder.build().unwrap();
             let mut exec = ExecutorImpl::from_elf(env, guest_elf).unwrap();
@@ -199,19 +199,19 @@ where
             start_time.elapsed()
         );
 
-        if args.profile {
-            profiler.finalize();
-
-            let sys_time = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap();
-            tokio::fs::write(
-                format!("profile_{}.pb", sys_time.as_secs()),
-                &profiler.encode_to_vec(),
-            )
-            .await
-            .expect("Failed to write profiling output");
-        }
+        // if args.profile {
+        //     profiler.finalize();
+        //
+        //     let sys_time = std::time::SystemTime::now()
+        //         .duration_since(std::time::UNIX_EPOCH)
+        //         .unwrap();
+        //     tokio::fs::write(
+        //         format!("profile_{}.pb", sys_time.as_secs()),
+        //         &profiler.encode_to_vec(),
+        //     )
+        //     .await
+        //     .expect("Failed to write profiling output");
+        // }
 
         info!(
             "Executor ran in (roughly) {} cycles",
@@ -219,7 +219,7 @@ where
         );
 
         let expected_hash = preflight_data.header.hash();
-        let found_hash: BlockHash = session.journal.decode().unwrap();
+        let found_hash: BlockHash = session.journal.unwrap().decode().unwrap();
 
         if found_hash == expected_hash {
             info!("Block hash (from executor): {}", found_hash);
@@ -231,95 +231,95 @@ where
         }
     }
 
-    let mut bonsai_session_uuid = args.verify_bonsai_receipt_uuid;
+    // let mut bonsai_session_uuid = args.verify_bonsai_receipt_uuid;
 
     // Run in Bonsai (if requested)
-    if bonsai_session_uuid.is_none() && args.submit_to_bonsai {
-        info!("Creating Bonsai client");
-        let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)
-            .expect("Could not create Bonsai client");
-
-        // create the memoryImg, upload it and return the imageId
-        info!("Uploading memory image");
-        let img_id = {
-            let program = Program::load_elf(guest_elf, risc0_zkvm::GUEST_MAX_MEM as u32)
-                .expect("Could not load ELF");
-            let image = MemoryImage::new(&program, risc0_zkvm::PAGE_SIZE as u32)
-                .expect("Could not create memory image");
-            let image_id = hex::encode(image.compute_id());
-            let image = bincode::serialize(&image).expect("Failed to serialize memory img");
-
-            client
-                .upload_img(&image_id, image)
-                .expect("Could not upload ELF");
-            image_id
-        };
-
-        // Prepare input data and upload it.
-        info!("Uploading inputs");
-        let input_data = to_vec(&input).unwrap();
-        let input_data = bytemuck::cast_slice(&input_data).to_vec();
-        let input_id = client
-            .upload_input(input_data)
-            .expect("Could not upload inputs");
-
-        // Start a session running the prover
-        info!("Starting session");
-        let session = client
-            .create_session(img_id, input_id)
-            .expect("Could not create Bonsai session");
-
-        println!("Bonsai session UUID: {}", session.uuid);
-        bonsai_session_uuid = Some(session.uuid)
-    }
+    // if bonsai_session_uuid.is_none() && args.submit_to_bonsai {
+    //     info!("Creating Bonsai client");
+    //     let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)
+    //         .expect("Could not create Bonsai client");
+    //
+    //     // create the memoryImg, upload it and return the imageId
+    //     info!("Uploading memory image");
+    //     let img_id = {
+    //         let program = Program::load_elf(guest_elf, risc0_zkvm::GUEST_MAX_MEM as u32)
+    //             .expect("Could not load ELF");
+    //         let image = MemoryImage::new(&program, risc0_zkvm::PAGE_SIZE as u32)
+    //             .expect("Could not create memory image");
+    //         let image_id = hex::encode(image.compute_id());
+    //         let image = bincode::serialize(&image).expect("Failed to serialize memory img");
+    //
+    //         client
+    //             .upload_img(&image_id, image)
+    //             .expect("Could not upload ELF");
+    //         image_id
+    //     };
+    //
+    //     // Prepare input data and upload it.
+    //     info!("Uploading inputs");
+    //     let input_data = to_vec(&input).unwrap();
+    //     let input_data = bytemuck::cast_slice(&input_data).to_vec();
+    //     let input_id = client
+    //         .upload_input(input_data)
+    //         .expect("Could not upload inputs");
+    //
+    //     // Start a session running the prover
+    //     info!("Starting session");
+    //     let session = client
+    //         .create_session(img_id, input_id)
+    //         .expect("Could not create Bonsai session");
+    //
+    //     println!("Bonsai session UUID: {}", session.uuid);
+    //     bonsai_session_uuid = Some(session.uuid)
+    // }
 
     // Verify receipt from Bonsai (if requested)
-    if let Some(session_uuid) = bonsai_session_uuid {
-        let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)
-            .expect("Could not create Bonsai client");
-        let session = bonsai_sdk::SessionId { uuid: session_uuid };
-
-        loop {
-            let res = session
-                .status(&client)
-                .expect("Could not fetch Bonsai status");
-            if res.status == "RUNNING" {
-                tokio::time::sleep(std::time::Duration::from_secs(15)).await;
-                continue;
-            }
-            if res.status == "SUCCEEDED" {
-                // Download the receipt, containing the output
-                let receipt_url = res
-                    .receipt_url
-                    .expect("API error, missing receipt on completed session");
-
-                let receipt_buf = client
-                    .download(&receipt_url)
-                    .expect("Could not download receipt");
-                let receipt: Receipt =
-                    bincode::deserialize(&receipt_buf).expect("Could not deserialize receipt");
-                receipt
-                    .verify(guest_id)
-                    .expect("Receipt verification failed");
-
-                let expected_hash = preflight_data.header.hash();
-                let found_hash: BlockHash = receipt.journal.decode().unwrap();
-
-                if found_hash == expected_hash {
-                    info!("Block hash (from Bonsai): {}", found_hash);
-                } else {
-                    error!(
-                        "Final block hash mismatch (from Bonsai) {} (expected {})",
-                        found_hash, expected_hash,
-                    );
-                }
-            } else {
-                panic!("Workflow exited: {}", res.status);
-            }
-
-            break;
-        }
-    }
+    // if let Some(session_uuid) = bonsai_session_uuid {
+    //     let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)
+    //         .expect("Could not create Bonsai client");
+    //     let session = bonsai_sdk::SessionId { uuid: session_uuid };
+    //
+    //     loop {
+    //         let res = session
+    //             .status(&client)
+    //             .expect("Could not fetch Bonsai status");
+    //         if res.status == "RUNNING" {
+    //             tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+    //             continue;
+    //         }
+    //         if res.status == "SUCCEEDED" {
+    //             // Download the receipt, containing the output
+    //             let receipt_url = res
+    //                 .receipt_url
+    //                 .expect("API error, missing receipt on completed session");
+    //
+    //             let receipt_buf = client
+    //                 .download(&receipt_url)
+    //                 .expect("Could not download receipt");
+    //             let receipt: Receipt =
+    //                 bincode::deserialize(&receipt_buf).expect("Could not deserialize receipt");
+    //             receipt
+    //                 .verify(guest_id)
+    //                 .expect("Receipt verification failed");
+    //
+    //             let expected_hash = preflight_data.header.hash();
+    //             let found_hash: BlockHash = receipt.journal.decode().unwrap();
+    //
+    //             if found_hash == expected_hash {
+    //                 info!("Block hash (from Bonsai): {}", found_hash);
+    //             } else {
+    //                 error!(
+    //                     "Final block hash mismatch (from Bonsai) {} (expected {})",
+    //                     found_hash, expected_hash,
+    //                 );
+    //             }
+    //         } else {
+    //             panic!("Workflow exited: {}", res.status);
+    //         }
+    //
+    //         break;
+    //     }
+    // }
 
     Ok(())
 }

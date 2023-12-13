@@ -15,37 +15,74 @@
 #![no_main]
 
 use risc0_zkvm::guest::env;
+use risc0_zkvm::serde::to_vec;
 use risc0_zkvm::sha::Digest;
-use zeth_lib::optimism::{ComposeInput, ComposeInputOperation, DeriveInput, DeriveMachine, MemDb};
+use zeth_lib::optimism::{ComposeInput, ComposeInputOperation, ComposeOutput, MemDb};
 
 risc0_zkvm::guest::entry!(main);
 
 pub fn main() {
-    // read input that specifies two adjacent derivation proofs
+    // read composition input
     let compose_input: ComposeInput<MemDb> = env::read();
-
-    match compose_input.operation {
+    // process input
+    let compose_output = match compose_input.operation {
         ComposeInputOperation::LIFT(derive_output) => {
-
+            // Verify derivation receipt
+            let derive_journal =
+                to_vec(&derive_output).expect("Failed to encode expected derivation journal");
+            env::verify(
+                Digest::from(compose_input.derive_image_id),
+                bytemuck::cast_slice(&derive_journal),
+            )
+            .expect("Failed to lift derivation receipt");
+            // todo Verify inclusion of ethereum tail in Merkle root
+            // Create output
+            ComposeOutput {
+                derive_image_id: compose_input.derive_image_id,
+                compose_image_id: compose_input.compose_image_id,
+                op_head: derive_output.op_head,
+                op_tail: derive_output.derived_op_blocks.last().unwrap_or(&derive_output.op_head).clone(),
+                eth_tail: derive_output.eth_tail,
+                eth_chain_root: compose_input.eth_chain_root
+            }
         }
-        ComposeInputOperation::JOIN { .. } => {}
-    }
+        ComposeInputOperation::JOIN { left: left_compose_output, right: right_compose_output } => {
+            // Verify composition receipts
+            let left_compose_journal =
+                to_vec(&left_compose_output).expect("Failed to encode expected left composition journal");
+            env::verify(
+                Digest::from(compose_input.compose_image_id),
+                bytemuck::cast_slice(&left_compose_journal),
+            ).expect("Failed to verify left composition receipt");
+            let right_compose_journal =
+                to_vec(&right_compose_output).expect("Failed to encode expected right composition journal");
+            env::verify(
+                Digest::from(compose_input.compose_image_id),
+                bytemuck::cast_slice(&right_compose_journal),
+            ).expect("Failed to verify right composition receipt");
+            // Verify composition continuity
+            // derive_image_id equality
+            assert_eq!(compose_input.derive_image_id, left_compose_output.derive_image_id);
+            assert_eq!(compose_input.derive_image_id, right_compose_output.derive_image_id);
+            // compose_image_id equality
+            assert_eq!(compose_input.compose_image_id, left_compose_output.compose_image_id);
+            assert_eq!(compose_input.compose_image_id, right_compose_output.compose_image_id);
+            // eth_chain_root equality
+            assert_eq!(compose_input.eth_chain_root, left_compose_output.eth_chain_root);
+            assert_eq!(compose_input.eth_chain_root, right_compose_output.eth_chain_root);
+            // op block continuity
+            assert_eq!(left_compose_output.op_tail, right_compose_output.op_head);
 
-    // own image id
-    // left proof: op_block_head, op_block_tail, eth_block_tail
-    // right proof: op_block_head, op_block_tail, eth_block_tail
-    // verify left proof & right proof
-    // check continuity of optimism blocks
-    //  -> right head is parent of left tail
-    // check overlap of ethereum blocks
-    //  -> derive eth block of right op_block_head
-    //  -> check chain of blocks that covers left tail and right tail
-    //      -> just check for inclusion proofs for tails under merkle root
+            ComposeOutput {
+                derive_image_id: compose_input.derive_image_id,
+                compose_image_id: compose_input.compose_image_id,
+                op_head: left_compose_output.op_head,
+                op_tail: right_compose_output.op_tail,
+                eth_tail: core::cmp::max(left_compose_output.eth_tail, right_compose_output.eth_tail),
+                eth_chain_root: compose_input.eth_chain_root,
+            }
+        }
+    };
     // output statement about larger segment
-    //  -> own image id
-    env::commit(&compose_input.image_id);
-    //  -> op-head of left proof as new op head
-    //  -> op-tail of right proof as new op tail
-    //  -> left/right eth tail with max height as new tail
-    //  -> reference blockchain merkle root
+    env::commit(&compose_output);
 }

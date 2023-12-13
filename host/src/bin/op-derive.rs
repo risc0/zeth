@@ -27,10 +27,10 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use log::{error, info};
 use risc0_zkvm::{
-    serde::to_vec, ExecutorEnv, ExecutorImpl, FileSegmentRef, MemoryImage, Program, Receipt,
+    serde::to_vec, ExecutorEnv, ExecutorImpl, FileSegmentRef, // Receipt,
 };
 use tempfile::tempdir;
-use zeth_guests::{OP_DERIVE_ELF, OP_DERIVE_ID, OP_DERIVE_PATH};
+use zeth_guests::*;
 use zeth_lib::{
     host::provider::{new_provider, BlockQuery},
     optimism::{
@@ -156,7 +156,7 @@ async fn main() -> Result<()> {
             input.len() * 4 / 1_000_000
         );
 
-        let mut profiler = risc0_zkvm::Profiler::new(OP_DERIVE_PATH, OP_DERIVE_ELF).unwrap();
+        // let mut profiler = risc0_zkvm::Profiler::new(OP_DERIVE_PATH, OP_DERIVE_ELF).unwrap();
 
         info!("Running the executor...");
         let start_time = std::time::Instant::now();
@@ -167,9 +167,9 @@ async fn main() -> Result<()> {
                 .segment_limit_po2(segment_limit_po2)
                 .write_slice(&input);
 
-            if args.profile {
-                builder.trace_callback(profiler.make_trace_callback());
-            }
+            // if args.profile {
+            //     builder.trace_callback(profiler.make_trace_callback());
+            // }
 
             let env = builder.build().unwrap();
             let mut exec = ExecutorImpl::from_elf(env, OP_DERIVE_ELF).unwrap();
@@ -187,26 +187,26 @@ async fn main() -> Result<()> {
             start_time.elapsed()
         );
 
-        if args.profile {
-            profiler.finalize();
-
-            let sys_time = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap();
-            tokio::fs::write(
-                format!("profile_{}.pb", sys_time.as_secs()),
-                &profiler.encode_to_vec(),
-            )
-            .await
-            .expect("Failed to write profiling output");
-        }
+        // if args.profile {
+        //     profiler.finalize();
+        //
+        //     let sys_time = std::time::SystemTime::now()
+        //         .duration_since(std::time::UNIX_EPOCH)
+        //         .unwrap();
+        //     tokio::fs::write(
+        //         format!("profile_{}.pb", sys_time.as_secs()),
+        //         &profiler.encode_to_vec(),
+        //     )
+        //     .await
+        //     .expect("Failed to write profiling output");
+        // }
 
         info!(
             "Executor ran in (roughly) {} cycles",
             session.segments.len() * (1 << segment_limit_po2)
         );
 
-        let output_guest: DeriveOutput = session.journal.decode().unwrap();
+        let output_guest: DeriveOutput = session.journal.unwrap().decode().unwrap();
 
         if output == output_guest {
             info!("Executor succeeded");

@@ -22,7 +22,10 @@ use clap::Parser;
 use ethers_core::types::Transaction as EthersTransaction;
 use log::{error, info};
 use risc0_zkvm::{
-    serde::to_vec, ExecutorEnv, ExecutorImpl, FileSegmentRef, // Receipt,
+    serde::to_vec,
+    ExecutorEnv,
+    ExecutorImpl,
+    FileSegmentRef, // Receipt,
 };
 use serde::{Deserialize, Serialize};
 use tempfile::tempdir;
@@ -247,7 +250,8 @@ where
     //         let image = MemoryImage::new(&program, risc0_zkvm::PAGE_SIZE as u32)
     //             .expect("Could not create memory image");
     //         let image_id = hex::encode(image.compute_id());
-    //         let image = bincode::serialize(&image).expect("Failed to serialize memory img");
+    //         let image = bincode::serialize(&image).expect("Failed to serialize memory
+    // img");
     //
     //         client
     //             .upload_img(&image_id, image)
@@ -297,8 +301,8 @@ where
     //                 .download(&receipt_url)
     //                 .expect("Could not download receipt");
     //             let receipt: Receipt =
-    //                 bincode::deserialize(&receipt_buf).expect("Could not deserialize receipt");
-    //             receipt
+    //                 bincode::deserialize(&receipt_buf).expect("Could not deserialize
+    // receipt");             receipt
     //                 .verify(guest_id)
     //                 .expect("Receipt verification failed");
     //

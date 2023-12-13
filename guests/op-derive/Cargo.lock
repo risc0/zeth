@@ -3692,6 +3692,7 @@ version = "0.1.0"
 dependencies = [
  "alloy-sol-types",
  "anyhow",
+ "bytemuck",
  "chrono",
  "ethers-core",
  "ethers-providers",
@@ -3701,6 +3702,7 @@ dependencies = [
  "log",
  "once_cell",
  "revm",
+ "risc0-zkvm",
  "ruint",
  "serde",
  "serde_json",

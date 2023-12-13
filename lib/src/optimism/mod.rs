@@ -13,11 +13,13 @@
 // limitations under the License.
 
 use core::iter::once;
+use std::collections::HashMap;
 
 use alloy_sol_types::{sol, SolInterface};
 use anyhow::{bail, Context, Result};
+#[cfg(not(target_os = "zkvm"))]
+use log::info;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use zeth_primitives::{
     address,
     batch::Batch,
@@ -32,9 +34,6 @@ use zeth_primitives::{
     uint, Address, BlockHash, BlockNumber, FixedBytes, RlpBytes, B256, U256,
 };
 
-#[cfg(not(target_os = "zkvm"))]
-use log::info;
-
 use crate::optimism::{
     batches::Batches,
     config::ChainConfig,
@@ -45,6 +44,7 @@ use crate::optimism::{
 pub mod batcher_transactions;
 pub mod batches;
 pub mod channels;
+pub mod composition;
 pub mod config;
 pub mod deposits;
 pub mod derivation;
@@ -353,7 +353,8 @@ impl<D: BatcherDb> DeriveMachine<D> {
                         self.op_batches.state.safe_head.hash
                     );
 
-                    // Verify that the new op head transactions are consistent with the batch transactions
+                    // Verify that the new op head transactions are consistent with the batch
+                    // transactions
                     {
                         let system_tx = self.derive_system_transaction(&op_batch);
 
@@ -457,32 +458,4 @@ impl<D: BatcherDb> DeriveMachine<D> {
             signature: Default::default(),
         }
     }
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ComposeInput<D> {
-    pub db: D,
-    pub derive_image_id: [u32; 8],
-    pub compose_image_id: [u32; 8],
-    pub operation: ComposeInputOperation,
-    pub eth_chain_root: [u8; 32],
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub enum ComposeInputOperation {
-    LIFT(DeriveOutput),
-    JOIN {
-        left: ComposeOutput,
-        right: ComposeOutput,
-    },
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ComposeOutput {
-    pub derive_image_id: [u32; 8],
-    pub compose_image_id: [u32; 8],
-    pub op_head: (BlockNumber, BlockHash),
-    pub op_tail: (BlockNumber, BlockHash),
-    pub eth_tail: (BlockNumber, BlockHash),
-    pub eth_chain_root: [u8; 32],
 }

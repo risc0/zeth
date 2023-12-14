@@ -165,14 +165,8 @@ impl Batcher {
             &eth_block.transactions,
         )?;
 
-        self.state.current_l1_block_number = eth_block.block_header.number;
-        self.state.current_l1_block_hash = eth_block_hash;
-
-        Ok(())
-    }
-
-    pub fn read_batch(&mut self) -> Result<Option<Batch>> {
-        if let Some(batches) = self.batcher_channel.read_batches() {
+        // Read batches
+        while let Some(batches) = self.batcher_channel.read_batches() {
             batches.into_iter().for_each(|batch| {
                 #[cfg(not(target_os = "zkvm"))]
                 log::debug!(
@@ -185,69 +179,94 @@ impl Batcher {
             });
         }
 
-        let derived_batch = loop {
-            if let Some(Reverse(batch)) = self.batches.pop() {
-                match self.batch_status(&batch) {
-                    BatchStatus::Accept => {
-                        break Some(batch);
-                    }
-                    BatchStatus::Drop => {
-                        #[cfg(not(target_os = "zkvm"))]
-                        log::debug!("Dropping invalid batch");
-                    }
-                    BatchStatus::Future | BatchStatus::Undecided => {
-                        self.batches.push(Reverse(batch));
-                        break None;
-                    }
-                }
-            } else {
-                break None;
-            }
-        };
+        self.state.current_l1_block_number = eth_block.block_header.number;
+        self.state.current_l1_block_hash = eth_block_hash;
 
-        let batch = if derived_batch.is_none() {
+        Ok(())
+    }
+
+    pub fn read_batch(&mut self) -> Result<Option<Batch>> {
+        let mut out = None;
+
+        // Grab the first accepted batch. From the spec:
+        // "The batches are processed in order of the inclusion on L1: if multiple batches can be
+        //  accept-ed the first is applied. An implementation can defer future batches a later
+        //  derivation step to reduce validation work."
+        while let Some(Reverse(batch)) = self.batches.pop() {
+            match self.batch_status(&batch) {
+                BatchStatus::Accept => {
+                    out = Some(batch);
+                    break;
+                }
+                BatchStatus::Drop => {
+                    #[cfg(not(target_os = "zkvm"))]
+                    log::debug!("Dropping batch");
+                }
+                BatchStatus::Future => {
+                    #[cfg(not(target_os = "zkvm"))]
+                    log::debug!("Encountered future batch");
+
+                    self.batches.push(Reverse(batch));
+                    break;
+                }
+                BatchStatus::Undecided => {
+                    #[cfg(not(target_os = "zkvm"))]
+                    log::debug!("Encountered undecided batch");
+
+                    self.batches.push(Reverse(batch));
+                    break;
+                }
+            }
+        }
+
+        // If there are no accepted batches, attempt to generate the default batch. From the spec:
+        // "If no batch can be accept-ed, and the stage has completed buffering of all batches
+        //  that can fully be read from the L1 block at height epoch.number + sequence_window_size,
+        //  and the next_epoch is available, then an empty batch can be derived."
+        if out.is_none() {
             let current_l1_block = self.state.current_l1_block_number;
             let safe_head = self.state.safe_head;
-            let epoch = &self.state.epoch;
+            let current_epoch = &self.state.epoch;
             let next_epoch = &self.state.next_epoch;
             let seq_window_size = self.config.seq_window_size;
 
             if let Some(next_epoch) = next_epoch {
-                if current_l1_block > epoch.number + seq_window_size {
+                if current_l1_block > current_epoch.number + seq_window_size {
                     let next_timestamp = safe_head.timestamp + self.config.blocktime;
                     let epoch = if next_timestamp < next_epoch.timestamp {
-                        epoch
+                        // From the spec:
+                        // "If next_timestamp < next_epoch.time: the current L1 origin is repeated,
+                        //  to preserve the L2 time invariant."
+                        current_epoch
                     } else {
                         next_epoch
                     };
 
-                    Some(Batch::new(
+                    out = Some(Batch::new(
                         current_l1_block,
                         safe_head.hash,
                         epoch.number,
                         epoch.hash,
                         next_timestamp,
                     ))
-                } else {
-                    None
                 }
-            } else {
-                None
             }
-        } else {
-            derived_batch.to_owned()
-        };
+        }
 
-        Ok(batch)
+        Ok(out)
     }
 
     fn batch_status(&self, batch: &Batch) -> BatchStatus {
+        // Apply the batch status rules. The spec describes a precise order for these checks.
+
         let epoch = &self.state.epoch;
         let next_epoch = &self.state.next_epoch;
-        let head = self.state.safe_head;
-        let next_timestamp = head.timestamp + self.config.blocktime;
+        let safe_l2_head = self.state.safe_head;
+        let next_timestamp = safe_l2_head.timestamp + self.config.blocktime;
 
-        // check timestamp range
+        // From the spec:
+        // "batch.timestamp > next_timestamp -> future"
+        // "batch.timestamp < next_timestamp -> drop"
         match batch.essence.timestamp.cmp(&next_timestamp) {
             Ordering::Greater => {
                 #[cfg(not(target_os = "zkvm"))]
@@ -261,7 +280,7 @@ impl Batcher {
             Ordering::Less => {
                 #[cfg(not(target_os = "zkvm"))]
                 log::debug!(
-                    "Drop batch: {} = batch.essence.timestamp < next_timestamp = {}",
+                    "Batch too old: {} = batch.essence.timestamp < next_timestamp = {}",
                     &batch.essence.timestamp,
                     &next_timestamp
                 );
@@ -270,81 +289,146 @@ impl Batcher {
             Ordering::Equal => (),
         }
 
-        // check that block builds on existing chain
-        if batch.essence.parent_hash != head.hash {
+        // From the spec:
+        // "batch.parent_hash != safe_l2_head.hash -> drop"
+        if batch.essence.parent_hash != safe_l2_head.hash {
             #[cfg(not(target_os = "zkvm"))]
-            log::debug!("invalid parent hash");
+            log::debug!(
+                "Incorrect parent hash: {} != {}",
+                batch.essence.parent_hash,
+                safe_l2_head.hash
+            );
             return BatchStatus::Drop;
         }
 
-        // check the inclusion delay
+        // From the spec:
+        // "batch.epoch_num + sequence_window_size < inclusion_block_number -> drop"
         if batch.essence.epoch_num + self.config.seq_window_size < batch.inclusion_block_number {
             #[cfg(not(target_os = "zkvm"))]
-            log::debug!("inclusion window elapsed");
+            log::debug!(
+                "Batch is not timely: {} + {} < {}",
+                batch.essence.epoch_num,
+                self.config.seq_window_size,
+                batch.inclusion_block_number
+            );
             return BatchStatus::Drop;
         }
 
-        // check and set batch origin epoch
-        let batch_origin = if batch.essence.epoch_num == epoch.number {
-            Some(epoch)
-        } else if batch.essence.epoch_num == epoch.number + 1 {
-            next_epoch.as_ref()
-        } else {
+        // From the spec:
+        // "batch.epoch_num < epoch.number -> drop"
+        if batch.essence.epoch_num < epoch.number {
             #[cfg(not(target_os = "zkvm"))]
-            log::debug!("invalid batch origin epoch number");
+            log::debug!(
+                "Batch epoch number is too low: {} < {}",
+                batch.essence.epoch_num,
+                epoch.number
+            );
+            return BatchStatus::Drop;
+        }
+
+        let batch_origin = if batch.essence.epoch_num == epoch.number {
+            // From the spec:
+            // "batch.epoch_num == epoch.number: define batch_origin as epoch"
+            epoch
+        } else if batch.essence.epoch_num == epoch.number + 1 {
+            // From the spec:
+            // "batch.epoch_num == epoch.number+1:"
+            // "  If known, then define batch_origin as next_epoch"
+            // "  If next_epoch is not known -> undecided"
+            match next_epoch {
+                Some(epoch) => epoch,
+                None => return BatchStatus::Undecided,
+            }
+        } else {
+            // From the spec:
+            // "batch.epoch_num > epoch.number+1 -> drop"
+            #[cfg(not(target_os = "zkvm"))]
+            log::debug!(
+                "Batch epoch number is too large: {} > {}",
+                batch.essence.epoch_num,
+                epoch.number + 1
+            );
             return BatchStatus::Drop;
         };
 
-        if let Some(batch_origin) = batch_origin {
-            if batch.essence.epoch_hash != batch_origin.hash {
-                #[cfg(not(target_os = "zkvm"))]
-                log::debug!("invalid epoch hash");
-                return BatchStatus::Drop;
-            }
-
-            if batch.essence.timestamp < batch_origin.timestamp {
-                #[cfg(not(target_os = "zkvm"))]
-                log::debug!("batch too old");
-                return BatchStatus::Drop;
-            }
-
-            // handle sequencer drift
-            if batch.essence.timestamp > batch_origin.timestamp + self.config.max_seq_drift {
-                if batch.essence.transactions.is_empty() {
-                    if epoch.number == batch.essence.epoch_num {
-                        if let Some(next_epoch) = next_epoch {
-                            if batch.essence.timestamp >= next_epoch.timestamp {
-                                #[cfg(not(target_os = "zkvm"))]
-                                log::debug!("sequencer drift too large");
-                                return BatchStatus::Drop;
-                            }
-                        } else {
-                            #[cfg(not(target_os = "zkvm"))]
-                            log::debug!("sequencer drift undecided");
-                            return BatchStatus::Undecided;
-                        }
-                    }
-                } else {
-                    #[cfg(not(target_os = "zkvm"))]
-                    log::debug!("sequencer drift too large");
-                    return BatchStatus::Drop;
-                }
-            }
-        } else {
+        // From the spec:
+        // "batch.epoch_hash != batch_origin.hash -> drop"
+        if batch.essence.epoch_hash != batch_origin.hash {
             #[cfg(not(target_os = "zkvm"))]
-            log::debug!("batch origin not known");
-            return BatchStatus::Undecided;
+            log::debug!(
+                "Epoch hash mismatch: {} != {}",
+                batch.essence.epoch_hash,
+                batch_origin.hash
+            );
+            return BatchStatus::Drop;
         }
 
-        if batch
-            .essence
-            .transactions
-            .iter()
-            .any(|tx| matches!(tx.first(), None | Some(0x7E)))
-        {
+        // From the spec:
+        // "batch.timestamp < batch_origin.time -> drop"
+        if batch.essence.timestamp < batch_origin.timestamp {
             #[cfg(not(target_os = "zkvm"))]
-            log::debug!("invalid transaction");
+            log::debug!(
+                "Batch violates timestamp rule: {} < {}",
+                batch.essence.timestamp,
+                batch_origin.timestamp
+            );
             return BatchStatus::Drop;
+        }
+
+        // From the spec:
+        // "batch.timestamp > batch_origin.time + max_sequencer_drift: enforce the L2 timestamp
+        //  drift rule, but with exceptions to preserve above min L2 timestamp invariant:"
+        if batch.essence.timestamp > batch_origin.timestamp + self.config.max_seq_drift {
+            #[cfg(not(target_os = "zkvm"))]
+            log::debug!(
+                "Sequencer drift detected: {} > {} + {}",
+                batch.essence.timestamp,
+                batch_origin.timestamp,
+                self.config.max_seq_drift
+            );
+
+            // From the spec:
+            // "len(batch.transactions) > 0: -> drop"
+            if !batch.essence.transactions.is_empty() {
+                #[cfg(not(target_os = "zkvm"))]
+                log::debug!("Sequencer drift detected for non-empty batch; drop.");
+                return BatchStatus::Drop;
+            }
+
+            // From the spec:
+            // "len(batch.transactions) == 0:"
+            //    epoch.number == batch.epoch_num: this implies the batch does not already
+            //    advance the L1 origin, and must thus be checked against next_epoch."
+            if epoch.number == batch.essence.epoch_num {
+                if let Some(next_epoch) = next_epoch {
+                    // From the spec:
+                    // "If batch.timestamp >= next_epoch.time -> drop"
+                    if batch.essence.timestamp >= next_epoch.timestamp {
+                        #[cfg(not(target_os = "zkvm"))]
+                        log::debug!("Sequencer drift detected; drop; batch timestamp is too far into the future. {} >= {}", batch.essence.timestamp, next_epoch.timestamp);
+                        return BatchStatus::Drop;
+                    }
+                } else {
+                    // From the spec:
+                    // "If next_epoch is not known -> undecided"
+                    #[cfg(not(target_os = "zkvm"))]
+                    log::debug!("Sequencer drift detected, but next epoch is not known; undecided");
+                    return BatchStatus::Undecided;
+                }
+            }
+        }
+
+        // From the spec:
+        // "batch.transactions: drop if the batch.transactions list contains a transaction that is
+        //  invalid or derived by other means exclusively:
+        //    any transaction that is empty (zero length byte string)
+        //    any deposited transactions (identified by the transaction type prefix byte)"
+        for tx in &batch.essence.transactions {
+            if matches!(tx.first(), None | Some(0x7E)) {
+                #[cfg(not(target_os = "zkvm"))]
+                log::debug!("Batch contains empty or invalid transaction");
+                return BatchStatus::Drop;
+            }
         }
 
         BatchStatus::Accept

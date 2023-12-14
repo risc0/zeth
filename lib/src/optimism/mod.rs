@@ -196,7 +196,7 @@ pub struct DeriveMachine<D> {
     op_block_no: u64,
     op_block_seq_no: u64,
     op_batches: Batches,
-    eth_block_no: u64,
+    pub eth_block_no: u64,
 }
 
 impl<D: BatcherDb> DeriveMachine<D> {

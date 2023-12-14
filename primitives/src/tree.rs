@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use alloy_primitives::{b256, B256};
 use k256::sha2::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
@@ -56,6 +58,25 @@ impl MerkleMountainRange {
         self.roots.push(Some(value));
     }
 
+    pub fn logged_append_leaf(
+        &mut self,
+        mut value: [u8; 32],
+        sibling_map: &mut HashMap<[u8; 32], [u8; 32]>,
+    ) {
+        for node in self.roots.iter_mut() {
+            if node.is_none() {
+                node.replace(value);
+                return;
+            } else {
+                let sibling = node.take().unwrap();
+                sibling_map.insert(value, sibling);
+                sibling_map.insert(sibling, value);
+                value = branch_hash(&value, &sibling)
+            }
+        }
+        self.roots.push(Some(value));
+    }
+
     pub fn root(&self) -> Option<[u8; 32]> {
         let mut result: Option<[u8; 32]> = None;
         for node in self.roots.iter() {
@@ -68,5 +89,30 @@ impl MerkleMountainRange {
             }
         }
         result
+    }
+
+    pub fn logged_root(&self, sibling_map: &mut HashMap<[u8; 32], [u8; 32]>) -> Option<[u8; 32]> {
+        let mut result: Option<[u8; 32]> = None;
+        for node in self.roots.iter() {
+            if let Some(root) = node {
+                if let Some(sibling) = result {
+                    sibling_map.insert(*root, sibling);
+                    sibling_map.insert(sibling, *root);
+                    result.replace(branch_hash(&sibling, root));
+                } else {
+                    result.replace(*root);
+                }
+            }
+        }
+        result
+    }
+
+    pub fn proof(sibling_map: &HashMap<[u8; 32], [u8; 32]>, mut value: [u8; 32]) -> Self {
+        let mut roots = vec![Some(value)];
+        while let Some(sibling) = sibling_map.get(&value) {
+            roots.push(Some(*sibling));
+            value = branch_hash(sibling, &value);
+        }
+        Self { roots }
     }
 }

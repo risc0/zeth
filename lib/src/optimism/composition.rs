@@ -42,6 +42,10 @@ pub enum ComposeInputOperation {
         left: ComposeOutput,
         right: ComposeOutput,
     },
+    FINISH {
+        prep: ComposeOutput,
+        aggregate: ComposeOutput,
+    },
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -237,6 +241,49 @@ impl ComposeInput {
                     eth_chain_root: self.eth_chain_root,
                     eth_chain_root_validated: left_compose_output.eth_chain_root_validated
                         || right_compose_output.eth_chain_root_validated,
+                }
+            }
+            ComposeInputOperation::FINISH { prep, aggregate } => {
+                // Verify prep receipt
+                #[cfg(target_os = "zkvm")]
+                {
+                    // A valid receipt should be provided for prior aggregation
+                    let compose_journal = to_vec(&prep).expect("Failed to encode prep journal");
+                    env::verify(
+                        Digest::from(self.compose_image_id),
+                        bytemuck::cast_slice(&compose_journal),
+                    )
+                    .expect("Failed to validate prep receipt");
+                }
+                // Verify aggregate receipt
+                #[cfg(target_os = "zkvm")]
+                {
+                    // A valid receipt should be provided for prior aggregation
+                    let compose_journal =
+                        to_vec(&aggregate).expect("Failed to encode prep journal");
+                    env::verify(
+                        Digest::from(self.compose_image_id),
+                        bytemuck::cast_slice(&compose_journal),
+                    )
+                    .expect("Failed to validate aggregate receipt");
+                }
+                // Validate context
+                // derive_image_id equality
+                assert_eq!(self.derive_image_id, prep.derive_image_id);
+                assert_eq!(self.derive_image_id, aggregate.derive_image_id);
+                // compose_image_id equality
+                assert_eq!(self.compose_image_id, prep.compose_image_id);
+                assert_eq!(self.compose_image_id, aggregate.compose_image_id);
+                // eth_chain_root equality
+                assert_eq!(self.eth_chain_root, prep.eth_chain_root);
+                assert_eq!(self.eth_chain_root, aggregate.eth_chain_root);
+                // Output new aggregate with validated chain root
+                ComposeOutput {
+                    derive_image_id: self.derive_image_id,
+                    compose_image_id: self.compose_image_id,
+                    operation: aggregate.operation,
+                    eth_chain_root: self.eth_chain_root,
+                    eth_chain_root_validated: true,
                 }
             }
         }

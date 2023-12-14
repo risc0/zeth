@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::VecDeque;
+use std::{collections::VecDeque, fmt::Debug};
 
 use anyhow::Context;
 use clap::Parser;
-use log::info;
+use log::{error, info};
+use risc0_zkvm::{default_prover, serde::to_vec, Assumption, ExecutorEnv, Receipt};
+use serde::{de::DeserializeOwned, Serialize};
 use zeth_guests::*;
 use zeth_lib::{
     host::provider::{new_provider, BlockQuery},
@@ -56,6 +58,11 @@ struct Args {
     #[clap(long, require_equals = true)]
     /// Number of L2 blocks to provably derive.
     blocks: u64,
+
+    #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "20")]
+    /// Runs the verification inside the zkvm executor locally. Accepts a custom maximum
+    /// segment cycle count as a power of 2. [default: 20]
+    local_exec: Option<u32>,
 }
 
 fn cache_file_path(cache_path: &String, network: &str, block_no: u64, ext: &str) -> String {
@@ -89,6 +96,7 @@ async fn main() -> anyhow::Result<()> {
             args.op_rpc_url.clone(),
             args.cache.clone(),
         );
+        let local_exec = args.local_exec.clone();
         let (input, output, chain) = tokio::task::spawn_blocking(move || {
             let derive_input = DeriveInput {
                 db,
@@ -139,8 +147,10 @@ async fn main() -> anyhow::Result<()> {
             assert_eq!(output, output_mem);
         }
 
+        let receipt = maybe_prove(local_exec, &input, OP_DERIVE_ELF, &output, vec![]);
+
         // Append derivation outputs to lift queue
-        lift_queue.push(output);
+        lift_queue.push((output, receipt));
         // Extend block chain
         for block in chain {
             let tail_num = match eth_chain.last() {
@@ -174,11 +184,19 @@ async fn main() -> anyhow::Result<()> {
         },
         eth_chain_root,
     };
-    let prep_compose_output = prep_compose_input.process();
+    let prep_compose_output = prep_compose_input.clone().process();
+
+    let prep_compose_receipt = maybe_prove(
+        args.local_exec.clone(),
+        &prep_compose_input,
+        OP_COMPOSE_ELF,
+        &prep_compose_output,
+        vec![],
+    );
 
     // Lift
     let mut join_queue = VecDeque::new();
-    for derive_output in lift_queue {
+    for (derive_output, derive_receipt) in lift_queue {
         let eth_tail_hash = derive_output.eth_tail.1 .0;
         let lift_compose_input = ComposeInput {
             derive_image_id: OP_DERIVE_ID,
@@ -189,13 +207,27 @@ async fn main() -> anyhow::Result<()> {
             },
             eth_chain_root,
         };
-        join_queue.push_back(lift_compose_input.process());
+        let lift_compose_output = lift_compose_input.clone().process();
+
+        let lift_compose_receipt = if let Some(receipt) = derive_receipt {
+            maybe_prove(
+                args.local_exec.clone(),
+                &lift_compose_input,
+                OP_COMPOSE_ELF,
+                &lift_compose_output,
+                vec![receipt.into()],
+            )
+        } else {
+            None
+        };
+
+        join_queue.push_back((lift_compose_output, lift_compose_receipt));
     }
 
     // Join
     while join_queue.len() > 1 {
-        let left = join_queue.pop_front().unwrap();
-        let right = join_queue.front().unwrap();
+        let (left, left_receipt) = join_queue.pop_front().unwrap();
+        let (right, _right_receipt) = join_queue.front().unwrap();
         let ComposeOutputOperation::AGGREGATE {
             op_tail: left_op_tail,
             ..
@@ -212,23 +244,38 @@ async fn main() -> anyhow::Result<()> {
         };
         // Push dangling workloads (odd block count) to next round
         if left_op_tail != right_op_head {
-            join_queue.push_back(left);
+            join_queue.push_back((left, left_receipt));
             continue;
         }
         // Pair up join
-        let right = join_queue.pop_front().unwrap();
+        let (right, right_receipt) = join_queue.pop_front().unwrap();
         let join_compose_input = ComposeInput {
             derive_image_id: OP_DERIVE_ID,
             compose_image_id: OP_COMPOSE_ID,
             operation: ComposeInputOperation::JOIN { left, right },
             eth_chain_root,
         };
+        let join_compose_output = join_compose_input.clone().process();
+
+        let join_compose_receipt =
+            if let (Some(left_receipt), Some(right_receipt)) = (left_receipt, right_receipt) {
+                maybe_prove(
+                    args.local_exec.clone(),
+                    &join_compose_input,
+                    OP_COMPOSE_ELF,
+                    &join_compose_output,
+                    vec![left_receipt.into(), right_receipt.into()],
+                )
+            } else {
+                None
+            };
+
         // Send workload to next round
-        join_queue.push_back(join_compose_input.process());
+        join_queue.push_back((join_compose_output, join_compose_receipt));
     }
 
     // Finish
-    let aggregate_output = join_queue.pop_front().unwrap();
+    let (aggregate_output, aggregate_receipt) = join_queue.pop_front().unwrap();
     let finish_compose_input = ComposeInput {
         derive_image_id: OP_DERIVE_ID,
         compose_image_id: OP_COMPOSE_ID,
@@ -238,11 +285,90 @@ async fn main() -> anyhow::Result<()> {
         },
         eth_chain_root,
     };
-    let finish_compose_output = finish_compose_input.process();
+    let finish_compose_output = finish_compose_input.clone().process();
+
+    let op_compose_receipt = if let (Some(prep_receipt), Some(aggregate_receipt)) =
+        (prep_compose_receipt, aggregate_receipt)
+    {
+        maybe_prove(
+            args.local_exec.clone(),
+            &finish_compose_input,
+            OP_COMPOSE_ELF,
+            &finish_compose_output,
+            vec![prep_receipt.into(), aggregate_receipt.into()],
+        )
+    } else {
+        None
+    };
 
     dbg!(&finish_compose_output);
 
+    if let Some(final_receipt) = op_compose_receipt {
+        final_receipt
+            .verify(OP_COMPOSE_ID)
+            .expect("Failed to verify final receipt");
+        info!("Verified final receipt!");
+    }
+
     Ok(())
+}
+
+pub fn maybe_prove<I: Serialize, O: Eq + Debug + DeserializeOwned>(
+    local_exec: Option<u32>,
+    input: &I,
+    elf: &[u8],
+    expected_output: &O,
+    assumptions: Vec<Assumption>,
+) -> Option<Receipt> {
+    if let Some(segment_limit_po2) = local_exec {
+        let encoded_input = to_vec(input).expect("Could not serialize composition prep input!");
+        let receipt = prove(segment_limit_po2, encoded_input, elf, assumptions);
+        let output_guest: O = receipt.journal.decode().unwrap();
+
+        if expected_output == &output_guest {
+            info!("Executor succeeded");
+        } else {
+            error!(
+                "Output mismatch! Executor: {:?}, expected: {:?}",
+                output_guest, expected_output,
+            );
+        }
+        Some(receipt)
+    } else {
+        None
+    }
+}
+
+pub fn prove(
+    segment_limit_po2: u32,
+    encoded_input: Vec<u32>,
+    elf: &[u8],
+    assumptions: Vec<Assumption>,
+) -> Receipt {
+    info!(
+        "Proving derivation with segment_limit_po2 = {:?}",
+        segment_limit_po2
+    );
+    info!(
+        "Input size: {} words ( {} MB )",
+        encoded_input.len(),
+        encoded_input.len() * 4 / 1_000_000
+    );
+
+    info!("Running the prover...");
+    let mut env_builder = ExecutorEnv::builder();
+
+    env_builder
+        .session_limit(None)
+        .segment_limit_po2(segment_limit_po2)
+        .write_slice(&encoded_input);
+
+    for assumption in assumptions {
+        env_builder.add_assumption(assumption);
+    }
+
+    let prover = default_prover();
+    prover.prove(env_builder.build().unwrap(), elf).unwrap()
 }
 
 #[derive(Clone)]

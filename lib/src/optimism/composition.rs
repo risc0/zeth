@@ -48,7 +48,7 @@ pub enum ComposeInputOperation {
     },
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Eq, PartialEq)]
 pub struct ComposeOutput {
     pub derive_image_id: [u32; 8],
     pub compose_image_id: [u32; 8],
@@ -57,7 +57,7 @@ pub struct ComposeOutput {
     pub eth_chain_root_validated: bool,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Eq, PartialEq)]
 pub enum ComposeOutputOperation {
     PREP {
         eth_tail: BlockHash,

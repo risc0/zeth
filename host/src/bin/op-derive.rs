@@ -36,8 +36,9 @@ use zeth_guests::{OP_DERIVE_ELF, OP_DERIVE_ID, OP_DERIVE_PATH};
 use zeth_lib::{
     host::provider::{new_provider, BlockQuery},
     optimism::{
-        derivation::CHAIN_SPEC, epoch::BlockInput, BatcherDb, DeriveInput, DeriveMachine,
-        DeriveOutput, MemDb,
+        batcher_db::{BatcherDb, BlockInput, MemDb},
+        config::OPTIMISM_CHAIN_SPEC,
+        DeriveInput, DeriveMachine, DeriveOutput,
     },
 };
 use zeth_primitives::{
@@ -299,11 +300,11 @@ impl BatcherDb for RpcDb {
             let block_header: Header = ethers_block.clone().try_into().unwrap();
             // include receipts when needed
             let can_contain_deposits = zeth_lib::optimism::deposits::can_contain(
-                &CHAIN_SPEC.deposit_contract,
+                &OPTIMISM_CHAIN_SPEC.deposit_contract,
                 &block_header.logs_bloom,
             );
             let can_contain_config = zeth_lib::optimism::system_config::can_contain(
-                &CHAIN_SPEC.system_config_contract,
+                &OPTIMISM_CHAIN_SPEC.system_config_contract,
                 &block_header.logs_bloom,
             );
             let receipts = if can_contain_config || can_contain_deposits {

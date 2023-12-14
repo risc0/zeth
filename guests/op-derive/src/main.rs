@@ -15,7 +15,7 @@
 #![no_main]
 
 use risc0_zkvm::guest::env;
-use zeth_lib::optimism::{DeriveInput, DeriveMachine, MemDb};
+use zeth_lib::optimism::{DeriveInput, DeriveMachine, batcher_db::MemDb};
 
 risc0_zkvm::guest::entry!(main);
 

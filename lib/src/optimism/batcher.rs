@@ -16,47 +16,118 @@ use core::cmp::Ordering;
 use std::{
     cmp::Reverse,
     collections::{BinaryHeap, VecDeque},
-    io::Read,
 };
 
-use anyhow::Context;
-use libflate::zlib::Decoder;
+use anyhow::{Context, Result};
 use zeth_primitives::{
     batch::Batch,
-    rlp::{Decodable, Header},
-    transactions::ethereum::EthereumTxEssence,
+    transactions::{ethereum::EthereumTxEssence, optimism::OptimismTxEssence, Transaction},
+    BlockHash, BlockNumber, B256, U256,
 };
 
 use super::{
-    batcher_transactions::BatcherTransactions,
-    channels::{Channel, Channels},
-    config::ChainConfig,
-    deposits,
-    derivation::{Epoch, State},
-    epoch::BlockInput,
+    batcher_channel::BatcherChannels, batcher_db::BlockInput, config::ChainConfig, deposits,
 };
 
-pub struct Batches {
-    /// Mapping of timestamps to batches
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
+pub struct BlockInfo {
+    pub hash: B256,
+    pub timestamp: u64,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Epoch {
+    pub number: BlockNumber,
+    pub hash: B256,
+    pub timestamp: u64,
+    pub base_fee_per_gas: U256,
+    pub deposits: Vec<Transaction<OptimismTxEssence>>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct State {
+    pub current_l1_block_number: BlockNumber,
+    pub current_l1_block_hash: BlockHash,
+    pub safe_head: BlockInfo,
+    pub epoch: Epoch,
+    pub op_epoch_queue: VecDeque<Epoch>,
+    pub next_epoch: Option<Epoch>,
+}
+
+impl State {
+    pub fn new(
+        current_l1_block_number: BlockNumber,
+        current_l1_block_hash: BlockHash,
+        safe_head: BlockInfo,
+        epoch: Epoch,
+    ) -> Self {
+        State {
+            current_l1_block_number,
+            current_l1_block_hash,
+            safe_head,
+            epoch,
+            op_epoch_queue: VecDeque::new(),
+            next_epoch: None,
+        }
+    }
+
+    pub fn do_next_epoch(&mut self) -> anyhow::Result<()> {
+        self.epoch = self.next_epoch.take().expect("No next epoch!");
+        self.deque_next_epoch_if_none()?;
+        Ok(())
+    }
+
+    pub fn push_epoch(&mut self, epoch: Epoch) -> anyhow::Result<()> {
+        self.op_epoch_queue.push_back(epoch);
+        self.deque_next_epoch_if_none()?;
+        Ok(())
+    }
+
+    fn deque_next_epoch_if_none(&mut self) -> anyhow::Result<()> {
+        if self.next_epoch.is_none() {
+            while let Some(next_epoch) = self.op_epoch_queue.pop_front() {
+                if next_epoch.number <= self.epoch.number {
+                    continue;
+                } else if next_epoch.number == self.epoch.number + 1 {
+                    self.next_epoch = Some(next_epoch);
+                    break;
+                } else {
+                    anyhow::bail!("Epoch gap!");
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum BatchStatus {
+    Drop,
+    Accept,
+    Undecided,
+    Future,
+}
+
+pub struct Batcher {
     batches: BinaryHeap<Reverse<Batch>>,
-    pub channel_iter: Channels<BatcherTransactions>,
+    batcher_channel: BatcherChannels,
     pub state: State,
     pub config: ChainConfig,
 }
 
-impl Batches {
-    pub fn new(config: ChainConfig, state: State) -> Batches {
-        let channel_iter = Channels::new(BatcherTransactions::new(VecDeque::new()), &config);
+impl Batcher {
+    pub fn new(config: ChainConfig, state: State) -> Batcher {
+        let batcher_channel = BatcherChannels::new(&config);
 
-        Batches {
+        Batcher {
             batches: BinaryHeap::new(),
-            channel_iter,
+            batcher_channel,
             state,
             config,
         }
     }
 
-    pub fn process(&mut self, eth_block: &BlockInput<EthereumTxEssence>) -> anyhow::Result<()> {
+    pub fn process_l1_block(&mut self, eth_block: &BlockInput<EthereumTxEssence>) -> Result<()> {
         let eth_block_hash = eth_block.block_header.hash();
 
         // Ensure block has correct parent
@@ -67,7 +138,10 @@ impl Batches {
             );
         }
 
-        // Update the system config
+        // Update the system config. From the spec:
+        // "Upon traversal of the L1 block, the system configuration copy used by the L1 retrieval
+        //  stage is updated, such that the batch-sender authentication is always accurate to the
+        //  exact L1 block that is read by the stage"
         if eth_block.receipts.is_some() {
             self.config
                 .system_config
@@ -84,12 +158,11 @@ impl Batches {
             deposits: deposits::extract_transactions(&self.config, &eth_block)?,
         })?;
 
-        BatcherTransactions::process(
-            self.config.batch_inbox,
+        // Read frames into channels
+        self.batcher_channel.process_l1_transactions(
             self.config.system_config.batch_sender,
             eth_block.block_header.number,
             &eth_block.transactions,
-            &mut self.channel_iter.batcher_tx_iter.buffer,
         )?;
 
         self.state.current_l1_block_number = eth_block.block_header.number;
@@ -97,31 +170,9 @@ impl Batches {
 
         Ok(())
     }
-}
 
-impl Iterator for Batches {
-    type Item = Batch;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.try_next() {
-            Ok(batch) => batch,
-            Err(_e) => {
-                #[cfg(not(target_os = "zkvm"))]
-                log::warn!("failed to decode batch: {:#}", _e);
-                None
-            }
-        }
-    }
-}
-
-impl Batches {
-    fn try_next(&mut self) -> anyhow::Result<Option<Batch>> {
-        let channel = self.channel_iter.next();
-        if let Some(channel) = channel {
-            #[cfg(not(target_os = "zkvm"))]
-            log::debug!("received channel: {}", channel.id);
-
-            let batches = decode_batches(&channel)?;
+    pub fn read_batch(&mut self) -> Result<Option<Batch>> {
+        if let Some(batches) = self.batcher_channel.read_batches() {
             batches.into_iter().for_each(|batch| {
                 #[cfg(not(target_os = "zkvm"))]
                 log::debug!(
@@ -171,11 +222,11 @@ impl Batches {
                     };
 
                     Some(Batch::new(
+                        current_l1_block,
                         safe_head.hash,
                         epoch.number,
                         epoch.hash,
                         next_timestamp,
-                        current_l1_block,
                     ))
                 } else {
                     None
@@ -227,7 +278,7 @@ impl Batches {
         }
 
         // check the inclusion delay
-        if batch.essence.epoch_num + self.config.seq_window_size < batch.l1_inclusion_block {
+        if batch.essence.epoch_num + self.config.seq_window_size < batch.inclusion_block_number {
             #[cfg(not(target_os = "zkvm"))]
             log::debug!("inclusion window elapsed");
             return BatchStatus::Drop;
@@ -298,32 +349,4 @@ impl Batches {
 
         BatchStatus::Accept
     }
-}
-
-fn decode_batches(channel: &Channel) -> anyhow::Result<Vec<Batch>> {
-    let mut buf = Vec::new();
-    let mut d = Decoder::new(channel.data.as_slice())?;
-    d.read_to_end(&mut buf).context("failed to decompress")?;
-
-    let mut batches = Vec::new();
-    let mut channel_data = buf.as_slice();
-    while !channel_data.is_empty() {
-        let batch_data = Header::decode_bytes(&mut channel_data, false)
-            .context("failed to decode batch data")?;
-
-        let mut batch = Batch::decode(&mut &batch_data[..])?;
-        batch.l1_inclusion_block = channel.l1_inclusion_block;
-
-        batches.push(batch);
-    }
-
-    Ok(batches)
-}
-
-#[derive(Debug, Clone, PartialEq)]
-enum BatchStatus {
-    Drop,
-    Accept,
-    Undecided,
-    Future,
 }

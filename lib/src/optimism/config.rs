@@ -62,3 +62,5 @@ impl ChainConfig {
         }
     }
 }
+
+pub const OPTIMISM_CHAIN_SPEC: ChainConfig = ChainConfig::optimism();

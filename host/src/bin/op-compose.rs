@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
+
 use anyhow::Context;
 use clap::Parser;
 use log::info;
@@ -19,7 +21,7 @@ use zeth_guests::*;
 use zeth_lib::{
     host::provider::{new_provider, BlockQuery},
     optimism::{
-        composition::{ComposeInput, ComposeInputOperation},
+        composition::{ComposeInput, ComposeInputOperation, ComposeOutputOperation},
         derivation::CHAIN_SPEC,
         epoch::BlockInput,
         BatcherDb, DeriveInput, DeriveMachine, MemDb,
@@ -78,13 +80,20 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     // OP Derivation
-    let (derive_output, eth_chain) = {
-        info!("Fetching data ...");
-        let (derive_input, output, eth_chain) = tokio::task::spawn_blocking(move || {
+    info!("Fetching data ...");
+    let mut lift_queue = Vec::new();
+    let mut eth_chain: Vec<Header> = Vec::new();
+    for i in 0..args.blocks {
+        let db = RpcDb::new(
+            args.eth_rpc_url.clone(),
+            args.op_rpc_url.clone(),
+            args.cache.clone(),
+        );
+        let (input, output, chain) = tokio::task::spawn_blocking(move || {
             let derive_input = DeriveInput {
-                db: RpcDb::new(args.eth_rpc_url, args.op_rpc_url, args.cache),
-                op_head_block_no: args.block_no,
-                op_derive_block_count: args.blocks,
+                db,
+                op_head_block_no: args.block_no + i,
+                op_derive_block_count: 1,
             };
             let mut derive_machine =
                 DeriveMachine::new(derive_input).expect("Could not create derive machine");
@@ -113,8 +122,8 @@ async fn main() -> anyhow::Result<()> {
 
             let derive_input_mem = DeriveInput {
                 db: derive_machine.derive_input.db.get_mem_db(),
-                op_head_block_no: args.block_no,
-                op_derive_block_count: args.blocks,
+                op_head_block_no: args.block_no + i,
+                op_derive_block_count: 1,
             };
             let out: anyhow::Result<_> = Ok((derive_input_mem, derive_output, eth_chain));
             out
@@ -123,40 +132,53 @@ async fn main() -> anyhow::Result<()> {
 
         info!("Running from memory ...");
         {
-            let output_mem = DeriveMachine::new(derive_input.clone())
+            let output_mem = DeriveMachine::new(input.clone())
                 .expect("Could not create derive machine")
                 .derive()
                 .unwrap();
             assert_eq!(output, output_mem);
         }
 
-        (output, eth_chain)
-    };
+        // Append derivation outputs to lift queue
+        lift_queue.push(output);
+        // Extend block chain
+        for block in chain {
+            let tail_num = match eth_chain.last() {
+                None => 0u64,
+                Some(tail) => tail.number,
+            };
+            // This check should be sufficient
+            if tail_num < block.number {
+                eth_chain.push(block);
+            }
+        }
+    }
 
     // OP Composition
-    {
-        // Preflight
-        let mut sibling_map = Default::default();
-        let mut eth_mountain_range: MerkleMountainRange = Default::default();
-        for block in &eth_chain {
-            eth_mountain_range.logged_append_leaf(block.hash().0, &mut sibling_map);
-        }
-        let eth_chain_root = eth_mountain_range
-            .logged_root(&mut sibling_map)
-            .expect("No eth blocks loaded!");
-        // Prep
-        let prep_compose_input = ComposeInput {
-            derive_image_id: OP_DERIVE_ID,
-            compose_image_id: OP_COMPOSE_ID,
-            operation: ComposeInputOperation::PREP {
-                eth_blocks: eth_chain,
-                mountain_range: Default::default(),
-                prior: None,
-            },
-            eth_chain_root,
-        };
-        let prep_compose_output = prep_compose_input.process();
-        // Lift
+    // Prep
+    let mut sibling_map = Default::default();
+    let mut eth_mountain_range: MerkleMountainRange = Default::default();
+    for block in &eth_chain {
+        eth_mountain_range.logged_append_leaf(block.hash().0, &mut sibling_map);
+    }
+    let eth_chain_root = eth_mountain_range
+        .logged_root(&mut sibling_map)
+        .expect("No eth blocks loaded!");
+    let prep_compose_input = ComposeInput {
+        derive_image_id: OP_DERIVE_ID,
+        compose_image_id: OP_COMPOSE_ID,
+        operation: ComposeInputOperation::PREP {
+            eth_blocks: eth_chain,
+            mountain_range: Default::default(),
+            prior: None,
+        },
+        eth_chain_root,
+    };
+    let prep_compose_output = prep_compose_input.process();
+
+    // Lift
+    let mut join_queue = VecDeque::new();
+    for derive_output in lift_queue {
         let eth_tail_hash = derive_output.eth_tail.1 .0;
         let lift_compose_input = ComposeInput {
             derive_image_id: OP_DERIVE_ID,
@@ -167,25 +189,63 @@ async fn main() -> anyhow::Result<()> {
             },
             eth_chain_root,
         };
-        let lift_compose_output = lift_compose_input.process();
-        // Finish
-        let finish_compose_input = ComposeInput {
+        join_queue.push_back(lift_compose_input.process());
+    }
+
+    // Join
+    while join_queue.len() > 1 {
+        let left = join_queue.pop_front().unwrap();
+        let right = join_queue.front().unwrap();
+        let ComposeOutputOperation::AGGREGATE {
+            op_tail: left_op_tail,
+            ..
+        } = &left.operation
+        else {
+            panic!("Expected left aggregate operation output!")
+        };
+        let ComposeOutputOperation::AGGREGATE {
+            op_head: right_op_head,
+            ..
+        } = &right.operation
+        else {
+            panic!("Expected right aggregate operation output!")
+        };
+        // Push dangling workloads (odd block count) to next round
+        if left_op_tail != right_op_head {
+            join_queue.push_back(left);
+            continue;
+        }
+        // Pair up join
+        let right = join_queue.pop_front().unwrap();
+        let join_compose_input = ComposeInput {
             derive_image_id: OP_DERIVE_ID,
             compose_image_id: OP_COMPOSE_ID,
-            operation: ComposeInputOperation::FINISH {
-                prep: prep_compose_output,
-                aggregate: lift_compose_output,
-            },
+            operation: ComposeInputOperation::JOIN { left, right },
             eth_chain_root,
         };
-        let finish_compose_output = finish_compose_input.process();
-
-        dbg!(&finish_compose_output);
+        // Send workload to next round
+        join_queue.push_back(join_compose_input.process());
     }
+
+    // Finish
+    let aggregate_output = join_queue.pop_front().unwrap();
+    let finish_compose_input = ComposeInput {
+        derive_image_id: OP_DERIVE_ID,
+        compose_image_id: OP_COMPOSE_ID,
+        operation: ComposeInputOperation::FINISH {
+            prep: prep_compose_output,
+            aggregate: aggregate_output,
+        },
+        eth_chain_root,
+    };
+    let finish_compose_output = finish_compose_input.process();
+
+    dbg!(&finish_compose_output);
 
     Ok(())
 }
 
+#[derive(Clone)]
 pub struct RpcDb {
     eth_rpc_url: Option<String>,
     op_rpc_url: Option<String>,

@@ -25,7 +25,7 @@ use zeth_primitives::{
     Address, Bloom, BloomInput, B256, U160, U256,
 };
 
-use super::{config::ChainConfig, epoch::BlockInput};
+use super::{batcher_db::BlockInput, config::ChainConfig};
 
 /// Signature of the deposit transaction event, i.e.
 /// keccak-256 hash of "TransactionDeposited(address,address,uint256,bytes)"

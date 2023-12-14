@@ -71,7 +71,7 @@ pub fn mpt_from_proof(proof_nodes: &[MptNode]) -> Result<MptNode> {
 
 /// Verifies that the given proof is a valid proof of exclusion for the given key.
 pub fn is_not_included(key: &[u8], proof_nodes: &[MptNode]) -> Result<bool> {
-    let proof_trie = mpt_from_proof(&proof_nodes).context("invalid trie")?;
+    let proof_trie = mpt_from_proof(proof_nodes).context("invalid trie")?;
     // for valid proofs, the get must not fail
     let value = proof_trie.get(key).context("invalid trie")?;
 

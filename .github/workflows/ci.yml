@@ -7,6 +7,9 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  RISC0_VERSION: 0.19.1
+  RISC0_TOOLCHAIN_VERSION: test-release-2
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -18,12 +21,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: recursive
-    - uses: risc0/risc0/.github/actions/rustup@release-0.18
-    - uses: risc0/risc0/.github/actions/sccache@release-0.18
-    - run: cargo install cargo-risczero && cargo risczero install
+    - uses: risc0/risc0/.github/actions/rustup@release-0.19
+    - uses: risc0/risc0/.github/actions/sccache@release-0.19
+    - uses: risc0/cargo-install@v1
+      with:
+        crate: cargo-binstall
+    - run: cargo binstall -y --force cargo-risczero@${{ env.RISC0_VERSION }}
+    - run: cargo risczero install --version $RISC0_TOOLCHAIN_VERSION
     - run: cargo test --workspace --all-targets --all-features
 
   clippy:
@@ -31,16 +38,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-    - uses: actions/checkout@v3
-      with:
-        submodules: recursive
-    - uses: risc0/risc0/.github/actions/rustup@release-0.18
-    - uses: risc0/risc0/.github/actions/sccache@release-0.18
+    - uses: actions/checkout@v4
+    - uses: risc0/risc0/.github/actions/rustup@release-0.19
+    - uses: risc0/risc0/.github/actions/sccache@release-0.19
     - uses: risc0/clippy-action@main
       with:
         reporter: 'github-pr-check'
         fail_on_error: true
-        github_token: ${{ secrets.GITHUB_TOKEN }}
         clippy_flags: --workspace --all-targets --all-features -- -Dwarnings
 
   fmt:
@@ -48,6 +52,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-    - uses: actions/checkout@v3
-    - uses: risc0/risc0/.github/actions/rustup@release-0.18
+    - uses: actions/checkout@v4
+    - uses: risc0/risc0/.github/actions/rustup@release-0.19
     - run: cargo fmt --all --check

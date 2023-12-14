@@ -18,7 +18,7 @@ use zeth_primitives::{
     b256, transactions::ethereum::EthereumTxEssence, Address, Bloom, BloomInput, B256, U256,
 };
 
-use super::epoch::BlockInput;
+use super::batcher_db::BlockInput;
 
 /// Signature of the deposit transaction event, i.e.
 /// keccak-256 hash of "ConfigUpdate(uint256,uint8,bytes)"

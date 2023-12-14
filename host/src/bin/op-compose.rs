@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::VecDeque, fmt::Debug};
+use std::{
+    collections::VecDeque,
+    fmt::Debug,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Context;
 use clap::Parser;
@@ -23,10 +27,10 @@ use zeth_guests::*;
 use zeth_lib::{
     host::provider::{new_provider, BlockQuery},
     optimism::{
+        batcher_db::{BatcherDb, BlockInput, MemDb},
         composition::{ComposeInput, ComposeInputOperation, ComposeOutputOperation},
-        derivation::CHAIN_SPEC,
-        epoch::BlockInput,
-        BatcherDb, DeriveInput, DeriveMachine, MemDb,
+        config::OPTIMISM_CHAIN_SPEC,
+        DeriveInput, DeriveMachine,
     },
 };
 use zeth_primitives::{
@@ -49,7 +53,7 @@ struct Args {
     #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "host/testdata/derivation")]
     /// Use a local directory as a cache for RPC calls. Accepts a custom directory.
     /// [default: host/testdata/derivation]
-    cache: Option<String>,
+    cache: Option<PathBuf>,
 
     #[clap(long, require_equals = true)]
     /// L2 block number to begin from
@@ -65,17 +69,20 @@ struct Args {
     local_exec: Option<u32>,
 }
 
-fn cache_file_path(cache_path: &String, network: &str, block_no: u64, ext: &str) -> String {
-    format!("{}/{}/{}.{}", cache_path, network, block_no, ext)
+fn cache_file_path(cache_path: &Path, network: &str, block_no: u64, ext: &str) -> PathBuf {
+    cache_path
+        .join(network)
+        .join(block_no.to_string())
+        .with_extension(ext)
 }
 
-fn eth_cache_path(cache: &Option<String>, block_no: u64) -> Option<String> {
+fn eth_cache_path(cache: &Option<PathBuf>, block_no: u64) -> Option<PathBuf> {
     cache
         .as_ref()
         .map(|dir| cache_file_path(dir, "ethereum", block_no, "json.gz"))
 }
 
-fn op_cache_path(cache: &Option<String>, block_no: u64) -> Option<String> {
+fn op_cache_path(cache: &Option<PathBuf>, block_no: u64) -> Option<PathBuf> {
     cache
         .as_ref()
         .map(|dir| cache_file_path(dir, "optimism", block_no, "json.gz"))
@@ -372,10 +379,11 @@ pub fn prove(
 }
 
 #[derive(Clone)]
+
 pub struct RpcDb {
     eth_rpc_url: Option<String>,
     op_rpc_url: Option<String>,
-    cache: Option<String>,
+    cache: Option<PathBuf>,
     mem_db: MemDb,
 }
 
@@ -383,7 +391,7 @@ impl RpcDb {
     pub fn new(
         eth_rpc_url: Option<String>,
         op_rpc_url: Option<String>,
-        cache: Option<String>,
+        cache: Option<PathBuf>,
     ) -> Self {
         RpcDb {
             eth_rpc_url,
@@ -451,11 +459,11 @@ impl BatcherDb for RpcDb {
             let block_header: Header = ethers_block.clone().try_into().unwrap();
             // include receipts when needed
             let can_contain_deposits = zeth_lib::optimism::deposits::can_contain(
-                &CHAIN_SPEC.deposit_contract,
+                &OPTIMISM_CHAIN_SPEC.deposit_contract,
                 &block_header.logs_bloom,
             );
             let can_contain_config = zeth_lib::optimism::system_config::can_contain(
-                &CHAIN_SPEC.system_config_contract,
+                &OPTIMISM_CHAIN_SPEC.system_config_contract,
                 &block_header.logs_bloom,
             );
             let receipts = if can_contain_config || can_contain_deposits {

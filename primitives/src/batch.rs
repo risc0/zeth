@@ -32,8 +32,8 @@ pub struct BatchEssence {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Batch {
+    pub inclusion_block_number: BlockNumber,
     pub essence: BatchEssence,
-    pub l1_inclusion_block: BlockNumber,
 }
 
 impl PartialOrd<Self> for Batch {
@@ -50,13 +50,14 @@ impl Ord for Batch {
 
 impl Batch {
     pub fn new(
+        inclusion_block_number: BlockNumber,
         parent_hash: B256,
         epoch_num: u64,
         epoch_hash: B256,
         timestamp: u64,
-        l1_inclusion_block: BlockNumber,
     ) -> Self {
         Self {
+            inclusion_block_number,
             essence: BatchEssence {
                 parent_hash,
                 epoch_num,
@@ -64,7 +65,6 @@ impl Batch {
                 timestamp,
                 transactions: Vec::new(),
             },
-            l1_inclusion_block,
         }
     }
 }
@@ -88,8 +88,8 @@ impl Decodable for Batch {
             Some(0) => {
                 buf.advance(1);
                 Ok(Self {
+                    inclusion_block_number: 0,
                     essence: BatchEssence::decode(buf)?,
-                    l1_inclusion_block: 0,
                 })
             }
             Some(_) => Err(alloy_rlp::Error::Custom("invalid version")),

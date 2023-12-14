@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use core::iter::once;
-use std::collections::HashMap;
 
 use alloy_sol_types::{sol, SolInterface};
 use anyhow::{bail, Context, Result};
@@ -23,10 +22,9 @@ use serde::{Deserialize, Serialize};
 use zeth_primitives::{
     address,
     batch::Batch,
-    block::Header,
     keccak::keccak,
     transactions::{
-        ethereum::{EthereumTxEssence, TransactionKind},
+        ethereum::TransactionKind,
         optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
         Transaction, TxEssence,
     },
@@ -35,20 +33,17 @@ use zeth_primitives::{
 };
 
 use crate::optimism::{
-    batches::Batches,
+    batcher::{Batcher, BlockInfo, Epoch, State},
+    batcher_db::BatcherDb,
     config::ChainConfig,
-    derivation::{BlockInfo, Epoch, State, CHAIN_SPEC},
-    epoch::BlockInput,
 };
 
-pub mod batcher_transactions;
-pub mod batches;
-pub mod channels;
+pub mod batcher;
+pub mod batcher_channel;
+pub mod batcher_db;
 pub mod composition;
 pub mod config;
 pub mod deposits;
-pub mod derivation;
-pub mod epoch;
 pub mod system_config;
 
 sol! {
@@ -64,115 +59,6 @@ sol! {
             uint256 l1_fee_overhead,
             uint256 l1_fee_scalar
         );
-    }
-}
-
-pub trait BatcherDb {
-    fn get_full_op_block(&mut self, block_no: u64) -> Result<BlockInput<OptimismTxEssence>>;
-    fn get_op_block_header(&mut self, block_no: u64) -> Result<Header>;
-    fn get_full_eth_block(&mut self, block_no: u64) -> Result<BlockInput<EthereumTxEssence>>;
-    fn get_eth_block_header(&mut self, block_no: u64) -> Result<Header>;
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct MemDb {
-    pub full_op_block: HashMap<u64, BlockInput<OptimismTxEssence>>,
-    pub op_block_header: HashMap<u64, Header>,
-    pub full_eth_block: HashMap<u64, BlockInput<EthereumTxEssence>>,
-    pub eth_block_header: HashMap<u64, Header>,
-}
-
-impl MemDb {
-    pub fn new() -> Self {
-        MemDb {
-            full_op_block: HashMap::new(),
-            op_block_header: HashMap::new(),
-            full_eth_block: HashMap::new(),
-            eth_block_header: HashMap::new(),
-        }
-    }
-}
-
-impl Default for MemDb {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl BatcherDb for MemDb {
-    fn get_full_op_block(&mut self, block_no: u64) -> Result<BlockInput<OptimismTxEssence>> {
-        let op_block = self.full_op_block.remove(&block_no).unwrap();
-        assert_eq!(block_no, op_block.block_header.number);
-
-        // Validate tx list
-        {
-            let mut tx_trie = MptNode::default();
-            for (tx_no, tx) in op_block.transactions.iter().enumerate() {
-                let trie_key = tx_no.to_rlp();
-                tx_trie.insert_rlp(&trie_key, tx)?;
-            }
-            if tx_trie.hash() != op_block.block_header.transactions_root {
-                bail!("Invalid op block transaction data!")
-            }
-        }
-
-        Ok(op_block)
-    }
-
-    fn get_op_block_header(&mut self, block_no: u64) -> Result<Header> {
-        let op_block = self.op_block_header.remove(&block_no).unwrap();
-        assert_eq!(block_no, op_block.number);
-
-        Ok(op_block)
-    }
-
-    fn get_full_eth_block(&mut self, block_no: u64) -> Result<BlockInput<EthereumTxEssence>> {
-        let eth_block = self.full_eth_block.remove(&block_no).unwrap();
-        assert_eq!(block_no, eth_block.block_header.number);
-
-        // Validate tx list
-        {
-            let mut tx_trie = MptNode::default();
-            for (tx_no, tx) in eth_block.transactions.iter().enumerate() {
-                let trie_key = tx_no.to_rlp();
-                tx_trie.insert_rlp(&trie_key, tx)?;
-            }
-            if tx_trie.hash() != eth_block.block_header.transactions_root {
-                bail!("Invalid eth block transaction data!")
-            }
-        }
-
-        // Validate receipts
-        if eth_block.receipts.is_some() {
-            let mut receipt_trie = MptNode::default();
-            for (tx_no, receipt) in eth_block.receipts.as_ref().unwrap().iter().enumerate() {
-                let trie_key = tx_no.to_rlp();
-                receipt_trie.insert_rlp(&trie_key, receipt)?;
-            }
-            if receipt_trie.hash() != eth_block.block_header.receipts_root {
-                bail!("Invalid eth block receipt data!")
-            }
-        } else {
-            let can_contain_deposits = deposits::can_contain(
-                &CHAIN_SPEC.deposit_contract,
-                &eth_block.block_header.logs_bloom,
-            );
-            let can_contain_config = system_config::can_contain(
-                &CHAIN_SPEC.system_config_contract,
-                &eth_block.block_header.logs_bloom,
-            );
-            assert!(!can_contain_deposits);
-            assert!(!can_contain_config);
-        }
-
-        Ok(eth_block)
-    }
-
-    fn get_eth_block_header(&mut self, block_no: u64) -> Result<Header> {
-        let eth_block = self.eth_block_header.remove(&block_no).unwrap();
-        assert_eq!(block_no, eth_block.number);
-
-        Ok(eth_block)
     }
 }
 
@@ -195,7 +81,7 @@ pub struct DeriveMachine<D> {
     op_head_block_hash: BlockHash,
     op_block_no: u64,
     op_block_seq_no: u64,
-    op_batches: Batches,
+    op_batcher: Batcher,
     pub eth_block_no: u64,
 }
 
@@ -242,14 +128,14 @@ impl<D: BatcherDb> DeriveMachine<D> {
             eth_block_no, set_l1_block_values.hash
         );
 
-        let op_batches = {
+        let op_batcher = {
             let mut op_chain_config = ChainConfig::optimism();
             op_chain_config.system_config.batch_sender =
                 Address::from_slice(&set_l1_block_values.batcher_hash.as_slice()[12..]);
             op_chain_config.system_config.l1_fee_overhead = set_l1_block_values.l1_fee_overhead;
             op_chain_config.system_config.l1_fee_scalar = set_l1_block_values.l1_fee_scalar;
 
-            Batches::new(
+            Batcher::new(
                 op_chain_config,
                 State::new(
                     eth_block_no,
@@ -274,7 +160,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
             op_head_block_hash,
             op_block_no,
             op_block_seq_no,
-            op_batches,
+            op_batcher,
             eth_block_no,
         })
     }
@@ -299,14 +185,16 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     .db
                     .get_full_eth_block(self.eth_block_no)
                     .context("block not found")?;
-                self.op_batches
-                    .process(&eth_block)
+
+                self.op_batcher
+                    .process_l1_block(&eth_block)
                     .context("failed to create batcher transactions")?;
+
                 self.eth_block_no += 1;
             }
 
             // Process batches
-            while let Some(op_batch) = self.op_batches.next() {
+            while let Some(op_batch) = self.op_batcher.read_batch()? {
                 // Process the batch
                 self.op_block_no += 1;
 
@@ -322,11 +210,11 @@ impl<D: BatcherDb> DeriveMachine<D> {
 
                 // Update sequence number (and fetch deposits if start of new epoch)
                 let deposits =
-                    if op_batch.essence.epoch_num == self.op_batches.state.epoch.number + 1 {
+                    if op_batch.essence.epoch_num == self.op_batcher.state.epoch.number + 1 {
                         self.op_block_seq_no = 0;
-                        self.op_batches.state.do_next_epoch()?;
+                        self.op_batcher.state.do_next_epoch()?;
 
-                        self.op_batches
+                        self.op_batcher
                             .state
                             .epoch
                             .deposits
@@ -350,7 +238,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     // Verify new op head has the expected parent
                     assert_eq!(
                         new_op_head.parent_hash,
-                        self.op_batches.state.safe_head.hash
+                        self.op_batcher.state.safe_head.hash
                     );
 
                     // Verify that the new op head transactions are consistent with the batch
@@ -384,7 +272,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     new_op_head.number, new_op_head_hash
                 );
 
-                self.op_batches.state.safe_head = BlockInfo {
+                self.op_batcher.state.safe_head = BlockInfo {
                     hash: new_op_head_hash,
                     timestamp: new_op_head.timestamp.try_into().unwrap(),
                 };
@@ -399,8 +287,8 @@ impl<D: BatcherDb> DeriveMachine<D> {
 
         Ok(DeriveOutput {
             eth_tail: (
-                self.op_batches.state.current_l1_block_number,
-                self.op_batches.state.current_l1_block_hash,
+                self.op_batcher.state.current_l1_block_number,
+                self.op_batcher.state.current_l1_block_hash,
             ),
             op_head: (self.derive_input.op_head_block_no, self.op_head_block_hash),
             derived_op_blocks,
@@ -410,31 +298,31 @@ impl<D: BatcherDb> DeriveMachine<D> {
     fn derive_system_transaction(&mut self, op_batch: &Batch) -> Transaction<OptimismTxEssence> {
         let batcher_hash = {
             let all_zero: FixedBytes<12> = FixedBytes([0_u8; 12]);
-            all_zero.concat_const::<20, 32>(self.op_batches.config.system_config.batch_sender.0)
+            all_zero.concat_const::<20, 32>(self.op_batcher.config.system_config.batch_sender.0)
         };
 
         let set_l1_block_values =
             OpSystemInfo::OpSystemInfoCalls::setL1BlockValues(OpSystemInfo::setL1BlockValuesCall {
-                number: self.op_batches.state.epoch.number,
-                timestamp: self.op_batches.state.epoch.timestamp,
-                basefee: self.op_batches.state.epoch.base_fee_per_gas,
-                hash: self.op_batches.state.epoch.hash,
+                number: self.op_batcher.state.epoch.number,
+                timestamp: self.op_batcher.state.epoch.timestamp,
+                basefee: self.op_batcher.state.epoch.base_fee_per_gas,
+                hash: self.op_batcher.state.epoch.hash,
                 sequence_number: self.op_block_seq_no,
                 batcher_hash,
-                l1_fee_overhead: self.op_batches.config.system_config.l1_fee_overhead,
-                l1_fee_scalar: self.op_batches.config.system_config.l1_fee_scalar,
+                l1_fee_overhead: self.op_batcher.config.system_config.l1_fee_overhead,
+                l1_fee_scalar: self.op_batcher.config.system_config.l1_fee_scalar,
             });
 
         let source_hash: B256 = {
             let source_hash_sequencing = keccak(
-                &[
+                [
                     op_batch.essence.epoch_hash.to_vec(),
                     U256::from(self.op_block_seq_no).to_be_bytes_vec(),
                 ]
                 .concat(),
             );
             keccak(
-                &[
+                [
                     [0u8; 31].as_slice(),
                     [1u8].as_slice(),
                     source_hash_sequencing.as_slice(),

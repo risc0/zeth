@@ -145,7 +145,7 @@ impl Batcher {
         if eth_block.receipts.is_some() {
             self.config
                 .system_config
-                .update(&self.config.system_config_contract, &eth_block)
+                .update(&self.config.system_config_contract, eth_block)
                 .context("failed to update system config")?;
         }
 
@@ -155,7 +155,7 @@ impl Batcher {
             hash: eth_block_hash,
             timestamp: eth_block.block_header.timestamp.try_into().unwrap(),
             base_fee_per_gas: eth_block.block_header.base_fee_per_gas,
-            deposits: deposits::extract_transactions(&self.config, &eth_block)?,
+            deposits: deposits::extract_transactions(&self.config, eth_block)?,
         })?;
 
         // Read frames into channels

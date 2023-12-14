@@ -314,14 +314,14 @@ impl<D: BatcherDb> DeriveMachine<D> {
 
         let source_hash: B256 = {
             let source_hash_sequencing = keccak(
-                &[
+                [
                     op_batch.essence.epoch_hash.to_vec(),
                     U256::from(self.op_block_seq_no).to_be_bytes_vec(),
                 ]
                 .concat(),
             );
             keccak(
-                &[
+                [
                     [0u8; 31].as_slice(),
                     [1u8].as_slice(),
                     source_hash_sequencing.as_slice(),

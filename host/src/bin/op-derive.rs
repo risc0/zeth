@@ -12,16 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/*
-Example usage:
-
-RUST_LOG=info ../zeth/target/release/op-derive \
-        --eth-rpc-url="https://eth-mainnet.g.alchemy.com/v2/API_KEY_HERE" \
-        --op-rpc-url="https://opt-mainnet.g.alchemy.com/v2/API_KEY_HERE" \
-        --cache \
-        --block-no=110807020 \
-        --blocks=2
-*/
+// Example usage:
+//
+// RUST_LOG=info ../zeth/target/release/op-derive \
+// --eth-rpc-url="https://eth-mainnet.g.alchemy.com/v2/API_KEY_HERE" \
+// --op-rpc-url="https://opt-mainnet.g.alchemy.com/v2/API_KEY_HERE" \
+// --cache \
+// --block-no=110807020 \
+// --blocks=2
 
 use std::path::{Path, PathBuf};
 

@@ -221,8 +221,9 @@ impl Batcher {
 
         // If there are no accepted batches, attempt to generate the default batch. From the spec:
         // "If no batch can be accept-ed, and the stage has completed buffering of all batches
-        //  that can fully be read from the L1 block at height epoch.number + sequence_window_size,
-        //  and the next_epoch is available, then an empty batch can be derived."
+        //  that can fully be read from the L1 block at height epoch.number +
+        // sequence_window_size,  and the next_epoch is available, then an empty batch can
+        // be derived."
         if out.is_none() {
             let current_l1_block = self.state.current_l1_block_number;
             let safe_head = self.state.safe_head;

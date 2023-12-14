@@ -16,6 +16,8 @@ use core::iter::once;
 
 use alloy_sol_types::{sol, SolInterface};
 use anyhow::{bail, Context, Result};
+#[cfg(not(target_os = "zkvm"))]
+use log::info;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
     address,
@@ -29,9 +31,6 @@ use zeth_primitives::{
     trie::MptNode,
     uint, Address, BlockHash, BlockNumber, FixedBytes, RlpBytes, B256, U256,
 };
-
-#[cfg(not(target_os = "zkvm"))]
-use log::info;
 
 use crate::optimism::{
     batcher::{Batcher, BlockInfo, Epoch, State},
@@ -241,7 +240,8 @@ impl<D: BatcherDb> DeriveMachine<D> {
                         self.op_batcher.state.safe_head.hash
                     );
 
-                    // Verify that the new op head transactions are consistent with the batch transactions
+                    // Verify that the new op head transactions are consistent with the batch
+                    // transactions
                     {
                         let system_tx = self.derive_system_transaction(&op_batch);
 

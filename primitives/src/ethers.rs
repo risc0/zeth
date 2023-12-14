@@ -20,21 +20,23 @@ use ethers_core::types::{
     transaction::eip2930::{
         AccessList as EthersAccessList, AccessListItem as EthersAccessListItem,
     },
-    Block as EthersBlock, Bytes as EthersBytes, Transaction as EthersTransaction,
-    Withdrawal as EthersWithdrawal, H160 as EthersH160, H256 as EthersH256, U256 as EthersU256,
+    Block as EthersBlock, Bytes as EthersBytes, EIP1186ProofResponse,
+    Transaction as EthersTransaction, Withdrawal as EthersWithdrawal, H160 as EthersH160,
+    H256 as EthersH256, U256 as EthersU256,
 };
 
 use crate::{
     access_list::{AccessList, AccessListItem},
     block::Header,
-    signature::TxSignature,
     transactions::{
         ethereum::{
             EthereumTxEssence, TransactionKind, TxEssenceEip1559, TxEssenceEip2930, TxEssenceLegacy,
         },
         optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
+        signature::TxSignature,
         Transaction, TxEssence,
     },
+    trie::StateAccount,
     withdrawal::Withdrawal,
 };
 
@@ -227,9 +229,9 @@ impl TryFrom<EthersTransaction> for OptimismTxEssence {
                 to: tx.to.into(),
                 value: from_ethers_u256(tx.value),
                 data: tx.input.0.into(),
-                source_hash: from_ethers_h256(tx.source_hash.context("source_hash missing")?),
+                source_hash: from_ethers_h256(tx.source_hash),
                 mint: from_ethers_u256(tx.mint.context("mint missing")?),
-                is_system_tx: tx.is_system_tx.unwrap_or_default(),
+                is_system_tx: tx.is_system_tx,
             }),
             _ => OptimismTxEssence::Ethereum(tx.try_into()?),
         };
@@ -252,5 +254,17 @@ impl TryFrom<EthersWithdrawal> for Withdrawal {
                 .try_into()
                 .map_err(|err| anyhow!("invalid amount: {}", err))?,
         })
+    }
+}
+
+/// Conversion from `EIP1186ProofResponse` to the local [StateAccount].
+impl From<EIP1186ProofResponse> for StateAccount {
+    fn from(response: EIP1186ProofResponse) -> Self {
+        StateAccount {
+            nonce: response.nonce.as_u64(),
+            balance: from_ethers_u256(response.balance),
+            storage_root: from_ethers_h256(response.storage_hash),
+            code_hash: from_ethers_h256(response.code_hash),
+        }
     }
 }

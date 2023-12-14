@@ -16,7 +16,6 @@ use alloy_primitives::{Address, Bytes, ChainId, TxNumber, B256, U256};
 use alloy_rlp::{Encodable, EMPTY_STRING_CODE};
 use alloy_rlp_derive::RlpEncodable;
 use anyhow::Context;
-use bytes::BufMut;
 use k256::{
     ecdsa::{RecoveryId, Signature as K256Signature, VerifyingKey as K256VerifyingKey},
     elliptic_curve::sec1::ToEncodedPoint,
@@ -24,12 +23,8 @@ use k256::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    access_list::AccessList,
-    keccak::keccak,
-    signature::TxSignature,
-    transactions::{Transaction, TxEssence},
-};
+use super::signature::TxSignature;
+use crate::{access_list::AccessList, keccak::keccak, transactions::TxEssence};
 
 /// Represents a legacy Ethereum transaction as detailed in [EIP-155](https://eips.ethereum.org/EIPS/eip-155).
 ///
@@ -49,8 +44,8 @@ pub struct TxEssenceLegacy {
     pub gas_price: U256,
     /// The maximum amount of gas allocated for the transaction's execution.
     pub gas_limit: U256,
-    /// The 160-bit address of the intended recipient for a message call. For contract
-    /// creation transactions, this is null.
+    /// The 160-bit address of the intended recipient for a message call or
+    /// [TransactionKind::Create] for contract creation.
     pub to: TransactionKind,
     /// The amount, in Wei, to be transferred to the recipient of the message call.
     pub value: U256,
@@ -75,11 +70,12 @@ impl TxEssenceLegacy {
     /// Encodes the transaction essence into the provided `out` buffer for the purpose of
     /// signing.
     ///
-    /// The method follows the RLP encoding scheme. If a `chain_id` is present,
-    /// the encoding adheres to the specifications set out in [EIP-155](https://eips.ethereum.org/EIPS/eip-155).
+    /// According to EIP-155, if `chain_id` is present, `(chain_id, 0, 0)` must be
+    /// appended to the regular RLP encoding when computing the hash of a transaction for
+    /// the purposes of signing.
     pub fn signing_encode(&self, out: &mut dyn alloy_rlp::BufMut) {
         let mut payload_length = self.payload_length();
-        // Append chain ID according to EIP-155 if present
+        // append chain ID according to EIP-155 if present
         if let Some(chain_id) = self.chain_id {
             payload_length += chain_id.length() + 1 + 1;
         }
@@ -108,11 +104,11 @@ impl TxEssenceLegacy {
     /// including any additional bytes required for the encoding format.
     pub fn signing_length(&self) -> usize {
         let mut payload_length = self.payload_length();
-        // Append chain ID according to EIP-155 if present
+        // append chain ID according to EIP-155 if present
         if let Some(chain_id) = self.chain_id {
             payload_length += chain_id.length() + 1 + 1;
         }
-        alloy_rlp::length_of_length(payload_length) + payload_length
+        payload_length + alloy_rlp::length_of_length(payload_length)
     }
 }
 
@@ -123,6 +119,7 @@ impl Encodable for TxEssenceLegacy {
     ///
     /// This method follows the RLP encoding scheme, but intentionally omits the
     /// `chain_id` to ensure compatibility with legacy transactions.
+    #[inline]
     fn encode(&self, out: &mut dyn alloy_rlp::BufMut) {
         alloy_rlp::Header {
             list: true,
@@ -141,9 +138,10 @@ impl Encodable for TxEssenceLegacy {
     ///
     /// This method calculates the total length of the transaction when it is RLP-encoded,
     /// excluding the `chain_id`.
+    #[inline]
     fn length(&self) -> usize {
         let payload_length = self.payload_length();
-        alloy_rlp::length_of_length(payload_length) + payload_length
+        payload_length + alloy_rlp::length_of_length(payload_length)
     }
 }
 
@@ -282,9 +280,8 @@ impl Encodable for TransactionKind {
 /// Represents the core essence of an Ethereum transaction, specifically the portion that
 /// gets signed.
 ///
-/// The `TxEssence` enum provides a way to handle different types of Ethereum
-/// transactions, from legacy transactions to more recent types introduced by various
-/// Ethereum Improvement Proposals (EIPs).
+/// The [EthereumTxEssence] enum provides a way to handle different types of Ethereum
+/// transactions.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EthereumTxEssence {
     /// Represents a legacy Ethereum transaction, which follows the original transaction
@@ -300,14 +297,13 @@ pub enum EthereumTxEssence {
     Eip1559(TxEssenceEip1559),
 }
 
-// Implement the Encodable trait for the TxEssence enum.
-// Ensures that each variant of the `TxEssence` enum can be RLP-encoded.
 impl Encodable for EthereumTxEssence {
     /// Encodes the [EthereumTxEssence] enum variant into the provided `out` buffer.
     ///
     /// Depending on the variant of the [EthereumTxEssence] enum, this method will
     /// delegate the encoding process to the appropriate transaction type's encoding
     /// method.
+    #[inline]
     fn encode(&self, out: &mut dyn alloy_rlp::BufMut) {
         match self {
             EthereumTxEssence::Legacy(tx) => tx.encode(out),
@@ -321,6 +317,7 @@ impl Encodable for EthereumTxEssence {
     /// Depending on the variant of the [EthereumTxEssence] enum, this method will
     /// delegate the length computation to the appropriate transaction type's length
     /// method.
+    #[inline]
     fn length(&self) -> usize {
         match self {
             EthereumTxEssence::Legacy(tx) => tx.length(),
@@ -366,11 +363,10 @@ impl EthereumTxEssence {
         }
     }
 
-    /// Determines whether the y-coordinate of the ECDSA signature's associated public key
-    /// is odd.
+    /// Returns the parity of the y-value of the curve point for which `signature.r` is
+    /// the x-value. This is encoded in the `v` field of the signature.
     ///
-    /// This information is derived from the `v` component of the signature and is used
-    /// during public key recovery.
+    /// It returns `None` if the parity cannot be determined.
     fn is_y_odd(&self, signature: &TxSignature) -> Option<bool> {
         match self {
             EthereumTxEssence::Legacy(TxEssenceLegacy { chain_id: None, .. }) => {
@@ -386,13 +382,7 @@ impl EthereumTxEssence {
 }
 
 /// Converts a given value into a boolean based on its parity.
-///
-/// Returns:
-/// - `Some(true)` if the value is 1.
-/// - `Some(false)` if the value is 0.
-/// - `None` otherwise.
-#[inline]
-pub fn checked_bool(v: u64) -> Option<bool> {
+fn checked_bool(v: u64) -> Option<bool> {
     match v {
         0 => Some(false),
         1 => Some(true),
@@ -401,12 +391,7 @@ pub fn checked_bool(v: u64) -> Option<bool> {
 }
 
 impl TxEssence for EthereumTxEssence {
-    /// Determines the type of the transaction based on its essence.
-    ///
-    /// Returns a byte representing the transaction type:
-    /// - `0x00` for Legacy transactions.
-    /// - `0x01` for EIP-2930 transactions.
-    /// - `0x02` for EIP-1559 transactions.
+    /// Returns the EIP-2718 transaction type or `0x00` for Legacy transactions.
     fn tx_type(&self) -> u8 {
         match self {
             EthereumTxEssence::Legacy(_) => 0x00,
@@ -414,10 +399,7 @@ impl TxEssence for EthereumTxEssence {
             EthereumTxEssence::Eip1559(_) => 0x02,
         }
     }
-    /// Retrieves the gas limit set for the transaction.
-    ///
-    /// The gas limit represents the maximum amount of gas units that the transaction
-    /// is allowed to consume. It ensures that transactions don't run indefinitely.
+    /// Returns the gas limit set for the transaction.
     fn gas_limit(&self) -> U256 {
         match self {
             EthereumTxEssence::Legacy(tx) => tx.gas_limit,
@@ -425,10 +407,7 @@ impl TxEssence for EthereumTxEssence {
             EthereumTxEssence::Eip1559(tx) => tx.gas_limit,
         }
     }
-    /// Retrieves the recipient address of the transaction, if available.
-    ///
-    /// For contract creation transactions, this method returns `None` as there's no
-    /// recipient address.
+    /// Returns the recipient address of the transaction, if available.
     fn to(&self) -> Option<Address> {
         match self {
             EthereumTxEssence::Legacy(tx) => tx.to.into(),
@@ -437,10 +416,6 @@ impl TxEssence for EthereumTxEssence {
         }
     }
     /// Recovers the Ethereum address of the sender from the transaction's signature.
-    ///
-    /// This method uses the ECDSA recovery mechanism to derive the sender's public key
-    /// and subsequently their Ethereum address. If the recovery is unsuccessful, an
-    /// error is returned.
     fn recover_from(&self, signature: &TxSignature) -> anyhow::Result<Address> {
         let is_y_odd = self.is_y_odd(signature).context("v invalid")?;
         let signature =
@@ -462,11 +437,7 @@ impl TxEssence for EthereumTxEssence {
 
         Ok(Address::from_slice(&hash[12..]))
     }
-    /// Computes the length of the RLP-encoded payload in bytes for the transaction
-    /// essence.
-    ///
-    /// This method calculates the length of the transaction data when it is RLP-encoded,
-    /// which is used for serialization and deserialization in the Ethereum network.
+    /// Returns the length of the RLP-encoding payload in bytes.
     fn payload_length(&self) -> usize {
         match self {
             EthereumTxEssence::Legacy(tx) => tx.payload_length(),
@@ -474,61 +445,215 @@ impl TxEssence for EthereumTxEssence {
             EthereumTxEssence::Eip1559(tx) => tx._alloy_rlp_payload_length(),
         }
     }
-
-    fn encode_with_signature(&self, signature: &TxSignature, out: &mut dyn BufMut) {
-        // join the essence lists and the signature list into one
-        rlp_join_lists(self, signature, out);
-    }
-
-    #[inline]
-    fn length(transaction: &Transaction<Self>) -> usize {
-        let payload_length =
-            transaction.essence.payload_length() + transaction.signature.payload_length();
-        let mut length = payload_length + alloy_rlp::length_of_length(payload_length);
-        if transaction.essence.tx_type() != 0 {
-            length += 1;
+    /// Returns a reference to the transaction's call data
+    fn data(&self) -> &Bytes {
+        match self {
+            EthereumTxEssence::Legacy(tx) => &tx.data,
+            EthereumTxEssence::Eip2930(tx) => &tx.data,
+            EthereumTxEssence::Eip1559(tx) => &tx.data,
         }
-        length
     }
 }
 
-/// Joins two RLP-encoded lists into a single RLP-encoded list.
-///
-/// This function takes two RLP-encoded lists, decodes their headers to ensure they are
-/// valid lists, and then combines their payloads into a single RLP-encoded list. The
-/// resulting list is written to the provided `out` buffer.
-///
-/// # Arguments
-///
-/// * `a` - The first RLP-encoded list to be joined.
-/// * `b` - The second RLP-encoded list to be joined.
-/// * `out` - The buffer where the resulting RLP-encoded list will be written.
-///
-/// # Panics
-///
-/// This function will panic if either `a` or `b` are not valid RLP-encoded lists.
-fn rlp_join_lists(a: impl Encodable, b: impl Encodable, out: &mut dyn alloy_rlp::BufMut) {
-    let a_buf = alloy_rlp::encode(a);
-    let header = alloy_rlp::Header::decode(&mut &a_buf[..]).unwrap();
-    if !header.list {
-        panic!("`a` not a list");
-    }
-    let a_head_length = header.length();
-    let a_payload_length = a_buf.len() - a_head_length;
+#[cfg(test)]
+mod tests {
+    use alloy_primitives::{address, b256};
+    use serde_json::json;
 
-    let b_buf = alloy_rlp::encode(b);
-    let header = alloy_rlp::Header::decode(&mut &b_buf[..]).unwrap();
-    if !header.list {
-        panic!("`b` not a list");
-    }
-    let b_head_length = header.length();
-    let b_payload_length = b_buf.len() - b_head_length;
+    use super::*;
+    use crate::transactions::EthereumTransaction;
 
-    alloy_rlp::Header {
-        list: true,
-        payload_length: a_payload_length + b_payload_length,
+    #[test]
+    fn legacy() {
+        // Tx: 0x5c504ed432cb51138bcf09aa5e8a410dd4a1e204ef84bfed1be16dfba1b22060
+        let tx = json!({
+                "Legacy": {
+                    "nonce": 0,
+                    "gas_price": "0x2d79883d2000",
+                    "gas_limit": "0x5208",
+                    "to": { "Call": "0x5df9b87991262f6ba471f09758cde1c0fc1de734" },
+                    "value": "0x7a69",
+                    "data": "0x"
+                  }
+        });
+        let essence: EthereumTxEssence = serde_json::from_value(tx).unwrap();
+
+        let signature: TxSignature = serde_json::from_value(json!({
+            "v": 28,
+            "r": "0x88ff6cf0fefd94db46111149ae4bfc179e9b94721fffd821d38d16464b3f71d0",
+            "s": "0x45e0aff800961cfce805daef7016b9b675c137a6a41a548f7b60a3484c06a33a"
+        }))
+        .unwrap();
+        let transaction = EthereumTransaction { essence, signature };
+
+        // verify that bincode serialization works
+        let _: EthereumTransaction =
+            bincode::deserialize(&bincode::serialize(&transaction).unwrap()).unwrap();
+
+        assert_eq!(
+            transaction.hash(),
+            b256!("5c504ed432cb51138bcf09aa5e8a410dd4a1e204ef84bfed1be16dfba1b22060")
+        );
+        let recovered = transaction.recover_from().unwrap();
+        assert_eq!(
+            recovered,
+            address!("a1e4380a3b1f749673e270229993ee55f35663b4")
+        );
     }
-    .encode(out);
-    out.put_slice(&a_buf[a_head_length..]); // skip the header
-    out.put_slice(&b_buf[b_head_length..]); // skip the header
+
+    #[test]
+    fn eip155() {
+        // Tx: 0x4540eb9c46b1654c26353ac3c65e56451f711926982ce1b02f15c50e7459caf7
+        let tx = json!({
+                "Legacy": {
+                    "nonce": 537760,
+                    "gas_price": "0x03c49bfa04",
+                    "gas_limit": "0x019a28",
+                    "to": { "Call": "0xf0ee707731d1be239f9f482e1b2ea5384c0c426f" },
+                    "value": "0x06df842eaa9fb800",
+                    "data": "0x",
+                    "chain_id": 1
+                  }
+        });
+        let essence: EthereumTxEssence = serde_json::from_value(tx).unwrap();
+
+        let signature: TxSignature = serde_json::from_value(json!({
+            "v": 38,
+            "r": "0xcadd790a37b78e5613c8cf44dc3002e3d7f06a5325d045963c708efe3f9fdf7a",
+            "s": "0x1f63adb9a2d5e020c6aa0ff64695e25d7d9a780ed8471abe716d2dc0bf7d4259"
+        }))
+        .unwrap();
+        let transaction = EthereumTransaction { essence, signature };
+
+        // verify that bincode serialization works
+        let _: EthereumTransaction =
+            bincode::deserialize(&bincode::serialize(&transaction).unwrap()).unwrap();
+
+        assert_eq!(
+            transaction.hash(),
+            b256!("4540eb9c46b1654c26353ac3c65e56451f711926982ce1b02f15c50e7459caf7")
+        );
+        let recovered = transaction.recover_from().unwrap();
+        assert_eq!(
+            recovered,
+            address!("974caa59e49682cda0ad2bbe82983419a2ecc400")
+        );
+    }
+
+    #[test]
+    fn eip2930() {
+        // Tx: 0xbe4ef1a2244e99b1ef518aec10763b61360be22e3b649dcdf804103719b1faef
+        let tx = json!({
+          "Eip2930": {
+            "chain_id": 1,
+            "nonce": 93847,
+            "gas_price": "0xf46a5a9d8",
+            "gas_limit": "0x21670",
+            "to": { "Call": "0xc11ce44147c9f6149fbe54adb0588523c38718d7" },
+            "value": "0x10d1471",
+            "data": "0x050000000002b8809aef26206090eafd7d5688615d48197d1c5ce09be6c30a33be4c861dee44d13f6dd33c2e8c5cad7e2725f88a8f0000000002d67ca5eb0e5fb6",
+            "access_list": [
+              {
+                "address": "0xd6e64961ba13ba42858ad8a74ed9a9b051a4957d",
+                "storage_keys": [
+                  "0x0000000000000000000000000000000000000000000000000000000000000008",
+                  "0x0b4b38935f88a7bddbe6be76893de2a04640a55799d6160729a82349aff1ffae",
+                  "0xc59ee2ee2ba599569b2b1f06989dadbec5ee157c8facfe64f36a3e33c2b9d1bf"
+                ]
+              },
+              {
+                "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+                "storage_keys": [
+                  "0x7635825e4f8dfeb20367f8742c8aac958a66caa001d982b3a864dcc84167be80",
+                  "0x42555691810bdf8f236c31de88d2cc9407a8ff86cd230ba3b7029254168df92a",
+                  "0x29ece5a5f4f3e7751868475502ab752b5f5fa09010960779bf7204deb72f5dde"
+                ]
+              },
+              {
+                "address": "0x4c861dee44d13f6dd33c2e8c5cad7e2725f88a8f",
+                "storage_keys": [
+                  "0x000000000000000000000000000000000000000000000000000000000000000c",
+                  "0x0000000000000000000000000000000000000000000000000000000000000008",
+                  "0x0000000000000000000000000000000000000000000000000000000000000006",
+                  "0x0000000000000000000000000000000000000000000000000000000000000007"
+                ]
+              },
+              {
+                "address": "0x90eafd7d5688615d48197d1c5ce09be6c30a33be",
+                "storage_keys": [
+                  "0x0000000000000000000000000000000000000000000000000000000000000001",
+                  "0x9c04773acff4c5c42718bd0120c72761f458e43068a3961eb935577d1ed4effb",
+                  "0x0000000000000000000000000000000000000000000000000000000000000008",
+                  "0x0000000000000000000000000000000000000000000000000000000000000000",
+                  "0x0000000000000000000000000000000000000000000000000000000000000004"
+                ]
+              }
+            ]
+          }
+        });
+        let essence: EthereumTxEssence = serde_json::from_value(tx).unwrap();
+
+        let signature: TxSignature = serde_json::from_value(json!({
+            "v": 1,
+            "r": "0xf86aa2dfde99b0d6a41741e96cfcdee0c6271febd63be4056911db19ae347e66",
+            "s": "0x601deefbc4835cb15aa1af84af6436fc692dea3428d53e7ff3d34a314cefe7fc"
+        }))
+        .unwrap();
+        let transaction = EthereumTransaction { essence, signature };
+
+        // verify that bincode serialization works
+        let _: EthereumTransaction =
+            bincode::deserialize(&bincode::serialize(&transaction).unwrap()).unwrap();
+
+        assert_eq!(
+            transaction.hash(),
+            b256!("be4ef1a2244e99b1ef518aec10763b61360be22e3b649dcdf804103719b1faef")
+        );
+        let recovered = transaction.recover_from().unwrap();
+        assert_eq!(
+            recovered,
+            address!("79b7a69d90c82e014bf0315e164208119b510fa0")
+        );
+    }
+
+    #[test]
+    fn eip1559() {
+        // Tx: 0x2bcdc03343ca9c050f8dfd3c87f32db718c762ae889f56762d8d8bdb7c5d69ff
+        let tx = json!({
+                "Eip1559": {
+                  "chain_id": 1,
+                  "nonce": 32,
+                  "max_priority_fee_per_gas": "0x3b9aca00",
+                  "max_fee_per_gas": "0x89d5f3200",
+                  "gas_limit": "0x5b04",
+                  "to": { "Call": "0xa9d1e08c7793af67e9d92fe308d5697fb81d3e43" },
+                  "value": "0x1dd1f234f68cde2",
+                  "data": "0x",
+                  "access_list": []
+                }
+        });
+        let essence: EthereumTxEssence = serde_json::from_value(tx).unwrap();
+
+        let signature: TxSignature = serde_json::from_value(json!({
+            "v": 0,
+            "r": "0x2bdf47562da5f2a09f09cce70aed35ec9ac62f5377512b6a04cc427e0fda1f4d",
+            "s": "0x28f9311b515a5f17aa3ad5ea8bafaecfb0958801f01ca11fd593097b5087121b"
+        }))
+        .unwrap();
+        let transaction = EthereumTransaction { essence, signature };
+
+        // verify that bincode serialization works
+        let _: EthereumTransaction =
+            bincode::deserialize(&bincode::serialize(&transaction).unwrap()).unwrap();
+
+        assert_eq!(
+            transaction.hash(),
+            b256!("2bcdc03343ca9c050f8dfd3c87f32db718c762ae889f56762d8d8bdb7c5d69ff")
+        );
+        let recovered = transaction.recover_from().unwrap();
+        assert_eq!(
+            recovered,
+            address!("4b9f4114d50e7907bff87728a060ce8d53bf4cf7")
+        );
+    }
 }

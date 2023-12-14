@@ -32,10 +32,8 @@ use zeth_primitives::{
     Bloom, RlpBytes,
 };
 
-use crate::{
-    block_builder::BlockBuilder, consts, consts::GWEI_TO_WEI, execution::TxExecStrategy,
-    guest_mem_forget,
-};
+use super::TxExecStrategy;
+use crate::{builder::BlockBuilder, consts, guest_mem_forget};
 
 /// Minimum supported protocol version: Paris (Block no. 15537394).
 const MIN_SPEC_ID: SpecId = SpecId::MERGE;
@@ -208,7 +206,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             .enumerate()
         {
             // the withdrawal amount is given in Gwei
-            let amount_wei = GWEI_TO_WEI
+            let amount_wei = consts::GWEI_TO_WEI
                 .checked_mul(withdrawal.amount.try_into().unwrap())
                 .unwrap();
 

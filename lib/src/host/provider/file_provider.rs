@@ -16,6 +16,7 @@ use std::{
     collections::HashMap,
     fs::File,
     io::{Read, Write},
+    path::{Path, PathBuf},
 };
 
 use anyhow::{anyhow, Result};
@@ -29,7 +30,7 @@ use super::{AccountQuery, BlockQuery, MutProvider, ProofQuery, Provider, Storage
 #[derive(Deserialize, Serialize)]
 pub struct FileProvider {
     #[serde(skip)]
-    file_path: String,
+    file_path: PathBuf,
     #[serde(skip)]
     dirty: bool,
     #[serde_as(as = "Vec<(_, _)>")]
@@ -49,7 +50,7 @@ pub struct FileProvider {
 }
 
 impl FileProvider {
-    pub fn empty(file_path: String) -> Self {
+    pub fn empty(file_path: PathBuf) -> Self {
         FileProvider {
             file_path,
             dirty: false,
@@ -63,7 +64,7 @@ impl FileProvider {
         }
     }
 
-    pub fn read_from_file(file_path: String) -> Result<Self> {
+    pub fn read_from_file(file_path: PathBuf) -> Result<Self> {
         let mut buf = vec![];
         let mut decoder = flate2::read::GzDecoder::new(File::open(&file_path)?);
         decoder.read_to_end(&mut buf)?;
@@ -75,7 +76,7 @@ impl FileProvider {
         Ok(out)
     }
 
-    pub fn save_to_file(&self, file_path: &String) -> Result<()> {
+    pub fn save_to_file(&self, file_path: &Path) -> Result<()> {
         if self.dirty {
             let mut encoder = flate2::write::GzEncoder::new(
                 File::create(file_path)?,

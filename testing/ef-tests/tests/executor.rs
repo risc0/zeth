@@ -16,10 +16,7 @@
 
 use std::path::PathBuf;
 
-use risc0_zkvm::{
-    serde::{from_slice, to_vec},
-    Executor, ExecutorEnv, FileSegmentRef,
-};
+use risc0_zkvm::{ExecutorEnv, ExecutorImpl, FileSegmentRef};
 use rstest::rstest;
 use tempfile::tempdir;
 use zeth_primitives::{block::Header, BlockHash};
@@ -29,7 +26,7 @@ use zeth_testeth::{
     guests::TEST_GUEST_ELF,
 };
 
-const SEGMENT_LIMIT_PO2: usize = 21;
+const SEGMENT_LIMIT_PO2: u32 = 21;
 
 #[rstest]
 fn executor(
@@ -65,21 +62,24 @@ fn executor(
 
         let input = create_input(
             &chain_spec,
-            json.pre,
             genesis,
+            json.pre,
             expected_header.clone(),
             block.transactions,
             block.withdrawals.unwrap_or_default(),
+            json.post.unwrap(),
         );
 
         let env = ExecutorEnv::builder()
             .session_limit(None)
             .segment_limit_po2(SEGMENT_LIMIT_PO2)
-            .add_input(&to_vec(&chain_spec).unwrap())
-            .add_input(&to_vec(&input).unwrap())
+            .write(&chain_spec)
+            .unwrap()
+            .write(&input)
+            .unwrap()
             .build()
             .unwrap();
-        let mut exec = Executor::from_elf(env, TEST_GUEST_ELF).unwrap();
+        let mut exec = ExecutorImpl::from_elf(env, TEST_GUEST_ELF).unwrap();
 
         let segment_dir = tempdir().unwrap();
         let session = exec
@@ -89,7 +89,7 @@ fn executor(
             .unwrap();
         println!("Generated {} segments", session.segments.len());
 
-        let found_hash: BlockHash = from_slice(&session.journal).unwrap();
+        let found_hash: BlockHash = session.journal.decode().unwrap();
         println!("Block hash (from executor): {}", found_hash);
         assert_eq!(found_hash, expected_header.hash());
     }

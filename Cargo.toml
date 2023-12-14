@@ -23,8 +23,8 @@ lto = true
 opt-level = 3
 
 [workspace.dependencies]
-bonsai-sdk = "0.4"
+bonsai-sdk = "0.5"
 hashbrown = { version = "0.14", features = ["inline-more"] }
-risc0-build = "0.18"
-risc0-zkvm = { version = "0.18", default-features = false }
+risc0-build = "0.19"
+risc0-zkvm = { version = "0.19", default-features = false }
 revm = { git = "https://github.com/bluealloy/revm.git", rev = "f1f174e6cea6fe91e6c9a5ec23aa87b6cf09be80", default-features = false, features = ["std", "serde", "optimism"] }

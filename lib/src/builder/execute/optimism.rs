@@ -33,12 +33,8 @@ use zeth_primitives::{
     Bloom, Bytes, RlpBytes,
 };
 
-use crate::{
-    block_builder::BlockBuilder,
-    consts,
-    execution::{ethereum::fill_eth_tx_env, TxExecStrategy},
-    guest_mem_forget,
-};
+use super::{ethereum::fill_eth_tx_env, TxExecStrategy};
+use crate::{builder::BlockBuilder, consts, guest_mem_forget};
 
 /// Minimum supported protocol version: Bedrock (Block no. 105235063).
 const MIN_SPEC_ID: SpecId = SpecId::BEDROCK;

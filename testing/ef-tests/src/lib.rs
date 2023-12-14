@@ -19,28 +19,26 @@ use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, NoneAsEmptyString};
 use zeth_lib::{
-    block_builder::BlockBuilder,
+    builder::{BlockBuilder, BlockBuilderStrategy, EthereumStrategy},
     consts::ChainSpec,
-    execution::ethereum::EthTxExecStrategy,
     host::{
+        preflight::Data,
         provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
         provider_db::ProviderDb,
-        Init,
     },
     input::Input,
     mem_db::{AccountState, DbAccount, MemDb},
-    preparation::EthHeaderPrepStrategy,
 };
 use zeth_primitives::{
     access_list::{AccessList, AccessListItem},
     block::Header,
     ethers::from_ethers_h160,
     keccak::keccak,
-    signature::TxSignature,
     transactions::{
         ethereum::{
             EthereumTxEssence, TransactionKind, TxEssenceEip1559, TxEssenceEip2930, TxEssenceLegacy,
         },
+        signature::TxSignature,
         EthereumTransaction,
     },
     trie::{self, MptNode, MptNodeData, StateAccount},
@@ -48,10 +46,9 @@ use zeth_primitives::{
     Address, Bloom, Bytes, RlpBytes, StorageKey, B256, B64, U256, U64,
 };
 
-use crate::ethers::{get_state_update_proofs, TestProvider};
+use crate::ethers::TestProvider;
 
 pub mod ethers;
-
 pub mod ethtests;
 
 pub mod guests {
@@ -105,7 +102,7 @@ impl From<DbAccount> for TestAccount {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TestState(pub HashMap<Address, TestAccount>);
 
@@ -287,17 +284,15 @@ fn proof_internal(node: &MptNode, key_nibs: &[u8]) -> Result<Vec<Vec<u8>>, anyho
     let mut path: Vec<Vec<u8>> = match node.as_data() {
         MptNodeData::Null | MptNodeData::Leaf(_, _) => vec![],
         MptNodeData::Branch(children) => {
-            let mut path = Vec::new();
-            for node in children.iter().flatten() {
-                path.extend(proof_internal(node, &key_nibs[1..])?);
+            let (i, tail) = key_nibs.split_first().unwrap();
+            match &children[*i as usize] {
+                Some(child) => proof_internal(child, tail)?,
+                None => vec![],
             }
-            path
         }
         MptNodeData::Extension(_, child) => {
-            let ext_nibs = node.nibs();
-            let ext_len = ext_nibs.len();
-            if key_nibs[..ext_len] == ext_nibs {
-                proof_internal(child, &key_nibs[ext_len..])?
+            if let Some(tail) = key_nibs.strip_prefix(node.nibs().as_slice()) {
+                proof_internal(child, tail)?
             } else {
                 vec![]
             }
@@ -314,17 +309,19 @@ pub const BIG_STACK_SIZE: usize = 8 * 1024 * 1024;
 
 pub fn create_input(
     chain_spec: &ChainSpec,
-    state: TestState,
     parent_header: Header,
+    parent_state: TestState,
     header: Header,
     transactions: Vec<TestTransaction>,
     withdrawals: Vec<Withdrawal>,
+    state: TestState,
 ) -> Input<EthereumTxEssence> {
     // create the provider DB
     let provider_db = ProviderDb::new(
         Box::new(TestProvider {
-            state,
+            state: parent_state,
             header: parent_header.clone(),
+            post: state,
         }),
         parent_header.number,
     );
@@ -350,29 +347,28 @@ pub fn create_input(
     };
 
     // create and run the block builder once to create the initial DB
-    let mut builder = BlockBuilder::new(chain_spec, input)
+    let mut builder = BlockBuilder::new(&chain_spec, input)
         .with_db(provider_db)
-        .prepare_header::<EthHeaderPrepStrategy>()
+        .prepare_header::<<EthereumStrategy as BlockBuilderStrategy>::HeaderPrepStrategy>()
         .unwrap()
-        .execute_transactions::<EthTxExecStrategy>()
+        .execute_transactions::<<EthereumStrategy as BlockBuilderStrategy>::TxExecStrategy>()
         .unwrap();
-
     let provider_db = builder.mut_db().unwrap();
 
-    let init_proofs = provider_db.get_initial_proofs().unwrap();
-    let fini_proofs =
-        get_state_update_proofs(provider_db, provider_db.get_latest_db().storage_keys()).unwrap();
+    let parent_proofs = provider_db.get_initial_proofs().unwrap();
+    let proofs = provider_db.get_latest_proofs().unwrap();
     let ancestor_headers = provider_db.get_ancestor_headers().unwrap();
 
-    Init {
+    let preflight_data = Data {
         db: provider_db.get_initial_db().clone(),
-        init_block: parent_header,
-        init_proofs,
-        fini_block: header,
-        fini_transactions: transactions,
-        fini_withdrawals: withdrawals,
-        fini_proofs,
+        parent_header,
+        parent_proofs,
+        header,
+        transactions,
+        withdrawals,
+        proofs,
         ancestor_headers,
-    }
-    .into()
+    };
+
+    preflight_data.try_into().unwrap()
 }

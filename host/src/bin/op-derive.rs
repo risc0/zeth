@@ -14,12 +14,12 @@
 
 // Example usage:
 //
-// RUST_LOG=info ../zeth/target/release/op-derive \
+// RUST_LOG=info ./target/release/op-derive \
 // --eth-rpc-url="https://eth-mainnet.g.alchemy.com/v2/API_KEY_HERE" \
 // --op-rpc-url="https://opt-mainnet.g.alchemy.com/v2/API_KEY_HERE" \
 // --cache \
-// --block-no=110807020 \
-// --blocks=2
+// --block-no=109279674 \
+// --blocks=6
 
 use std::path::{Path, PathBuf};
 
@@ -116,7 +116,7 @@ async fn main() -> Result<()> {
             op_derive_block_count: args.blocks,
         };
         let mut derive_machine =
-            DeriveMachine::new(derive_input).expect("Could not create derive machine");
+            DeriveMachine::new(derive_input).context("Could not create derive machine")?;
         let derive_output = derive_machine.derive().context("could not derive")?;
         let derive_input_mem = DeriveInput {
             db: derive_machine.derive_input.db.get_mem_db(),
@@ -126,12 +126,13 @@ async fn main() -> Result<()> {
         let out: Result<_> = Ok((derive_input_mem, derive_output));
         out
     })
-    .await??;
+    .await?
+    .context("preflight failed")?;
 
     info!("Running from memory ...");
     {
         let output_mem = DeriveMachine::new(derive_input.clone())
-            .expect("Could not create derive machine")
+            .context("Could not create derive machine")?
             .derive()
             .unwrap();
         assert_eq!(output, output_mem);
@@ -254,7 +255,8 @@ impl BatcherDb for RpcDb {
         let mut provider = new_provider(
             op_cache_path(&self.cache, block_no),
             self.op_rpc_url.clone(),
-        )?;
+        )
+        .context("failed to create provider")?;
         let block = {
             let ethers_block = provider.get_full_block(&BlockQuery { block_no })?;
             BlockInput {

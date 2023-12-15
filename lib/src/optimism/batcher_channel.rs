@@ -25,6 +25,8 @@ use zeth_primitives::{
 
 use super::config::ChainConfig;
 
+pub const MAX_RLP_BYTES_PER_CHANNEL: u64 = 10_000_000;
+
 pub struct BatcherChannels {
     batch_inbox: Address,
     max_channel_bank_size: u64,
@@ -256,8 +258,15 @@ impl Channel {
             buf
         };
 
+        // From the spec:
+        // "When decompressing a channel, we limit the amount of decompressed data to
+        //  MAX_RLP_BYTES_PER_CHANNEL (currently 10,000,000 bytes), in order to avoid "zip-bomb"
+        //  types of attack (where a small compressed input decompresses to a humongous amount
+        //  of data). If the decompressed data exceeds the limit, things proceeds as though the
+        //  channel contained only the first MAX_RLP_BYTES_PER_CHANNEL decompressed bytes."
         let mut decompressed = Vec::new();
         Decoder::new(compressed.as_slice())?
+            .take(MAX_RLP_BYTES_PER_CHANNEL)
             .read_to_end(&mut decompressed)
             .context("failed to decompress")?;
 

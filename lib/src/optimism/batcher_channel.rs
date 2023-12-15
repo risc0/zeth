@@ -27,7 +27,7 @@ use super::config::ChainConfig;
 
 pub struct BatcherChannels {
     batch_inbox: Address,
-    max_channel_size: u64,
+    max_channel_bank_size: u64,
     channel_timeout: u64,
     channels: VecDeque<Channel>,
     batches: VecDeque<Vec<Batch>>,
@@ -37,7 +37,7 @@ impl BatcherChannels {
     pub fn new(config: &ChainConfig) -> Self {
         Self {
             batch_inbox: config.batch_inbox,
-            max_channel_size: config.max_channel_size,
+            max_channel_bank_size: config.max_channel_bank_size,
             channel_timeout: config.channel_timeout,
             channels: VecDeque::new(),
             batches: VecDeque::new(),
@@ -97,11 +97,11 @@ impl BatcherChannels {
                     }
                 }
 
-                // Enforce max_channel_size. From the spec:
+                // Enforce max_channel_bank_size. From the spec:
                 // "After successfully inserting a new frame, the ChannelBank is pruned: channels
                 //  are dropped in FIFO order, until total_size <= MAX_CHANNEL_BANK_SIZE."
                 {
-                    while self.total_frame_data_len() as u64 > self.max_channel_size {
+                    while self.total_frame_data_len() as u64 > self.max_channel_bank_size {
                         let _dropped_channel = self.channels.pop_front().unwrap();
 
                         #[cfg(not(target_os = "zkvm"))]

@@ -142,10 +142,10 @@ async fn main() -> Result<()> {
     }
 
     info!("In-memory test complete");
-    info!("Eth tail: {} {}", output.eth_tail.0, output.eth_tail.1);
-    info!("Op Head: {} {}", output.op_head.0, output.op_head.1);
+    println!("Eth tail: {} {}", output.eth_tail.0, output.eth_tail.1);
+    println!("Op Head: {} {}", output.op_head.0, output.op_head.1);
     for derived_block in &output.derived_op_blocks {
-        info!("Derived: {} {}", derived_block.0, derived_block.1);
+        println!("Derived: {} {}", derived_block.0, derived_block.1);
     }
 
     // Run in the executor (if requested)
@@ -187,7 +187,7 @@ async fn main() -> Result<()> {
             })
             .unwrap()
         };
-        info!(
+        println!(
             "Generated {:?} segments; elapsed time: {:?}",
             session.segments.len(),
             start_time.elapsed()
@@ -207,7 +207,7 @@ async fn main() -> Result<()> {
             .expect("Failed to write profiling output");
         }
 
-        info!(
+        println!(
             "Executor ran in (roughly) {} cycles",
             session.segments.len() * (1 << segment_limit_po2)
         );
@@ -215,7 +215,7 @@ async fn main() -> Result<()> {
         let output_guest: DeriveOutput = session.journal.decode().unwrap();
 
         if output == output_guest {
-            info!("Executor succeeded");
+            println!("Executor succeeded");
         } else {
             error!(
                 "Output mismatch! Executor: {:?}, expected: {:?}",
@@ -303,7 +303,7 @@ async fn main() -> Result<()> {
                 let bonsai_output: DeriveOutput = receipt.journal.decode().unwrap();
 
                 if output == bonsai_output {
-                    info!("Executor succeeded");
+                    println!("Bonsai succeeded");
                 } else {
                     error!(
                         "Output mismatch! Bonsai: {:?}, expected: {:?}",

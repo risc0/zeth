@@ -21,7 +21,11 @@ use std::{
 use anyhow::{Context, Result};
 use zeth_primitives::{
     batch::Batch,
-    transactions::{ethereum::EthereumTxEssence, optimism::OptimismTxEssence, Transaction},
+    transactions::{
+        ethereum::EthereumTxEssence,
+        optimism::{OptimismTxEssence, OPTIMISM_DEPOSITED_TX_TYPE},
+        Transaction,
+    },
     BlockHash, BlockNumber, B256, U256,
 };
 
@@ -425,7 +429,7 @@ impl Batcher {
         //    any transaction that is empty (zero length byte string)
         //    any deposited transactions (identified by the transaction type prefix byte)"
         for tx in &batch.essence.transactions {
-            if matches!(tx.first(), None | Some(0x7E)) {
+            if matches!(tx.first(), None | Some(&OPTIMISM_DEPOSITED_TX_TYPE)) {
                 #[cfg(not(target_os = "zkvm"))]
                 log::debug!("Batch contains empty or invalid transaction");
                 return BatchStatus::Drop;

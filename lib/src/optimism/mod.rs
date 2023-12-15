@@ -276,13 +276,13 @@ impl<D: BatcherDb> DeriveMachine<D> {
                         // The first transaction MUST be a L1 attributes deposited transaction,
                         // followed by an array of zero-or-more user-deposited transactions.
                         let l1_attributes_tx = self.derive_l1_attributes_deposited_tx(&op_batch);
-                        let derived_transactions: Vec<_> = once(l1_attributes_tx.to_rlp())
+                        let derived_transactions = once(l1_attributes_tx.to_rlp())
                             .chain(deposits)
                             .chain(op_batch.essence.transactions.iter().map(|tx| tx.to_vec()))
-                            .collect();
+                            .enumerate();
 
                         let mut tx_trie = MptNode::default();
-                        for (tx_no, tx) in derived_transactions.into_iter().enumerate() {
+                        for (tx_no, tx) in derived_transactions {
                             let trie_key = tx_no.to_rlp();
                             tx_trie.insert(&trie_key, tx)?;
                         }

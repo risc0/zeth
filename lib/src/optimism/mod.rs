@@ -34,7 +34,7 @@ use zeth_primitives::{
 use crate::{
     consts::ONE,
     optimism::{
-        batcher::{Batcher, BlockInfo, Epoch, State},
+        batcher::{Batcher, BlockInfo},
         batcher_db::BatcherDb,
         config::ChainConfig,
     },
@@ -100,7 +100,6 @@ pub struct DeriveMachine<D> {
     op_block_no: u64,
     op_block_seq_no: u64,
     op_batcher: Batcher,
-    eth_block_no: u64,
 }
 
 impl<D: BatcherDb> DeriveMachine<D> {
@@ -143,10 +142,9 @@ impl<D: BatcherDb> DeriveMachine<D> {
 
         // check that the correct L1 block is in the database
         let eth_block_no = set_l1_block_values.number;
-        let eth_head = derive_input.db.get_eth_block_header(eth_block_no)?;
-        let eth_head_hash = eth_head.hash();
+        let eth_head = derive_input.db.get_full_eth_block(eth_block_no)?;
         ensure!(
-            eth_head_hash == set_l1_block_values.hash,
+            eth_head.block_header.hash() == set_l1_block_values.hash,
             "Ethereum head block hash mismatch"
         );
         #[cfg(not(target_os = "zkvm"))]
@@ -165,22 +163,12 @@ impl<D: BatcherDb> DeriveMachine<D> {
 
             Batcher::new(
                 op_chain_config,
-                State::new(
-                    eth_block_no,
-                    eth_head_hash,
-                    BlockInfo {
-                        hash: op_head_block_hash,
-                        timestamp: op_head.block_header.timestamp.try_into().unwrap(),
-                    },
-                    Epoch {
-                        number: eth_block_no,
-                        hash: eth_head_hash,
-                        timestamp: eth_head.timestamp.try_into().unwrap(),
-                        base_fee_per_gas: eth_head.base_fee_per_gas,
-                        deposits: Vec::new(),
-                    },
-                ),
-            )
+                BlockInfo {
+                    hash: op_head_block_hash,
+                    timestamp: op_head.block_header.timestamp.try_into().unwrap(),
+                },
+                &eth_head,
+            )?
         };
 
         Ok(DeriveMachine {
@@ -189,7 +177,6 @@ impl<D: BatcherDb> DeriveMachine<D> {
             op_block_no,
             op_block_seq_no,
             op_batcher,
-            eth_block_no,
         })
     }
 
@@ -198,28 +185,29 @@ impl<D: BatcherDb> DeriveMachine<D> {
             self.derive_input.op_head_block_no + self.derive_input.op_derive_block_count;
 
         let mut derived_op_blocks = Vec::new();
+        let mut process_next_eth_block = false;
 
         while self.op_block_no < target_block_no {
             #[cfg(not(target_os = "zkvm"))]
             info!(
                 "op_block_no = {}, eth_block_no = {}",
-                self.op_block_no, self.eth_block_no
+                self.op_block_no, self.op_batcher.state.current_l1_block_number
             );
 
-            // process next Eth block
-            {
+            // Process next Eth block. We do this on every iteration, except the first iteration.
+            // (The first iteration is handled by Batcher::new().)
+            if process_next_eth_block {
                 let eth_block = self
                     .derive_input
                     .db
-                    .get_full_eth_block(self.eth_block_no)
+                    .get_full_eth_block(self.op_batcher.state.current_l1_block_number + 1)
                     .context("block not found")?;
 
                 self.op_batcher
                     .process_l1_block(&eth_block)
                     .context("failed to create batcher transactions")?;
-
-                self.eth_block_no += 1;
             }
+            process_next_eth_block = true;
 
             // Process batches
             while let Some(op_batch) = self.op_batcher.read_batch()? {

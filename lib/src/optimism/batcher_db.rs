@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use anyhow::{bail, Result};
+use anyhow::{ensure, Result};
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
     block::Header,
@@ -83,10 +83,17 @@ impl BatcherDb for MemDb {
                 let trie_key = tx_no.to_rlp();
                 tx_trie.insert_rlp(&trie_key, tx)?;
             }
-            if tx_trie.hash() != op_block.block_header.transactions_root {
-                bail!("Invalid op block transaction data!")
-            }
+            ensure!(
+                tx_trie.hash() == op_block.block_header.transactions_root,
+                "Invalid op block transaction data!"
+            );
         }
+
+        // Validate receipts
+        ensure!(
+            op_block.receipts.is_none(),
+            "Op blocks should not contain receipts"
+        );
 
         Ok(op_block)
     }
@@ -109,9 +116,10 @@ impl BatcherDb for MemDb {
                 let trie_key = tx_no.to_rlp();
                 tx_trie.insert_rlp(&trie_key, tx)?;
             }
-            if tx_trie.hash() != eth_block.block_header.transactions_root {
-                bail!("Invalid eth block transaction data!")
-            }
+            ensure!(
+                tx_trie.hash() == eth_block.block_header.transactions_root,
+                "Invalid eth block transaction data!"
+            );
         }
 
         // Validate receipts
@@ -121,9 +129,10 @@ impl BatcherDb for MemDb {
                 let trie_key = tx_no.to_rlp();
                 receipt_trie.insert_rlp(&trie_key, receipt)?;
             }
-            if receipt_trie.hash() != eth_block.block_header.receipts_root {
-                bail!("Invalid eth block receipt data!")
-            }
+            ensure!(
+                receipt_trie.hash() == eth_block.block_header.receipts_root,
+                "Invalid eth block receipt data!"
+            );
         } else {
             let can_contain_deposits = deposits::can_contain(
                 &OPTIMISM_CHAIN_SPEC.deposit_contract,
@@ -133,8 +142,14 @@ impl BatcherDb for MemDb {
                 &OPTIMISM_CHAIN_SPEC.system_config_contract,
                 &eth_block.block_header.logs_bloom,
             );
-            assert!(!can_contain_deposits);
-            assert!(!can_contain_config);
+            ensure!(
+                !can_contain_deposits,
+                "Eth block has no receipts, but bloom filter indicates it has deposits"
+            );
+            ensure!(
+                !can_contain_config,
+                "Eth block has no receipts, but bloom filter indicates it has config updates"
+            );
         }
 
         Ok(eth_block)

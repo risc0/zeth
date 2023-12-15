@@ -18,8 +18,8 @@
 // --eth-rpc-url="https://eth-mainnet.g.alchemy.com/v2/API_KEY_HERE" \
 // --op-rpc-url="https://opt-mainnet.g.alchemy.com/v2/API_KEY_HERE" \
 // --cache \
-// --block-no=109279674 \
-// --blocks=6
+// --op-block-no=109279674 \
+// --op-blocks=6
 
 use std::path::{Path, PathBuf};
 
@@ -60,11 +60,11 @@ struct Args {
 
     #[clap(long, require_equals = true)]
     /// L2 block number to begin from
-    block_no: u64,
+    op_block_no: u64,
 
     #[clap(long, require_equals = true)]
     /// Number of L2 blocks to provably derive.
-    blocks: u64,
+    op_blocks: u64,
 
     #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "20")]
     /// Runs the verification inside the zkvm executor locally. Accepts a custom maximum
@@ -112,16 +112,16 @@ async fn main() -> Result<()> {
     let (derive_input, output) = tokio::task::spawn_blocking(move || {
         let derive_input = DeriveInput {
             db: RpcDb::new(args.eth_rpc_url, args.op_rpc_url, args.cache),
-            op_head_block_no: args.block_no,
-            op_derive_block_count: args.blocks,
+            op_head_block_no: args.op_block_no,
+            op_derive_block_count: args.op_blocks,
         };
         let mut derive_machine = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input)
             .context("Could not create derive machine")?;
         let derive_output = derive_machine.derive().context("could not derive")?;
         let derive_input_mem = DeriveInput {
             db: derive_machine.derive_input.db.get_mem_db(),
-            op_head_block_no: args.block_no,
-            op_derive_block_count: args.blocks,
+            op_head_block_no: args.op_block_no,
+            op_derive_block_count: args.op_blocks,
         };
         let out: Result<_> = Ok((derive_input_mem, derive_output));
         out

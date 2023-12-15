@@ -23,6 +23,10 @@ use super::system_config::SystemConfig;
 pub struct ChainConfig {
     /// The initial system config value
     pub system_config: SystemConfig,
+    // The L1 attributes depositor address
+    pub l1_attributes_depositor: Address,
+    /// The L1 attributes contract
+    pub l1_attributes_contract: Address,
     /// The batch inbox address
     pub batch_inbox: Address,
     /// The deposit contract address
@@ -51,6 +55,8 @@ impl ChainConfig {
                 l1_fee_scalar: uint!(684000_U256),
                 unsafe_block_signer: address!("AAAA45d9549EDA09E70937013520214382Ffc4A2"),
             },
+            l1_attributes_depositor: address!("deaddeaddeaddeaddeaddeaddeaddeaddead0001"),
+            l1_attributes_contract: address!("4200000000000000000000000000000000000015"),
             batch_inbox: address!("ff00000000000000000000000000000000000010"),
             deposit_contract: address!("bEb5Fc579115071764c7423A4f12eDde41f106Ed"),
             system_config_contract: address!("229047fed2591dbec1eF1118d64F7aF3dB9EB290"),

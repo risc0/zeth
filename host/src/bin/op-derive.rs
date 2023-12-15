@@ -115,8 +115,8 @@ async fn main() -> Result<()> {
             op_head_block_no: args.block_no,
             op_derive_block_count: args.blocks,
         };
-        let mut derive_machine =
-            DeriveMachine::new(derive_input).context("Could not create derive machine")?;
+        let mut derive_machine = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input)
+            .context("Could not create derive machine")?;
         let derive_output = derive_machine.derive().context("could not derive")?;
         let derive_input_mem = DeriveInput {
             db: derive_machine.derive_input.db.get_mem_db(),
@@ -131,7 +131,7 @@ async fn main() -> Result<()> {
 
     info!("Running from memory ...");
     {
-        let output_mem = DeriveMachine::new(derive_input.clone())
+        let output_mem = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input.clone())
             .context("Could not create derive machine")?
             .derive()
             .unwrap();

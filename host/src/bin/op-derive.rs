@@ -316,6 +316,8 @@ async fn main() -> Result<()> {
 
             break;
         }
+
+        info!("Bonsai request completed");
     }
 
     Ok(())

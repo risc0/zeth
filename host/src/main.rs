@@ -326,7 +326,11 @@ where
                     );
                 }
             } else {
-                panic!("Workflow exited: {}", res.status);
+                panic!(
+                    "Workflow exited: {} - | err: {}",
+                    res.status,
+                    res.error_msg.unwrap_or_default()
+                );
             }
 
             break;

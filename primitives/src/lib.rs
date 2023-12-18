@@ -25,6 +25,7 @@ pub mod withdrawal;
 #[cfg(feature = "ethers")]
 pub mod ethers;
 
+pub mod batch;
 #[cfg(feature = "revm")]
 pub mod revm;
 

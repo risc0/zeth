@@ -12,21 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate core;
+#![no_main]
 
-#[cfg(not(target_os = "zkvm"))]
-pub mod host;
+use risc0_zkvm::guest::env;
+use zeth_lib::optimism::{
+    batcher_db::MemDb, config::OPTIMISM_CHAIN_SPEC, DeriveInput, DeriveMachine,
+};
 
-pub mod builder;
-pub mod consts;
-pub mod input;
-pub mod mem_db;
-pub mod optimism;
+risc0_zkvm::guest::entry!(main);
 
-pub use zeth_primitives::transactions::{ethereum::EthereumTxEssence, optimism::OptimismTxEssence};
-
-/// call forget only if running inside the guest
-pub fn guest_mem_forget<T>(_t: T) {
-    #[cfg(target_os = "zkvm")]
-    core::mem::forget(_t)
+pub fn main() {
+    let derive_input: DeriveInput<MemDb> = env::read();
+    let mut derive_machine = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input)
+        .expect("Could not create derive machine");
+    let output = derive_machine
+        .derive()
+        .expect("Failed to process derivation input");
+    env::commit(&output);
 }

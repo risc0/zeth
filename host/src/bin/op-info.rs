@@ -14,26 +14,13 @@
 
 use std::path::{Path, PathBuf};
 
-use alloy_sol_types::{sol, SolInterface};
+use alloy_sol_types::SolInterface;
 use anyhow::Result;
 use clap::Parser;
-use zeth_lib::host::provider::{new_provider, BlockQuery};
-
-sol! {
-    #[derive(Debug)]
-    interface OpSystemInfo {
-        function setL1BlockValues(
-            uint64 _number,
-            uint64 _timestamp,
-            uint256 _basefee,
-            bytes32 _hash,
-            uint64 _sequenceNumber,
-            bytes32 _batcherHash,
-            uint256 _l1FeeOverhead,
-            uint256 _l1FeeScalar
-        );
-    }
-}
+use zeth_lib::{
+    host::provider::{new_provider, BlockQuery},
+    optimism::OpSystemInfo,
+};
 
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
@@ -48,7 +35,7 @@ struct Args {
     cache: Option<PathBuf>,
 
     #[clap(long, require_equals = true)]
-    /// L2 block number to begin from
+    /// L2 block number to query
     block_no: u64,
 }
 

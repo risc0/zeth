@@ -15,7 +15,9 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use ethers_core::types::{Block, Bytes, EIP1186ProofResponse, Transaction, H256, U256};
+use ethers_core::types::{
+    Block, Bytes, EIP1186ProofResponse, Transaction, TransactionReceipt, H256, U256,
+};
 
 use super::{
     file_provider::FileProvider, rpc_provider::RpcProvider, AccountQuery, BlockQuery, MutProvider,
@@ -29,7 +31,7 @@ pub struct CachedRpcProvider {
 
 impl CachedRpcProvider {
     pub fn new(cache_path: PathBuf, rpc_url: String) -> Result<Self> {
-        let cache = match FileProvider::read_from_file(cache_path.clone()) {
+        let cache = match FileProvider::from_file(&cache_path) {
             Ok(provider) => provider,
             Err(_) => FileProvider::empty(cache_path),
         };
@@ -64,6 +66,18 @@ impl Provider for CachedRpcProvider {
 
         let out = self.rpc.get_partial_block(query)?;
         self.cache.insert_partial_block(query.clone(), out.clone());
+
+        Ok(out)
+    }
+
+    fn get_block_receipts(&mut self, query: &BlockQuery) -> Result<Vec<TransactionReceipt>> {
+        let cache_out = self.cache.get_block_receipts(query);
+        if cache_out.is_ok() {
+            return cache_out;
+        }
+
+        let out = self.rpc.get_block_receipts(query)?;
+        self.cache.insert_block_receipts(query.clone(), out.clone());
 
         Ok(out)
     }

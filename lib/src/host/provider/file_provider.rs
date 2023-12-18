@@ -20,7 +20,9 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use ethers_core::types::{Block, Bytes, EIP1186ProofResponse, Transaction, H256, U256};
+use ethers_core::types::{
+    Block, Bytes, EIP1186ProofResponse, Transaction, TransactionReceipt, H256, U256,
+};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
@@ -37,6 +39,9 @@ pub struct FileProvider {
     full_blocks: HashMap<BlockQuery, Block<Transaction>>,
     #[serde_as(as = "Vec<(_, _)>")]
     partial_blocks: HashMap<BlockQuery, Block<H256>>,
+    #[serde(default)]
+    #[serde_as(as = "Vec<(_, _)>")]
+    receipts: HashMap<BlockQuery, Vec<TransactionReceipt>>,
     #[serde_as(as = "Vec<(_, _)>")]
     proofs: HashMap<ProofQuery, EIP1186ProofResponse>,
     #[serde_as(as = "Vec<(_, _)>")]
@@ -56,6 +61,7 @@ impl FileProvider {
             dirty: false,
             full_blocks: HashMap::new(),
             partial_blocks: HashMap::new(),
+            receipts: HashMap::new(),
             proofs: HashMap::new(),
             transaction_count: HashMap::new(),
             balance: HashMap::new(),
@@ -64,14 +70,14 @@ impl FileProvider {
         }
     }
 
-    pub fn read_from_file(file_path: PathBuf) -> Result<Self> {
+    pub fn from_file(file_path: &PathBuf) -> Result<Self> {
         let mut buf = vec![];
-        let mut decoder = flate2::read::GzDecoder::new(File::open(&file_path)?);
+        let mut decoder = flate2::read::GzDecoder::new(File::open(file_path)?);
         decoder.read_to_end(&mut buf)?;
 
         let mut out: Self = serde_json::from_slice(&buf[..])?;
 
-        out.file_path = file_path;
+        out.file_path = file_path.clone();
         out.dirty = false;
         Ok(out)
     }
@@ -104,6 +110,13 @@ impl Provider for FileProvider {
 
     fn get_partial_block(&mut self, query: &BlockQuery) -> Result<Block<H256>> {
         match self.partial_blocks.get(query) {
+            Some(val) => Ok(val.clone()),
+            None => Err(anyhow!("No data for {:?}", query)),
+        }
+    }
+
+    fn get_block_receipts(&mut self, query: &BlockQuery) -> Result<Vec<TransactionReceipt>> {
+        match self.receipts.get(query) {
             Some(val) => Ok(val.clone()),
             None => Err(anyhow!("No data for {:?}", query)),
         }
@@ -153,6 +166,11 @@ impl MutProvider for FileProvider {
 
     fn insert_partial_block(&mut self, query: BlockQuery, val: Block<H256>) {
         self.partial_blocks.insert(query, val);
+        self.dirty = true;
+    }
+
+    fn insert_block_receipts(&mut self, query: BlockQuery, val: Vec<TransactionReceipt>) {
+        self.receipts.insert(query, val);
         self.dirty = true;
     }
 

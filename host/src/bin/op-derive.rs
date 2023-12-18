@@ -21,7 +21,7 @@
 // --op-block-no=109279674 \
 // --op-blocks=6
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 // use bonsai_sdk::alpha as bonsai_sdk;
@@ -29,18 +29,10 @@ use clap::Parser;
 use log::{error, info};
 use risc0_zkvm::{serde::to_vec, ExecutorEnv, ExecutorImpl, FileSegmentRef};
 use tempfile::tempdir;
-use zeth_guests::{OP_DERIVE_ELF, OP_DERIVE_ID, OP_DERIVE_PATH};
+use zeth_guests::*;
 use zeth_lib::{
-    host::provider::{new_provider, BlockQuery},
-    optimism::{
-        batcher_db::{BatcherDb, BlockInput, MemDb},
-        config::OPTIMISM_CHAIN_SPEC,
-        DeriveInput, DeriveMachine, DeriveOutput,
-    },
-};
-use zeth_primitives::{
-    block::Header,
-    transactions::{ethereum::EthereumTxEssence, optimism::OptimismTxEssence},
+    host::rpc_db::RpcDb,
+    optimism::{config::OPTIMISM_CHAIN_SPEC, DeriveInput, DeriveMachine, DeriveOutput},
 };
 
 #[derive(Parser, Debug, Clone)]
@@ -83,25 +75,6 @@ struct Args {
     #[clap(short, long, default_value_t = false)]
     /// Whether to profile the zkVM execution
     profile: bool,
-}
-
-fn cache_file_path(cache_path: &Path, network: &str, block_no: u64, ext: &str) -> PathBuf {
-    cache_path
-        .join(network)
-        .join(block_no.to_string())
-        .with_extension(ext)
-}
-
-fn eth_cache_path(cache: &Option<PathBuf>, block_no: u64) -> Option<PathBuf> {
-    cache
-        .as_ref()
-        .map(|dir| cache_file_path(dir, "ethereum", block_no, "json.gz"))
-}
-
-fn op_cache_path(cache: &Option<PathBuf>, block_no: u64) -> Option<PathBuf> {
-    cache
-        .as_ref()
-        .map(|dir| cache_file_path(dir, "optimism", block_no, "json.gz"))
 }
 
 #[tokio::main]
@@ -222,7 +195,7 @@ async fn main() -> Result<()> {
         }
     }
 
-    let mut bonsai_session_uuid = args.verify_bonsai_receipt_uuid;
+    // let mut bonsai_session_uuid = args.verify_bonsai_receipt_uuid;
 
     // Run in Bonsai (if requested)
     // if bonsai_session_uuid.is_none() && args.submit_to_bonsai {
@@ -324,128 +297,4 @@ async fn main() -> Result<()> {
     // }
 
     Ok(())
-}
-
-pub struct RpcDb {
-    eth_rpc_url: Option<String>,
-    op_rpc_url: Option<String>,
-    cache: Option<PathBuf>,
-    mem_db: MemDb,
-}
-
-impl RpcDb {
-    pub fn new(
-        eth_rpc_url: Option<String>,
-        op_rpc_url: Option<String>,
-        cache: Option<PathBuf>,
-    ) -> Self {
-        RpcDb {
-            eth_rpc_url,
-            op_rpc_url,
-            cache,
-            mem_db: MemDb::new(),
-        }
-    }
-
-    pub fn get_mem_db(self) -> MemDb {
-        self.mem_db
-    }
-}
-
-impl BatcherDb for RpcDb {
-    fn get_full_op_block(&mut self, block_no: u64) -> Result<BlockInput<OptimismTxEssence>> {
-        let mut provider = new_provider(
-            op_cache_path(&self.cache, block_no),
-            self.op_rpc_url.clone(),
-        )
-        .context("failed to create provider")?;
-        let block = {
-            let ethers_block = provider.get_full_block(&BlockQuery { block_no })?;
-            BlockInput {
-                block_header: ethers_block.clone().try_into().unwrap(),
-                transactions: ethers_block
-                    .transactions
-                    .into_iter()
-                    .map(|tx| tx.try_into().unwrap())
-                    .collect(),
-                receipts: None,
-            }
-        };
-        self.mem_db.full_op_block.insert(block_no, block.clone());
-        provider.save()?;
-        Ok(block)
-    }
-
-    fn get_op_block_header(&mut self, block_no: u64) -> Result<Header> {
-        let mut provider = new_provider(
-            op_cache_path(&self.cache, block_no),
-            self.op_rpc_url.clone(),
-        )?;
-        let header: Header = provider
-            .get_partial_block(&BlockQuery { block_no })?
-            .try_into()?;
-        self.mem_db.op_block_header.insert(block_no, header.clone());
-        provider.save()?;
-        Ok(header)
-    }
-
-    fn get_full_eth_block(&mut self, block_no: u64) -> Result<BlockInput<EthereumTxEssence>> {
-        let query = BlockQuery { block_no };
-        let mut provider = new_provider(
-            eth_cache_path(&self.cache, block_no),
-            self.eth_rpc_url.clone(),
-        )?;
-        let block = {
-            let ethers_block = provider.get_full_block(&query)?;
-            let block_header: Header = ethers_block.clone().try_into().unwrap();
-            // include receipts when needed
-            let can_contain_deposits = zeth_lib::optimism::deposits::can_contain(
-                &OPTIMISM_CHAIN_SPEC.deposit_contract,
-                &block_header.logs_bloom,
-            );
-            let can_contain_config = zeth_lib::optimism::system_config::can_contain(
-                &OPTIMISM_CHAIN_SPEC.system_config_contract,
-                &block_header.logs_bloom,
-            );
-            let receipts = if can_contain_config || can_contain_deposits {
-                let receipts = provider.get_block_receipts(&query)?;
-                Some(
-                    receipts
-                        .into_iter()
-                        .map(|receipt| receipt.try_into())
-                        .collect::<Result<Vec<_>, _>>()
-                        .context("invalid receipt")?,
-                )
-            } else {
-                None
-            };
-            BlockInput {
-                block_header,
-                transactions: ethers_block
-                    .transactions
-                    .into_iter()
-                    .map(|tx| tx.try_into().unwrap())
-                    .collect(),
-                receipts,
-            }
-        };
-        self.mem_db.full_eth_block.insert(block_no, block.clone());
-        provider.save()?;
-        Ok(block)
-    }
-
-    fn get_eth_block_header(&mut self, block_no: u64) -> Result<Header> {
-        let mut provider = new_provider(
-            eth_cache_path(&self.cache, block_no),
-            self.eth_rpc_url.clone(),
-        )?;
-        let header: Header = provider
-            .get_partial_block(&BlockQuery { block_no })?
-            .try_into()?;
-        self.mem_db
-            .eth_block_header
-            .insert(block_no, header.clone());
-        provider.save()?;
-        Ok(header)
-    }
 }

@@ -16,4 +16,5 @@ pub mod mpt;
 pub mod preflight;
 pub mod provider;
 pub mod provider_db;
+pub mod rpc_db;
 pub mod verify;

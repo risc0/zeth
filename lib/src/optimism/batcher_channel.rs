@@ -14,7 +14,8 @@
 
 use std::{collections::VecDeque, io::Read};
 
-use anyhow::{ensure, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
+use bytes::Buf;
 use libflate::zlib::Decoder;
 use zeth_primitives::{
     batch::Batch,
@@ -65,7 +66,7 @@ impl BatcherChannels {
                 continue;
             }
 
-            for frame in Frame::process_l1_transaction(&tx.essence)? {
+            for frame in Frame::process_batcher_transaction(&tx.essence)? {
                 #[cfg(not(target_os = "zkvm"))]
                 log::debug!(
                     "received frame: channel_id: {}, frame_number: {}, is_last: {}",
@@ -274,55 +275,73 @@ impl Channel {
     }
 }
 
+/// A [Frame] is a chunk of data belonging to a [Channel]. Batcher transactions carry one
+/// or multiple frames. The reason to split a channel into frames is that a channel might
+/// too large to include in a single batcher transaction.
 #[derive(Debug, Default, Clone)]
 struct Frame {
+    /// The channel ID this frame belongs to.
     pub channel_id: u128,
+    /// The index of this frame within the channel.
     pub frame_number: u16,
+    /// A sequence of bytes belonging to the channel.
     pub frame_data: Vec<u8>,
+    /// Whether this is the last frame of the channel.
     pub is_last: bool,
 }
 
 impl Frame {
     const HEADER_SIZE: usize = 22;
+    const MAX_FRAME_DATA_LENGTH: u32 = 1_000_000;
 
-    pub fn process_l1_transaction(tx_essence: &EthereumTxEssence) -> Result<Vec<Self>> {
-        let (version, mut frame_data) = tx_essence.data().split_first().context("invalid data")?;
+    pub fn process_batcher_transaction(tx_essence: &EthereumTxEssence) -> Result<Vec<Self>> {
+        let (version, mut rollup_payload) = tx_essence
+            .data()
+            .split_first()
+            .context("empty transaction data")?;
         ensure!(version == &0, "Invalid version: {}", version);
 
         let mut frames = Vec::new();
-        while !frame_data.is_empty() {
-            let frame = Frame::parse(frame_data)?;
-            frame_data = {
-                let bytes_read = Self::HEADER_SIZE + frame.frame_data.len() + 1;
-                &frame_data[bytes_read..]
-            };
+        while !rollup_payload.is_empty() {
+            // From the spec:
+            // "If any one frame fails to parse, the all frames in the transaction are rejected."
+            let frame = Frame::decode(&mut rollup_payload).context("invalid frame")?;
             frames.push(frame);
         }
 
         Ok(frames)
     }
 
-    fn parse(data: &[u8]) -> Result<Self> {
-        ensure!(Self::HEADER_SIZE < data.len(), "Insufficient frame data");
+    /// Decodes a Frame from the given buffer, advancing the buffer's position.
+    fn decode(buf: &mut &[u8]) -> Result<Self> {
+        ensure!(buf.remaining() > Self::HEADER_SIZE, "input too short");
 
-        let channel_id = u128::from_be_bytes(data[0..16].try_into()?);
-        let frame_number = u16::from_be_bytes(data[16..18].try_into()?);
-        let frame_data_len = u32::from_be_bytes(data[18..22].try_into()?);
+        let channel_id = buf.get_u128();
+        let frame_number = buf.get_u16();
+        // frame_data_length is the length of frame_data in bytes. It is capped to 1,000,000 bytes
+        let frame_data_length = buf.get_u32();
+        ensure!(
+            frame_data_length <= Self::MAX_FRAME_DATA_LENGTH,
+            "frame_data_length too large"
+        );
 
-        let frame_data_end = Self::HEADER_SIZE + frame_data_len as usize;
-        ensure!(frame_data_end <= data.len(), "frame_data_end too large");
-        ensure!(data[frame_data_end] <= 1, "Invalid byte at frame_data_end");
+        let frame_data = buf
+            .get(..frame_data_length as usize)
+            .context("input too short")?;
+        buf.advance(frame_data_length as usize);
 
-        let frame_data = data[22..frame_data_end].to_vec();
-        let is_last = data[frame_data_end] != 0;
-
-        let frame = Self {
-            channel_id,
-            frame_number,
-            frame_data,
-            is_last,
+        ensure!(buf.has_remaining(), "input too short");
+        let is_last = match buf.get_u8() {
+            0 => false,
+            1 => true,
+            _ => bail!("invalid is_last value"),
         };
 
-        Ok(frame)
+        Ok(Self {
+            channel_id,
+            frame_number,
+            frame_data: frame_data.to_vec(),
+            is_last,
+        })
     }
 }

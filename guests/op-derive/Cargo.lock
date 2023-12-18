@@ -3706,6 +3706,7 @@ version = "0.1.0"
 dependencies = [
  "alloy-sol-types",
  "anyhow",
+ "bytes",
  "chrono",
  "ethers-core",
  "ethers-providers",

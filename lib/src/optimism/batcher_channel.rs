@@ -22,7 +22,7 @@ use bytes::Buf;
 use libflate::zlib::Decoder;
 use zeth_primitives::{
     batch::Batch,
-    rlp::{Decodable, Header},
+    rlp::{Decodable},
     transactions::{ethereum::EthereumTxEssence, Transaction, TxEssence},
     Address, BlockNumber,
 };
@@ -74,7 +74,7 @@ impl BatcherChannels {
                 log::debug!(
                     "received frame: channel_id: {}, frame_number: {}, is_last: {}",
                     frame.channel_id,
-                    frame.frame_number,
+                    frame.number,
                     frame.is_last
                 );
 
@@ -146,30 +146,34 @@ impl BatcherChannels {
         self.channels.iter().map(|c| c.size).sum()
     }
 
-    fn channel_index(&self, channel_id: u128) -> Option<usize> {
+    fn channel_index(&self, channel_id: ChannelId) -> Option<usize> {
         self.channels.iter().position(|c| c.id == channel_id)
     }
 }
+
+/// A [ChannelId] is a unique identifier for a [Channel].
+type ChannelId = u128;
 
 /// A [Channel] is a set of batches that are split into at least one, but possibly
 /// multiple frames. Frames are allowed to be ingested in any order.
 #[derive(Debug)]
 struct Channel {
     /// The channel ID.
-    id: u128,
+    id: ChannelId,
     /// The number of the L1 block that opened this channel.
     open_l1_block: u64,
     /// The number of the frame that closes this channel.
     close_frame_number: Option<u16>,
-    /// Map of frame number to frame.
+    /// All frames belonging to this channel by their frame number.
     frames: BTreeMap<u16, Frame>,
-    /// estimated memory size, used to drop the channel if we have too much data.
+    /// The estimated memory size, used to drop the channel if we have too much data.
     size: usize,
 }
 
 impl Channel {
     const FRAME_OVERHEAD: usize = 200;
 
+    /// Creates a new channel from the given frame.
     fn new(open_l1_block: u64, frame: Frame) -> Self {
         let mut channel = Self {
             id: frame.channel_id,
@@ -185,10 +189,12 @@ impl Channel {
         channel
     }
 
+    /// Returns true if the channel is closed, i.e. the closing frame has been received.
     fn is_closed(&self) -> bool {
         self.close_frame_number.is_some()
     }
 
+    /// Returns true if the channel is ready to be read.
     fn is_ready(&self) -> bool {
         // From the spec:
         // "A channel is ready if:
@@ -203,16 +209,16 @@ impl Channel {
             "frame channel_id does not match channel id"
         );
         if frame.is_last && self.is_closed() {
-            bail!("duplicate close-frame");
+            bail!("channel is already closed");
         }
         ensure!(
-            !self.frames.contains_key(&frame.frame_number),
-            "duplicate frame"
+            !self.frames.contains_key(&frame.number),
+            "duplicate frame number"
         );
         if let Some(close_frame_number) = self.close_frame_number {
             ensure!(
-                frame.frame_number < close_frame_number,
-                "frame frame_number is not less than close_frame_number of a closed channel"
+                frame.number < close_frame_number,
+                "frame number >= close_frame_number"
             );
         }
 
@@ -220,16 +226,17 @@ impl Channel {
         // "If a frame is closing any existing higher-numbered frames are removed from the
         // channel."
         if frame.is_last {
-            self.close_frame_number = Some(frame.frame_number);
+            // mark channel as closed
+            self.close_frame_number = Some(frame.number);
             // prune frames with a number higher than the closing frame and update size
             self.frames
-                .split_off(&frame.frame_number)
+                .split_off(&frame.number)
                 .values()
-                .for_each(|pruned| self.size -= Self::FRAME_OVERHEAD + pruned.frame_data.len());
+                .for_each(|pruned| self.size -= Self::FRAME_OVERHEAD + pruned.data.len());
         }
 
-        self.size += Self::FRAME_OVERHEAD + frame.frame_data.len();
-        self.frames.insert(frame.frame_number, frame);
+        self.size += Self::FRAME_OVERHEAD + frame.data.len();
+        self.frames.insert(frame.number, frame);
 
         Ok(())
     }
@@ -254,7 +261,7 @@ impl Channel {
         let compressed = {
             let mut buf = Vec::new();
             for frame in self.frames.values() {
-                buf.extend(&frame.frame_data)
+                buf.extend(&frame.data)
             }
 
             buf
@@ -282,11 +289,11 @@ impl Channel {
 #[derive(Debug, Default, Clone)]
 struct Frame {
     /// The channel ID this frame belongs to.
-    pub channel_id: u128,
+    pub channel_id: ChannelId,
     /// The index of this frame within the channel.
-    pub frame_number: u16,
+    pub number: u16,
     /// A sequence of bytes belonging to the channel.
-    pub frame_data: Vec<u8>,
+    pub data: Vec<u8>,
     /// Whether this is the last frame of the channel.
     pub is_last: bool,
 }
@@ -295,6 +302,7 @@ impl Frame {
     const HEADER_SIZE: usize = 22;
     const MAX_FRAME_DATA_LENGTH: u32 = 1_000_000;
 
+    /// Processes a batcher transaction and returns the list of contained frames.
     pub fn process_batcher_transaction(tx_essence: &EthereumTxEssence) -> Result<Vec<Self>> {
         let (version, mut rollup_payload) = tx_essence
             .data()
@@ -313,13 +321,14 @@ impl Frame {
         Ok(frames)
     }
 
-    /// Decodes a Frame from the given buffer, advancing the buffer's position.
+    /// Decodes a [Frame] from the given buffer, advancing the buffer's position.
     fn decode(buf: &mut &[u8]) -> Result<Self> {
         ensure!(buf.remaining() > Self::HEADER_SIZE, "input too short");
 
         let channel_id = buf.get_u128();
         let frame_number = buf.get_u16();
-        // frame_data_length is the length of frame_data in bytes. It is capped to 1,000,000 bytes
+        // From the spec:
+        // "frame_data_length is the length of frame_data in bytes. It is capped to 1,000,000."
         let frame_data_length = buf.get_u32();
         ensure!(
             frame_data_length <= Self::MAX_FRAME_DATA_LENGTH,
@@ -331,6 +340,9 @@ impl Frame {
             .context("input too short")?;
         buf.advance(frame_data_length as usize);
 
+        // From the spec:
+        // "is_last is a single byte with a value of 1 if the frame is the last in the channel,
+        //  0 if there are frames in the channel. Any other value makes the frame invalid."
         ensure!(buf.has_remaining(), "input too short");
         let is_last = match buf.get_u8() {
             0 => false,
@@ -340,8 +352,8 @@ impl Frame {
 
         Ok(Self {
             channel_id,
-            frame_number,
-            frame_data: frame_data.to_vec(),
+            number: frame_number,
+            data: frame_data.to_vec(),
             is_last,
         })
     }

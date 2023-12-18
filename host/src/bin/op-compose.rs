@@ -110,9 +110,9 @@ async fn main() -> anyhow::Result<()> {
                 op_head_block_no: args.block_no + i,
                 op_derive_block_count: 1,
             };
-            let mut derive_machine =
-                DeriveMachine::new(derive_input).expect("Could not create derive machine");
-            let eth_head_no = derive_machine.eth_block_no;
+            let mut derive_machine = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input)
+                .expect("Could not create derive machine");
+            let eth_head_no = derive_machine.op_batcher.state.epoch.number;
             let eth_head = derive_machine
                 .derive_input
                 .db
@@ -147,7 +147,7 @@ async fn main() -> anyhow::Result<()> {
 
         info!("Running from memory ...");
         {
-            let output_mem = DeriveMachine::new(input.clone())
+            let output_mem = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, input.clone())
                 .expect("Could not create derive machine")
                 .derive()
                 .unwrap();

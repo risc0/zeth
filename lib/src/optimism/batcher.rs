@@ -18,10 +18,14 @@ use std::{
     collections::{BinaryHeap, VecDeque},
 };
 
-use anyhow::{Context, Result};
+use anyhow::{ensure, Context, Result};
 use zeth_primitives::{
     batch::Batch,
-    transactions::{ethereum::EthereumTxEssence, optimism::OptimismTxEssence, Transaction},
+    transactions::{
+        ethereum::EthereumTxEssence,
+        optimism::{OptimismTxEssence, OPTIMISM_DEPOSITED_TX_TYPE},
+        Transaction,
+    },
     BlockHash, BlockNumber, B256, U256,
 };
 
@@ -116,27 +120,44 @@ pub struct Batcher {
 }
 
 impl Batcher {
-    pub fn new(config: ChainConfig, state: State) -> Batcher {
+    pub fn new(
+        config: ChainConfig,
+        op_head: BlockInfo,
+        eth_block: &BlockInput<EthereumTxEssence>,
+    ) -> Result<Batcher> {
+        let eth_block_hash = eth_block.block_header.hash();
+
         let batcher_channel = BatcherChannels::new(&config);
 
-        Batcher {
+        let state = State::new(
+            eth_block.block_header.number,
+            eth_block_hash,
+            op_head,
+            Epoch {
+                number: eth_block.block_header.number,
+                hash: eth_block_hash,
+                timestamp: eth_block.block_header.timestamp.try_into().unwrap(),
+                base_fee_per_gas: eth_block.block_header.base_fee_per_gas,
+                deposits: deposits::extract_transactions(&config, eth_block)?,
+            },
+        );
+
+        Ok(Batcher {
             batches: BinaryHeap::new(),
             batcher_channel,
             state,
             config,
-        }
+        })
     }
 
     pub fn process_l1_block(&mut self, eth_block: &BlockInput<EthereumTxEssence>) -> Result<()> {
         let eth_block_hash = eth_block.block_header.hash();
 
         // Ensure block has correct parent
-        if self.state.current_l1_block_number < eth_block.block_header.number {
-            assert_eq!(
-                eth_block.block_header.parent_hash,
-                self.state.current_l1_block_hash,
-            );
-        }
+        ensure!(
+            eth_block.block_header.parent_hash == self.state.current_l1_block_hash,
+            "Eth block has invalid parent hash"
+        );
 
         // Update the system config. From the spec:
         // "Upon traversal of the L1 block, the system configuration copy used by the L1 retrieval
@@ -425,7 +446,7 @@ impl Batcher {
         //    any transaction that is empty (zero length byte string)
         //    any deposited transactions (identified by the transaction type prefix byte)"
         for tx in &batch.essence.transactions {
-            if matches!(tx.first(), None | Some(0x7E)) {
+            if matches!(tx.first(), None | Some(&OPTIMISM_DEPOSITED_TX_TYPE)) {
                 #[cfg(not(target_os = "zkvm"))]
                 log::debug!("Batch contains empty or invalid transaction");
                 return BatchStatus::Drop;

@@ -15,12 +15,11 @@
 use core::iter::once;
 
 use alloy_sol_types::{sol, SolInterface};
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 #[cfg(not(target_os = "zkvm"))]
 use log::info;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
-    address,
     batch::Batch,
     keccak::keccak,
     transactions::{
@@ -32,10 +31,13 @@ use zeth_primitives::{
     uint, Address, BlockHash, BlockNumber, FixedBytes, RlpBytes, B256, U256,
 };
 
-use crate::optimism::{
-    batcher::{Batcher, BlockInfo, Epoch, State},
-    batcher_db::BatcherDb,
-    config::ChainConfig,
+use crate::{
+    consts::ONE,
+    optimism::{
+        batcher::{Batcher, BlockInfo},
+        batcher_db::BatcherDb,
+        config::ChainConfig,
+    },
 };
 
 pub mod batcher;
@@ -47,46 +49,63 @@ pub mod deposits;
 pub mod system_config;
 
 sol! {
+    /// The values stored by the L1 Attributes Predeployed Contract.
     #[derive(Debug)]
     interface OpSystemInfo {
         function setL1BlockValues(
+            /// L1 block attributes.
             uint64 number,
             uint64 timestamp,
             uint256 basefee,
             bytes32 hash,
+            /// Sequence number in the current epoch.
             uint64 sequence_number,
+            /// A versioned hash of the current authorized batcher sender.
             bytes32 batcher_hash,
+            /// The L1 fee overhead to apply to L1 cost computation of transactions.
             uint256 l1_fee_overhead,
+            /// The L1 fee scalar to apply to L1 cost computation of transactions.
             uint256 l1_fee_scalar
         );
     }
 }
 
+/// Represents the input for the derivation process.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DeriveInput<D> {
+    /// Database containing the blocks.
     pub db: D,
+    /// Block number of the L2 head.
     pub op_head_block_no: u64,
+    /// Block count for the operation.
     pub op_derive_block_count: u64,
 }
 
+/// Represents the output of the derivation process.
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DeriveOutput {
+    /// Ethereum tail block.
     pub eth_tail: (BlockNumber, BlockHash),
+    /// Optimism head block.
     pub op_head: (BlockNumber, BlockHash),
+    /// Derived Optimism blocks.
     pub derived_op_blocks: Vec<(BlockNumber, BlockHash)>,
 }
 
+/// Implementation of the actual derivation process.
 pub struct DeriveMachine<D> {
+    /// Input for the derivation process.
     pub derive_input: DeriveInput<D>,
+
     op_head_block_hash: BlockHash,
     op_block_no: u64,
     op_block_seq_no: u64,
-    op_batcher: Batcher,
-    pub eth_block_no: u64,
+    pub op_batcher: Batcher,
 }
 
 impl<D: BatcherDb> DeriveMachine<D> {
-    pub fn new(mut derive_input: DeriveInput<D>) -> Result<Self> {
+    /// Creates a new instance of DeriveMachine.
+    pub fn new(chain_config: &ChainConfig, mut derive_input: DeriveInput<D>) -> Result<Self> {
         let op_block_no = derive_input.op_head_block_no;
 
         // read system config from op_head (seq_no/epoch_no..etc)
@@ -96,19 +115,25 @@ impl<D: BatcherDb> DeriveMachine<D> {
         #[cfg(not(target_os = "zkvm"))]
         info!(
             "Fetched Op head (block no {}) {}",
-            derive_input.op_head_block_no, op_head_block_hash
+            op_block_no, op_head_block_hash
         );
 
+        // the first transaction in a block MUST be a L1 attributes deposited transaction
+        let l1_attributes_tx = &op_head
+            .transactions
+            .first()
+            .context("block is empty")?
+            .essence;
+        if let Err(err) = validate_l1_attributes_deposited_tx(chain_config, l1_attributes_tx) {
+            bail!(
+                "First transaction in block is not a valid L1 attributes deposited transaction: {}",
+                err
+            )
+        }
+        // decode the L1 attributes deposited transaction
         let set_l1_block_values = {
-            let system_tx_data = op_head
-                .transactions
-                .first()
-                .unwrap()
-                .essence
-                .data()
-                .to_vec();
-            let call = OpSystemInfo::OpSystemInfoCalls::abi_decode(&system_tx_data, true)
-                .expect("Could not decode call data");
+            let call = OpSystemInfo::OpSystemInfoCalls::abi_decode(l1_attributes_tx.data(), true)
+                .context("invalid L1 attributes data")?;
             match call {
                 OpSystemInfo::OpSystemInfoCalls::setL1BlockValues(x) => x,
             }
@@ -116,12 +141,13 @@ impl<D: BatcherDb> DeriveMachine<D> {
 
         let op_block_seq_no = set_l1_block_values.sequence_number;
 
+        // check that the correct L1 block is in the database
         let eth_block_no = set_l1_block_values.number;
-        let eth_head = derive_input.db.get_eth_block_header(eth_block_no)?;
-        let eth_head_hash = eth_head.hash();
-        if eth_head_hash != set_l1_block_values.hash.as_slice() {
-            bail!("Ethereum head block hash mismatch.")
-        }
+        let eth_head = derive_input.db.get_full_eth_block(eth_block_no)?;
+        ensure!(
+            eth_head.block_header.hash() == set_l1_block_values.hash,
+            "Ethereum head block hash mismatch"
+        );
         #[cfg(not(target_os = "zkvm"))]
         info!(
             "Fetched Eth head (block no {}) {}",
@@ -129,7 +155,8 @@ impl<D: BatcherDb> DeriveMachine<D> {
         );
 
         let op_batcher = {
-            let mut op_chain_config = ChainConfig::optimism();
+            // copy the chain config and update the system config
+            let mut op_chain_config = chain_config.clone();
             op_chain_config.system_config.batch_sender =
                 Address::from_slice(&set_l1_block_values.batcher_hash.as_slice()[12..]);
             op_chain_config.system_config.l1_fee_overhead = set_l1_block_values.l1_fee_overhead;
@@ -137,22 +164,12 @@ impl<D: BatcherDb> DeriveMachine<D> {
 
             Batcher::new(
                 op_chain_config,
-                State::new(
-                    eth_block_no,
-                    eth_head_hash,
-                    BlockInfo {
-                        hash: op_head_block_hash,
-                        timestamp: op_head.block_header.timestamp.try_into().unwrap(),
-                    },
-                    Epoch {
-                        number: eth_block_no,
-                        hash: eth_head_hash,
-                        timestamp: eth_head.timestamp.try_into().unwrap(),
-                        base_fee_per_gas: eth_head.base_fee_per_gas,
-                        deposits: Vec::new(),
-                    },
-                ),
-            )
+                BlockInfo {
+                    hash: op_head_block_hash,
+                    timestamp: op_head.block_header.timestamp.try_into().unwrap(),
+                },
+                &eth_head,
+            )?
         };
 
         Ok(DeriveMachine {
@@ -161,7 +178,6 @@ impl<D: BatcherDb> DeriveMachine<D> {
             op_block_no,
             op_block_seq_no,
             op_batcher,
-            eth_block_no,
         })
     }
 
@@ -170,28 +186,29 @@ impl<D: BatcherDb> DeriveMachine<D> {
             self.derive_input.op_head_block_no + self.derive_input.op_derive_block_count;
 
         let mut derived_op_blocks = Vec::new();
+        let mut process_next_eth_block = false;
 
         while self.op_block_no < target_block_no {
             #[cfg(not(target_os = "zkvm"))]
             info!(
                 "op_block_no = {}, eth_block_no = {}",
-                self.op_block_no, self.eth_block_no
+                self.op_block_no, self.op_batcher.state.current_l1_block_number
             );
 
-            // Process next Eth block
-            {
+            // Process next Eth block. We do this on every iteration, except the first iteration.
+            // (The first iteration is handled by Batcher::new().)
+            if process_next_eth_block {
                 let eth_block = self
                     .derive_input
                     .db
-                    .get_full_eth_block(self.eth_block_no)
+                    .get_full_eth_block(self.op_batcher.state.current_l1_block_number + 1)
                     .context("block not found")?;
 
                 self.op_batcher
                     .process_l1_block(&eth_block)
                     .context("failed to create batcher transactions")?;
-
-                self.eth_block_no += 1;
             }
+            process_next_eth_block = true;
 
             // Process batches
             while let Some(op_batch) = self.op_batcher.read_batch()? {
@@ -244,15 +261,17 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     // Verify that the new op head transactions are consistent with the batch
                     // transactions
                     {
-                        let system_tx = self.derive_system_transaction(&op_batch);
-
-                        let derived_transactions: Vec<_> = once(system_tx.to_rlp())
+                        // From the spec:
+                        // The first transaction MUST be a L1 attributes deposited transaction,
+                        // followed by an array of zero-or-more user-deposited transactions.
+                        let l1_attributes_tx = self.derive_l1_attributes_deposited_tx(&op_batch);
+                        let derived_transactions = once(l1_attributes_tx.to_rlp())
                             .chain(deposits)
                             .chain(op_batch.essence.transactions.iter().map(|tx| tx.to_vec()))
-                            .collect();
+                            .enumerate();
 
                         let mut tx_trie = MptNode::default();
-                        for (tx_no, tx) in derived_transactions.into_iter().enumerate() {
+                        for (tx_no, tx) in derived_transactions {
                             let trie_key = tx_no.to_rlp();
                             tx_trie.insert(&trie_key, tx)?;
                         }
@@ -295,9 +314,12 @@ impl<D: BatcherDb> DeriveMachine<D> {
         })
     }
 
-    fn derive_system_transaction(&mut self, op_batch: &Batch) -> Transaction<OptimismTxEssence> {
+    fn derive_l1_attributes_deposited_tx(
+        &mut self,
+        op_batch: &Batch,
+    ) -> Transaction<OptimismTxEssence> {
         let batcher_hash = {
-            let all_zero: FixedBytes<12> = FixedBytes([0_u8; 12]);
+            let all_zero: FixedBytes<12> = FixedBytes::ZERO;
             all_zero.concat_const::<20, 32>(self.op_batcher.config.system_config.batch_sender.0)
         };
 
@@ -314,29 +336,18 @@ impl<D: BatcherDb> DeriveMachine<D> {
             });
 
         let source_hash: B256 = {
-            let source_hash_sequencing = keccak(
-                [
-                    op_batch.essence.epoch_hash.to_vec(),
-                    U256::from(self.op_block_seq_no).to_be_bytes_vec(),
-                ]
-                .concat(),
-            );
-            keccak(
-                [
-                    [0u8; 31].as_slice(),
-                    [1u8].as_slice(),
-                    source_hash_sequencing.as_slice(),
-                ]
-                .concat(),
-            )
-            .into()
+            let l1_block_hash = op_batch.essence.epoch_hash.0;
+            let seq_number = U256::from(self.op_block_seq_no).to_be_bytes::<32>();
+            let source_hash_sequencing = keccak([l1_block_hash, seq_number].concat());
+            keccak([ONE.to_be_bytes::<32>(), source_hash_sequencing].concat()).into()
         };
+        let config = &self.op_batcher.config;
 
         Transaction {
             essence: OptimismTxEssence::OptimismDeposited(TxEssenceOptimismDeposited {
                 source_hash,
-                from: address!("deaddeaddeaddeaddeaddeaddeaddeaddead0001"),
-                to: TransactionKind::Call(address!("4200000000000000000000000000000000000015")),
+                from: config.l1_attributes_depositor,
+                to: TransactionKind::Call(config.l1_attributes_contract),
                 mint: Default::default(),
                 value: Default::default(),
                 gas_limit: uint!(1_000_000_U256),
@@ -346,4 +357,28 @@ impl<D: BatcherDb> DeriveMachine<D> {
             signature: Default::default(),
         }
     }
+}
+
+fn validate_l1_attributes_deposited_tx(config: &ChainConfig, tx: &OptimismTxEssence) -> Result<()> {
+    match tx {
+        OptimismTxEssence::Ethereum(_) => {
+            bail!("No Optimism deposit transaction");
+        }
+        OptimismTxEssence::OptimismDeposited(op) => {
+            ensure!(
+                op.from == config.l1_attributes_depositor,
+                "Invalid from address"
+            );
+            ensure!(
+                matches!(op.to, TransactionKind::Call(addr) if addr == config.l1_attributes_contract),
+                "Invalid to address"
+            );
+            ensure!(op.mint == U256::ZERO, "Invalid mint value");
+            ensure!(op.value == U256::ZERO, "Invalid value");
+            ensure!(op.gas_limit == uint!(1_000_000_U256), "Invalid gas limit");
+            ensure!(!op.is_system_tx, "Invalid is_system_tx value");
+        }
+    }
+
+    Ok(())
 }

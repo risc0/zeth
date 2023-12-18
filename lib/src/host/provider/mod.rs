@@ -14,7 +14,7 @@
 
 use std::{collections::BTreeSet, path::PathBuf};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use ethers_core::types::{
     Block, Bytes, EIP1186ProofResponse, Transaction, TransactionReceipt, H160, H256, U256,
 };
@@ -74,7 +74,8 @@ pub trait MutProvider: Provider {
 }
 
 pub fn new_file_provider(file_path: PathBuf) -> Result<Box<dyn Provider>> {
-    let provider = file_provider::FileProvider::read_from_file(file_path)?;
+    let provider = file_provider::FileProvider::from_file(&file_path)
+        .with_context(|| format!("invalid cache file: {}", file_path.display()))?;
 
     Ok(Box::new(provider))
 }

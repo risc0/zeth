@@ -295,6 +295,11 @@ where
     //             .status(&client)
     //             .expect("Could not fetch Bonsai status");
     //         if res.status == "RUNNING" {
+    //             println!(
+    //                 "Current status: {} - state: {} - continue polling...",
+    //                 res.status,
+    //                 res.state.unwrap_or_default()
+    //             );
     //             tokio::time::sleep(std::time::Duration::from_secs(15)).await;
     //             continue;
     //         }
@@ -325,7 +330,11 @@ where
     //                 );
     //             }
     //         } else {
-    //             panic!("Workflow exited: {}", res.status);
+    //             panic!(
+    //                 "Workflow exited: {} - | err: {}",
+    //                 res.status,
+    //                 res.error_msg.unwrap_or_default()
+    //             );
     //         }
     //
     //         break;

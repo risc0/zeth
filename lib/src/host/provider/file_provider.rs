@@ -70,14 +70,14 @@ impl FileProvider {
         }
     }
 
-    pub fn read_from_file(file_path: PathBuf) -> Result<Self> {
+    pub fn from_file(file_path: &PathBuf) -> Result<Self> {
         let mut buf = vec![];
-        let mut decoder = flate2::read::GzDecoder::new(File::open(&file_path)?);
+        let mut decoder = flate2::read::GzDecoder::new(File::open(file_path)?);
         decoder.read_to_end(&mut buf)?;
 
         let mut out: Self = serde_json::from_slice(&buf[..])?;
 
-        out.file_path = file_path;
+        out.file_path = file_path.clone();
         out.dirty = false;
         Ok(out)
     }

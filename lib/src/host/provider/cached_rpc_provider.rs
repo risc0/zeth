@@ -31,7 +31,7 @@ pub struct CachedRpcProvider {
 
 impl CachedRpcProvider {
     pub fn new(cache_path: PathBuf, rpc_url: String) -> Result<Self> {
-        let cache = match FileProvider::read_from_file(cache_path.clone()) {
+        let cache = match FileProvider::from_file(&cache_path) {
             Ok(provider) => provider,
             Err(_) => FileProvider::empty(cache_path),
         };

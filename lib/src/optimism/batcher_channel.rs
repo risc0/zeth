@@ -240,10 +240,8 @@ impl Channel {
         let mut batches = Vec::new();
 
         while !channel_data.is_empty() {
-            let batch_data = Header::decode_bytes(&mut channel_data, false)
-                .context("failed to decode batch data")?;
-
-            let mut batch = Batch::decode(&mut &batch_data[..])?;
+            let mut batch =
+                Batch::decode(&mut channel_data).context("failed to decode batch data")?;
             batch.inclusion_block_number = l1_block_number;
 
             batches.push(batch);

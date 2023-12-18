@@ -24,12 +24,10 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use bonsai_sdk::alpha as bonsai_sdk;
+// use bonsai_sdk::alpha as bonsai_sdk;
 use clap::Parser;
 use log::{error, info};
-use risc0_zkvm::{
-    serde::to_vec, ExecutorEnv, ExecutorImpl, FileSegmentRef, MemoryImage, Program, Receipt,
-};
+use risc0_zkvm::{serde::to_vec, ExecutorEnv, ExecutorImpl, FileSegmentRef};
 use tempfile::tempdir;
 use zeth_guests::{OP_DERIVE_ELF, OP_DERIVE_ID, OP_DERIVE_PATH};
 use zeth_lib::{
@@ -227,102 +225,103 @@ async fn main() -> Result<()> {
     let mut bonsai_session_uuid = args.verify_bonsai_receipt_uuid;
 
     // Run in Bonsai (if requested)
-    if bonsai_session_uuid.is_none() && args.submit_to_bonsai {
-        info!("Creating Bonsai client");
-        let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)
-            .expect("Could not create Bonsai client");
-
-        // create the memoryImg, upload it and return the imageId
-        info!("Uploading memory image");
-        let img_id = {
-            let program = Program::load_elf(OP_DERIVE_ELF, risc0_zkvm::GUEST_MAX_MEM as u32)
-                .expect("Could not load ELF");
-            let image = MemoryImage::new(&program, risc0_zkvm::PAGE_SIZE as u32)
-                .expect("Could not create memory image");
-            let image_id = hex::encode(image.compute_id());
-            let image = bincode::serialize(&image).expect("Failed to serialize memory img");
-
-            client
-                .upload_img(&image_id, image)
-                .expect("Could not upload ELF");
-            image_id
-        };
-
-        // Prepare input data and upload it.
-        info!("Uploading inputs");
-        let input_data = to_vec(&derive_input).unwrap();
-        let input_data = bytemuck::cast_slice(&input_data).to_vec();
-        let input_id = client
-            .upload_input(input_data)
-            .expect("Could not upload inputs");
-
-        // Start a session running the prover
-        info!("Starting session");
-        let session = client
-            .create_session(img_id, input_id)
-            .expect("Could not create Bonsai session");
-
-        println!("Bonsai session UUID: {}", session.uuid);
-        bonsai_session_uuid = Some(session.uuid)
-    }
+    // if bonsai_session_uuid.is_none() && args.submit_to_bonsai {
+    //     info!("Creating Bonsai client");
+    //     let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)
+    //         .expect("Could not create Bonsai client");
+    //
+    //     // create the memoryImg, upload it and return the imageId
+    //     info!("Uploading memory image");
+    //     let img_id = {
+    //         let program = Program::load_elf(OP_DERIVE_ELF, risc0_zkvm::GUEST_MAX_MEM as
+    // u32)             .expect("Could not load ELF");
+    //         let image = MemoryImage::new(&program, risc0_zkvm::PAGE_SIZE as u32)
+    //             .expect("Could not create memory image");
+    //         let image_id = hex::encode(image.compute_id());
+    //         let image = bincode::serialize(&image).expect("Failed to serialize memory
+    // img");
+    //
+    //         client
+    //             .upload_img(&image_id, image)
+    //             .expect("Could not upload ELF");
+    //         image_id
+    //     };
+    //
+    //     // Prepare input data and upload it.
+    //     info!("Uploading inputs");
+    //     let input_data = to_vec(&derive_input).unwrap();
+    //     let input_data = bytemuck::cast_slice(&input_data).to_vec();
+    //     let input_id = client
+    //         .upload_input(input_data)
+    //         .expect("Could not upload inputs");
+    //
+    //     // Start a session running the prover
+    //     info!("Starting session");
+    //     let session = client
+    //         .create_session(img_id, input_id)
+    //         .expect("Could not create Bonsai session");
+    //
+    //     println!("Bonsai session UUID: {}", session.uuid);
+    //     bonsai_session_uuid = Some(session.uuid)
+    // }
 
     // Verify receipt from Bonsai (if requested)
-    if let Some(session_uuid) = bonsai_session_uuid {
-        let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)
-            .expect("Could not create Bonsai client");
-        let session = bonsai_sdk::SessionId { uuid: session_uuid };
-
-        loop {
-            let res = session
-                .status(&client)
-                .expect("Could not fetch Bonsai status");
-            if res.status == "RUNNING" {
-                println!(
-                    "Current status: {} - state: {} - continue polling...",
-                    res.status,
-                    res.state.unwrap_or_default()
-                );
-                tokio::time::sleep(std::time::Duration::from_secs(15)).await;
-                continue;
-            }
-            if res.status == "SUCCEEDED" {
-                // Download the receipt, containing the output
-                let receipt_url = res
-                    .receipt_url
-                    .expect("API error, missing receipt on completed session");
-
-                let receipt_buf = client
-                    .download(&receipt_url)
-                    .expect("Could not download receipt");
-                let receipt: Receipt =
-                    bincode::deserialize(&receipt_buf).expect("Could not deserialize receipt");
-                receipt
-                    .verify(OP_DERIVE_ID)
-                    .expect("Receipt verification failed");
-
-                let bonsai_output: DeriveOutput = receipt.journal.decode().unwrap();
-
-                if output == bonsai_output {
-                    println!("Bonsai succeeded");
-                } else {
-                    error!(
-                        "Output mismatch! Bonsai: {:?}, expected: {:?}",
-                        bonsai_output, output,
-                    );
-                }
-            } else {
-                panic!(
-                    "Workflow exited: {} - | err: {}",
-                    res.status,
-                    res.error_msg.unwrap_or_default()
-                );
-            }
-
-            break;
-        }
-
-        info!("Bonsai request completed");
-    }
+    // if let Some(session_uuid) = bonsai_session_uuid {
+    //     let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)
+    //         .expect("Could not create Bonsai client");
+    //     let session = bonsai_sdk::SessionId { uuid: session_uuid };
+    //
+    //     loop {
+    //         let res = session
+    //             .status(&client)
+    //             .expect("Could not fetch Bonsai status");
+    //         if res.status == "RUNNING" {
+    //             println!(
+    //                 "Current status: {} - state: {} - continue polling...",
+    //                 res.status,
+    //                 res.state.unwrap_or_default()
+    //             );
+    //             tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+    //             continue;
+    //         }
+    //         if res.status == "SUCCEEDED" {
+    //             // Download the receipt, containing the output
+    //             let receipt_url = res
+    //                 .receipt_url
+    //                 .expect("API error, missing receipt on completed session");
+    //
+    //             let receipt_buf = client
+    //                 .download(&receipt_url)
+    //                 .expect("Could not download receipt");
+    //             let receipt: Receipt =
+    //                 bincode::deserialize(&receipt_buf).expect("Could not deserialize
+    // receipt");             receipt
+    //                 .verify(OP_DERIVE_ID)
+    //                 .expect("Receipt verification failed");
+    //
+    //             let bonsai_output: DeriveOutput = receipt.journal.decode().unwrap();
+    //
+    //             if output == bonsai_output {
+    //                 println!("Bonsai succeeded");
+    //             } else {
+    //                 error!(
+    //                     "Output mismatch! Bonsai: {:?}, expected: {:?}",
+    //                     bonsai_output, output,
+    //                 );
+    //             }
+    //         } else {
+    //             panic!(
+    //                 "Workflow exited: {} - | err: {}",
+    //                 res.status,
+    //                 res.error_msg.unwrap_or_default()
+    //             );
+    //         }
+    //
+    //         break;
+    //     }
+    //
+    //     info!("Bonsai request completed");
+    // }
 
     Ok(())
 }

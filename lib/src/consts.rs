@@ -13,6 +13,7 @@
 // limitations under the License.
 
 //! Constants for the Ethereum protocol.
+extern crate alloc;
 
 use alloc::{
     collections::BTreeMap,

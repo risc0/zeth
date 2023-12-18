@@ -38,13 +38,15 @@ use ethers_core::types::{
         AccessList as EthersAccessList, AccessListItem as EthersAccessListItem,
     },
     Block as EthersBlock, Bytes as EthersBytes, EIP1186ProofResponse,
-    Transaction as EthersTransaction, Withdrawal as EthersWithdrawal, H160 as EthersH160,
-    H256 as EthersH256, U256 as EthersU256,
+    Transaction as EthersTransaction, TransactionReceipt as EthersReceipt,
+    Withdrawal as EthersWithdrawal, H160 as EthersH160, H256 as EthersH256, U256 as EthersU256,
+    U64,
 };
 
 use crate::{
     access_list::{AccessList, AccessListItem},
     block::Header,
+    receipt::{Log, Receipt, ReceiptPayload},
     transactions::{
         ethereum::{
             EthereumTxEssence, TransactionKind, TxEssenceEip1559, TxEssenceEip2930, TxEssenceLegacy,
@@ -61,6 +63,12 @@ use crate::{
 #[inline]
 pub fn from_ethers_u256(v: EthersU256) -> U256 {
     U256::from_limbs(v.0)
+}
+
+/// Convert an `U256` type to the `EthersU256` type.
+#[inline]
+pub fn to_ethers_u256(v: U256) -> EthersU256 {
+    EthersU256(v.into_limbs())
 }
 
 /// Convert an `EthersH160` type to the `Address` type.
@@ -271,6 +279,40 @@ impl TryFrom<EthersWithdrawal> for Withdrawal {
                 .amount
                 .try_into()
                 .map_err(|err| anyhow!("invalid amount: {}", err))?,
+        })
+    }
+}
+
+impl TryFrom<EthersReceipt> for Receipt {
+    type Error = anyhow::Error;
+
+    fn try_from(receipt: EthersReceipt) -> Result<Self, Self::Error> {
+        Ok(Receipt {
+            tx_type: receipt
+                .transaction_type
+                .context("transaction_type missing")?
+                .as_u64()
+                .try_into()
+                .context("invalid transaction_type")?,
+            payload: ReceiptPayload {
+                success: receipt.status.context("status missing")? == U64::one(),
+                cumulative_gas_used: from_ethers_u256(receipt.cumulative_gas_used),
+                logs_bloom: Bloom::from_slice(receipt.logs_bloom.as_bytes()),
+                logs: receipt
+                    .logs
+                    .into_iter()
+                    .map(|log| {
+                        let address = log.address.0.into();
+                        let topics = log.topics.into_iter().map(from_ethers_h256).collect();
+                        let data = log.data.0.into();
+                        Log {
+                            address,
+                            topics,
+                            data,
+                        }
+                    })
+                    .collect(),
+            },
         })
     }
 }

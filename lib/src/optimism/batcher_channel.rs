@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::VecDeque, io::Read};
+use std::{
+    collections::{BTreeMap, VecDeque},
+    io::Read,
+};
 
 use anyhow::{bail, ensure, Context, Result};
 use bytes::Buf;
@@ -89,7 +92,7 @@ impl BatcherChannels {
                             self.channels.remove(channel_index);
                         } else {
                             // Add frame to channel
-                            channel.process_frame(frame);
+                            channel.add_frame(frame).context("failed to add frame")?;
                         }
                     } else {
                         // Create new channel. From the spec:
@@ -104,14 +107,16 @@ impl BatcherChannels {
                 // "After successfully inserting a new frame, the ChannelBank is pruned: channels
                 //  are dropped in FIFO order, until total_size <= MAX_CHANNEL_BANK_SIZE."
                 {
-                    while self.total_frame_data_len() as u64 > self.max_channel_bank_size {
-                        let _dropped_channel = self.channels.pop_front().unwrap();
+                    let mut total_size = self.total_size();
+                    while total_size as u64 > self.max_channel_bank_size {
+                        let dropped_channel = self.channels.pop_front().unwrap();
+                        total_size -= dropped_channel.size;
 
                         #[cfg(not(target_os = "zkvm"))]
                         log::debug!(
-                            "dropped channel: {} (frames_data_len: {})",
-                            _dropped_channel.id,
-                            _dropped_channel.frames_data_len
+                            "pruned channel: {} (channel_size: {})",
+                            dropped_channel.id,
+                            dropped_channel.size
                         );
                     }
                 }
@@ -137,12 +142,8 @@ impl BatcherChannels {
         self.batches.pop_front()
     }
 
-    fn total_frame_data_len(&self) -> usize {
-        let mut out = 0;
-        for channel in &self.channels {
-            out += channel.frames_data_len;
-        }
-        out
+    fn total_size(&self) -> usize {
+        self.channels.iter().map(|c| c.size).sum()
     }
 
     fn channel_index(&self, channel_id: u128) -> Option<usize> {
@@ -150,77 +151,87 @@ impl BatcherChannels {
     }
 }
 
+/// A [Channel] is a set of batches that are split into at least one, but possibly
+/// multiple frames. Frames are allowed to be ingested in any order.
 #[derive(Debug)]
 struct Channel {
+    /// The channel ID.
     id: u128,
+    /// The number of the L1 block that opened this channel.
     open_l1_block: u64,
-    // From the spec:
-    // "the sum of all buffered frame data of the channel, with an additional frame-overhead of
-    //  200 bytes per frame."
-    frames_data_len: usize,
-    frames: Vec<Frame>,
-    expected_frames_len: Option<usize>,
+    /// The number of the frame that closes this channel.
+    close_frame_number: Option<u16>,
+    /// Map of frame number to frame.
+    frames: BTreeMap<u16, Frame>,
+    /// estimated memory size, used to drop the channel if we have too much data.
+    size: usize,
 }
 
 impl Channel {
     const FRAME_OVERHEAD: usize = 200;
 
     fn new(open_l1_block: u64, frame: Frame) -> Self {
-        let expected_frames_len = if frame.is_last {
-            Some(frame.frame_number as usize + 1)
-        } else {
-            None
-        };
-
-        Self {
+        let mut channel = Self {
             id: frame.channel_id,
             open_l1_block,
-            frames_data_len: Self::FRAME_OVERHEAD + frame.frame_data.len(),
-            frames: vec![frame],
-            expected_frames_len,
-        }
+            close_frame_number: None,
+            frames: BTreeMap::new(),
+            size: 0,
+        };
+
+        // cannot fail for an empty channel
+        channel.add_frame(frame).unwrap();
+
+        channel
     }
 
-    fn contains(&self, frame_number: u16) -> bool {
-        self.frames
-            .iter()
-            .any(|existing_frame| existing_frame.frame_number == frame_number)
+    fn is_closed(&self) -> bool {
+        self.close_frame_number.is_some()
     }
 
-    fn process_frame(&mut self, frame: Frame) {
+    fn is_ready(&self) -> bool {
         // From the spec:
-        // "Duplicate frames (by frame number) for frames that have not been pruned from the
-        //  channel-bank are dropped."
-        if self.contains(frame.frame_number) {
-            #[cfg(not(target_os = "zkvm"))]
-            log::debug!(
-                "channel {} dropping duplicate frame {}",
-                self.id,
-                frame.frame_number
+        // "A channel is ready if:
+        //  - The channel is closed
+        //  - The channel has a contiguous sequence of frames until the closing frame"
+        matches!(self.close_frame_number, Some(n) if n as usize == self.frames.len() - 1)
+    }
+
+    fn add_frame(&mut self, frame: Frame) -> Result<()> {
+        ensure!(
+            frame.channel_id == self.id,
+            "frame channel_id does not match channel id"
+        );
+        if frame.is_last && self.is_closed() {
+            bail!("duplicate close-frame");
+        }
+        ensure!(
+            !self.frames.contains_key(&frame.frame_number),
+            "duplicate frame"
+        );
+        if let Some(close_frame_number) = self.close_frame_number {
+            ensure!(
+                frame.frame_number < close_frame_number,
+                "frame frame_number is not less than close_frame_number of a closed channel"
             );
-
-            return;
         }
 
         // From the spec:
-        // "Duplicate closes (new frame is_last == 1, but the channel has already seen a closing
-        //  frame and has not yet been pruned from the channel-bank) are dropped."
+        // "If a frame is closing any existing higher-numbered frames are removed from the
+        // channel."
         if frame.is_last {
-            if self.expected_frames_len.is_some() {
-                #[cfg(not(target_os = "zkvm"))]
-                log::debug!(
-                    "channel {} dropping duplicate close-frame {}",
-                    self.id,
-                    frame.frame_number
-                );
-
-                return;
-            }
-            self.expected_frames_len = Some(frame.frame_number as usize + 1);
+            self.close_frame_number = Some(frame.frame_number);
+            // prune frames with a number higher than the closing frame and update size
+            self.frames
+                .split_off(&frame.frame_number)
+                .values()
+                .for_each(|pruned| self.size -= Self::FRAME_OVERHEAD + pruned.frame_data.len());
         }
 
-        self.frames_data_len += Self::FRAME_OVERHEAD + frame.frame_data.len();
-        self.frames.push(frame);
+        self.size += Self::FRAME_OVERHEAD + frame.frame_data.len();
+        self.frames.insert(frame.frame_number, frame);
+
+        Ok(())
     }
 
     fn read_batches(&self, l1_block_number: BlockNumber) -> Result<Vec<Batch>> {
@@ -241,18 +252,10 @@ impl Channel {
         Ok(batches)
     }
 
-    fn is_ready(&self) -> bool {
-        self.expected_frames_len == Some(self.frames.len())
-    }
-
     fn decompress(&self) -> Result<Vec<u8>> {
         let compressed = {
             let mut buf = Vec::new();
-
-            let mut sorted_frames: Vec<&Frame> = self.frames.iter().collect();
-            sorted_frames.sort_by_key(|f| f.frame_number);
-
-            for frame in sorted_frames {
+            for frame in self.frames.values() {
                 buf.extend(&frame.frame_data)
             }
 

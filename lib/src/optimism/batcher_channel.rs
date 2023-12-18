@@ -22,7 +22,7 @@ use bytes::Buf;
 use libflate::zlib::Decoder;
 use zeth_primitives::{
     batch::Batch,
-    rlp::{Decodable},
+    rlp::Decodable,
     transactions::{ethereum::EthereumTxEssence, Transaction, TxEssence},
     Address, BlockNumber,
 };

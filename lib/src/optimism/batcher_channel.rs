@@ -159,7 +159,7 @@ type ChannelId = u128;
 
 /// A [Channel] is a set of batches that are split into at least one, but possibly
 /// multiple frames. Frames are allowed to be ingested in any order.
-#[derive(Debug)]
+#[derive(Clone, Debug, Default)]
 struct Channel {
     /// The channel ID.
     id: ChannelId,
@@ -359,5 +359,173 @@ impl Frame {
             data: frame_data.to_vec(),
             is_last,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // test vectors from https://github.com/ethereum-optimism/optimism/blob/711f33b4366f6cd268a265e7ed8ccb37085d86a2/op-node/rollup/derive/channel_test.go
+    mod channel {
+        use super::*;
+
+        const CHANNEL_ID: ChannelId = 0xff;
+
+        fn new_channel() -> Channel {
+            Channel {
+                id: CHANNEL_ID,
+                ..Default::default()
+            }
+        }
+
+        #[test]
+        fn frame_validity() {
+            // wrong channel
+            {
+                let frame = Frame {
+                    channel_id: 0xee,
+                    ..Default::default()
+                };
+
+                let mut channel = new_channel();
+                channel.add_frame(frame).unwrap_err();
+                assert_eq!(channel.size, 0);
+            }
+
+            // double close
+            {
+                let frame_a = Frame {
+                    channel_id: CHANNEL_ID,
+                    number: 2,
+                    data: b"four".to_vec(),
+                    is_last: true,
+                };
+                let frame_b = Frame {
+                    channel_id: CHANNEL_ID,
+                    number: 1,
+                    is_last: true,
+                    ..Default::default()
+                };
+
+                let mut channel = new_channel();
+                channel.add_frame(frame_a).unwrap();
+                assert_eq!(channel.size, 204);
+                channel.add_frame(frame_b).unwrap_err();
+                assert_eq!(channel.size, 204);
+            }
+
+            // duplicate frame
+            {
+                let frame_a = Frame {
+                    channel_id: CHANNEL_ID,
+                    number: 2,
+                    data: b"four".to_vec(),
+                    ..Default::default()
+                };
+                let frame_b = Frame {
+                    channel_id: CHANNEL_ID,
+                    number: 2,
+                    data: b"seven__".to_vec(),
+                    ..Default::default()
+                };
+
+                let mut channel = new_channel();
+                channel.add_frame(frame_a).unwrap();
+                assert_eq!(channel.size, 204);
+                channel.add_frame(frame_b).unwrap_err();
+                assert_eq!(channel.size, 204);
+            }
+
+            // duplicate closing frame
+            {
+                let frame_a = Frame {
+                    channel_id: CHANNEL_ID,
+                    number: 2,
+                    data: b"four".to_vec(),
+                    is_last: true,
+                };
+                let frame_b = Frame {
+                    channel_id: CHANNEL_ID,
+                    number: 2,
+                    data: b"seven__".to_vec(),
+                    is_last: true,
+                };
+
+                let mut channel = new_channel();
+                channel.add_frame(frame_a).unwrap();
+                assert_eq!(channel.size, 204);
+                channel.add_frame(frame_b).unwrap_err();
+                assert_eq!(channel.size, 204);
+            }
+
+            // frame past closing
+            {
+                let frame_a = Frame {
+                    channel_id: CHANNEL_ID,
+                    number: 2,
+                    data: b"four".to_vec(),
+                    is_last: true,
+                };
+                let frame_b = Frame {
+                    channel_id: CHANNEL_ID,
+                    number: 10,
+                    data: b"seven__".to_vec(),
+                    ..Default::default()
+                };
+
+                let mut channel = new_channel();
+                channel.add_frame(frame_a).unwrap();
+                assert_eq!(channel.size, 204);
+                channel.add_frame(frame_b).unwrap_err();
+                assert_eq!(channel.size, 204);
+            }
+
+            // prune after close frame
+            {
+                let frame_a = Frame {
+                    channel_id: CHANNEL_ID,
+                    number: 10,
+                    data: b"seven__".to_vec(),
+                    is_last: false,
+                };
+                let frame_b = Frame {
+                    channel_id: CHANNEL_ID,
+                    number: 2,
+                    data: b"four".to_vec(),
+                    is_last: true,
+                };
+
+                let mut channel = new_channel();
+                channel.add_frame(frame_a).unwrap();
+                assert_eq!(channel.size, 207);
+                channel.add_frame(frame_b).unwrap();
+                assert_eq!(channel.size, 204);
+            }
+
+            // multiple valid frames
+            {
+                let frame_a = Frame {
+                    channel_id: CHANNEL_ID,
+                    number: 1,
+                    data: b"seven__".to_vec(),
+                    is_last: true,
+                };
+                let frame_b = Frame {
+                    channel_id: CHANNEL_ID,
+                    number: 0,
+                    data: b"four".to_vec(),
+                    ..Default::default()
+                };
+
+                let mut channel = new_channel();
+                channel.add_frame(frame_a).unwrap();
+                assert_eq!(channel.size, 207);
+                assert_eq!(channel.is_ready(), false);
+                channel.add_frame(frame_b).unwrap();
+                assert_eq!(channel.size, 411);
+                assert_eq!(channel.is_ready(), true);
+            }
+        }
     }
 }

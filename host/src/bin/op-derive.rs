@@ -133,8 +133,6 @@ async fn main() -> Result<()> {
             input.len() * 4 / 1_000_000
         );
 
-        // let mut profiler = risc0_zkvm::Profiler::new(OP_DERIVE_PATH, OP_DERIVE_ELF).unwrap();
-
         info!("Running the executor...");
         let start_time = std::time::Instant::now();
         let session = {
@@ -144,9 +142,14 @@ async fn main() -> Result<()> {
                 .segment_limit_po2(segment_limit_po2)
                 .write_slice(&input);
 
-            // if args.profile {
-            //     builder.trace_callback(profiler.make_trace_callback());
-            // }
+            if args.profile {
+                info!("Profiling enabled.");
+                let sys_time = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap();
+
+                builder.enable_profiler(format!("profile_opd_{}.pb", sys_time.as_secs()));
+            }
 
             let env = builder.build().unwrap();
             let mut exec = ExecutorImpl::from_elf(env, OP_DERIVE_ELF).unwrap();
@@ -163,20 +166,6 @@ async fn main() -> Result<()> {
             session.segments.len(),
             start_time.elapsed()
         );
-
-        // if args.profile {
-        //     profiler.finalize();
-        //
-        //     let sys_time = std::time::SystemTime::now()
-        //         .duration_since(std::time::UNIX_EPOCH)
-        //         .unwrap();
-        //     tokio::fs::write(
-        //         format!("profile_{}.pb", sys_time.as_secs()),
-        //         &profiler.encode_to_vec(),
-        //     )
-        //     .await
-        //     .expect("Failed to write profiling output");
-        // }
 
         println!(
             "Executor ran in (roughly) {} cycles",

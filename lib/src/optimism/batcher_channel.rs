@@ -69,6 +69,9 @@ impl BatcherChannels {
                 continue;
             }
 
+            #[cfg(not(target_os = "zkvm"))]
+            log::debug!("received batcher tx: {}", tx.hash());
+
             for frame in Frame::process_batcher_transaction(&tx.essence)? {
                 #[cfg(not(target_os = "zkvm"))]
                 log::debug!(

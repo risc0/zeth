@@ -18,8 +18,9 @@
 // --eth-rpc-url="https://eth-mainnet.g.alchemy.com/v2/API_KEY_HERE" \
 // --op-rpc-url="https://opt-mainnet.g.alchemy.com/v2/API_KEY_HERE" \
 // --cache \
-// --block-no=112875552 \
-// --blocks=8 \
+// --op-block-no=112875552 \
+// --op-blocks=8 \
+// --op-blocks-step=2 \
 
 use std::{collections::VecDeque, fmt::Debug, path::PathBuf};
 
@@ -58,11 +59,15 @@ struct Args {
 
     #[clap(long, require_equals = true)]
     /// L2 block number to begin from
-    block_no: u64,
+    op_block_no: u64,
 
     #[clap(long, require_equals = true)]
     /// Number of L2 blocks to provably derive.
-    blocks: u64,
+    op_blocks: u64,
+
+    #[clap(long, require_equals = true, default_value = "1")]
+    /// Number of L2 blocks to process per derivation call.
+    op_blocks_step: u64,
 
     #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "20")]
     /// Runs the verification inside the zkvm executor locally. Accepts a custom maximum
@@ -79,7 +84,7 @@ async fn main() -> anyhow::Result<()> {
     info!("Fetching data ...");
     let mut lift_queue = Vec::new();
     let mut eth_chain: Vec<Header> = Vec::new();
-    for i in 0..args.blocks {
+    for op_block_index in (0..args.op_blocks).step_by(args.op_blocks_step as usize) {
         let db = RpcDb::new(
             args.eth_rpc_url.clone(),
             args.op_rpc_url.clone(),
@@ -89,8 +94,8 @@ async fn main() -> anyhow::Result<()> {
         let (input, output, chain) = tokio::task::spawn_blocking(move || {
             let derive_input = DeriveInput {
                 db,
-                op_head_block_no: args.block_no + i,
-                op_derive_block_count: 1,
+                op_head_block_no: args.op_block_no + op_block_index,
+                op_derive_block_count: args.op_blocks_step,
             };
             let mut derive_machine = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input)
                 .expect("Could not create derive machine");
@@ -119,15 +124,15 @@ async fn main() -> anyhow::Result<()> {
 
             let derive_input_mem = DeriveInput {
                 db: derive_machine.derive_input.db.get_mem_db(),
-                op_head_block_no: args.block_no + i,
-                op_derive_block_count: 1,
+                op_head_block_no: args.op_block_no + op_block_index,
+                op_derive_block_count: args.op_blocks_step,
             };
             let out: anyhow::Result<_> = Ok((derive_input_mem, derive_output, eth_chain));
             out
         })
         .await??;
 
-        info!("Running from memory ...");
+        info!("Deriving ...");
         {
             let output_mem = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, input.clone())
                 .expect("Could not create derive machine")
@@ -173,6 +178,7 @@ async fn main() -> anyhow::Result<()> {
         },
         eth_chain_root,
     };
+    info!("Preparing ...");
     let prep_compose_output = prep_compose_input.clone().process();
 
     let prep_compose_receipt = maybe_prove(
@@ -196,6 +202,7 @@ async fn main() -> anyhow::Result<()> {
             },
             eth_chain_root,
         };
+        info!("Lifting ...");
         let lift_compose_output = lift_compose_input.clone().process();
 
         let lift_compose_receipt = if let Some(receipt) = derive_receipt {
@@ -244,6 +251,7 @@ async fn main() -> anyhow::Result<()> {
             operation: ComposeInputOperation::JOIN { left, right },
             eth_chain_root,
         };
+        info!("Joining ...");
         let join_compose_output = join_compose_input.clone().process();
 
         let join_compose_receipt =
@@ -274,6 +282,7 @@ async fn main() -> anyhow::Result<()> {
         },
         eth_chain_root,
     };
+    info!("Finishing ...");
     let finish_compose_output = finish_compose_input.clone().process();
 
     let op_compose_receipt = if let (Some(prep_receipt), Some(aggregate_receipt)) =
@@ -334,10 +343,7 @@ pub fn prove(
     elf: &[u8],
     assumptions: Vec<Assumption>,
 ) -> Receipt {
-    info!(
-        "Proving derivation with segment_limit_po2 = {:?}",
-        segment_limit_po2
-    );
+    info!("Proving with segment_limit_po2 = {:?}", segment_limit_po2);
     info!(
         "Input size: {} words ( {} MB )",
         encoded_input.len(),

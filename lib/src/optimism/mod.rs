@@ -96,7 +96,6 @@ pub struct DeriveOutput {
 pub struct DeriveMachine<D> {
     /// Input for the derivation process.
     pub derive_input: DeriveInput<D>,
-
     op_head_block_hash: BlockHash,
     op_block_no: u64,
     op_block_seq_no: u64,

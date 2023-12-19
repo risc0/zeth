@@ -16,6 +16,7 @@ hex = "0.4.3"
 log = "0.4"
 revm = { workspace = true }
 risc0-zkvm = { workspace = true, features = ["prove", "profiler"] }
+ruint = { version = "1.10", default-features = false }
 serde = "1.0"
 tempfile = "3.6"
 tokio = { version = "1.23", features = ["full"] }

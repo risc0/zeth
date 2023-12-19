@@ -18,7 +18,7 @@ use assert_cmd::Command;
 use rstest::rstest;
 
 #[rstest]
-fn block_cli_ethereum(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
+fn zeth_ethereum(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
     let block_no = file_prefix(&path);
 
     Command::cargo_bin("zeth")
@@ -33,7 +33,7 @@ fn block_cli_ethereum(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
 }
 
 #[rstest]
-fn block_cli_optimism(#[files("testdata/optimism/*.json.gz")] path: PathBuf) {
+fn zeth_optimism(#[files("testdata/optimism/*.json.gz")] path: PathBuf) {
     let block_no = file_prefix(&path);
 
     Command::cargo_bin("zeth")
@@ -42,6 +42,20 @@ fn block_cli_optimism(#[files("testdata/optimism/*.json.gz")] path: PathBuf) {
             "--network=optimism",
             "--cache=testdata",
             &format!("--block-no={}", block_no),
+        ])
+        .assert()
+        .success();
+}
+
+#[rstest]
+#[case(109279674, 6)]
+fn derive_optimism(#[case] op_block_no: u64, #[case] op_blocks: u64) {
+    Command::cargo_bin("op-derive")
+        .unwrap()
+        .args([
+            "--cache=testdata/derivation",
+            &format!("--op-block-no={}", op_block_no),
+            &format!("--op-blocks={}", op_blocks),
         ])
         .assert()
         .success();

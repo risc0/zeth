@@ -13,9 +13,9 @@
 // limitations under the License.
 
 //! Constants for the Ethereum protocol.
+extern crate alloc;
 
-use core::str::FromStr;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, str::FromStr};
 
 use anyhow::bail;
 use once_cell::sync::Lazy;

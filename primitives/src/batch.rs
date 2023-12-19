@@ -17,22 +17,26 @@ use std::cmp::Ordering;
 use alloy_primitives::{BlockNumber, Bytes, B256};
 use alloy_rlp::{Decodable, Encodable};
 use alloy_rlp_derive::{RlpDecodable, RlpEncodable};
+use serde::{Deserialize, Serialize};
 
 pub type RawTransaction = Bytes;
 
-#[derive(Debug, Clone, Eq, PartialEq, RlpEncodable, RlpDecodable)]
+/// A batch contains information to build one Optimism block.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Batch {
+    pub inclusion_block_number: BlockNumber,
+    pub essence: BatchEssence,
+}
+
+/// Represents the core details of a [Batch], specifically the portion that is derived
+/// from the batcher transactions.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, RlpEncodable, RlpDecodable)]
 pub struct BatchEssence {
     pub parent_hash: B256,
     pub epoch_num: u64,
     pub epoch_hash: B256,
     pub timestamp: u64,
     pub transactions: Vec<RawTransaction>,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Batch {
-    pub inclusion_block_number: BlockNumber,
-    pub essence: BatchEssence,
 }
 
 impl PartialOrd<Self> for Batch {
@@ -77,7 +81,7 @@ impl Encodable for Batch {
             payload_length: self.essence.length() + 1,
         }
         .encode(out);
-        out.put_u8(0);
+        out.put_u8(0x00);
         self.essence.encode(out);
     }
 
@@ -104,32 +108,30 @@ impl Decodable for Batch {
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{b256, hex::FromHex};
+    use hex_literal::hex;
+    use serde_json::json;
 
     use super::*;
 
     #[test]
     fn rlp_roundtrip() {
-        let batch = Batch {
-            inclusion_block_number: 0,
-            essence: BatchEssence {
-                parent_hash: b256!(
-                    "55b11b918355b1ef9c5db810302ebad0bf2544255b530cdce90674d5887bb286"
-                ),
-                epoch_num: 1,
-                epoch_hash: b256!(
-                    "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
-                ),
-                timestamp: 1647026951,
-                transactions: vec![
-                    Bytes::from_hex("0x000000").unwrap(),
-                    Bytes::from_hex("0x76fd7c").unwrap(),
-                ],
-            },
-        };
+        let expected = hex!("b85000f84da0dbf6a80fef073de06add9b0d14026d6e5a86c85f6d102c36d3d8e9cf89c2afd3840109d8fea0438335a20d98863a4c0c97999eb2481921ccd28553eac6f913af7c12aec0410884647f5ea9c0");
+        let batch: Batch = serde_json::from_value(json!({
+          "inclusion_block_number": 0,
+          "essence": {
+            "parent_hash": "0xdbf6a80fef073de06add9b0d14026d6e5a86c85f6d102c36d3d8e9cf89c2afd3",
+            "epoch_num": 17422590,
+            "epoch_hash": "0x438335a20d98863a4c0c97999eb2481921ccd28553eac6f913af7c12aec04108",
+            "timestamp": 1686068905,
+            "transactions": []
+          }
+        }))
+        .unwrap();
 
         let encoded = alloy_rlp::encode(&batch);
         assert_eq!(encoded.len(), batch.length());
+        assert_eq!(encoded, expected);
+
         let decoded = Batch::decode(&mut &encoded[..]).unwrap();
         assert_eq!(batch, decoded);
     }

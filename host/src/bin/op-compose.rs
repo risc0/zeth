@@ -73,6 +73,10 @@ struct Args {
     /// Runs the verification inside the zkvm executor locally. Accepts a custom maximum
     /// segment cycle count as a power of 2. [default: 20]
     local_exec: Option<u32>,
+
+    #[clap(short, long, default_value_t = false)]
+    /// Whether to profile the zkVM execution
+    profile: bool,
 }
 
 #[tokio::main]
@@ -141,7 +145,14 @@ async fn main() -> anyhow::Result<()> {
             assert_eq!(output, output_mem);
         }
 
-        let receipt = maybe_prove(local_exec, &input, OP_DERIVE_ELF, &output, vec![]);
+        let receipt = maybe_prove(
+            local_exec,
+            &input,
+            OP_DERIVE_ELF,
+            &output,
+            vec![],
+            args.profile,
+        );
 
         // Append derivation outputs to lift queue
         lift_queue.push((output, receipt));
@@ -187,6 +198,7 @@ async fn main() -> anyhow::Result<()> {
         OP_COMPOSE_ELF,
         &prep_compose_output,
         vec![],
+        args.profile,
     );
 
     // Lift
@@ -212,6 +224,7 @@ async fn main() -> anyhow::Result<()> {
                 OP_COMPOSE_ELF,
                 &lift_compose_output,
                 vec![receipt.into()],
+                args.profile,
             )
         } else {
             None
@@ -262,6 +275,7 @@ async fn main() -> anyhow::Result<()> {
                     OP_COMPOSE_ELF,
                     &join_compose_output,
                     vec![left_receipt.into(), right_receipt.into()],
+                    args.profile,
                 )
             } else {
                 None
@@ -294,6 +308,7 @@ async fn main() -> anyhow::Result<()> {
             OP_COMPOSE_ELF,
             &finish_compose_output,
             vec![prep_receipt.into(), aggregate_receipt.into()],
+            args.profile,
         )
     } else {
         None
@@ -317,10 +332,11 @@ pub fn maybe_prove<I: Serialize, O: Eq + Debug + DeserializeOwned>(
     elf: &[u8],
     expected_output: &O,
     assumptions: Vec<Assumption>,
+    profile: bool,
 ) -> Option<Receipt> {
     if let Some(segment_limit_po2) = local_exec {
         let encoded_input = to_vec(input).expect("Could not serialize composition prep input!");
-        let receipt = prove(segment_limit_po2, encoded_input, elf, assumptions);
+        let receipt = prove(segment_limit_po2, encoded_input, elf, assumptions, profile);
         let output_guest: O = receipt.journal.decode().unwrap();
 
         if expected_output == &output_guest {
@@ -342,6 +358,7 @@ pub fn prove(
     encoded_input: Vec<u32>,
     elf: &[u8],
     assumptions: Vec<Assumption>,
+    profile: bool,
 ) -> Receipt {
     info!("Proving with segment_limit_po2 = {:?}", segment_limit_po2);
     info!(
@@ -357,6 +374,15 @@ pub fn prove(
         .session_limit(None)
         .segment_limit_po2(segment_limit_po2)
         .write_slice(&encoded_input);
+
+    if profile {
+        info!("Profiling enabled.");
+        let sys_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap();
+
+        env_builder.enable_profiler(format!("profile_opc_{}.pb", sys_time.as_nanos()));
+    }
 
     for assumption in assumptions {
         env_builder.add_assumption(assumption);

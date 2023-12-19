@@ -4825,6 +4825,7 @@ dependencies = [
  "alloy-sol-types",
  "anyhow",
  "bincode",
+ "bytes",
  "chrono",
  "ethers-core",
  "ethers-providers",

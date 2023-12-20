@@ -3858,6 +3858,7 @@ dependencies = [
  "alloy-sol-types",
  "anyhow",
  "bytemuck",
+ "bytes",
  "chrono",
  "ethers-core",
  "ethers-providers",

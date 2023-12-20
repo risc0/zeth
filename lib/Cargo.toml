@@ -7,6 +7,7 @@ edition = "2021"
 alloy-sol-types = "0.4"
 anyhow = "1.0"
 bytemuck = "1.13"
+bytes = "1.5"
 ethers-core = { version = "2.0", features = ["optimism"] }
 hashbrown = { workspace = true }
 libflate = "2.0.0"

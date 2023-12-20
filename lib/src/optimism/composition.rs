@@ -247,23 +247,23 @@ impl ComposeInput {
                 // Verify prep receipt
                 #[cfg(target_os = "zkvm")]
                 {
-                    // A valid receipt should be provided for prior aggregation
-                    let compose_journal = to_vec(&prep).expect("Failed to encode prep journal");
+                    // A valid receipt should be provided for merkle tree prep
+                    let prep_journal = to_vec(&prep).expect("Failed to encode prep journal");
                     env::verify(
                         Digest::from(self.compose_image_id),
-                        bytemuck::cast_slice(&compose_journal),
+                        bytemuck::cast_slice(&prep_journal),
                     )
                     .expect("Failed to validate prep receipt");
                 }
                 // Verify aggregate receipt
                 #[cfg(target_os = "zkvm")]
                 {
-                    // A valid receipt should be provided for prior aggregation
-                    let compose_journal =
-                        to_vec(&aggregate).expect("Failed to encode prep journal");
+                    // A valid receipt should be provided for aggregation
+                    let aggregation_journal =
+                        to_vec(&aggregate).expect("Failed to encode aggregation journal");
                     env::verify(
                         Digest::from(self.compose_image_id),
-                        bytemuck::cast_slice(&compose_journal),
+                        bytemuck::cast_slice(&aggregation_journal),
                     )
                     .expect("Failed to validate aggregate receipt");
                 }

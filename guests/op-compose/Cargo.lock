@@ -144,6 +144,52 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4668cab20f66d8d020e1fbc0ebe47217433c1b6c8f2040faf858554e394ace6"
 
 [[package]]
+name = "ark-bn254"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a22f4561524cd949590d78d7d4c5df8f592430d221f7f3c9497bbafd8972120f"
+dependencies = [
+ "ark-ec",
+ "ark-ff 0.4.2",
+ "ark-std 0.4.0",
+]
+
+[[package]]
+name = "ark-crypto-primitives"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f3a13b34da09176a8baba701233fdffbaa7c1b1192ce031a3da4e55ce1f1a56"
+dependencies = [
+ "ark-ec",
+ "ark-ff 0.4.2",
+ "ark-relations",
+ "ark-serialize 0.4.2",
+ "ark-snark",
+ "ark-std 0.4.0",
+ "blake2",
+ "derivative",
+ "digest 0.10.7",
+ "sha2",
+]
+
+[[package]]
+name = "ark-ec"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "defd9a439d56ac24968cca0571f598a61bc8c55f71d50a89cda591cb750670ba"
+dependencies = [
+ "ark-ff 0.4.2",
+ "ark-poly",
+ "ark-serialize 0.4.2",
+ "ark-std 0.4.0",
+ "derivative",
+ "hashbrown 0.13.2",
+ "itertools",
+ "num-traits",
+ "zeroize",
+]
+
+[[package]]
 name = "ark-ff"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -227,6 +273,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "ark-groth16"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20ceafa83848c3e390f1cbf124bc3193b3e639b3f02009e0e290809a501b95fc"
+dependencies = [
+ "ark-crypto-primitives",
+ "ark-ec",
+ "ark-ff 0.4.2",
+ "ark-poly",
+ "ark-relations",
+ "ark-serialize 0.4.2",
+ "ark-std 0.4.0",
+]
+
+[[package]]
+name = "ark-poly"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d320bfc44ee185d899ccbadfa8bc31aab923ce1558716e1997a1e74057fe86bf"
+dependencies = [
+ "ark-ff 0.4.2",
+ "ark-serialize 0.4.2",
+ "ark-std 0.4.0",
+ "derivative",
+ "hashbrown 0.13.2",
+]
+
+[[package]]
+name = "ark-relations"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00796b6efc05a3f48225e59cb6a2cda78881e7c390872d5786aaf112f31fb4f0"
+dependencies = [
+ "ark-ff 0.4.2",
+ "ark-std 0.4.0",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "ark-serialize"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -242,9 +328,33 @@ version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adb7b85a02b83d2f22f89bd5cac66c9c89474240cb6207cb1efc16d098e822a5"
 dependencies = [
+ "ark-serialize-derive",
  "ark-std 0.4.0",
  "digest 0.10.7",
  "num-bigint",
+]
+
+[[package]]
+name = "ark-serialize-derive"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae3281bc6d0fd7e549af32b52511e1302185bd688fd3359fa36423346ff682ea"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "ark-snark"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84d3cc6833a335bb8a600241889ead68ee89a3cf8448081fb7694c0fe503da63"
+dependencies = [
+ "ark-ff 0.4.2",
+ "ark-relations",
+ "ark-serialize 0.4.2",
+ "ark-std 0.4.0",
 ]
 
 [[package]]
@@ -1736,6 +1846,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-derive"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfb77679af88f8b125209d354a202862602672222e7f2313fdd6dc349bad4712"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.39",
+]
+
+[[package]]
 name = "num-integer"
 version = "0.1.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2351,8 +2472,8 @@ dependencies = [
 
 [[package]]
 name = "risc0-binfmt"
-version = "0.20.0-alpha.1"
-source = "git+https://github.com/risc0/risc0.git?rev=cee4239273e827e9d0a9b12714fb7c4c3175d231#cee4239273e827e9d0a9b12714fb7c4c3175d231"
+version = "0.21.0-alpha.1"
+source = "git+https://github.com/risc0/risc0.git?rev=209e314be0e48d1b754a4e90bb807714bcfa6a59#209e314be0e48d1b754a4e90bb807714bcfa6a59"
 dependencies = [
  "anyhow",
  "elf",
@@ -2363,9 +2484,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "risc0-circuit-recursion"
+version = "0.21.0-alpha.1"
+source = "git+https://github.com/risc0/risc0.git?rev=209e314be0e48d1b754a4e90bb807714bcfa6a59#209e314be0e48d1b754a4e90bb807714bcfa6a59"
+dependencies = [
+ "anyhow",
+ "bytemuck",
+ "risc0-core",
+ "risc0-zkp",
+ "tracing",
+]
+
+[[package]]
+name = "risc0-circuit-rv32im"
+version = "0.21.0-alpha.1"
+source = "git+https://github.com/risc0/risc0.git?rev=209e314be0e48d1b754a4e90bb807714bcfa6a59#209e314be0e48d1b754a4e90bb807714bcfa6a59"
+dependencies = [
+ "anyhow",
+ "risc0-core",
+ "risc0-zkp",
+ "risc0-zkvm-platform",
+ "tracing",
+]
+
+[[package]]
 name = "risc0-core"
-version = "0.20.0-alpha.1"
-source = "git+https://github.com/risc0/risc0.git?rev=cee4239273e827e9d0a9b12714fb7c4c3175d231#cee4239273e827e9d0a9b12714fb7c4c3175d231"
+version = "0.21.0-alpha.1"
+source = "git+https://github.com/risc0/risc0.git?rev=209e314be0e48d1b754a4e90bb807714bcfa6a59#209e314be0e48d1b754a4e90bb807714bcfa6a59"
 dependencies = [
  "bytemuck",
  "rand_core",
@@ -2373,8 +2518,8 @@ dependencies = [
 
 [[package]]
 name = "risc0-zkp"
-version = "0.20.0-alpha.1"
-source = "git+https://github.com/risc0/risc0.git?rev=cee4239273e827e9d0a9b12714fb7c4c3175d231#cee4239273e827e9d0a9b12714fb7c4c3175d231"
+version = "0.21.0-alpha.1"
+source = "git+https://github.com/risc0/risc0.git?rev=209e314be0e48d1b754a4e90bb807714bcfa6a59#209e314be0e48d1b754a4e90bb807714bcfa6a59"
 dependencies = [
  "anyhow",
  "blake2",
@@ -2392,27 +2537,37 @@ dependencies = [
 
 [[package]]
 name = "risc0-zkvm"
-version = "0.20.0-alpha.1"
-source = "git+https://github.com/risc0/risc0.git?rev=cee4239273e827e9d0a9b12714fb7c4c3175d231#cee4239273e827e9d0a9b12714fb7c4c3175d231"
+version = "0.21.0-alpha.1"
+source = "git+https://github.com/risc0/risc0.git?rev=209e314be0e48d1b754a4e90bb807714bcfa6a59#209e314be0e48d1b754a4e90bb807714bcfa6a59"
 dependencies = [
  "anyhow",
+ "ark-bn254",
+ "ark-groth16",
+ "ark-serialize 0.4.2",
  "bytemuck",
  "cfg-if",
  "getrandom",
  "hex",
+ "num-bigint",
+ "num-derive",
+ "num-traits",
  "risc0-binfmt",
+ "risc0-circuit-recursion",
+ "risc0-circuit-rv32im",
  "risc0-core",
  "risc0-zkp",
  "risc0-zkvm-platform",
  "rrs-lib",
  "semver 1.0.20",
  "serde",
+ "sha2",
+ "tracing",
 ]
 
 [[package]]
 name = "risc0-zkvm-platform"
-version = "0.20.0-alpha.1"
-source = "git+https://github.com/risc0/risc0.git?rev=cee4239273e827e9d0a9b12714fb7c4c3175d231#cee4239273e827e9d0a9b12714fb7c4c3175d231"
+version = "0.21.0-alpha.1"
+source = "git+https://github.com/risc0/risc0.git?rev=209e314be0e48d1b754a4e90bb807714bcfa6a59#209e314be0e48d1b754a4e90bb807714bcfa6a59"
 dependencies = [
  "bytemuck",
  "getrandom",
@@ -3248,6 +3403,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c06d3da6113f116aaee68e4d601191614c9053067f9ab7f6edbcb161237daa54"
 dependencies = [
  "once_cell",
+ "valuable",
 ]
 
 [[package]]
@@ -3258,6 +3414,15 @@ checksum = "97d095ae15e245a057c8e8451bab9b3ee1e1f68e9ba2b4fbc18d0ac5237835f2"
 dependencies = [
  "pin-project",
  "tracing",
+]
+
+[[package]]
+name = "tracing-subscriber"
+version = "0.2.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e0d2eaa99c3c2e41547cfa109e910a68ea03823cccad4a0525dcbc9b01e8c71"
+dependencies = [
+ "tracing-core",
 ]
 
 [[package]]

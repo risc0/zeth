@@ -87,9 +87,10 @@ fn executor(
                 Ok(Box::new(FileSegmentRef::new(&segment, segment_dir.path())?))
             })
             .unwrap();
-        println!("Generated {} segments", session.segments.len());
+        let (total_cycles, user_cycles) = session.get_cycles().unwrap();
+        println!("Cycles: total={}, user={}", total_cycles, user_cycles);
 
-        let found_hash: BlockHash = session.journal.decode().unwrap();
+        let found_hash: BlockHash = session.journal.unwrap().decode().unwrap();
         println!("Block hash (from executor): {}", found_hash);
         assert_eq!(found_hash, expected_header.hash());
     }

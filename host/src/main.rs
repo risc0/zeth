@@ -26,13 +26,11 @@ use clap::Parser;
 use ethers_core::types::Transaction as EthersTransaction;
 use log::{error, info};
 use risc0_zkvm::{
-    serde::to_vec, ExecutorEnv, ExecutorImpl, FileSegmentRef, MemoryImage, Program, Receipt,
+    compute_image_id, serde::to_vec, ExecutorEnv, ExecutorImpl, FileSegmentRef, Receipt,
 };
 use serde::{Deserialize, Serialize};
 use tempfile::tempdir;
-use zeth_guests::{
-    ETH_BLOCK_ELF, ETH_BLOCK_ID, ETH_BLOCK_PATH, OP_BLOCK_ELF, OP_BLOCK_ID, OP_BLOCK_PATH,
-};
+use zeth_guests::{ETH_BLOCK_ELF, OP_BLOCK_ELF};
 use zeth_lib::{
     builder::{BlockBuilderStrategy, EthereumStrategy, OptimismStrategy},
     consts::{ChainSpec, Network, ETH_MAINNET_CHAIN_SPEC, OP_MAINNET_CHAIN_SPEC},
@@ -79,10 +77,6 @@ struct Args {
     #[clap(short, long, require_equals = true)]
     /// Bonsai Session UUID to use for receipt verification.
     verify_bonsai_receipt_uuid: Option<String>,
-
-    #[clap(short, long, default_value_t = false)]
-    /// Whether to profile the zkVM execution
-    profile: bool,
 }
 
 fn cache_file_path(cache_path: &Path, network: &str, block_no: u64, ext: &str) -> PathBuf {
@@ -99,24 +93,10 @@ async fn main() -> Result<()> {
 
     match args.network {
         Network::Ethereum => {
-            run::<EthereumStrategy>(
-                args,
-                ETH_MAINNET_CHAIN_SPEC.clone(),
-                ETH_BLOCK_ELF,
-                ETH_BLOCK_ID,
-                ETH_BLOCK_PATH,
-            )
-            .await
+            run::<EthereumStrategy>(args, ETH_MAINNET_CHAIN_SPEC.clone(), ETH_BLOCK_ELF).await
         }
         Network::Optimism => {
-            run::<OptimismStrategy>(
-                args,
-                OP_MAINNET_CHAIN_SPEC.clone(),
-                OP_BLOCK_ELF,
-                OP_BLOCK_ID,
-                OP_BLOCK_PATH,
-            )
-            .await
+            run::<OptimismStrategy>(args, OP_MAINNET_CHAIN_SPEC.clone(), OP_BLOCK_ELF).await
         }
     }
 }
@@ -125,8 +105,6 @@ async fn run<N: BlockBuilderStrategy>(
     args: Args,
     chain_spec: ChainSpec,
     guest_elf: &[u8],
-    guest_id: [u32; risc0_zkvm::sha::DIGEST_WORDS],
-    guest_path: &str,
 ) -> Result<()>
 where
     N::TxEssence: 'static + Send + TryFrom<EthersTransaction> + Serialize + Deserialize<'static>,
@@ -175,8 +153,6 @@ where
             input.len() * 4 / 1_000_000
         );
 
-        let mut profiler = risc0_zkvm::Profiler::new(guest_path, guest_elf).unwrap();
-
         info!("Running the executor...");
         let start_time = Instant::now();
         let session = {
@@ -185,10 +161,6 @@ where
                 .session_limit(None)
                 .segment_limit_po2(segment_limit_po2)
                 .write_slice(&input);
-
-            if args.profile {
-                builder.trace_callback(profiler.make_trace_callback());
-            }
 
             let env = builder.build().unwrap();
             let mut exec = ExecutorImpl::from_elf(env, guest_elf).unwrap();
@@ -205,35 +177,19 @@ where
             session.segments.len(),
             start_time.elapsed()
         );
-
-        if args.profile {
-            profiler.finalize();
-
-            let sys_time = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap();
-            tokio::fs::write(
-                format!("profile_{}.pb", sys_time.as_secs()),
-                &profiler.encode_to_vec(),
-            )
-            .await
-            .expect("Failed to write profiling output");
-        }
-
         info!(
             "Executor ran in (roughly) {} cycles",
             session.segments.len() * (1 << segment_limit_po2)
         );
 
         let expected_hash = preflight_data.header.hash();
-        let found_hash: BlockHash = session.journal.decode().unwrap();
-
-        if found_hash == expected_hash {
-            info!("Block hash (from executor): {}", found_hash);
+        let hash_guest: BlockHash = session.journal.unwrap().decode().unwrap();
+        if hash_guest == expected_hash {
+            info!("Block hash (from executor): {}", hash_guest);
         } else {
             error!(
-                "Final block hash mismatch (from executor) {} (expected {})",
-                found_hash, expected_hash,
+                "Block hash mismatch! Executor: {}, expected: {}",
+                hash_guest, expected_hash,
             );
         }
     }
@@ -248,19 +204,11 @@ where
 
         // create the memoryImg, upload it and return the imageId
         info!("Uploading memory image");
-        let img_id = {
-            let program = Program::load_elf(guest_elf, risc0_zkvm::GUEST_MAX_MEM as u32)
-                .expect("Could not load ELF");
-            let image = MemoryImage::new(&program, risc0_zkvm::PAGE_SIZE as u32)
-                .expect("Could not create memory image");
-            let image_id = hex::encode(image.compute_id());
-            let image = bincode::serialize(&image).expect("Failed to serialize memory img");
-
-            client
-                .upload_img(&image_id, image)
-                .expect("Could not upload ELF");
-            image_id
-        };
+        let image_id =
+            hex::encode(compute_image_id(guest_elf).expect("Could not compute image ID"));
+        client
+            .upload_img(&image_id, guest_elf.to_vec())
+            .expect("Could not upload ELF");
 
         // Prepare input data and upload it.
         info!("Uploading inputs");
@@ -273,7 +221,7 @@ where
         // Start a session running the prover
         info!("Starting session");
         let session = client
-            .create_session(img_id, input_id)
+            .create_session(image_id, input_id)
             .expect("Could not create Bonsai session");
 
         println!("Bonsai session UUID: {}", session.uuid);
@@ -282,6 +230,7 @@ where
 
     // Verify receipt from Bonsai (if requested)
     if let Some(session_uuid) = bonsai_session_uuid {
+        let image_id = compute_image_id(guest_elf).expect("Could not compute image ID");
         let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)
             .expect("Could not create Bonsai client");
         let session = bonsai_sdk::SessionId { uuid: session_uuid };
@@ -311,18 +260,17 @@ where
                 let receipt: Receipt =
                     bincode::deserialize(&receipt_buf).expect("Could not deserialize receipt");
                 receipt
-                    .verify(guest_id)
+                    .verify(image_id)
                     .expect("Receipt verification failed");
 
                 let expected_hash = preflight_data.header.hash();
-                let found_hash: BlockHash = receipt.journal.decode().unwrap();
-
-                if found_hash == expected_hash {
-                    info!("Block hash (from Bonsai): {}", found_hash);
+                let hash_guest: BlockHash = receipt.journal.decode().unwrap();
+                if hash_guest == expected_hash {
+                    info!("Block hash (from Bonsai): {}", hash_guest);
                 } else {
                     error!(
-                        "Final block hash mismatch (from Bonsai) {} (expected {})",
-                        found_hash, expected_hash,
+                        "Block hash mismatch! Executor: {}, expected: {}",
+                        hash_guest, expected_hash,
                     );
                 }
             } else {

@@ -185,7 +185,7 @@ impl BatcherChannels {
         self.channels.iter().map(|c| c.size).sum()
     }
 
-    fn channel_index(&mut self, channel_id: ChannelId) -> Option<usize> {
+    fn channel_index(&self, channel_id: ChannelId) -> Option<usize> {
         self.channels.iter().position(|c| c.id == channel_id)
     }
 }

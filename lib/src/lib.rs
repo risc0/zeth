@@ -31,6 +31,8 @@ pub mod taiko;
 #[cfg(not(target_os = "zkvm"))]
 pub mod host;
 
+mod utils;
+
 pub use zeth_primitives::transactions::{ethereum::EthereumTxEssence, optimism::OptimismTxEssence};
 
 /// call forget only if running inside the guest

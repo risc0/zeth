@@ -33,12 +33,10 @@ use zeth_primitives::{
 };
 
 use super::TxExecStrategy;
-use crate::{
-    builder::BlockBuilder,
-    consts,
-    consts::{GWEI_TO_WEI, MIN_SPEC_ID},
-    guest_mem_forget,
-};
+use crate::{builder::BlockBuilder, consts, guest_mem_forget};
+
+/// Minimum supported protocol version: Paris (Block no. 15537394).
+const MIN_SPEC_ID: SpecId = SpecId::MERGE;
 
 pub struct EthTxExecStrategy {}
 
@@ -89,6 +87,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
         // set the EVM configuration
         evm.env.cfg.chain_id = block_builder.chain_spec.chain_id();
         evm.env.cfg.spec_id = spec_id;
+        evm.env.cfg.optimism = false;
 
         // set the EVM block environment
         evm.env.block.number = header.number.try_into().unwrap();
@@ -207,7 +206,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             .enumerate()
         {
             // the withdrawal amount is given in Gwei
-            let amount_wei = GWEI_TO_WEI
+            let amount_wei = consts::GWEI_TO_WEI
                 .checked_mul(withdrawal.amount.try_into().unwrap())
                 .unwrap();
 

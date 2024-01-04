@@ -28,10 +28,10 @@ use bonsai_sdk::alpha as bonsai_sdk;
 use clap::Parser;
 use log::{error, info};
 use risc0_zkvm::{
-    serde::to_vec, ExecutorEnv, ExecutorImpl, FileSegmentRef, MemoryImage, Program, Receipt,
+    compute_image_id, serde::to_vec, ExecutorEnv, ExecutorImpl, FileSegmentRef, Receipt,
 };
 use tempfile::tempdir;
-use zeth_guests::{OP_DERIVE_ELF, OP_DERIVE_ID, OP_DERIVE_PATH};
+use zeth_guests::{OP_DERIVE_ELF, OP_DERIVE_ID};
 use zeth_lib::{
     host::provider::{new_provider, BlockQuery},
     optimism::{
@@ -81,10 +81,6 @@ struct Args {
     #[clap(short, long, require_equals = true)]
     /// Bonsai Session UUID to use for receipt verification.
     verify_bonsai_receipt_uuid: Option<String>,
-
-    #[clap(short, long, default_value_t = false)]
-    /// Whether to profile the zkVM execution
-    profile: bool,
 }
 
 fn cache_file_path(cache_path: &Path, network: &str, block_no: u64, ext: &str) -> PathBuf {
@@ -162,8 +158,6 @@ async fn main() -> Result<()> {
             input.len() * 4 / 1_000_000
         );
 
-        let mut profiler = risc0_zkvm::Profiler::new(OP_DERIVE_PATH, OP_DERIVE_ELF).unwrap();
-
         info!("Running the executor...");
         let start_time = std::time::Instant::now();
         let session = {
@@ -173,15 +167,10 @@ async fn main() -> Result<()> {
                 .segment_limit_po2(segment_limit_po2)
                 .write_slice(&input);
 
-            if args.profile {
-                builder.trace_callback(profiler.make_trace_callback());
-            }
-
             let env = builder.build().unwrap();
             let mut exec = ExecutorImpl::from_elf(env, OP_DERIVE_ELF).unwrap();
 
             let segment_dir = tempdir().unwrap();
-
             exec.run_with_callback(|segment| {
                 Ok(Box::new(FileSegmentRef::new(&segment, segment_dir.path())?))
             })
@@ -192,28 +181,12 @@ async fn main() -> Result<()> {
             session.segments.len(),
             start_time.elapsed()
         );
-
-        if args.profile {
-            profiler.finalize();
-
-            let sys_time = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap();
-            tokio::fs::write(
-                format!("profile_{}.pb", sys_time.as_secs()),
-                &profiler.encode_to_vec(),
-            )
-            .await
-            .expect("Failed to write profiling output");
-        }
-
         println!(
             "Executor ran in (roughly) {} cycles",
             session.segments.len() * (1 << segment_limit_po2)
         );
 
-        let output_guest: DeriveOutput = session.journal.decode().unwrap();
-
+        let output_guest = session.journal.unwrap().decode().unwrap();
         if output == output_guest {
             println!("Executor succeeded");
         } else {
@@ -234,19 +207,11 @@ async fn main() -> Result<()> {
 
         // create the memoryImg, upload it and return the imageId
         info!("Uploading memory image");
-        let img_id = {
-            let program = Program::load_elf(OP_DERIVE_ELF, risc0_zkvm::GUEST_MAX_MEM as u32)
-                .expect("Could not load ELF");
-            let image = MemoryImage::new(&program, risc0_zkvm::PAGE_SIZE as u32)
-                .expect("Could not create memory image");
-            let image_id = hex::encode(image.compute_id());
-            let image = bincode::serialize(&image).expect("Failed to serialize memory img");
-
-            client
-                .upload_img(&image_id, image)
-                .expect("Could not upload ELF");
-            image_id
-        };
+        let image_id =
+            hex::encode(compute_image_id(OP_DERIVE_ELF).expect("Could not compute image ID"));
+        client
+            .upload_img(&image_id, OP_DERIVE_ELF.to_vec())
+            .expect("Could not upload ELF");
 
         // Prepare input data and upload it.
         info!("Uploading inputs");
@@ -259,7 +224,7 @@ async fn main() -> Result<()> {
         // Start a session running the prover
         info!("Starting session");
         let session = client
-            .create_session(img_id, input_id)
+            .create_session(image_id, input_id)
             .expect("Could not create Bonsai session");
 
         println!("Bonsai session UUID: {}", session.uuid);

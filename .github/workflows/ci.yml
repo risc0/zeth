@@ -8,7 +8,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  RISC0_VERSION: 0.19.1
+  RISC0_VERSION: 0.20.0-rc.1
   RISC0_TOOLCHAIN_VERSION: test-release-2
 
 concurrency:

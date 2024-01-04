@@ -179,19 +179,21 @@ impl Batcher {
             deposits: deposits::extract_transactions(&self.config, eth_block)?,
         })?;
 
-        // Read frames into channels
-        self.batcher_channel.process_l1_transactions(
-            self.config.system_config.batch_sender,
-            eth_block.block_header.number,
-            &eth_block.transactions,
-        )?;
+        // process all transactions of this block to generate batches
+        self.batcher_channel
+            .process_l1_transactions(
+                self.config.system_config.batch_sender,
+                eth_block.block_header.number,
+                &eth_block.transactions,
+            )
+            .context("failed to process transactions")?;
 
         // Read batches
         while let Some(batches) = self.batcher_channel.read_batches() {
             batches.into_iter().for_each(|batch| {
                 #[cfg(not(target_os = "zkvm"))]
                 log::debug!(
-                    "saw batch: t={}, ph={:?}, e={}",
+                    "received batch: timestamp={}, parent_hash={}, epoch={}",
                     batch.essence.timestamp,
                     batch.essence.parent_hash,
                     batch.essence.epoch_num

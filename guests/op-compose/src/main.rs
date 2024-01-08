@@ -12,9 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod mpt;
-pub mod preflight;
-pub mod provider;
-pub mod provider_db;
-pub mod rpc_db;
-pub mod verify;
+#![no_main]
+
+use risc0_zkvm::guest::env;
+use zeth_lib::optimism::composition::ComposeInput;
+
+risc0_zkvm::guest::entry!(main);
+
+pub fn main() {
+    // read composition input
+    let compose_input: ComposeInput = env::read();
+    // process input
+    let compose_output = compose_input.process();
+    // output statement about larger segment
+    env::commit(&compose_output);
+}

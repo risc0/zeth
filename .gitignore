@@ -1,6 +1,7 @@
 .DS_Store
 target/
 tmp/
+rpc_cache/
 log.txt
 *.pb
 rpc_cache.json

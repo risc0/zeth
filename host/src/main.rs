@@ -15,34 +15,115 @@
 extern crate core;
 
 use std::{
+    collections::VecDeque,
     fmt::Debug,
     path::{Path, PathBuf},
-    time::Instant,
 };
 
 use anyhow::{Context, Result};
 // use bonsai_sdk::alpha as bonsai_sdk;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use ethers_core::types::Transaction as EthersTransaction;
 use log::{error, info};
 use risc0_zkvm::{
-    serde::to_vec,
-    ExecutorEnv,
-    ExecutorImpl,
-    FileSegmentRef, // Receipt,
+    default_prover, serde::to_vec, Assumption, ExecutorEnv, ExecutorImpl, FileSegmentRef, Receipt,
+    Session,
 };
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tempfile::tempdir;
-use zeth_guests::{
-    ETH_BLOCK_ELF, ETH_BLOCK_ID, ETH_BLOCK_PATH, OP_BLOCK_ELF, OP_BLOCK_ID, OP_BLOCK_PATH,
-};
+use zeth_guests::*;
 use zeth_lib::{
     builder::{BlockBuilderStrategy, EthereumStrategy, OptimismStrategy},
     consts::{ChainSpec, Network, ETH_MAINNET_CHAIN_SPEC, OP_MAINNET_CHAIN_SPEC},
-    host::{preflight::Preflight, verify::Verifier},
+    host::{preflight::Preflight, rpc_db::RpcDb, verify::Verifier},
     input::Input,
+    optimism::{
+        batcher_db::BatcherDb,
+        composition::{ComposeInput, ComposeInputOperation, ComposeOutputOperation},
+        config::OPTIMISM_CHAIN_SPEC,
+        DeriveInput, DeriveMachine, DeriveOutput,
+    },
 };
-use zeth_primitives::BlockHash;
+use zeth_primitives::{block::Header, tree::MerkleMountainRange, BlockHash};
+
+#[derive(Parser)] // requires `derive` feature
+#[command(name = "zeth")]
+#[command(bin_name = "zeth")]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Command>,
+
+    #[clap(
+        short,
+        long,
+        require_equals = true,
+        value_enum,
+        default_value = "ethereum"
+    )]
+    /// Network name.
+    network: Network,
+
+    #[clap(long, require_equals = true)]
+    /// URL of the Ethereum RPC node.
+    eth_rpc_url: Option<String>,
+
+    #[clap(long, require_equals = true)]
+    /// URL of the Optimism RPC node.
+    op_rpc_url: Option<String>,
+
+    #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "host/testdata")]
+    /// Use a local directory as a cache for RPC calls. Accepts a custom directory.
+    /// [default: host/testdata]
+    cache: Option<PathBuf>,
+
+    #[clap(long, require_equals = true)]
+    /// Block number to begin from
+    block_number: u64,
+
+    #[clap(long, require_equals = true, default_value_t = 1)]
+    /// Number of blocks to provably derive.
+    block_count: u64,
+
+    #[clap(long, require_equals = true, num_args = 0..=1, default_missing_value = "1")]
+    /// Number of blocks to process per derivation call.
+    composition: Option<u64>,
+}
+
+#[derive(Default, Subcommand)]
+enum Command {
+    #[default]
+    Build,
+    Run {
+        #[clap(short, long, default_value_t = 20)]
+        /// Runs the verification inside the zkvm executor locally. Accepts a custom
+        /// maximum segment cycle count as a power of 2. [default: 20]
+        local_exec: u32,
+
+        #[clap(short, long, default_value_t = false)]
+        /// Whether to profile the zkVM execution
+        profile: bool,
+    },
+    Prove {
+        #[clap(short, long, default_value_t = 20)]
+        /// Runs the verification inside the zkvm executor locally. Accepts a custom
+        /// maximum segment cycle count as a power of 2. [default: 20]
+        local_exec: u32,
+
+        #[clap(short, long, default_value_t = false)]
+        /// Whether to profile the zkVM execution
+        profile: bool,
+
+        #[clap(short, long, default_value_t = false)]
+        /// Whether to submit the proving workload to Bonsai.
+        submit_to_bonsai: bool,
+    },
+    Verify {
+        #[clap(short, long, require_equals = true)]
+        /// Bonsai Session UUID to use for receipt verification.
+        bonsai_receipt_uuid: Option<String>,
+    },
+}
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -98,12 +179,15 @@ fn cache_file_path(cache_path: &Path, network: &str, block_no: u64, ext: &str) -
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
-    let args = Args::parse();
 
-    match args.network {
+    let cli = Cli::parse();
+
+    match cli.network {
         Network::Ethereum => {
-            run::<EthereumStrategy>(
-                args,
+            let rpc_url = cli.eth_rpc_url.clone();
+            mono_chain::<EthereumStrategy>(
+                cli,
+                rpc_url,
                 ETH_MAINNET_CHAIN_SPEC.clone(),
                 ETH_BLOCK_ELF,
                 ETH_BLOCK_ID,
@@ -112,8 +196,10 @@ async fn main() -> Result<()> {
             .await
         }
         Network::Optimism => {
-            run::<OptimismStrategy>(
-                args,
+            let rpc_url = cli.op_rpc_url.clone();
+            mono_chain::<OptimismStrategy>(
+                cli,
+                rpc_url,
                 OP_MAINNET_CHAIN_SPEC.clone(),
                 OP_BLOCK_ELF,
                 OP_BLOCK_ID,
@@ -121,11 +207,13 @@ async fn main() -> Result<()> {
             )
             .await
         }
+        Network::OptimismDerived => multi_chain(cli).await,
     }
 }
 
-async fn run<N: BlockBuilderStrategy>(
-    args: Args,
+async fn mono_chain<N: BlockBuilderStrategy>(
+    cli: Cli,
+    rpc_url: Option<String>,
     chain_spec: ChainSpec,
     guest_elf: &[u8],
     _guest_id: [u32; risc0_zkvm::sha::DIGEST_WORDS],
@@ -136,14 +224,14 @@ where
     <N::TxEssence as TryFrom<EthersTransaction>>::Error: Debug,
 {
     // Fetch all of the initial data
-    let rpc_cache = args
+    let rpc_cache = cli
         .cache
         .as_ref()
-        .map(|dir| cache_file_path(dir, &args.network.to_string(), args.block_no, "json.gz"));
+        .map(|dir| cache_file_path(dir, &cli.network.to_string(), cli.block_number, "json.gz"));
 
     let init_spec = chain_spec.clone();
     let preflight_result = tokio::task::spawn_blocking(move || {
-        N::run_preflight(init_spec, rpc_cache, args.rpc_url, args.block_no)
+        N::run_preflight(init_spec, rpc_cache, rpc_url, cli.block_number)
     })
     .await?;
     let preflight_data = preflight_result.context("preflight failed")?;
@@ -164,69 +252,40 @@ where
 
     info!("Final block hash derived successfully. {}", header.hash());
 
-    // Run in the executor (if requested)
-    if let Some(segment_limit_po2) = args.local_exec {
-        info!(
-            "Running in executor with segment_limit_po2 = {:?}",
-            segment_limit_po2
-        );
+    match cli.command.unwrap_or_default() {
+        Command::Build => {}
+        Command::Run {
+            local_exec,
+            profile,
+        } => {
+            let session = execute(&input, local_exec, profile, guest_elf);
 
-        let input = to_vec(&input).expect("Could not serialize input!");
-        info!(
-            "Input size: {} words ( {} MB )",
-            input.len(),
-            input.len() * 4 / 1_000_000
-        );
+            let expected_hash = preflight_data.header.hash();
+            let found_hash: BlockHash = session.journal.unwrap().decode().unwrap();
 
-        info!("Running the executor...");
-        let start_time = Instant::now();
-        let session = {
-            let mut builder = ExecutorEnv::builder();
-            builder
-                .session_limit(None)
-                .segment_limit_po2(segment_limit_po2)
-                .write_slice(&input);
-
-            if args.profile {
-                info!("Profiling enabled.");
-                let sys_time = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap();
-
-                builder.enable_profiler(format!("profile_eth_{}.pb", sys_time.as_secs()));
+            if found_hash == expected_hash {
+                info!("Block hash (from executor): {}", found_hash);
+            } else {
+                error!(
+                    "Final block hash mismatch (from executor) {} (expected {})",
+                    found_hash, expected_hash,
+                );
+            }
+        }
+        Command::Prove {
+            local_exec,
+            profile,
+            submit_to_bonsai,
+        } => {
+            if submit_to_bonsai {
+                unimplemented!()
             }
 
-            let env = builder.build().unwrap();
-            let mut exec = ExecutorImpl::from_elf(env, guest_elf).unwrap();
-
-            let segment_dir = tempdir().unwrap();
-
-            exec.run_with_callback(|segment| {
-                Ok(Box::new(FileSegmentRef::new(&segment, segment_dir.path())?))
-            })
-            .unwrap()
-        };
-        info!(
-            "Generated {:?} segments; elapsed time: {:?}",
-            session.segments.len(),
-            start_time.elapsed()
-        );
-
-        info!(
-            "Executor ran in (roughly) {} cycles",
-            session.segments.len() * (1 << segment_limit_po2)
-        );
-
-        let expected_hash = preflight_data.header.hash();
-        let found_hash: BlockHash = session.journal.unwrap().decode().unwrap();
-
-        if found_hash == expected_hash {
-            info!("Block hash (from executor): {}", found_hash);
-        } else {
-            error!(
-                "Final block hash mismatch (from executor) {} (expected {})",
-                found_hash, expected_hash,
-            );
+            let encoded_input = to_vec(&input).expect("Could not serialize input!");
+            let _receipt = prove(local_exec, encoded_input, guest_elf, vec![], profile);
+        }
+        Command::Verify { .. } => {
+            unimplemented!()
         }
     }
 
@@ -331,4 +390,531 @@ where
     // }
 
     Ok(())
+}
+
+async fn multi_chain(cli: Cli) -> Result<()> {
+    if let Some(composition_size) = cli.composition {
+        // OP Composition
+        info!("Fetching data ...");
+        let mut lift_queue = Vec::new();
+        let mut eth_chain: Vec<Header> = Vec::new();
+        let command = cli.command.unwrap_or_default();
+        for op_block_index in (0..cli.block_count).step_by(composition_size as usize) {
+            let db = RpcDb::new(
+                cli.eth_rpc_url.clone(),
+                cli.op_rpc_url.clone(),
+                cli.cache.clone(),
+            );
+            let (input, output, chain) = tokio::task::spawn_blocking(move || {
+                let derive_input = DeriveInput {
+                    db,
+                    op_head_block_no: cli.block_number + op_block_index,
+                    op_derive_block_count: composition_size,
+                };
+                let mut derive_machine = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input)
+                    .expect("Could not create derive machine");
+                let eth_head_no = derive_machine.op_batcher.state.epoch.number;
+                let eth_head = derive_machine
+                    .derive_input
+                    .db
+                    .get_eth_block_header(eth_head_no)
+                    .context("could not fetch eth head")?;
+                let derive_output = derive_machine.derive().context("could not derive")?;
+                let eth_tail = derive_machine
+                    .derive_input
+                    .db
+                    .get_eth_block_header(derive_output.eth_tail.0)
+                    .context("could not fetch eth tail")?;
+                let mut eth_chain = vec![eth_head];
+                for block_no in (eth_head_no + 1)..eth_tail.number {
+                    let eth_block = derive_machine
+                        .derive_input
+                        .db
+                        .get_eth_block_header(block_no)
+                        .context("could not fetch eth block")?;
+                    eth_chain.push(eth_block);
+                }
+                eth_chain.push(eth_tail);
+
+                let derive_input_mem = DeriveInput {
+                    db: derive_machine.derive_input.db.get_mem_db(),
+                    op_head_block_no: cli.block_number + op_block_index,
+                    op_derive_block_count: composition_size,
+                };
+                let out: anyhow::Result<_> = Ok((derive_input_mem, derive_output, eth_chain));
+                out
+            })
+            .await??;
+
+            info!("Deriving ...");
+            {
+                let output_mem = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, input.clone())
+                    .expect("Could not create derive machine")
+                    .derive()
+                    .unwrap();
+                assert_eq!(output, output_mem);
+            }
+
+            let receipt = maybe_prove(&command, &input, OP_DERIVE_ELF, &output, vec![]);
+
+            // Append derivation outputs to lift queue
+            lift_queue.push((output, receipt));
+            // Extend block chain
+            for block in chain {
+                let tail_num = match eth_chain.last() {
+                    None => 0u64,
+                    Some(tail) => tail.number,
+                };
+                // This check should be sufficient
+                if tail_num < block.number {
+                    eth_chain.push(block);
+                }
+            }
+        }
+
+        // OP Composition
+        // Prep
+        let mut sibling_map = Default::default();
+        let mut eth_mountain_range: MerkleMountainRange = Default::default();
+        for block in &eth_chain {
+            eth_mountain_range.logged_append_leaf(block.hash().0, &mut sibling_map);
+        }
+        let eth_chain_root = eth_mountain_range
+            .logged_root(&mut sibling_map)
+            .expect("No eth blocks loaded!");
+        let prep_compose_input = ComposeInput {
+            derive_image_id: OP_DERIVE_ID,
+            compose_image_id: OP_COMPOSE_ID,
+            operation: ComposeInputOperation::PREP {
+                eth_blocks: eth_chain,
+                mountain_range: Default::default(),
+                prior: None,
+            },
+            eth_chain_root,
+        };
+        info!("Preparing ...");
+        let prep_compose_output = prep_compose_input.clone().process();
+
+        let prep_compose_receipt = maybe_prove(
+            &command,
+            &prep_compose_input,
+            OP_COMPOSE_ELF,
+            &prep_compose_output,
+            vec![],
+        );
+
+        // Lift
+        let mut join_queue = VecDeque::new();
+        for (derive_output, derive_receipt) in lift_queue {
+            let eth_tail_hash = derive_output.eth_tail.1 .0;
+            let lift_compose_input = ComposeInput {
+                derive_image_id: OP_DERIVE_ID,
+                compose_image_id: OP_COMPOSE_ID,
+                operation: ComposeInputOperation::LIFT {
+                    derivation: derive_output,
+                    eth_tail_proof: MerkleMountainRange::proof(&sibling_map, eth_tail_hash),
+                },
+                eth_chain_root,
+            };
+            info!("Lifting ...");
+            let lift_compose_output = lift_compose_input.clone().process();
+
+            let lift_compose_receipt = if let Some(receipt) = derive_receipt {
+                maybe_prove(
+                    &command,
+                    &lift_compose_input,
+                    OP_COMPOSE_ELF,
+                    &lift_compose_output,
+                    vec![receipt.into()],
+                )
+            } else {
+                None
+            };
+
+            join_queue.push_back((lift_compose_output, lift_compose_receipt));
+        }
+
+        // Join
+        while join_queue.len() > 1 {
+            let (left, left_receipt) = join_queue.pop_front().unwrap();
+            let (right, _right_receipt) = join_queue.front().unwrap();
+            let ComposeOutputOperation::AGGREGATE {
+                op_tail: left_op_tail,
+                ..
+            } = &left.operation
+            else {
+                panic!("Expected left aggregate operation output!")
+            };
+            let ComposeOutputOperation::AGGREGATE {
+                op_head: right_op_head,
+                ..
+            } = &right.operation
+            else {
+                panic!("Expected right aggregate operation output!")
+            };
+            // Push dangling workloads (odd block count) to next round
+            if left_op_tail != right_op_head {
+                join_queue.push_back((left, left_receipt));
+                continue;
+            }
+            // Pair up join
+            let (right, right_receipt) = join_queue.pop_front().unwrap();
+            let join_compose_input = ComposeInput {
+                derive_image_id: OP_DERIVE_ID,
+                compose_image_id: OP_COMPOSE_ID,
+                operation: ComposeInputOperation::JOIN { left, right },
+                eth_chain_root,
+            };
+            info!("Joining ...");
+            let join_compose_output = join_compose_input.clone().process();
+
+            let join_compose_receipt =
+                if let (Some(left_receipt), Some(right_receipt)) = (left_receipt, right_receipt) {
+                    maybe_prove(
+                        &command,
+                        &join_compose_input,
+                        OP_COMPOSE_ELF,
+                        &join_compose_output,
+                        vec![left_receipt.into(), right_receipt.into()],
+                    )
+                } else {
+                    None
+                };
+
+            // Send workload to next round
+            join_queue.push_back((join_compose_output, join_compose_receipt));
+        }
+
+        // Finish
+        let (aggregate_output, aggregate_receipt) = join_queue.pop_front().unwrap();
+        let finish_compose_input = ComposeInput {
+            derive_image_id: OP_DERIVE_ID,
+            compose_image_id: OP_COMPOSE_ID,
+            operation: ComposeInputOperation::FINISH {
+                prep: prep_compose_output,
+                aggregate: aggregate_output,
+            },
+            eth_chain_root,
+        };
+        info!("Finishing ...");
+        let finish_compose_output = finish_compose_input.clone().process();
+
+        let op_compose_receipt = if let (Some(prep_receipt), Some(aggregate_receipt)) =
+            (prep_compose_receipt, aggregate_receipt)
+        {
+            maybe_prove(
+                &command,
+                &finish_compose_input,
+                OP_COMPOSE_ELF,
+                &finish_compose_output,
+                vec![prep_receipt.into(), aggregate_receipt.into()],
+            )
+        } else {
+            None
+        };
+
+        dbg!(&finish_compose_output);
+
+        if let Some(final_receipt) = op_compose_receipt {
+            final_receipt
+                .verify(OP_COMPOSE_ID)
+                .expect("Failed to verify final receipt");
+            info!("Verified final receipt!");
+        }
+
+        Ok(())
+    } else {
+        info!("Fetching data ...");
+        let (derive_input, output) = tokio::task::spawn_blocking(move || {
+            let derive_input = DeriveInput {
+                db: RpcDb::new(cli.eth_rpc_url, cli.op_rpc_url, cli.cache),
+                op_head_block_no: cli.block_number,
+                op_derive_block_count: cli.block_count,
+            };
+            let mut derive_machine = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input)
+                .context("Could not create derive machine")?;
+            let derive_output = derive_machine.derive().context("could not derive")?;
+            let derive_input_mem = DeriveInput {
+                db: derive_machine.derive_input.db.get_mem_db(),
+                op_head_block_no: cli.block_number,
+                op_derive_block_count: cli.block_count,
+            };
+            let out: Result<_> = Ok((derive_input_mem, derive_output));
+            out
+        })
+        .await?
+        .context("preflight failed")?;
+
+        info!("Running from memory ...");
+        {
+            let output_mem = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input.clone())
+                .context("Could not create derive machine")?
+                .derive()
+                .unwrap();
+            assert_eq!(output, output_mem);
+        }
+
+        info!("In-memory test complete");
+        println!("Eth tail: {} {}", output.eth_tail.0, output.eth_tail.1);
+        println!("Op Head: {} {}", output.op_head.0, output.op_head.1);
+        for derived_block in &output.derived_op_blocks {
+            println!("Derived: {} {}", derived_block.0, derived_block.1);
+        }
+
+        // Run in the executor (if requested)
+        if let Command::Run {
+            local_exec,
+            profile,
+        } = cli.command.unwrap_or_default()
+        {
+            let session = execute(&derive_input, local_exec, profile, OP_DERIVE_ELF);
+
+            let output_guest: DeriveOutput = session.journal.unwrap().decode().unwrap();
+
+            if output == output_guest {
+                println!("Executor succeeded");
+            } else {
+                error!(
+                    "Output mismatch! Executor: {:?}, expected: {:?}",
+                    output_guest, output,
+                );
+            }
+        }
+
+        // let mut bonsai_session_uuid = args.verify_bonsai_receipt_uuid;
+
+        // Run in Bonsai (if requested)
+        // if bonsai_session_uuid.is_none() && args.submit_to_bonsai {
+        //     info!("Creating Bonsai client");
+        //     let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)
+        //         .expect("Could not create Bonsai client");
+        //
+        //     // create the memoryImg, upload it and return the imageId
+        //     info!("Uploading memory image");
+        //     let img_id = {
+        //         let program = Program::load_elf(OP_DERIVE_ELF, risc0_zkvm::GUEST_MAX_MEM as
+        // u32)             .expect("Could not load ELF");
+        //         let image = MemoryImage::new(&program, risc0_zkvm::PAGE_SIZE as u32)
+        //             .expect("Could not create memory image");
+        //         let image_id = hex::encode(image.compute_id());
+        //         let image = bincode::serialize(&image).expect("Failed to serialize memory
+        // img");
+        //
+        //         client
+        //             .upload_img(&image_id, image)
+        //             .expect("Could not upload ELF");
+        //         image_id
+        //     };
+        //
+        //     // Prepare input data and upload it.
+        //     info!("Uploading inputs");
+        //     let input_data = to_vec(&derive_input).unwrap();
+        //     let input_data = bytemuck::cast_slice(&input_data).to_vec();
+        //     let input_id = client
+        //         .upload_input(input_data)
+        //         .expect("Could not upload inputs");
+        //
+        //     // Start a session running the prover
+        //     info!("Starting session");
+        //     let session = client
+        //         .create_session(img_id, input_id)
+        //         .expect("Could not create Bonsai session");
+        //
+        //     println!("Bonsai session UUID: {}", session.uuid);
+        //     bonsai_session_uuid = Some(session.uuid)
+        // }
+
+        // Verify receipt from Bonsai (if requested)
+        // if let Some(session_uuid) = bonsai_session_uuid {
+        //     let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)
+        //         .expect("Could not create Bonsai client");
+        //     let session = bonsai_sdk::SessionId { uuid: session_uuid };
+        //
+        //     loop {
+        //         let res = session
+        //             .status(&client)
+        //             .expect("Could not fetch Bonsai status");
+        //         if res.status == "RUNNING" {
+        //             println!(
+        //                 "Current status: {} - state: {} - continue polling...",
+        //                 res.status,
+        //                 res.state.unwrap_or_default()
+        //             );
+        //             tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+        //             continue;
+        //         }
+        //         if res.status == "SUCCEEDED" {
+        //             // Download the receipt, containing the output
+        //             let receipt_url = res
+        //                 .receipt_url
+        //                 .expect("API error, missing receipt on completed session");
+        //
+        //             let receipt_buf = client
+        //                 .download(&receipt_url)
+        //                 .expect("Could not download receipt");
+        //             let receipt: Receipt =
+        //                 bincode::deserialize(&receipt_buf).expect("Could not deserialize
+        // receipt");             receipt
+        //                 .verify(OP_DERIVE_ID)
+        //                 .expect("Receipt verification failed");
+        //
+        //             let bonsai_output: DeriveOutput = receipt.journal.decode().unwrap();
+        //
+        //             if output == bonsai_output {
+        //                 println!("Bonsai succeeded");
+        //             } else {
+        //                 error!(
+        //                     "Output mismatch! Bonsai: {:?}, expected: {:?}",
+        //                     bonsai_output, output,
+        //                 );
+        //             }
+        //         } else {
+        //             panic!(
+        //                 "Workflow exited: {} - | err: {}",
+        //                 res.status,
+        //                 res.error_msg.unwrap_or_default()
+        //             );
+        //         }
+        //
+        //         break;
+        //     }
+        //
+        //     info!("Bonsai request completed");
+        // }
+        Ok(())
+    }
+}
+
+fn maybe_prove<I: Serialize, O: Eq + Debug + DeserializeOwned>(
+    command: &Command,
+    input: &I,
+    elf: &[u8],
+    expected_output: &O,
+    assumptions: Vec<Assumption>,
+) -> Option<Receipt> {
+    if let Command::Prove {
+        local_exec,
+        profile,
+        submit_to_bonsai,
+    } = command
+    {
+        if *submit_to_bonsai {
+            unimplemented!()
+        }
+
+        let encoded_input = to_vec(input).expect("Could not serialize composition prep input!");
+        let receipt = prove(*local_exec, encoded_input, elf, assumptions, *profile);
+        let output_guest: O = receipt.journal.decode().unwrap();
+
+        if expected_output == &output_guest {
+            info!("Executor succeeded");
+        } else {
+            error!(
+                "Output mismatch! Executor: {:?}, expected: {:?}",
+                output_guest, expected_output,
+            );
+        }
+        Some(receipt)
+    } else {
+        None
+    }
+}
+
+fn prove(
+    segment_limit_po2: u32,
+    encoded_input: Vec<u32>,
+    elf: &[u8],
+    assumptions: Vec<Assumption>,
+    profile: bool,
+) -> Receipt {
+    info!("Proving with segment_limit_po2 = {:?}", segment_limit_po2);
+    info!(
+        "Input size: {} words ( {} MB )",
+        encoded_input.len(),
+        encoded_input.len() * 4 / 1_000_000
+    );
+
+    info!("Running the prover...");
+    let mut env_builder = ExecutorEnv::builder();
+
+    env_builder
+        .session_limit(None)
+        .segment_limit_po2(segment_limit_po2)
+        .write_slice(&encoded_input);
+
+    if profile {
+        info!("Profiling enabled.");
+        let sys_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap();
+
+        env_builder.enable_profiler(format!("profile_opc_{}.pb", sys_time.as_nanos()));
+    }
+
+    for assumption in assumptions {
+        env_builder.add_assumption(assumption);
+    }
+
+    let prover = default_prover();
+    prover.prove(env_builder.build().unwrap(), elf).unwrap()
+}
+
+fn execute<T: serde::Serialize + ?Sized>(
+    input: &T,
+    segment_limit_po2: u32,
+    profile: bool,
+    elf: &[u8],
+) -> Session {
+    info!(
+        "Running in executor with segment_limit_po2 = {:?}",
+        segment_limit_po2
+    );
+
+    let input = to_vec(input).expect("Could not serialize input!");
+    info!(
+        "Input size: {} words ( {} MB )",
+        input.len(),
+        input.len() * 4 / 1_000_000
+    );
+
+    info!("Running the executor...");
+    let start_time = std::time::Instant::now();
+    let session = {
+        let mut builder = ExecutorEnv::builder();
+        builder
+            .session_limit(None)
+            .segment_limit_po2(segment_limit_po2)
+            .write_slice(&input);
+
+        if profile {
+            info!("Profiling enabled.");
+            let sys_time = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap();
+
+            builder.enable_profiler(format!("profile_opd_{}.pb", sys_time.as_secs()));
+        }
+
+        let env = builder.build().unwrap();
+        let mut exec = ExecutorImpl::from_elf(env, elf).unwrap();
+
+        let segment_dir = tempdir().unwrap();
+
+        exec.run_with_callback(|segment| {
+            Ok(Box::new(FileSegmentRef::new(&segment, segment_dir.path())?))
+        })
+        .unwrap()
+    };
+    println!(
+        "Generated {:?} segments; elapsed time: {:?}",
+        session.segments.len(),
+        start_time.elapsed()
+    );
+
+    println!(
+        "Executor ran in (roughly) {} cycles",
+        session.segments.len() * (1 << segment_limit_po2)
+    );
+
+    session
 }

@@ -2,6 +2,7 @@
 name = "zeth"
 version = "0.1.0"
 edition = "2021"
+default-run = "zeth"
 
 [dependencies]
 alloy-sol-types = "0.4"

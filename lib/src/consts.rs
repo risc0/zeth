@@ -157,7 +157,7 @@ impl ChainSpec {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Network {
     /// The Ethereum Mainnet
     #[default]

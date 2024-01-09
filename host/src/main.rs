@@ -20,11 +20,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use alloy_sol_types::SolInterface;
 use anyhow::{Context, Result};
 use clap::Parser;
 // use bonsai_sdk::alpha as bonsai_sdk;
 use ethers_core::types::Transaction as EthersTransaction;
-use log::{error, info};
+use log::{error, info, warn};
 use risc0_zkvm::{
     default_prover, serde::to_vec, Assumption, ExecutorEnv, ExecutorImpl, FileSegmentRef, Receipt,
     Session,
@@ -35,13 +36,18 @@ use zeth_guests::*;
 use zeth_lib::{
     builder::{BlockBuilderStrategy, EthereumStrategy, OptimismStrategy},
     consts::{ChainSpec, Network, ETH_MAINNET_CHAIN_SPEC, OP_MAINNET_CHAIN_SPEC},
-    host::{preflight::Preflight, rpc_db::RpcDb, verify::Verifier},
+    host::{
+        preflight::Preflight,
+        provider::{new_provider, BlockQuery},
+        rpc_db::RpcDb,
+        verify::Verifier,
+    },
     input::Input,
     optimism::{
         batcher_db::BatcherDb,
         composition::{ComposeInput, ComposeInputOperation, ComposeOutputOperation},
         config::OPTIMISM_CHAIN_SPEC,
-        DeriveInput, DeriveMachine, DeriveOutput,
+        DeriveInput, DeriveMachine, DeriveOutput, OpSystemInfo,
     },
 };
 use zeth_primitives::{block::Header, tree::MerkleMountainRange, BlockHash};
@@ -51,10 +57,16 @@ use zeth_primitives::{block::Header, tree::MerkleMountainRange, BlockHash};
 #[command(bin_name = "zeth")]
 #[command(author, version, about, long_about = None)]
 enum Cli {
+    /// Build blocks natively outside the zkVM
     Build(CoreArgs),
+    /// Run the block creation process inside the executor
     Run(RunArgs),
+    /// Provably create blocks inside the zkVM
     Prove(ProveArgs),
+    /// Verify a block creation receipt
     Verify(VerifyArgs),
+    /// Output debug information about an optimism block
+    OpInfo(CoreArgs),
 }
 
 impl Cli {
@@ -64,6 +76,7 @@ impl Cli {
             Cli::Run(run_args) => &run_args.core_args,
             Cli::Prove(prove_args) => &prove_args.core_args,
             Cli::Verify(verify_args) => &verify_args.core_args,
+            Cli::OpInfo(core_args) => core_args,
         }
     }
 }
@@ -212,6 +225,40 @@ where
         )
     });
 
+    if let Cli::OpInfo(..) = &cli {
+        if core_args.network != Network::Optimism {
+            warn!("Network automatically switched to optimism for this command.")
+        }
+
+        let op_block = tokio::task::spawn_blocking(move || {
+            let mut provider = new_provider(rpc_cache, core_args.op_rpc_url.clone())
+                .expect("Could not create provider");
+
+            let op_block = provider
+                .get_full_block(&BlockQuery {
+                    block_no: core_args.block_number,
+                })
+                .expect("Could not fetch OP block");
+            provider.save().expect("Could not save cache");
+
+            op_block
+        })
+        .await?;
+
+        let system_tx_data = op_block
+            .transactions
+            .first()
+            .expect("No transactions")
+            .input
+            .to_vec();
+        let set_l1_block_values =
+            OpSystemInfo::OpSystemInfoCalls::abi_decode(&system_tx_data, true)
+                .expect("Could not decode call data");
+
+        println!("{:?}", set_l1_block_values);
+        return Ok(());
+    }
+
     let init_spec = chain_spec.clone();
     let preflight_result = tokio::task::spawn_blocking(move || {
         N::run_preflight(init_spec, rpc_cache, rpc_url, core_args.block_number)
@@ -273,6 +320,9 @@ where
         }
         Cli::Verify(..) => {
             unimplemented!()
+        }
+        Cli::OpInfo(..) => {
+            unreachable!()
         }
     }
 

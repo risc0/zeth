@@ -21,8 +21,8 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use clap::Parser;
 // use bonsai_sdk::alpha as bonsai_sdk;
-use clap::{Parser, Subcommand};
 use ethers_core::types::Transaction as EthersTransaction;
 use log::{error, info};
 use risc0_zkvm::{
@@ -46,14 +46,30 @@ use zeth_lib::{
 };
 use zeth_primitives::{block::Header, tree::MerkleMountainRange, BlockHash};
 
-#[derive(Parser)] // requires `derive` feature
+#[derive(clap::Parser, Debug, Clone)] // requires `derive` feature
 #[command(name = "zeth")]
 #[command(bin_name = "zeth")]
 #[command(author, version, about, long_about = None)]
-struct Cli {
-    #[command(subcommand)]
-    command: Option<Command>,
+enum Cli {
+    Build(CoreArgs),
+    Run(RunArgs),
+    Prove(ProveArgs),
+    Verify(VerifyArgs),
+}
 
+impl Cli {
+    pub fn core_args(&self) -> &CoreArgs {
+        match &self {
+            Cli::Build(core_args) => core_args,
+            Cli::Run(run_args) => &run_args.core_args,
+            Cli::Prove(prove_args) => &prove_args.core_args,
+            Cli::Verify(verify_args) => &verify_args.core_args,
+        }
+    }
+}
+
+#[derive(clap::Args, Debug, Clone)]
+struct CoreArgs {
     #[clap(
         short,
         long,
@@ -90,83 +106,44 @@ struct Cli {
     composition: Option<u64>,
 }
 
-#[derive(Default, Subcommand)]
-enum Command {
-    #[default]
-    Build,
-    Run {
-        #[clap(short, long, default_value_t = 20)]
-        /// Runs the verification inside the zkvm executor locally. Accepts a custom
-        /// maximum segment cycle count as a power of 2. [default: 20]
-        local_exec: u32,
-
-        #[clap(short, long, default_value_t = false)]
-        /// Whether to profile the zkVM execution
-        profile: bool,
-    },
-    Prove {
-        #[clap(short, long, default_value_t = 20)]
-        /// Runs the verification inside the zkvm executor locally. Accepts a custom
-        /// maximum segment cycle count as a power of 2. [default: 20]
-        local_exec: u32,
-
-        #[clap(short, long, default_value_t = false)]
-        /// Whether to profile the zkVM execution
-        profile: bool,
-
-        #[clap(short, long, default_value_t = false)]
-        /// Whether to submit the proving workload to Bonsai.
-        submit_to_bonsai: bool,
-    },
-    Verify {
-        #[clap(short, long, require_equals = true)]
-        /// Bonsai Session UUID to use for receipt verification.
-        bonsai_receipt_uuid: Option<String>,
-    },
-}
-
-#[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None)]
-struct Args {
-    #[clap(short, long, require_equals = true)]
-    /// URL of the chain RPC node.
-    rpc_url: Option<String>,
-
-    #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "host/testdata")]
-    /// Use a local directory as a cache for RPC calls. Accepts a custom directory.
-    /// [default: host/testdata]
-    cache: Option<PathBuf>,
-
-    #[clap(
-        short,
-        long,
-        require_equals = true,
-        value_enum,
-        default_value = "ethereum"
-    )]
-    /// Network name.
-    network: Network,
-
-    #[clap(short, long, require_equals = true)]
-    /// Block number to validate.
-    block_no: u64,
-
-    #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "20")]
-    /// Runs the verification inside the zkvm executor locally. Accepts a custom maximum
-    /// segment cycle count as a power of 2. [default: 20]
-    local_exec: Option<u32>,
-
-    #[clap(short, long, default_value_t = false)]
-    /// Whether to submit the proving workload to Bonsai.
-    submit_to_bonsai: bool,
-
-    #[clap(short, long, require_equals = true)]
-    /// Bonsai Session UUID to use for receipt verification.
-    verify_bonsai_receipt_uuid: Option<String>,
+#[derive(clap::Args, Debug, Clone)]
+struct ExecutorArgs {
+    #[clap(short, long, require_equals = true, default_value_t = 20)]
+    /// Runs the verification inside the zkvm executor locally. Accepts a custom
+    /// maximum segment cycle count as a power of 2. [default: 20]
+    local_exec: u32,
 
     #[clap(short, long, default_value_t = false)]
     /// Whether to profile the zkVM execution
     profile: bool,
+}
+
+#[derive(clap::Args, Debug, Clone)]
+struct RunArgs {
+    #[clap(flatten)]
+    core_args: CoreArgs,
+    #[clap(flatten)]
+    exec_args: ExecutorArgs,
+}
+
+#[derive(clap::Args, Debug, Clone)]
+struct ProveArgs {
+    #[clap(flatten)]
+    core_args: CoreArgs,
+    #[clap(flatten)]
+    exec_args: ExecutorArgs,
+    #[clap(short, long, default_value_t = false)]
+    /// Whether to submit the proving workload to Bonsai.
+    submit_to_bonsai: bool,
+}
+
+#[derive(clap::Args, Debug, Clone)]
+struct VerifyArgs {
+    #[clap(flatten)]
+    core_args: CoreArgs,
+    #[clap(short, long, require_equals = true)]
+    /// Bonsai Session UUID to use for receipt verification.
+    bonsai_receipt_uuid: Option<String>,
 }
 
 fn cache_file_path(cache_path: &Path, network: &str, block_no: u64, ext: &str) -> PathBuf {
@@ -181,10 +158,11 @@ async fn main() -> Result<()> {
     env_logger::init();
 
     let cli = Cli::parse();
+    let core_args = cli.core_args();
 
-    match cli.network {
+    match core_args.network {
         Network::Ethereum => {
-            let rpc_url = cli.eth_rpc_url.clone();
+            let rpc_url = core_args.eth_rpc_url.clone();
             mono_chain::<EthereumStrategy>(
                 cli,
                 rpc_url,
@@ -196,7 +174,7 @@ async fn main() -> Result<()> {
             .await
         }
         Network::Optimism => {
-            let rpc_url = cli.op_rpc_url.clone();
+            let rpc_url = core_args.op_rpc_url.clone();
             mono_chain::<OptimismStrategy>(
                 cli,
                 rpc_url,
@@ -223,15 +201,20 @@ where
     N::TxEssence: 'static + Send + TryFrom<EthersTransaction> + Serialize + Deserialize<'static>,
     <N::TxEssence as TryFrom<EthersTransaction>>::Error: Debug,
 {
+    let core_args = cli.core_args().clone();
     // Fetch all of the initial data
-    let rpc_cache = cli
-        .cache
-        .as_ref()
-        .map(|dir| cache_file_path(dir, &cli.network.to_string(), cli.block_number, "json.gz"));
+    let rpc_cache = core_args.cache.as_ref().map(|dir| {
+        cache_file_path(
+            dir,
+            &core_args.network.to_string(),
+            core_args.block_number,
+            "json.gz",
+        )
+    });
 
     let init_spec = chain_spec.clone();
     let preflight_result = tokio::task::spawn_blocking(move || {
-        N::run_preflight(init_spec, rpc_cache, rpc_url, cli.block_number)
+        N::run_preflight(init_spec, rpc_cache, rpc_url, core_args.block_number)
     })
     .await?;
     let preflight_data = preflight_result.context("preflight failed")?;
@@ -252,13 +235,15 @@ where
 
     info!("Final block hash derived successfully. {}", header.hash());
 
-    match cli.command.unwrap_or_default() {
-        Command::Build => {}
-        Command::Run {
-            local_exec,
-            profile,
-        } => {
-            let session = execute(&input, local_exec, profile, guest_elf);
+    match &cli {
+        Cli::Build(..) => {}
+        Cli::Run(run_args) => {
+            let session = execute(
+                &input,
+                run_args.exec_args.local_exec,
+                run_args.exec_args.profile,
+                guest_elf,
+            );
 
             let expected_hash = preflight_data.header.hash();
             let found_hash: BlockHash = session.journal.unwrap().decode().unwrap();
@@ -272,19 +257,21 @@ where
                 );
             }
         }
-        Command::Prove {
-            local_exec,
-            profile,
-            submit_to_bonsai,
-        } => {
-            if submit_to_bonsai {
+        Cli::Prove(prove_args) => {
+            if prove_args.submit_to_bonsai {
                 unimplemented!()
             }
 
             let encoded_input = to_vec(&input).expect("Could not serialize input!");
-            let _receipt = prove(local_exec, encoded_input, guest_elf, vec![], profile);
+            let _receipt = prove(
+                prove_args.exec_args.local_exec,
+                encoded_input,
+                guest_elf,
+                vec![],
+                prove_args.exec_args.profile,
+            );
         }
-        Command::Verify { .. } => {
+        Cli::Verify(..) => {
             unimplemented!()
         }
     }
@@ -393,22 +380,22 @@ where
 }
 
 async fn multi_chain(cli: Cli) -> Result<()> {
-    if let Some(composition_size) = cli.composition {
+    let core_args = cli.core_args().clone();
+    if let Some(composition_size) = core_args.composition {
         // OP Composition
         info!("Fetching data ...");
         let mut lift_queue = Vec::new();
         let mut eth_chain: Vec<Header> = Vec::new();
-        let command = cli.command.unwrap_or_default();
-        for op_block_index in (0..cli.block_count).step_by(composition_size as usize) {
+        for op_block_index in (0..core_args.block_count).step_by(composition_size as usize) {
             let db = RpcDb::new(
-                cli.eth_rpc_url.clone(),
-                cli.op_rpc_url.clone(),
-                cli.cache.clone(),
+                core_args.eth_rpc_url.clone(),
+                core_args.op_rpc_url.clone(),
+                core_args.cache.clone(),
             );
             let (input, output, chain) = tokio::task::spawn_blocking(move || {
                 let derive_input = DeriveInput {
                     db,
-                    op_head_block_no: cli.block_number + op_block_index,
+                    op_head_block_no: core_args.block_number + op_block_index,
                     op_derive_block_count: composition_size,
                 };
                 let mut derive_machine = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input)
@@ -438,7 +425,7 @@ async fn multi_chain(cli: Cli) -> Result<()> {
 
                 let derive_input_mem = DeriveInput {
                     db: derive_machine.derive_input.db.get_mem_db(),
-                    op_head_block_no: cli.block_number + op_block_index,
+                    op_head_block_no: core_args.block_number + op_block_index,
                     op_derive_block_count: composition_size,
                 };
                 let out: anyhow::Result<_> = Ok((derive_input_mem, derive_output, eth_chain));
@@ -455,7 +442,7 @@ async fn multi_chain(cli: Cli) -> Result<()> {
                 assert_eq!(output, output_mem);
             }
 
-            let receipt = maybe_prove(&command, &input, OP_DERIVE_ELF, &output, vec![]);
+            let receipt = maybe_prove(&cli, &input, OP_DERIVE_ELF, &output, vec![]);
 
             // Append derivation outputs to lift queue
             lift_queue.push((output, receipt));
@@ -496,7 +483,7 @@ async fn multi_chain(cli: Cli) -> Result<()> {
         let prep_compose_output = prep_compose_input.clone().process();
 
         let prep_compose_receipt = maybe_prove(
-            &command,
+            &cli,
             &prep_compose_input,
             OP_COMPOSE_ELF,
             &prep_compose_output,
@@ -521,7 +508,7 @@ async fn multi_chain(cli: Cli) -> Result<()> {
 
             let lift_compose_receipt = if let Some(receipt) = derive_receipt {
                 maybe_prove(
-                    &command,
+                    &cli,
                     &lift_compose_input,
                     OP_COMPOSE_ELF,
                     &lift_compose_output,
@@ -571,7 +558,7 @@ async fn multi_chain(cli: Cli) -> Result<()> {
             let join_compose_receipt =
                 if let (Some(left_receipt), Some(right_receipt)) = (left_receipt, right_receipt) {
                     maybe_prove(
-                        &command,
+                        &cli,
                         &join_compose_input,
                         OP_COMPOSE_ELF,
                         &join_compose_output,
@@ -603,7 +590,7 @@ async fn multi_chain(cli: Cli) -> Result<()> {
             (prep_compose_receipt, aggregate_receipt)
         {
             maybe_prove(
-                &command,
+                &cli,
                 &finish_compose_input,
                 OP_COMPOSE_ELF,
                 &finish_compose_output,
@@ -627,17 +614,21 @@ async fn multi_chain(cli: Cli) -> Result<()> {
         info!("Fetching data ...");
         let (derive_input, output) = tokio::task::spawn_blocking(move || {
             let derive_input = DeriveInput {
-                db: RpcDb::new(cli.eth_rpc_url, cli.op_rpc_url, cli.cache),
-                op_head_block_no: cli.block_number,
-                op_derive_block_count: cli.block_count,
+                db: RpcDb::new(
+                    core_args.eth_rpc_url.clone(),
+                    core_args.op_rpc_url.clone(),
+                    core_args.cache.clone(),
+                ),
+                op_head_block_no: core_args.block_number,
+                op_derive_block_count: core_args.block_count,
             };
             let mut derive_machine = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input)
                 .context("Could not create derive machine")?;
             let derive_output = derive_machine.derive().context("could not derive")?;
             let derive_input_mem = DeriveInput {
                 db: derive_machine.derive_input.db.get_mem_db(),
-                op_head_block_no: cli.block_number,
-                op_derive_block_count: cli.block_count,
+                op_head_block_no: core_args.block_number,
+                op_derive_block_count: core_args.block_count,
             };
             let out: Result<_> = Ok((derive_input_mem, derive_output));
             out
@@ -662,12 +653,13 @@ async fn multi_chain(cli: Cli) -> Result<()> {
         }
 
         // Run in the executor (if requested)
-        if let Command::Run {
-            local_exec,
-            profile,
-        } = cli.command.unwrap_or_default()
-        {
-            let session = execute(&derive_input, local_exec, profile, OP_DERIVE_ELF);
+        if let Cli::Run(run_args) = &cli {
+            let session = execute(
+                &derive_input,
+                run_args.exec_args.local_exec,
+                run_args.exec_args.profile,
+                OP_DERIVE_ELF,
+            );
 
             let output_guest: DeriveOutput = session.journal.unwrap().decode().unwrap();
 
@@ -786,24 +778,25 @@ async fn multi_chain(cli: Cli) -> Result<()> {
 }
 
 fn maybe_prove<I: Serialize, O: Eq + Debug + DeserializeOwned>(
-    command: &Command,
+    cli: &Cli,
     input: &I,
     elf: &[u8],
     expected_output: &O,
     assumptions: Vec<Assumption>,
 ) -> Option<Receipt> {
-    if let Command::Prove {
-        local_exec,
-        profile,
-        submit_to_bonsai,
-    } = command
-    {
-        if *submit_to_bonsai {
+    if let Cli::Prove(prove_args) = cli {
+        if prove_args.submit_to_bonsai {
             unimplemented!()
         }
 
         let encoded_input = to_vec(input).expect("Could not serialize composition prep input!");
-        let receipt = prove(*local_exec, encoded_input, elf, assumptions, *profile);
+        let receipt = prove(
+            prove_args.exec_args.local_exec,
+            encoded_input,
+            elf,
+            assumptions,
+            prove_args.exec_args.profile,
+        );
         let output_guest: O = receipt.journal.decode().unwrap();
 
         if expected_output == &output_guest {

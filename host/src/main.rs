@@ -82,8 +82,8 @@ impl Cli {
 
     pub fn composition(&self) -> Option<u64> {
         match &self {
-            Cli::Build(build_args) => build_args.composition,
-            Cli::Prove(prove_args) => prove_args.composition,
+            Cli::Build(build_args) => build_args.composition_args.composition,
+            Cli::Prove(prove_args) => prove_args.composition_args.composition,
             _ => None,
         }
     }
@@ -92,7 +92,7 @@ impl Cli {
 #[derive(clap::Args, Debug, Clone)]
 struct CoreArgs {
     #[clap(
-        short,
+        short = 'w',
         long,
         require_equals = true,
         value_enum,
@@ -101,11 +101,11 @@ struct CoreArgs {
     /// Network name (ethereum/optimism/optimism-derived).
     network: Network,
 
-    #[clap(long, require_equals = true)]
+    #[clap(short, long, require_equals = true)]
     /// URL of the Ethereum RPC node.
     eth_rpc_url: Option<String>,
 
-    #[clap(long, require_equals = true)]
+    #[clap(short, long, require_equals = true)]
     /// URL of the Optimism RPC node.
     op_rpc_url: Option<String>,
 
@@ -114,11 +114,11 @@ struct CoreArgs {
     /// [default: host/testdata]
     cache: Option<PathBuf>,
 
-    #[clap(long, require_equals = true)]
+    #[clap(short, long, require_equals = true)]
     /// Block number to begin from
     block_number: u64,
 
-    #[clap(long, require_equals = true, default_value_t = 1)]
+    #[clap(short = 'n', long, require_equals = true, default_value_t = 1)]
     /// Number of blocks to provably derive.
     block_count: u64,
 }
@@ -135,13 +135,20 @@ struct ExecutorArgs {
 }
 
 #[derive(clap::Args, Debug, Clone)]
+struct CompositionArgs {
+    #[clap(short='m', long, require_equals = true, num_args = 0..=1, default_missing_value = "1")]
+    /// Compose separate block derivation proofs together. Accepts a custom number of
+    /// blocks to process per derivation call. (optimism-derived network only)
+    /// [default: 1]
+    composition: Option<u64>,
+}
+
+#[derive(clap::Args, Debug, Clone)]
 struct BuildArgs {
     #[clap(flatten)]
     core_args: CoreArgs,
-    #[clap(long, require_equals = true, num_args = 0..=1, default_missing_value = "1")]
-    /// Compose separate block derivation proofs together. Accepts a custom number of
-    /// blocks to process per derivation call. (optimism-derived network only)
-    composition: Option<u64>,
+    #[clap(flatten)]
+    composition_args: CompositionArgs,
 }
 
 #[derive(clap::Args, Debug, Clone)]
@@ -158,10 +165,8 @@ struct ProveArgs {
     core_args: CoreArgs,
     #[clap(flatten)]
     exec_args: ExecutorArgs,
-    #[clap(long, require_equals = true, num_args = 0..=1, default_missing_value = "1")]
-    /// Compose separate block derivation proofs together. Accepts a custom number of
-    /// blocks to process per derivation call. (optimism-derived network only)
-    composition: Option<u64>,
+    #[clap(flatten)]
+    composition_args: CompositionArgs,
     #[clap(short, long, default_value_t = false)]
     /// Prove remotely using Bonsai.
     submit_to_bonsai: bool,
@@ -173,7 +178,7 @@ struct VerifyArgs {
     core_args: CoreArgs,
     #[clap(short, long, require_equals = true)]
     /// Verify the receipt from the provided Bonsai Session UUID.
-    bonsai_receipt_uuid: Option<String>,
+    receipt_bonsai_uuid: Option<String>,
 }
 
 fn cache_file_path(cache_path: &Path, network: &str, block_no: u64, ext: &str) -> PathBuf {
@@ -343,7 +348,7 @@ where
         }
     }
 
-    // let mut bonsai_session_uuid = args.verify_bonsai_receipt_uuid;
+    // let mut bonsai_session_uuid = args.verify_receipt_bonsai_uuid;
 
     // Run in Bonsai (if requested)
     // if bonsai_session_uuid.is_none() && args.submit_to_bonsai {
@@ -740,7 +745,7 @@ async fn multi_chain(cli: Cli) -> Result<()> {
             }
         }
 
-        // let mut bonsai_session_uuid = args.verify_bonsai_receipt_uuid;
+        // let mut bonsai_session_uuid = args.verify_receipt_bonsai_uuid;
 
         // Run in Bonsai (if requested)
         // if bonsai_session_uuid.is_none() && args.submit_to_bonsai {

@@ -31,7 +31,11 @@ fn zeth_ethereum(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
 
     Command::cargo_bin("zeth")
         .unwrap()
-        .args(["--cache=testdata", &format!("--block-no={}", block_no)])
+        .args([
+            "build",
+            "--cache=testdata",
+            &format!("--block-number={}", block_no),
+        ])
         .assert()
         .success();
 }
@@ -39,12 +43,14 @@ fn zeth_ethereum(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
 #[rstest]
 #[case(109279674, 6)]
 fn derive_optimism(#[case] op_block_no: u64, #[case] op_blocks: u64) {
-    Command::cargo_bin("op-derive")
+    Command::cargo_bin("zeth")
         .unwrap()
         .args([
+            "build",
+            "--network=optimism-derived",
             "--cache=testdata/derivation",
-            &format!("--op-block-no={}", op_block_no),
-            &format!("--op-blocks={}", op_blocks),
+            &format!("--block-number={}", op_block_no),
+            &format!("--block-count={}", op_blocks),
         ])
         .assert()
         .success();

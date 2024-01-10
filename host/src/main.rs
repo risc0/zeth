@@ -58,7 +58,7 @@ use zeth_primitives::{block::Header, tree::MerkleMountainRange, BlockHash};
 #[command(author, version, about, long_about = None)]
 enum Cli {
     /// Build blocks natively outside the zkVM
-    Build(CoreArgs),
+    Build(BuildArgs),
     /// Run the block creation process inside the executor
     Run(RunArgs),
     /// Provably create blocks inside the zkVM
@@ -72,11 +72,19 @@ enum Cli {
 impl Cli {
     pub fn core_args(&self) -> &CoreArgs {
         match &self {
-            Cli::Build(core_args) => core_args,
+            Cli::Build(build_args) => &build_args.core_args,
             Cli::Run(run_args) => &run_args.core_args,
             Cli::Prove(prove_args) => &prove_args.core_args,
             Cli::Verify(verify_args) => &verify_args.core_args,
             Cli::OpInfo(core_args) => core_args,
+        }
+    }
+
+    pub fn composition(&self) -> Option<u64> {
+        match &self {
+            Cli::Build(build_args) => build_args.composition,
+            Cli::Prove(prove_args) => prove_args.composition,
+            _ => None,
         }
     }
 }
@@ -90,7 +98,7 @@ struct CoreArgs {
         value_enum,
         default_value = "ethereum"
     )]
-    /// Network name.
+    /// Network name (ethereum/optimism/optimism-derived).
     network: Network,
 
     #[clap(long, require_equals = true)]
@@ -113,10 +121,6 @@ struct CoreArgs {
     #[clap(long, require_equals = true, default_value_t = 1)]
     /// Number of blocks to provably derive.
     block_count: u64,
-
-    #[clap(long, require_equals = true, num_args = 0..=1, default_missing_value = "1")]
-    /// Number of blocks to process per derivation call.
-    composition: Option<u64>,
 }
 
 #[derive(clap::Args, Debug, Clone)]
@@ -129,6 +133,16 @@ struct ExecutorArgs {
     #[clap(short, long, default_value_t = false)]
     /// Whether to profile the zkVM execution
     profile: bool,
+}
+
+#[derive(clap::Args, Debug, Clone)]
+struct BuildArgs {
+    #[clap(flatten)]
+    core_args: CoreArgs,
+    #[clap(long, require_equals = true, num_args = 0..=1, default_missing_value = "1")]
+    /// Compose separate block derivation proofs together. Accepts a custom number of
+    /// blocks to process per derivation call. (optimism-derived network only)
+    composition: Option<u64>,
 }
 
 #[derive(clap::Args, Debug, Clone)]
@@ -145,8 +159,12 @@ struct ProveArgs {
     core_args: CoreArgs,
     #[clap(flatten)]
     exec_args: ExecutorArgs,
+    #[clap(long, require_equals = true, num_args = 0..=1, default_missing_value = "1")]
+    /// Compose separate block derivation proofs together. Accepts a custom number of
+    /// blocks to process per derivation call. (optimism-derived network only)
+    composition: Option<u64>,
     #[clap(short, long, default_value_t = false)]
-    /// Whether to submit the proving workload to Bonsai.
+    /// Prove remotely using Bonsai.
     submit_to_bonsai: bool,
 }
 
@@ -155,7 +173,7 @@ struct VerifyArgs {
     #[clap(flatten)]
     core_args: CoreArgs,
     #[clap(short, long, require_equals = true)]
-    /// Bonsai Session UUID to use for receipt verification.
+    /// Verify the receipt from the provided Bonsai Session UUID.
     bonsai_receipt_uuid: Option<String>,
 }
 
@@ -431,7 +449,7 @@ where
 
 async fn multi_chain(cli: Cli) -> Result<()> {
     let core_args = cli.core_args().clone();
-    if let Some(composition_size) = core_args.composition {
+    if let Some(composition_size) = cli.composition() {
         // OP Composition
         info!("Fetching data ...");
         let mut lift_queue = Vec::new();

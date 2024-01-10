@@ -126,8 +126,7 @@ struct CoreArgs {
 #[derive(clap::Args, Debug, Clone)]
 struct ExecutorArgs {
     #[clap(short, long, require_equals = true, default_value_t = 20)]
-    /// Runs the verification inside the zkvm executor locally. Accepts a custom
-    /// maximum segment cycle count as a power of 2. [default: 20]
+    /// The maximum segment cycle count as a power of 2.
     local_exec: u32,
 
     #[clap(short, long, default_value_t = false)]

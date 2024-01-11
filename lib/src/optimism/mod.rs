@@ -34,7 +34,7 @@ use zeth_primitives::{
 use crate::{
     consts::ONE,
     optimism::{
-        batcher::{Batcher, BlockInfo},
+        batcher::{Batcher, BlockId, L2BlockInfo},
         batcher_db::BatcherDb,
         config::ChainConfig,
     },
@@ -163,9 +163,13 @@ impl<D: BatcherDb> DeriveMachine<D> {
 
             Batcher::new(
                 op_chain_config,
-                BlockInfo {
+                L2BlockInfo {
                     hash: op_head_block_hash,
                     timestamp: op_head.block_header.timestamp.try_into().unwrap(),
+                    l1_origin: BlockId {
+                        number: set_l1_block_values.number,
+                        hash: set_l1_block_values.hash,
+                    },
                 },
                 &eth_head,
             )?
@@ -218,33 +222,34 @@ impl<D: BatcherDb> DeriveMachine<D> {
                 info!(
                     "Read batch for Op block {}: timestamp={}, epoch={}, tx count={}, parent hash={:?}",
                     self.op_block_no,
-                    op_batch.essence.timestamp,
-                    op_batch.essence.epoch_num,
-                    op_batch.essence.transactions.len(),
-                    op_batch.essence.parent_hash,
+                    op_batch.0.timestamp,
+                    op_batch.0.epoch_num,
+                    op_batch.0.transactions.len(),
+                    op_batch.0.parent_hash,
                 );
 
                 // Update sequence number (and fetch deposits if start of new epoch)
-                let deposits =
-                    if op_batch.essence.epoch_num == self.op_batcher.state.epoch.number + 1 {
-                        self.op_block_seq_no = 0;
-                        self.op_batcher.state.do_next_epoch()?;
+                let l2_safe_head = &self.op_batcher.state.safe_head;
+                let deposits = if l2_safe_head.l1_origin.number != op_batch.0.epoch_num {
+                    self.op_block_seq_no = 0;
+                    self.op_batcher.state.do_next_epoch()?;
 
-                        self.op_batcher
-                            .state
-                            .epoch
-                            .deposits
-                            .iter()
-                            .map(|tx| tx.to_rlp())
-                            .collect()
-                    } else {
-                        self.op_block_seq_no += 1;
+                    self.op_batcher
+                        .state
+                        .epoch
+                        .deposits
+                        .iter()
+                        .map(|tx| tx.to_rlp())
+                        .collect()
+                } else {
+                    self.op_block_seq_no += 1;
 
-                        Vec::new()
-                    };
+                    Vec::new()
+                };
 
                 // Obtain new Op head
                 let new_op_head = {
+                    // load the next op block header
                     let new_op_head = self
                         .derive_input
                         .db
@@ -252,9 +257,9 @@ impl<D: BatcherDb> DeriveMachine<D> {
                         .context("block not found")?;
 
                     // Verify new op head has the expected parent
-                    assert_eq!(
-                        new_op_head.parent_hash,
-                        self.op_batcher.state.safe_head.hash
+                    ensure!(
+                        new_op_head.parent_hash == self.op_batcher.state.safe_head.hash,
+                        "Invalid op block parent hash"
                     );
 
                     // Verify that the new op head transactions are consistent with the batch
@@ -266,7 +271,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                         let l1_attributes_tx = self.derive_l1_attributes_deposited_tx(&op_batch);
                         let derived_transactions = once(l1_attributes_tx.to_rlp())
                             .chain(deposits)
-                            .chain(op_batch.essence.transactions.iter().map(|tx| tx.to_vec()))
+                            .chain(op_batch.0.transactions.iter().map(|tx| tx.to_vec()))
                             .enumerate();
 
                         let mut tx_trie = MptNode::default();
@@ -274,9 +279,10 @@ impl<D: BatcherDb> DeriveMachine<D> {
                             let trie_key = tx_no.to_rlp();
                             tx_trie.insert(&trie_key, tx)?;
                         }
-                        if tx_trie.hash() != new_op_head.transactions_root {
-                            bail!("Invalid op block transaction data! Transaction trie root does not match")
-                        }
+                        ensure!(
+                            tx_trie.hash() == new_op_head.transactions_root,
+                            "Invalid op block transaction data! Transaction trie root does not match"
+                        );
                     }
 
                     new_op_head
@@ -290,9 +296,13 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     new_op_head.number, new_op_head_hash
                 );
 
-                self.op_batcher.state.safe_head = BlockInfo {
+                self.op_batcher.state.safe_head = L2BlockInfo {
                     hash: new_op_head_hash,
                     timestamp: new_op_head.timestamp.try_into().unwrap(),
+                    l1_origin: BlockId {
+                        number: self.op_batcher.state.epoch.number,
+                        hash: self.op_batcher.state.epoch.hash,
+                    },
                 };
 
                 derived_op_blocks.push((new_op_head.number, new_op_head_hash));
@@ -335,7 +345,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
             });
 
         let source_hash: B256 = {
-            let l1_block_hash = op_batch.essence.epoch_hash.0;
+            let l1_block_hash = op_batch.0.epoch_hash.0;
             let seq_number = U256::from(self.op_block_seq_no).to_be_bytes::<32>();
             let source_hash_sequencing = keccak([l1_block_hash, seq_number].concat());
             keccak([ONE.to_be_bytes::<32>(), source_hash_sequencing].concat()).into()

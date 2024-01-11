@@ -243,22 +243,51 @@ impl<D: BatcherDb> DeriveMachine<D> {
                         Vec::new()
                     };
 
-                // Obtain new Op head
+                // obtain verified op block header
                 let new_op_head = {
                     let new_op_head = self
                         .derive_input
                         .db
                         .get_op_block_header(self.op_block_no)
-                        .context("block not found")?;
+                        .context("op block not found")?;
 
-                    // Verify new op head has the expected parent
-                    assert_eq!(
-                        new_op_head.parent_hash,
-                        self.op_batcher.state.safe_head.hash
+                    // Verify that the op block header loaded from the DB matches the payload
+                    // attributes of the batch.
+                    ensure!(
+                        new_op_head.parent_hash == self.op_batcher.state.safe_head.hash,
+                        "Invalid op block parent hash"
+                    );
+                    ensure!(
+                        new_op_head.beneficiary == self.op_batcher.config.sequencer_fee_vault,
+                        "Invalid op block beneficiary"
+                    );
+                    ensure!(
+                        new_op_head.gas_limit == self.op_batcher.config.system_config.gas_limit,
+                        "Invalid op block gas limit"
+                    );
+                    ensure!(
+                        new_op_head.timestamp == U256::from(op_batch.essence.timestamp),
+                        "Invalid op block timestamp"
+                    );
+                    ensure!(
+                        new_op_head.extra_data.is_empty(),
+                        "Invalid op block extra data"
                     );
 
-                    // Verify that the new op head transactions are consistent with the batch
-                    // transactions
+                    // verify that the new op head mix hash matches the mix hash of the L1 block
+                    {
+                        let l1_epoch_header = self
+                            .derive_input
+                            .db
+                            .get_eth_block_header(op_batch.essence.epoch_num)
+                            .context("eth block not found")?;
+                        ensure!(
+                            new_op_head.mix_hash == l1_epoch_header.mix_hash,
+                            "Invalid op block mix hash"
+                        );
+                    }
+
+                    // verify that the new op head transactions match the batch transactions
                     {
                         // From the spec:
                         // The first transaction MUST be a L1 attributes deposited transaction,
@@ -274,10 +303,17 @@ impl<D: BatcherDb> DeriveMachine<D> {
                             let trie_key = tx_no.to_rlp();
                             tx_trie.insert(&trie_key, tx)?;
                         }
-                        if tx_trie.hash() != new_op_head.transactions_root {
-                            bail!("Invalid op block transaction data! Transaction trie root does not match")
-                        }
+
+                        ensure!(
+                            tx_trie.hash() == new_op_head.transactions_root,
+                            "Invalid op block transactions"
+                        );
                     }
+
+                    ensure!(
+                        new_op_head.withdrawals_root.is_none(),
+                        "Invalid op block withdrawals"
+                    );
 
                     new_op_head
                 };

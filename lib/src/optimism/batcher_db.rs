@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use anyhow::{ensure, Result};
+use anyhow::{ensure, Context, Result};
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
     block::Header,
@@ -99,7 +99,10 @@ impl BatcherDb for MemDb {
     }
 
     fn get_op_block_header(&mut self, block_no: u64) -> Result<Header> {
-        let op_block = self.op_block_header.remove(&block_no).unwrap();
+        let op_block = self
+            .op_block_header
+            .remove(&block_no)
+            .context("not or no longer in db")?;
         assert_eq!(block_no, op_block.number);
 
         Ok(op_block)
@@ -156,7 +159,10 @@ impl BatcherDb for MemDb {
     }
 
     fn get_eth_block_header(&mut self, block_no: u64) -> Result<Header> {
-        let eth_block = self.eth_block_header.remove(&block_no).unwrap();
+        let eth_block = self
+            .eth_block_header
+            .remove(&block_no)
+            .context("not or no longer in db")?;
         assert_eq!(block_no, eth_block.number);
 
         Ok(eth_block)

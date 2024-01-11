@@ -79,13 +79,11 @@ impl MerkleMountainRange {
 
     pub fn root(&self) -> Option<[u8; 32]> {
         let mut result: Option<[u8; 32]> = None;
-        for node in self.roots.iter() {
-            if let Some(root) = node {
-                if let Some(sibling) = result {
-                    result.replace(branch_hash(&sibling, root));
-                } else {
-                    result.replace(*root);
-                }
+        for root in self.roots.iter().flatten() {
+            if let Some(sibling) = result {
+                result.replace(branch_hash(&sibling, root));
+            } else {
+                result.replace(*root);
             }
         }
         result
@@ -93,15 +91,13 @@ impl MerkleMountainRange {
 
     pub fn logged_root(&self, sibling_map: &mut HashMap<[u8; 32], [u8; 32]>) -> Option<[u8; 32]> {
         let mut result: Option<[u8; 32]> = None;
-        for node in self.roots.iter() {
-            if let Some(root) = node {
-                if let Some(sibling) = result {
-                    sibling_map.insert(*root, sibling);
-                    sibling_map.insert(sibling, *root);
-                    result.replace(branch_hash(&sibling, root));
-                } else {
-                    result.replace(*root);
-                }
+        for root in self.roots.iter().flatten() {
+            if let Some(sibling) = result {
+                sibling_map.insert(*root, sibling);
+                sibling_map.insert(sibling, *root);
+                result.replace(branch_hash(&sibling, root));
+            } else {
+                result.replace(*root);
             }
         }
         result

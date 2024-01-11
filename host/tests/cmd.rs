@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{path::PathBuf, str::FromStr};
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use assert_cmd::Command;
 use risc0_zkvm::{ExecutorEnv, ExecutorImpl, FileSegmentRef};
@@ -24,6 +27,11 @@ use zeth_lib::{
     input::Input,
 };
 use zeth_primitives::{transactions::ethereum::EthereumTxEssence, trie::MptNodeData};
+
+fn file_prefix(path: &Path) -> &str {
+    let file_name = path.file_name().unwrap().to_str().unwrap();
+    file_name.split('.').next().unwrap()
+}
 
 #[rstest]
 fn zeth_ethereum(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
@@ -95,9 +103,4 @@ fn empty_blocks(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
         .unwrap();
     // Output segment count
     println!("Generated {} segments", session.segments.len());
-}
-
-fn file_prefix(path: &PathBuf) -> &str {
-    let file_name = path.file_name().unwrap().to_str().unwrap();
-    file_name.split('.').next().unwrap()
 }

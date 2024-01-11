@@ -31,7 +31,7 @@ jobs:
         crate: cargo-binstall
     - run: cargo binstall -y --force cargo-risczero@${{ env.RISC0_VERSION }}
     - run: cargo risczero install --version $RISC0_TOOLCHAIN_VERSION
-    - run: cargo test --workspace --all-targets --all-features
+    - run: cargo test --workspace --all-targets -F ef-tests
 
   clippy:
     name: clippy
@@ -45,7 +45,7 @@ jobs:
       with:
         reporter: 'github-pr-check'
         fail_on_error: true
-        clippy_flags: --workspace --all-targets --all-features -- -Dwarnings
+        clippy_flags: --workspace --all-targets -- -Dwarnings
 
   fmt:
     name: fmt

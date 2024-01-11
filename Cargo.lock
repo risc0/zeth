@@ -676,7 +676,7 @@ dependencies = [
 [[package]]
 name = "bonsai-sdk"
 version = "0.6.0-rc.1"
-source = "git+https://github.com/risc0/risc0.git?rev=209e314be0e48d1b754a4e90bb807714bcfa6a59#209e314be0e48d1b754a4e90bb807714bcfa6a59"
+source = "git+https://github.com/risc0/risc0.git?rev=d2502d46270a1fe0f0b53059ce8de1fc662539c7#d2502d46270a1fe0f0b53059ce8de1fc662539c7"
 dependencies = [
  "reqwest",
  "serde",
@@ -1892,6 +1892,12 @@ name = "httpdate"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
+
+[[package]]
+name = "human-repr"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f58b778a5761513caf593693f8951c97a5b610841e754788400f32102eefdff1"
 
 [[package]]
 name = "humantime"
@@ -3304,7 +3310,7 @@ dependencies = [
 [[package]]
 name = "risc0-binfmt"
 version = "0.21.0-alpha.1"
-source = "git+https://github.com/risc0/risc0.git?rev=209e314be0e48d1b754a4e90bb807714bcfa6a59#209e314be0e48d1b754a4e90bb807714bcfa6a59"
+source = "git+https://github.com/risc0/risc0.git?rev=d2502d46270a1fe0f0b53059ce8de1fc662539c7#d2502d46270a1fe0f0b53059ce8de1fc662539c7"
 dependencies = [
  "anyhow",
  "elf",
@@ -3317,7 +3323,7 @@ dependencies = [
 [[package]]
 name = "risc0-build"
 version = "0.21.0-alpha.1"
-source = "git+https://github.com/risc0/risc0.git?rev=209e314be0e48d1b754a4e90bb807714bcfa6a59#209e314be0e48d1b754a4e90bb807714bcfa6a59"
+source = "git+https://github.com/risc0/risc0.git?rev=d2502d46270a1fe0f0b53059ce8de1fc662539c7#d2502d46270a1fe0f0b53059ce8de1fc662539c7"
 dependencies = [
  "anyhow",
  "cargo_metadata",
@@ -3333,7 +3339,7 @@ dependencies = [
 [[package]]
 name = "risc0-build-kernel"
 version = "0.21.0-alpha.1"
-source = "git+https://github.com/risc0/risc0.git?rev=209e314be0e48d1b754a4e90bb807714bcfa6a59#209e314be0e48d1b754a4e90bb807714bcfa6a59"
+source = "git+https://github.com/risc0/risc0.git?rev=d2502d46270a1fe0f0b53059ce8de1fc662539c7#d2502d46270a1fe0f0b53059ce8de1fc662539c7"
 dependencies = [
  "cc",
  "directories",
@@ -3345,7 +3351,7 @@ dependencies = [
 [[package]]
 name = "risc0-circuit-recursion"
 version = "0.21.0-alpha.1"
-source = "git+https://github.com/risc0/risc0.git?rev=209e314be0e48d1b754a4e90bb807714bcfa6a59#209e314be0e48d1b754a4e90bb807714bcfa6a59"
+source = "git+https://github.com/risc0/risc0.git?rev=d2502d46270a1fe0f0b53059ce8de1fc662539c7#d2502d46270a1fe0f0b53059ce8de1fc662539c7"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -3364,7 +3370,7 @@ dependencies = [
 [[package]]
 name = "risc0-circuit-recursion-sys"
 version = "0.21.0-alpha.1"
-source = "git+https://github.com/risc0/risc0.git?rev=209e314be0e48d1b754a4e90bb807714bcfa6a59#209e314be0e48d1b754a4e90bb807714bcfa6a59"
+source = "git+https://github.com/risc0/risc0.git?rev=d2502d46270a1fe0f0b53059ce8de1fc662539c7#d2502d46270a1fe0f0b53059ce8de1fc662539c7"
 dependencies = [
  "glob",
  "risc0-build-kernel",
@@ -3374,7 +3380,7 @@ dependencies = [
 [[package]]
 name = "risc0-circuit-rv32im"
 version = "0.21.0-alpha.1"
-source = "git+https://github.com/risc0/risc0.git?rev=209e314be0e48d1b754a4e90bb807714bcfa6a59#209e314be0e48d1b754a4e90bb807714bcfa6a59"
+source = "git+https://github.com/risc0/risc0.git?rev=d2502d46270a1fe0f0b53059ce8de1fc662539c7#d2502d46270a1fe0f0b53059ce8de1fc662539c7"
 dependencies = [
  "anyhow",
  "metal",
@@ -3390,7 +3396,7 @@ dependencies = [
 [[package]]
 name = "risc0-circuit-rv32im-sys"
 version = "0.21.0-alpha.1"
-source = "git+https://github.com/risc0/risc0.git?rev=209e314be0e48d1b754a4e90bb807714bcfa6a59#209e314be0e48d1b754a4e90bb807714bcfa6a59"
+source = "git+https://github.com/risc0/risc0.git?rev=d2502d46270a1fe0f0b53059ce8de1fc662539c7#d2502d46270a1fe0f0b53059ce8de1fc662539c7"
 dependencies = [
  "glob",
  "risc0-build-kernel",
@@ -3400,7 +3406,7 @@ dependencies = [
 [[package]]
 name = "risc0-core"
 version = "0.21.0-alpha.1"
-source = "git+https://github.com/risc0/risc0.git?rev=209e314be0e48d1b754a4e90bb807714bcfa6a59#209e314be0e48d1b754a4e90bb807714bcfa6a59"
+source = "git+https://github.com/risc0/risc0.git?rev=d2502d46270a1fe0f0b53059ce8de1fc662539c7#d2502d46270a1fe0f0b53059ce8de1fc662539c7"
 dependencies = [
  "bytemuck",
  "rand_core",
@@ -3409,7 +3415,7 @@ dependencies = [
 [[package]]
 name = "risc0-sys"
 version = "0.21.0-alpha.1"
-source = "git+https://github.com/risc0/risc0.git?rev=209e314be0e48d1b754a4e90bb807714bcfa6a59#209e314be0e48d1b754a4e90bb807714bcfa6a59"
+source = "git+https://github.com/risc0/risc0.git?rev=d2502d46270a1fe0f0b53059ce8de1fc662539c7#d2502d46270a1fe0f0b53059ce8de1fc662539c7"
 dependencies = [
  "cc",
  "risc0-build-kernel",
@@ -3418,7 +3424,7 @@ dependencies = [
 [[package]]
 name = "risc0-zkp"
 version = "0.21.0-alpha.1"
-source = "git+https://github.com/risc0/risc0.git?rev=209e314be0e48d1b754a4e90bb807714bcfa6a59#209e314be0e48d1b754a4e90bb807714bcfa6a59"
+source = "git+https://github.com/risc0/risc0.git?rev=d2502d46270a1fe0f0b53059ce8de1fc662539c7#d2502d46270a1fe0f0b53059ce8de1fc662539c7"
 dependencies = [
  "anyhow",
  "blake2",
@@ -3444,7 +3450,7 @@ dependencies = [
 [[package]]
 name = "risc0-zkvm"
 version = "0.21.0-alpha.1"
-source = "git+https://github.com/risc0/risc0.git?rev=209e314be0e48d1b754a4e90bb807714bcfa6a59#209e314be0e48d1b754a4e90bb807714bcfa6a59"
+source = "git+https://github.com/risc0/risc0.git?rev=d2502d46270a1fe0f0b53059ce8de1fc662539c7#d2502d46270a1fe0f0b53059ce8de1fc662539c7"
 dependencies = [
  "addr2line",
  "anyhow",
@@ -3460,6 +3466,7 @@ dependencies = [
  "elf",
  "getrandom",
  "hex",
+ "human-repr",
  "lazy-regex",
  "num-bigint 0.4.4",
  "num-derive",
@@ -3487,7 +3494,7 @@ dependencies = [
 [[package]]
 name = "risc0-zkvm-platform"
 version = "0.21.0-alpha.1"
-source = "git+https://github.com/risc0/risc0.git?rev=209e314be0e48d1b754a4e90bb807714bcfa6a59#209e314be0e48d1b754a4e90bb807714bcfa6a59"
+source = "git+https://github.com/risc0/risc0.git?rev=d2502d46270a1fe0f0b53059ce8de1fc662539c7#d2502d46270a1fe0f0b53059ce8de1fc662539c7"
 dependencies = [
  "bytemuck",
  "getrandom",
@@ -5123,34 +5130,5 @@ dependencies = [
  "byteorder",
  "crc32fast",
  "crossbeam-utils",
- "zstd",
-]
-
-[[package]]
-name = "zstd"
-version = "0.11.2+zstd.1.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20cc960326ece64f010d2d2107537f26dc589a6573a316bd5b1dba685fa5fde4"
-dependencies = [
- "zstd-safe",
-]
-
-[[package]]
-name = "zstd-safe"
-version = "5.0.2+zstd.1.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d2a5585e04f9eea4b2a3d1eca508c4dee9592a89ef6f450c11719da0726f4db"
-dependencies = [
- "libc",
- "zstd-sys",
-]
-
-[[package]]
-name = "zstd-sys"
-version = "2.0.9+zstd.1.5.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e16efa8a874a0481a574084d34cc26fdb3b99627480f785888deb6386506656"
-dependencies = [
- "cc",
- "pkg-config",
+ "flate2",
 ]

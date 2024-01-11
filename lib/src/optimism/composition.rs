@@ -84,11 +84,8 @@ impl ComposeInput {
                         // A valid receipt should be provided for prior aggregation
                         let compose_journal = to_vec(&prior_output)
                             .expect("Failed to encode prior aggregation journal");
-                        env::verify(
-                            Digest::from(self.compose_image_id),
-                            bytemuck::cast_slice(&compose_journal),
-                        )
-                        .expect("Failed to validate prior aggregation");
+                        env::verify(Digest::from(self.compose_image_id), &compose_journal)
+                            .expect("Failed to validate prior aggregation");
                     }
                     // Validate context
                     assert_eq!(self.derive_image_id, prior_output.derive_image_id);
@@ -144,11 +141,8 @@ impl ComposeInput {
                     // Verify derivation receipt
                     let derive_journal = to_vec(&derive_output)
                         .expect("Failed to encode expected derivation journal");
-                    env::verify(
-                        Digest::from(self.derive_image_id),
-                        bytemuck::cast_slice(&derive_journal),
-                    )
-                    .expect("Failed to lift derivation receipt");
+                    env::verify(Digest::from(self.derive_image_id), &derive_journal)
+                        .expect("Failed to lift derivation receipt");
                 }
                 // Verify inclusion of ethereum tail in Merkle root
                 assert_eq!(
@@ -187,18 +181,12 @@ impl ComposeInput {
                     // Verify composition receipts
                     let left_compose_journal = to_vec(&left_compose_output)
                         .expect("Failed to encode expected left composition journal");
-                    env::verify(
-                        Digest::from(self.compose_image_id),
-                        bytemuck::cast_slice(&left_compose_journal),
-                    )
-                    .expect("Failed to verify left composition receipt");
+                    env::verify(Digest::from(self.compose_image_id), &left_compose_journal)
+                        .expect("Failed to verify left composition receipt");
                     let right_compose_journal = to_vec(&right_compose_output)
                         .expect("Failed to encode expected right composition journal");
-                    env::verify(
-                        Digest::from(self.compose_image_id),
-                        bytemuck::cast_slice(&right_compose_journal),
-                    )
-                    .expect("Failed to verify right composition receipt");
+                    env::verify(Digest::from(self.compose_image_id), &right_compose_journal)
+                        .expect("Failed to verify right composition receipt");
                 }
                 // Validate context
                 // derive_image_id equality
@@ -249,11 +237,8 @@ impl ComposeInput {
                 {
                     // A valid receipt should be provided for merkle tree prep
                     let prep_journal = to_vec(&prep).expect("Failed to encode prep journal");
-                    env::verify(
-                        Digest::from(self.compose_image_id),
-                        bytemuck::cast_slice(&prep_journal),
-                    )
-                    .expect("Failed to validate prep receipt");
+                    env::verify(Digest::from(self.compose_image_id), &prep_journal)
+                        .expect("Failed to validate prep receipt");
                 }
                 // Verify aggregate receipt
                 #[cfg(target_os = "zkvm")]
@@ -261,11 +246,8 @@ impl ComposeInput {
                     // A valid receipt should be provided for aggregation
                     let aggregation_journal =
                         to_vec(&aggregate).expect("Failed to encode aggregation journal");
-                    env::verify(
-                        Digest::from(self.compose_image_id),
-                        bytemuck::cast_slice(&aggregation_journal),
-                    )
-                    .expect("Failed to validate aggregate receipt");
+                    env::verify(Digest::from(self.compose_image_id), &aggregation_journal)
+                        .expect("Failed to validate aggregate receipt");
                 }
                 // Validate context
                 // derive_image_id equality

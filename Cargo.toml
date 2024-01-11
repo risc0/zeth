@@ -25,6 +25,6 @@ opt-level = 3
 [workspace.dependencies]
 bonsai-sdk = "0.5"
 hashbrown = { version = "0.14", features = ["inline-more"] }
-risc0-build = { git = "https://github.com/risc0/risc0.git", rev = "209e314be0e48d1b754a4e90bb807714bcfa6a59" }
-risc0-zkvm = { git = "https://github.com/risc0/risc0.git", rev = "209e314be0e48d1b754a4e90bb807714bcfa6a59", default-features = false }
+risc0-build = { git = "https://github.com/risc0/risc0.git", rev = "d2502d46270a1fe0f0b53059ce8de1fc662539c7" }
+risc0-zkvm = { git = "https://github.com/risc0/risc0.git", rev = "d2502d46270a1fe0f0b53059ce8de1fc662539c7", default-features = false }
 revm = { version = "3.5", default-features = false, features = ["std", "serde", "optional_no_base_fee", "optional_balance_check"] }

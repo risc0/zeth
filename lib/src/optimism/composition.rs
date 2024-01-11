@@ -161,11 +161,10 @@ impl ComposeInput {
                     compose_image_id: self.compose_image_id,
                     operation: ComposeOutputOperation::AGGREGATE {
                         op_head: derive_output.op_head,
-                        op_tail: derive_output
+                        op_tail: *derive_output
                             .derived_op_blocks
                             .last()
-                            .unwrap_or(&derive_output.op_head)
-                            .clone(),
+                            .unwrap_or(&derive_output.op_head),
                         eth_tail: derive_output.eth_tail,
                     },
                     eth_chain_root: self.eth_chain_root,

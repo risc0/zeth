@@ -94,7 +94,7 @@ async fn main() -> anyhow::Result<()> {
             args.op_rpc_url.clone(),
             args.cache.clone(),
         );
-        let local_exec = args.local_exec.clone();
+        let local_exec = args.local_exec;
         let (input, output, chain) = tokio::task::spawn_blocking(move || {
             let derive_input = DeriveInput {
                 db,
@@ -193,7 +193,7 @@ async fn main() -> anyhow::Result<()> {
     let prep_compose_output = prep_compose_input.clone().process();
 
     let prep_compose_receipt = maybe_prove(
-        args.local_exec.clone(),
+        args.local_exec,
         &prep_compose_input,
         OP_COMPOSE_ELF,
         &prep_compose_output,
@@ -219,7 +219,7 @@ async fn main() -> anyhow::Result<()> {
 
         let lift_compose_receipt = if let Some(receipt) = derive_receipt {
             maybe_prove(
-                args.local_exec.clone(),
+                args.local_exec,
                 &lift_compose_input,
                 OP_COMPOSE_ELF,
                 &lift_compose_output,
@@ -270,7 +270,7 @@ async fn main() -> anyhow::Result<()> {
         let join_compose_receipt =
             if let (Some(left_receipt), Some(right_receipt)) = (left_receipt, right_receipt) {
                 maybe_prove(
-                    args.local_exec.clone(),
+                    args.local_exec,
                     &join_compose_input,
                     OP_COMPOSE_ELF,
                     &join_compose_output,
@@ -303,7 +303,7 @@ async fn main() -> anyhow::Result<()> {
         (prep_compose_receipt, aggregate_receipt)
     {
         maybe_prove(
-            args.local_exec.clone(),
+            args.local_exec,
             &finish_compose_input,
             OP_COMPOSE_ELF,
             &finish_compose_output,

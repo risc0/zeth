@@ -567,10 +567,10 @@ mod tests {
                 let mut channel = new_channel();
                 channel.add_frame(frame_a).unwrap();
                 assert_eq!(channel.size, 209);
-                assert_eq!(channel.is_ready(), false);
+                assert!(!channel.is_ready());
                 channel.add_frame(frame_b).unwrap();
                 assert_eq!(channel.size, 420);
-                assert_eq!(channel.is_ready(), true);
+                assert!(channel.is_ready());
                 assert_eq!(channel.decompress().unwrap(), b"Hello World!");
             }
         }

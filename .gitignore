@@ -4,5 +4,6 @@ tmp/
 rpc_cache/
 log.txt
 *.pb
+*.zkp
 rpc_cache.json
 .idea

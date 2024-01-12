@@ -14,12 +14,7 @@
 
 extern crate core;
 
-use std::{
-    collections::VecDeque,
-    fmt::Debug,
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{collections::VecDeque, fmt::Debug, path::PathBuf};
 
 use alloy_sol_types::SolInterface;
 use anyhow::{Context, Result};
@@ -33,6 +28,7 @@ use risc0_zkvm::{
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tempfile::tempdir;
+use zeth::*;
 use zeth_guests::*;
 use zeth_lib::{
     builder::{BlockBuilderStrategy, EthereumStrategy, OptimismStrategy},
@@ -48,10 +44,10 @@ use zeth_lib::{
         batcher_db::BatcherDb,
         composition::{ComposeInput, ComposeInputOperation, ComposeOutputOperation},
         config::OPTIMISM_CHAIN_SPEC,
-        DeriveInput, DeriveMachine, DeriveOutput, OpSystemInfo,
+        DeriveInput, DeriveMachine, OpSystemInfo,
     },
 };
-use zeth_primitives::{block::Header, tree::MerkleMountainRange, BlockHash};
+use zeth_primitives::{block::Header, tree::MerkleMountainRange};
 
 #[derive(clap::Parser, Debug, Clone)] // requires `derive` feature
 #[command(name = "zeth")]
@@ -228,13 +224,6 @@ struct VerifyArgs {
     receipt_bonsai_uuid: Option<String>,
 }
 
-fn cache_file_path(cache_path: &Path, network: &str, block_no: u64, ext: &str) -> PathBuf {
-    cache_path
-        .join(network)
-        .join(block_no.to_string())
-        .with_extension(ext)
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
@@ -361,41 +350,25 @@ where
     match &cli {
         Cli::Build(..) => {}
         Cli::Run(run_args) => {
-            let session = execute(
+            execute(
                 &input,
                 run_args.exec_args.local_exec,
                 run_args.exec_args.profile,
                 guest_elf,
+                &preflight_data.header.hash(),
                 file_reference,
             );
-
-            let expected_hash = preflight_data.header.hash();
-            let found_hash: BlockHash = session.journal.unwrap().decode().unwrap();
-
-            if found_hash == expected_hash {
-                info!("Block hash (from executor): {}", found_hash);
-            } else {
-                error!(
-                    "Final block hash mismatch (from executor) {} (expected {})",
-                    found_hash, expected_hash,
-                );
-            }
         }
-        Cli::Prove(prove_args) => {
-            if prove_args.submit_to_bonsai {
-                unimplemented!()
-            }
-
-            let receipt = prove(
-                prove_args.exec_args.local_exec,
-                to_vec(&input).expect("Could not serialize input!"),
+        Cli::Prove(..) => {
+            maybe_prove(
+                &cli,
+                &input,
                 guest_elf,
+                &preflight_data.header.hash(),
                 vec![],
-                prove_args.exec_args.profile,
                 file_reference,
+                None,
             );
-
-            save_receipt(file_reference, &receipt, None);
         }
         Cli::Verify(..) => {
             unimplemented!()
@@ -579,7 +552,7 @@ async fn multi_chain(cli: Cli, file_reference: &String) -> Result<()> {
                 &output,
                 vec![],
                 file_reference,
-                &mut receipt_index,
+                Some(&mut receipt_index),
             );
 
             // Append derivation outputs to lift queue
@@ -627,7 +600,7 @@ async fn multi_chain(cli: Cli, file_reference: &String) -> Result<()> {
             &prep_compose_output,
             vec![],
             file_reference,
-            &mut receipt_index,
+            Some(&mut receipt_index),
         );
 
         // Lift
@@ -654,7 +627,7 @@ async fn multi_chain(cli: Cli, file_reference: &String) -> Result<()> {
                     &lift_compose_output,
                     vec![receipt.into()],
                     file_reference,
-                    &mut receipt_index,
+                    Some(&mut receipt_index),
                 )
             } else {
                 None
@@ -706,7 +679,7 @@ async fn multi_chain(cli: Cli, file_reference: &String) -> Result<()> {
                         &join_compose_output,
                         vec![left_receipt.into(), right_receipt.into()],
                         file_reference,
-                        &mut receipt_index,
+                        Some(&mut receipt_index),
                     )
                 } else {
                     None
@@ -740,7 +713,7 @@ async fn multi_chain(cli: Cli, file_reference: &String) -> Result<()> {
                 &finish_compose_output,
                 vec![prep_receipt.into(), aggregate_receipt.into()],
                 file_reference,
-                &mut receipt_index,
+                Some(&mut receipt_index),
             )
         } else {
             None
@@ -798,25 +771,34 @@ async fn multi_chain(cli: Cli, file_reference: &String) -> Result<()> {
             println!("Derived: {} {}", derived_block.0, derived_block.1);
         }
 
-        // Run in the executor (if requested)
-        if let Cli::Run(run_args) = &cli {
-            let session = execute(
-                &derive_input,
-                run_args.exec_args.local_exec,
-                run_args.exec_args.profile,
-                OP_DERIVE_ELF,
-                file_reference,
-            );
-
-            let output_guest: DeriveOutput = session.journal.unwrap().decode().unwrap();
-
-            if output == output_guest {
-                println!("Executor succeeded");
-            } else {
-                error!(
-                    "Output mismatch! Executor: {:?}, expected: {:?}",
-                    output_guest, output,
+        match &cli {
+            Cli::Build(..) => {}
+            Cli::Run(run_args) => {
+                execute(
+                    &derive_input,
+                    run_args.exec_args.local_exec,
+                    run_args.exec_args.profile,
+                    OP_DERIVE_ELF,
+                    &output,
+                    file_reference,
                 );
+            }
+            Cli::Prove(..) => {
+                maybe_prove(
+                    &cli,
+                    &derive_input,
+                    OP_DERIVE_ELF,
+                    &output,
+                    vec![],
+                    file_reference,
+                    None,
+                );
+            }
+            Cli::Verify(..) => {
+                unimplemented!()
+            }
+            Cli::OpInfo(..) => {
+                unreachable!()
             }
         }
 
@@ -931,7 +913,7 @@ fn maybe_prove<I: Serialize, O: Eq + Debug + DeserializeOwned>(
     expected_output: &O,
     assumptions: Vec<Assumption>,
     file_reference: &String,
-    receipt_index: &mut usize,
+    receipt_index: Option<&mut usize>,
 ) -> Option<Receipt> {
     if let Cli::Prove(prove_args) = cli {
         if prove_args.submit_to_bonsai {
@@ -957,7 +939,7 @@ fn maybe_prove<I: Serialize, O: Eq + Debug + DeserializeOwned>(
             );
         }
         // save receipt
-        save_receipt(file_reference, &receipt, Some(receipt_index));
+        save_receipt(file_reference, &receipt, receipt_index);
         // return result
         Some(receipt)
     } else {
@@ -1001,22 +983,12 @@ fn prove(
     prover.prove(env_builder.build().unwrap(), elf).unwrap()
 }
 
-fn save_receipt(file_reference: &String, receipt: &Receipt, index: Option<&mut usize>) {
-    let receipt_serialized = bincode::serialize(receipt).expect("Failed to serialize receipt!");
-    let path = if let Some(number) = index {
-        *number += 1;
-        format!("receipt_{}_{}.zkp", file_reference, *number - 1)
-    } else {
-        format!("receipt_{}.zkp", file_reference)
-    };
-    fs::write(path, receipt_serialized).expect("Failed to save receipt output file.");
-}
-
-fn execute<T: serde::Serialize + ?Sized>(
+fn execute<T: serde::Serialize + ?Sized, O: Eq + Debug + DeserializeOwned>(
     input: &T,
     segment_limit_po2: u32,
     profile: bool,
     elf: &[u8],
+    expected_output: &O,
     file_reference: &String,
 ) -> Session {
     info!(
@@ -1055,16 +1027,26 @@ fn execute<T: serde::Serialize + ?Sized>(
         })
         .unwrap()
     };
+    // verify output
+    let output_guest: O = session.journal.clone().unwrap().decode().unwrap();
+    if expected_output == &output_guest {
+        info!("Executor succeeded");
+    } else {
+        error!(
+            "Output mismatch! Executor: {:?}, expected: {:?}",
+            output_guest, expected_output,
+        );
+    }
+    // report performance
     println!(
         "Generated {:?} segments; elapsed time: {:?}",
         session.segments.len(),
         start_time.elapsed()
     );
-
     println!(
         "Executor ran in (roughly) {} cycles",
         session.segments.len() * (1 << segment_limit_po2)
     );
-
+    // return result
     session
 }

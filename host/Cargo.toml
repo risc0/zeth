@@ -28,3 +28,8 @@ zeth-primitives = { path = "../primitives" }
 [dev-dependencies]
 assert_cmd = "2.0"
 rstest = "0.18"
+
+[features]
+metal = [
+    "risc0-zkvm/metal"
+]

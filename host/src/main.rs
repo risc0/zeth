@@ -17,6 +17,7 @@ extern crate core;
 use std::{
     collections::VecDeque,
     fmt::Debug,
+    fs,
     path::{Path, PathBuf},
 };
 
@@ -85,6 +86,52 @@ impl Cli {
             Cli::Build(build_args) => build_args.composition_args.composition,
             Cli::Prove(prove_args) => prove_args.composition_args.composition,
             _ => None,
+        }
+    }
+}
+
+impl ToString for Cli {
+    fn to_string(&self) -> String {
+        match self {
+            Cli::Build(BuildArgs {
+                core_args,
+                composition_args,
+            }) => format!(
+                "build_{}_{}_{}_{}",
+                core_args.network.to_string(),
+                core_args.block_number,
+                core_args.block_count,
+                composition_args.composition.unwrap_or(0)
+            ),
+            Cli::Run(RunArgs { core_args, .. }) => format!(
+                "run_{}_{}_{}",
+                core_args.network.to_string(),
+                core_args.block_number,
+                core_args.block_count,
+            ),
+            Cli::Prove(ProveArgs {
+                core_args,
+                composition_args,
+                ..
+            }) => format!(
+                "prove_{}_{}_{}_{}",
+                core_args.network.to_string(),
+                core_args.block_number,
+                core_args.block_count,
+                composition_args.composition.unwrap_or(0)
+            ),
+            Cli::Verify(VerifyArgs { core_args, .. }) => format!(
+                "verify_{}_{}_{}",
+                core_args.network.to_string(),
+                core_args.block_number,
+                core_args.block_count
+            ),
+            Cli::OpInfo(core_args) => format!(
+                "opinfo_{}_{}_{}",
+                core_args.network.to_string(),
+                core_args.block_number,
+                core_args.block_count
+            ),
         }
     }
 }
@@ -194,12 +241,17 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
     let core_args = cli.core_args();
+    let sys_time = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap();
+    let file_reference = format!("{}_{}", sys_time.as_secs(), cli.to_string());
 
     match core_args.network {
         Network::Ethereum => {
             let rpc_url = core_args.eth_rpc_url.clone();
             mono_chain::<EthereumStrategy>(
                 cli,
+                &file_reference,
                 rpc_url,
                 ETH_MAINNET_CHAIN_SPEC.clone(),
                 ETH_BLOCK_ELF,
@@ -212,6 +264,7 @@ async fn main() -> Result<()> {
             let rpc_url = core_args.op_rpc_url.clone();
             mono_chain::<OptimismStrategy>(
                 cli,
+                &file_reference,
                 rpc_url,
                 OP_MAINNET_CHAIN_SPEC.clone(),
                 OP_BLOCK_ELF,
@@ -220,12 +273,13 @@ async fn main() -> Result<()> {
             )
             .await
         }
-        Network::OptimismDerived => multi_chain(cli).await,
+        Network::OptimismDerived => multi_chain(cli, &file_reference).await,
     }
 }
 
 async fn mono_chain<N: BlockBuilderStrategy>(
     cli: Cli,
+    file_reference: &String,
     rpc_url: Option<String>,
     chain_spec: ChainSpec,
     guest_elf: &[u8],
@@ -312,6 +366,7 @@ where
                 run_args.exec_args.local_exec,
                 run_args.exec_args.profile,
                 guest_elf,
+                file_reference,
             );
 
             let expected_hash = preflight_data.header.hash();
@@ -331,14 +386,16 @@ where
                 unimplemented!()
             }
 
-            let encoded_input = to_vec(&input).expect("Could not serialize input!");
-            let _receipt = prove(
+            let receipt = prove(
                 prove_args.exec_args.local_exec,
-                encoded_input,
+                to_vec(&input).expect("Could not serialize input!"),
                 guest_elf,
                 vec![],
                 prove_args.exec_args.profile,
+                file_reference,
             );
+
+            save_receipt(file_reference, &receipt, None);
         }
         Cli::Verify(..) => {
             unimplemented!()
@@ -451,8 +508,9 @@ where
     Ok(())
 }
 
-async fn multi_chain(cli: Cli) -> Result<()> {
+async fn multi_chain(cli: Cli, file_reference: &String) -> Result<()> {
     let core_args = cli.core_args().clone();
+    let mut receipt_index = 0;
     if let Some(composition_size) = cli.composition() {
         // OP Composition
         info!("Fetching data ...");
@@ -514,7 +572,15 @@ async fn multi_chain(cli: Cli) -> Result<()> {
                 assert_eq!(output, output_mem);
             }
 
-            let receipt = maybe_prove(&cli, &input, OP_DERIVE_ELF, &output, vec![]);
+            let receipt = maybe_prove(
+                &cli,
+                &input,
+                OP_DERIVE_ELF,
+                &output,
+                vec![],
+                file_reference,
+                &mut receipt_index,
+            );
 
             // Append derivation outputs to lift queue
             lift_queue.push((output, receipt));
@@ -560,6 +626,8 @@ async fn multi_chain(cli: Cli) -> Result<()> {
             OP_COMPOSE_ELF,
             &prep_compose_output,
             vec![],
+            file_reference,
+            &mut receipt_index,
         );
 
         // Lift
@@ -585,6 +653,8 @@ async fn multi_chain(cli: Cli) -> Result<()> {
                     OP_COMPOSE_ELF,
                     &lift_compose_output,
                     vec![receipt.into()],
+                    file_reference,
+                    &mut receipt_index,
                 )
             } else {
                 None
@@ -635,6 +705,8 @@ async fn multi_chain(cli: Cli) -> Result<()> {
                         OP_COMPOSE_ELF,
                         &join_compose_output,
                         vec![left_receipt.into(), right_receipt.into()],
+                        file_reference,
+                        &mut receipt_index,
                     )
                 } else {
                     None
@@ -667,6 +739,8 @@ async fn multi_chain(cli: Cli) -> Result<()> {
                 OP_COMPOSE_ELF,
                 &finish_compose_output,
                 vec![prep_receipt.into(), aggregate_receipt.into()],
+                file_reference,
+                &mut receipt_index,
             )
         } else {
             None
@@ -731,6 +805,7 @@ async fn multi_chain(cli: Cli) -> Result<()> {
                 run_args.exec_args.local_exec,
                 run_args.exec_args.profile,
                 OP_DERIVE_ELF,
+                file_reference,
             );
 
             let output_guest: DeriveOutput = session.journal.unwrap().decode().unwrap();
@@ -855,22 +930,24 @@ fn maybe_prove<I: Serialize, O: Eq + Debug + DeserializeOwned>(
     elf: &[u8],
     expected_output: &O,
     assumptions: Vec<Assumption>,
+    file_reference: &String,
+    receipt_index: &mut usize,
 ) -> Option<Receipt> {
     if let Cli::Prove(prove_args) = cli {
         if prove_args.submit_to_bonsai {
             unimplemented!()
         }
-
-        let encoded_input = to_vec(input).expect("Could not serialize composition prep input!");
+        // run prover
         let receipt = prove(
             prove_args.exec_args.local_exec,
-            encoded_input,
+            to_vec(input).expect("Could not serialize composition prep input!"),
             elf,
             assumptions,
             prove_args.exec_args.profile,
+            file_reference,
         );
+        // verify output
         let output_guest: O = receipt.journal.decode().unwrap();
-
         if expected_output == &output_guest {
             info!("Executor succeeded");
         } else {
@@ -879,6 +956,9 @@ fn maybe_prove<I: Serialize, O: Eq + Debug + DeserializeOwned>(
                 output_guest, expected_output,
             );
         }
+        // save receipt
+        save_receipt(file_reference, &receipt, Some(receipt_index));
+        // return result
         Some(receipt)
     } else {
         None
@@ -891,6 +971,7 @@ fn prove(
     elf: &[u8],
     assumptions: Vec<Assumption>,
     profile: bool,
+    file_reference: &String,
 ) -> Receipt {
     info!("Proving with segment_limit_po2 = {:?}", segment_limit_po2);
     info!(
@@ -909,11 +990,7 @@ fn prove(
 
     if profile {
         info!("Profiling enabled.");
-        let sys_time = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap();
-
-        env_builder.enable_profiler(format!("profile_opc_{}.pb", sys_time.as_nanos()));
+        env_builder.enable_profiler(format!("profile_{}.pb", file_reference));
     }
 
     for assumption in assumptions {
@@ -924,11 +1001,23 @@ fn prove(
     prover.prove(env_builder.build().unwrap(), elf).unwrap()
 }
 
+fn save_receipt(file_reference: &String, receipt: &Receipt, index: Option<&mut usize>) {
+    let receipt_serialized = bincode::serialize(receipt).expect("Failed to serialize receipt!");
+    let path = if let Some(number) = index {
+        *number += 1;
+        format!("receipt_{}_{}.zkp", file_reference, *number - 1)
+    } else {
+        format!("receipt_{}.zkp", file_reference)
+    };
+    fs::write(path, receipt_serialized).expect("Failed to save receipt output file.");
+}
+
 fn execute<T: serde::Serialize + ?Sized>(
     input: &T,
     segment_limit_po2: u32,
     profile: bool,
     elf: &[u8],
+    file_reference: &String,
 ) -> Session {
     info!(
         "Running in executor with segment_limit_po2 = {:?}",
@@ -953,11 +1042,7 @@ fn execute<T: serde::Serialize + ?Sized>(
 
         if profile {
             info!("Profiling enabled.");
-            let sys_time = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap();
-
-            builder.enable_profiler(format!("profile_opd_{}.pb", sys_time.as_secs()));
+            builder.enable_profiler(format!("profile_{}.pb", file_reference));
         }
 
         let env = builder.build().unwrap();

@@ -20,6 +20,7 @@ use std::{
 use risc0_zkvm::Receipt;
 
 pub mod cli;
+pub mod operations;
 
 pub fn cache_file_path(cache_path: &Path, network: &str, block_no: u64, ext: &str) -> PathBuf {
     cache_path

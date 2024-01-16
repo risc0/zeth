@@ -1,4 +1,4 @@
-// Copyright 2023 RISC Zero, Inc.
+// Copyright 2024 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -174,23 +174,25 @@ async fn main() -> anyhow::Result<()> {
     let mut sibling_map = Default::default();
     let mut eth_mountain_range: MerkleMountainRange = Default::default();
     for block in &eth_chain {
-        eth_mountain_range.logged_append_leaf(block.hash().0, &mut sibling_map);
+        eth_mountain_range.append_leaf(block.hash().0, Some(&mut sibling_map));
     }
     let eth_chain_root = eth_mountain_range
-        .logged_root(&mut sibling_map)
+        .root(Some(&mut sibling_map))
         .expect("No eth blocks loaded!");
     let prep_compose_input = ComposeInput {
         derive_image_id: OP_DERIVE_ID,
         compose_image_id: OP_COMPOSE_ID,
         operation: ComposeInputOperation::PREP {
             eth_blocks: eth_chain,
-            mountain_range: Default::default(),
-            prior: None,
+            prior_prep: None,
         },
-        eth_chain_root,
+        eth_chain_merkle_root: eth_chain_root,
     };
     info!("Preparing ...");
-    let prep_compose_output = prep_compose_input.clone().process();
+    let prep_compose_output = prep_compose_input
+        .clone()
+        .process()
+        .expect("Prep composition failed.");
 
     let prep_compose_receipt = maybe_prove(
         args.local_exec,
@@ -212,10 +214,13 @@ async fn main() -> anyhow::Result<()> {
                 derivation: derive_output,
                 eth_tail_proof: MerkleMountainRange::proof(&sibling_map, eth_tail_hash),
             },
-            eth_chain_root,
+            eth_chain_merkle_root: eth_chain_root,
         };
         info!("Lifting ...");
-        let lift_compose_output = lift_compose_input.clone().process();
+        let lift_compose_output = lift_compose_input
+            .clone()
+            .process()
+            .expect("Lift composition failed.");
 
         let lift_compose_receipt = if let Some(receipt) = derive_receipt {
             maybe_prove(
@@ -262,10 +267,13 @@ async fn main() -> anyhow::Result<()> {
             derive_image_id: OP_DERIVE_ID,
             compose_image_id: OP_COMPOSE_ID,
             operation: ComposeInputOperation::JOIN { left, right },
-            eth_chain_root,
+            eth_chain_merkle_root: eth_chain_root,
         };
         info!("Joining ...");
-        let join_compose_output = join_compose_input.clone().process();
+        let join_compose_output = join_compose_input
+            .clone()
+            .process()
+            .expect("Join composition failed.");
 
         let join_compose_receipt =
             if let (Some(left_receipt), Some(right_receipt)) = (left_receipt, right_receipt) {
@@ -294,10 +302,13 @@ async fn main() -> anyhow::Result<()> {
             prep: prep_compose_output,
             aggregate: aggregate_output,
         },
-        eth_chain_root,
+        eth_chain_merkle_root: eth_chain_root,
     };
     info!("Finishing ...");
-    let finish_compose_output = finish_compose_input.clone().process();
+    let finish_compose_output = finish_compose_input
+        .clone()
+        .process()
+        .expect("Finish composition failed.");
 
     let op_compose_receipt = if let (Some(prep_receipt), Some(aggregate_receipt)) =
         (prep_compose_receipt, aggregate_receipt)

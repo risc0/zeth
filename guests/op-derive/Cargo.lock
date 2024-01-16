@@ -1955,7 +1955,6 @@ checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
 name = "op-derive"
 version = "0.1.0"
 dependencies = [
- "k256",
  "risc0-zkvm",
  "zeth-lib",
  "zeth-primitives",
@@ -3921,7 +3920,6 @@ version = "0.1.0"
 dependencies = [
  "alloy-sol-types",
  "anyhow",
- "bytemuck",
  "bytes",
  "chrono",
  "ethers-core",
@@ -3956,6 +3954,7 @@ dependencies = [
  "revm-primitives",
  "rlp",
  "serde",
+ "sha2",
  "sha3",
  "thiserror",
 ]

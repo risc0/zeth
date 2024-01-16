@@ -1,4 +1,4 @@
-// Copyright 2023 RISC Zero, Inc.
+// Copyright 2024 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,31 +14,8 @@
 
 use std::collections::HashMap;
 
-use alloy_primitives::{b256, B256};
-use k256::sha2::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
-
-/// Represents the Keccak-256 hash of an empty byte slice.
-///
-/// This is a constant value and can be used as a default or placeholder
-/// in various cryptographic operations.
-pub const SHA256_ZERO: B256 =
-    b256!("0000000000000000000000000000000000000000000000000000000000000000");
-
-#[inline]
-pub fn sha256(data: impl AsRef<[u8]>) -> [u8; 32] {
-    Sha256::digest(&data).into()
-}
-
-#[inline]
-fn branch_hash(a: &[u8; 32], b: &[u8; 32]) -> [u8; 32] {
-    let data = if a < b {
-        [a.as_slice(), b.as_slice()].concat()
-    } else {
-        [b.as_slice(), a.as_slice()].concat()
-    };
-    sha256(data)
-}
+use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct MerkleMountainRange {
@@ -46,22 +23,13 @@ pub struct MerkleMountainRange {
 }
 
 impl MerkleMountainRange {
-    pub fn append_leaf(&mut self, mut value: [u8; 32]) {
-        for node in self.roots.iter_mut() {
-            if node.is_none() {
-                node.replace(value);
-                return;
-            } else {
-                value = branch_hash(&value, &node.take().unwrap())
-            }
-        }
-        self.roots.push(Some(value));
-    }
-
-    pub fn logged_append_leaf(
+    /// Appends a new leaf to the mountain range, bubbling up all the changes required to
+    /// the ancestor tree roots. The optional `_sibling_map` parameter can be
+    /// specified in order to record all visited siblings.
+    pub fn append_leaf(
         &mut self,
         mut value: [u8; 32],
-        sibling_map: &mut HashMap<[u8; 32], [u8; 32]>,
+        mut _sibling_map: Option<&mut HashMap<[u8; 32], [u8; 32]>>,
     ) {
         for node in self.roots.iter_mut() {
             if node.is_none() {
@@ -69,19 +37,35 @@ impl MerkleMountainRange {
                 return;
             } else {
                 let sibling = node.take().unwrap();
-                sibling_map.insert(value, sibling);
-                sibling_map.insert(sibling, value);
-                value = branch_hash(&value, &sibling)
+                // We only need to log siblings outside the zkVM
+                #[cfg(not(target_os = "zkvm"))]
+                if let Some(sibling_map) = _sibling_map.as_mut() {
+                    sibling_map.insert(value, sibling);
+                    sibling_map.insert(sibling, value);
+                }
+                value = Self::branch_hash(&value, &sibling)
             }
         }
         self.roots.push(Some(value));
     }
 
-    pub fn root(&self) -> Option<[u8; 32]> {
+    /// Returns the root of the (unbalanced) Merkle tree that covers all the present range
+    /// roots. The optional `_sibling_map` parameter can be specified in order to
+    /// record all visited siblings.
+    pub fn root(
+        &self,
+        mut _sibling_map: Option<&mut HashMap<[u8; 32], [u8; 32]>>,
+    ) -> Option<[u8; 32]> {
         let mut result: Option<[u8; 32]> = None;
         for root in self.roots.iter().flatten() {
             if let Some(sibling) = result {
-                result.replace(branch_hash(&sibling, root));
+                // We only need to log siblings outside the zkVM
+                #[cfg(not(target_os = "zkvm"))]
+                if let Some(sibling_map) = _sibling_map.as_mut() {
+                    sibling_map.insert(*root, sibling);
+                    sibling_map.insert(sibling, *root);
+                }
+                result.replace(Self::branch_hash(&sibling, root));
             } else {
                 result.replace(*root);
             }
@@ -89,25 +73,27 @@ impl MerkleMountainRange {
         result
     }
 
-    pub fn logged_root(&self, sibling_map: &mut HashMap<[u8; 32], [u8; 32]>) -> Option<[u8; 32]> {
-        let mut result: Option<[u8; 32]> = None;
-        for root in self.roots.iter().flatten() {
-            if let Some(sibling) = result {
-                sibling_map.insert(*root, sibling);
-                sibling_map.insert(sibling, *root);
-                result.replace(branch_hash(&sibling, root));
-            } else {
-                result.replace(*root);
-            }
-        }
-        result
+    /// Returns the hash of two sibling nodes by appending them together while placing
+    /// the lexicographically smaller node first.
+    #[inline]
+    fn branch_hash(a: &[u8; 32], b: &[u8; 32]) -> [u8; 32] {
+        let mut hasher = Sha256::new();
+        if a < b {
+            hasher.update(a);
+            hasher.update(b);
+        } else {
+            hasher.update(b);
+            hasher.update(a);
+        };
+        hasher.finalize().into()
     }
 
+    /// Returns the inclusion proof of the input `value` using the provided `sibling_map`.
     pub fn proof(sibling_map: &HashMap<[u8; 32], [u8; 32]>, mut value: [u8; 32]) -> Self {
         let mut roots = vec![Some(value)];
         while let Some(sibling) = sibling_map.get(&value) {
             roots.push(Some(*sibling));
-            value = branch_hash(sibling, &value);
+            value = Self::branch_hash(sibling, &value);
         }
         Self { roots }
     }

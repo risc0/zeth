@@ -1,4 +1,4 @@
-// Copyright 2023 RISC Zero, Inc.
+// Copyright 2024 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ pub fn main() {
     // read composition input
     let compose_input: ComposeInput = env::read();
     // process input
-    let compose_output = compose_input.process();
+    let compose_output = compose_input.process().expect("Failed to process composition.");
     // output statement about larger segment
     env::commit(&compose_output);
 }

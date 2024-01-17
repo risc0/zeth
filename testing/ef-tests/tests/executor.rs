@@ -31,7 +31,8 @@ const SEGMENT_LIMIT_PO2: u32 = 21;
 #[rstest]
 fn executor(
     // execute only the deep stack tests
-    #[files("testdata/BlockchainTests/GeneralStateTests/**/*Call1024BalanceTooLow.json")]
+    // #[files("testdata/BlockchainTests/GeneralStateTests/**/*Call1024BalanceTooLow.json")]
+    #[files("testdata/BlockchainTests/GeneralStateTests/stReturnDataTest/returndatacopy_initial_big_sum.json")]
     path: PathBuf,
 ) {
     let _ = env_logger::builder()

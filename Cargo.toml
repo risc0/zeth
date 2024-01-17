@@ -21,8 +21,8 @@ bonsai-sdk = "0.5"
 hashbrown = { version = "0.14", features = ["inline-more"] }
 risc0-build = "0.19"
 risc0-zkvm = { version = "0.19", default-features = false }
-revm-primitives = { git = "https://github.com/bluealloy/revm.git", branch = "main", default_features = false }
-revm = { git = "https://github.com/bluealloy/revm.git", branch = "main", default-features = false, features = [
+revm-primitives = { git = "https://github.com/bluealloy/revm.git", rev = "5e6546e2a57bbc7661469fa606ea3c6569fe1838", default_features = false }
+revm = { git = "https://github.com/bluealloy/revm.git", rev = "5e6546e2a57bbc7661469fa606ea3c6569fe1838", default-features = false, features = [
     "std",
     "serde",
     "optimism",

@@ -74,7 +74,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                 .unwrap();
 
             info!("Block no. {}", header.number);
-            info!("  Evm spec ID: {:?}", spec_id);
+            info!("  EVM spec ID: {:?}", spec_id);
             info!("  Timestamp: {}", dt);
             info!("  Transactions: {}", block_builder.input.transactions.len());
             info!("  Fee Recipient: {:?}", block_builder.input.beneficiary);
@@ -86,12 +86,12 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
         let mut evm = Evm::builder()
             .spec_id(spec_id)
             .modify_cfg_env(|cfg_env| {
-                // set the Evm configuration
+                // set the EVM configuration
                 cfg_env.chain_id = chain_id;
                 cfg_env.optimism = true;
             })
             .modify_block_env(|blk_env| {
-                // set the Evm block environment
+                // set the EVM block environment
                 blk_env.number = header.number.try_into().unwrap();
                 blk_env.coinbase = block_builder.input.beneficiary;
                 blk_env.timestamp = header.timestamp;
@@ -163,7 +163,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             #[cfg(not(target_os = "zkvm"))]
             debug!("  Ok: {:?}", result);
 
-            // create the receipt from the Evm result
+            // create the receipt from the EVM result
             let receipt = Receipt::new(
                 tx.essence.tx_type(),
                 result.is_success(),

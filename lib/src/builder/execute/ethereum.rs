@@ -72,7 +72,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
                 .unwrap();
 
             info!("Block no. {}", header.number);
-            info!("  Evm spec ID: {:?}", spec_id);
+            info!("  EVM spec ID: {:?}", spec_id);
             info!("  Timestamp: {}", dt);
             info!("  Transactions: {}", block_builder.input.transactions.len());
             info!("  Withdrawals: {}", block_builder.input.withdrawals.len());
@@ -86,12 +86,12 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
         let mut evm = Evm::builder()
             .spec_id(spec_id)
             .modify_cfg_env(|cfg_env| {
-                // set the Evm configuration
+                // set the EVM configuration
                 cfg_env.chain_id = block_builder.chain_spec.chain_id();
                 cfg_env.optimism = false;
             })
             .modify_block_env(|blk_env| {
-                // set the Evm block environment
+                // set the EVM block environment
                 blk_env.number = header.number.try_into().unwrap();
                 blk_env.coinbase = block_builder.input.beneficiary;
                 blk_env.timestamp = header.timestamp;
@@ -147,7 +147,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             #[cfg(not(target_os = "zkvm"))]
             debug!("  Ok: {:?}", result);
 
-            // create the receipt from the Evm result
+            // create the receipt from the EVM result
             let receipt = Receipt::new(
                 tx.essence.tx_type(),
                 result.is_success(),

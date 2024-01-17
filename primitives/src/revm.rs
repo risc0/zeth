@@ -49,8 +49,8 @@ impl From<RevmLog> for Log {
     fn from(log: RevmLog) -> Self {
         Log {
             address: log.address,
-            topics: log.topics,
-            data: log.data,
+            topics: log.data.topics().to_vec(),
+            data: log.data.data,
         }
     }
 }

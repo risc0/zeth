@@ -18,8 +18,9 @@ use anyhow::{anyhow, bail, Context, Result};
 #[cfg(not(target_os = "zkvm"))]
 use log::debug;
 use revm::{
+    interpreter::Host,
     primitives::{Account, Address, ResultAndState, SpecId, TransactTo, TxEnv},
-    Database, DatabaseCommit, EVM,
+    Database, DatabaseCommit, Evm,
 };
 use ruint::aliases::U256;
 use zeth_primitives::{
@@ -77,7 +78,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                 .unwrap();
 
             info!("Block no. {}", header.number);
-            info!("  EVM spec ID: {:?}", spec_id);
+            info!("  Evm spec ID: {:?}", spec_id);
             info!("  Timestamp: {}", dt);
             info!("  Transactions: {}", block_builder.input.transactions.len());
             info!("  Withdrawals: {}", block_builder.input.withdrawals.len());
@@ -87,23 +88,24 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             info!("  Extra data: {:?}", block_builder.input.extra_data);
         }
 
-        // initialize the EVM
-        let mut evm = EVM::new();
-
-        // set the EVM configuration
-        evm.env.cfg.chain_id = chain_id;
-        evm.env.cfg.spec_id = spec_id;
-
-        // set the EVM block environment
-        evm.env.block.number = header.number.try_into().unwrap();
-        evm.env.block.coinbase = block_builder.input.beneficiary;
-        evm.env.block.timestamp = header.timestamp;
-        evm.env.block.difficulty = U256::ZERO;
-        evm.env.block.prevrandao = Some(header.mix_hash);
-        evm.env.block.basefee = header.base_fee_per_gas;
-        evm.env.block.gas_limit = block_builder.input.gas_limit;
-
-        evm.database(block_builder.db.take().unwrap());
+        let mut evm = Evm::builder()
+            .spec_id(spec_id)
+            .modify_cfg_env(|cfg_env| {
+                // set the Evm configuration
+                cfg_env.chain_id = chain_id;
+            })
+            .modify_block_env(|blk_env| {
+                // set the Evm block environment
+                blk_env.number = header.number.try_into().unwrap();
+                blk_env.coinbase = block_builder.input.beneficiary;
+                blk_env.timestamp = header.timestamp;
+                blk_env.difficulty = U256::ZERO;
+                blk_env.prevrandao = Some(header.mix_hash);
+                blk_env.basefee = header.base_fee_per_gas;
+                blk_env.gas_limit = block_builder.input.gas_limit;
+            })
+            .with_db(block_builder.db.take().unwrap())
+            .build();
 
         // bloom filter over all transaction logs
         let mut logs_bloom = Bloom::default();
@@ -163,20 +165,27 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             let l1_gas_fees = match &tx.essence {
                 OptimismTxEssence::OptimismDeposited(deposit) => {
                     // Disable gas fees
-                    evm.env.cfg.disable_base_fee = true;
-                    evm.env.cfg.disable_balance_check = true;
+                    evm.env().cfg.disable_base_fee = true;
+                    evm.env().cfg.disable_balance_check = true;
                     // Irrevocably credit minted amount
-                    let db = evm.db().unwrap();
-                    increase_account_balance(db, tx_from, deposit.mint)?;
+                    increase_account_balance(&mut evm.context.evm.db, tx_from, deposit.mint)?;
                     // Retrieve effective nonce
                     // todo: read this from contract
                     let effective_nonce = if tx_from == l1_info_depositor_address {
                         None
                     } else {
-                        Some(db.basic(tx_from).unwrap().unwrap_or_default().nonce)
+                        Some(
+                            evm.context
+                                .evm
+                                .db
+                                .basic(tx_from)
+                                .unwrap()
+                                .unwrap_or_default()
+                                .nonce,
+                        )
                     };
+                    fill_deposit_tx_env(&mut evm.env().tx, deposit, tx_from, effective_nonce);
                     // Initialize tx environment
-                    fill_deposit_tx_env(&mut evm.env.tx, deposit, tx_from, effective_nonce);
 
                     U256::ZERO
                 }
@@ -213,13 +222,13 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                         (l1_base_fee * l1_gas * l1_fee_scalar) / l1_fee_overhead_decimals;
 
                     // Deduct L1 fee from sender
-                    decrease_account_balance(evm.db().unwrap(), tx_from, l1_gas_fees)?;
+                    decrease_account_balance(&mut evm.context.evm.db, tx_from, l1_gas_fees)?;
 
                     // Enable gas fees
-                    evm.env.cfg.disable_base_fee = false;
-                    evm.env.cfg.disable_balance_check = false;
+                    evm.env().cfg.disable_base_fee = false;
+                    evm.env().cfg.disable_balance_check = false;
                     // Initialize tx environment
-                    fill_eth_tx_env(&mut evm.env.tx, transaction, tx_from);
+                    fill_eth_tx_env(&mut evm.env().tx, transaction, tx_from);
                     l1_gas_fees
                 }
             };
@@ -235,7 +244,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             #[cfg(not(target_os = "zkvm"))]
             debug!("  Ok: {:?}", result);
 
-            // create the receipt from the EVM result
+            // create the receipt from the Evm result
             let receipt = Receipt::new(
                 tx.essence.tx_type(),
                 result.is_success(),
@@ -272,19 +281,21 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                 }
             }
 
-            let db = evm.db().unwrap();
-
-            db.commit(state);
+            evm.context.evm.db.commit(state);
 
             if !matches!(tx.essence, OptimismTxEssence::OptimismDeposited(_)) {
                 // Credit L2 base fee
                 increase_account_balance(
-                    db,
+                    &mut evm.context.evm.db,
                     base_fee_vault_pre_deploy,
                     gas_used * header.base_fee_per_gas,
                 )?;
                 // Credit L1 gas fee
-                increase_account_balance(db, l1_fee_vault_pre_deploy, l1_gas_fees)?;
+                increase_account_balance(
+                    &mut evm.context.evm.db,
+                    l1_fee_vault_pre_deploy,
+                    l1_gas_fees,
+                )?;
             }
 
             // accumulate logs to the block bloom filter
@@ -299,8 +310,6 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                 .insert_rlp(&trie_key, receipt)
                 .context("failed to insert receipt")?;
         }
-
-        let mut db = evm.take_db();
 
         // process withdrawals unconditionally after any transactions
         let mut withdrawals_trie = MptNode::default();
@@ -321,7 +330,10 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             }
             // Read account from database
             let withdrawal_address = withdrawal.address;
-            let mut withdrawal_account: Account = db
+            let mut withdrawal_account: Account = evm
+                .context
+                .evm
+                .db
                 .basic(withdrawal.address)
                 .map_err(|db_err| anyhow!("Error at withdrawal {}: {:?}", i, db_err))?
                 .unwrap_or_default()
@@ -334,7 +346,10 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                 .unwrap();
             withdrawal_account.mark_touch();
             // Commit changes to database
-            db.commit([(withdrawal_address, withdrawal_account)].into());
+            evm.context
+                .evm
+                .db
+                .commit([(withdrawal_address, withdrawal_account)].into());
             // Add withdrawal to trie
             withdrawals_trie
                 .insert_rlp(&i.to_rlp(), withdrawal)
@@ -355,12 +370,12 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
         // Leak memory, save cycles
         guest_mem_forget([tx_trie, receipt_trie, withdrawals_trie]);
         // Return block builder with updated database
-        Ok(block_builder.with_db(db))
+        Ok(block_builder.with_db(evm.context.evm.db))
     }
 }
 
-fn read_uint<D>(
-    evm: &mut EVM<D>,
+fn read_uint<'a, EXT, D>(
+    evm: &mut Evm<'a, EXT, D>,
     abi_call: Vec<u8>,
     chain_id: Option<zeth_primitives::ChainId>,
     gas_limit: U256,
@@ -382,9 +397,9 @@ where
         });
 
     // disable base fees
-    evm.env.cfg.disable_base_fee = true;
-    evm.env.cfg.disable_balance_check = true;
-    fill_eth_tx_env(&mut evm.env.tx, &op_l1_tx, Default::default());
+    evm.env().cfg.disable_base_fee = true;
+    evm.env().cfg.disable_balance_check = true;
+    fill_eth_tx_env(&mut evm.env().tx, &op_l1_tx, Default::default());
 
     let Ok(ResultAndState {
         result: execution_result,

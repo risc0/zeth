@@ -1,12 +1,6 @@
 [workspace]
 resolver = "2"
-members = [
-    "guests",
-    "host",
-    "lib",
-    "primitives",
-    "testing/ef-tests"
-]
+members = ["guests", "host", "lib", "primitives", "testing/ef-tests"]
 
 # Always optimize; building and running the guest takes much longer without optimization.
 [profile.dev]
@@ -27,4 +21,10 @@ bonsai-sdk = "0.5"
 hashbrown = { version = "0.14", features = ["inline-more"] }
 risc0-build = "0.19"
 risc0-zkvm = { version = "0.19", default-features = false }
-revm = { version = "3.5", default-features = false, features = ["std", "serde", "optional_no_base_fee", "optional_balance_check"] }
+revm-primitives = { git = "https://github.com/bluealloy/revm.git", branch = "main", default_features = false }
+revm = { git = "https://github.com/bluealloy/revm.git", branch = "main", default-features = false, features = [
+    "std",
+    "serde",
+    "optional_no_base_fee",
+    "optional_balance_check",
+] }

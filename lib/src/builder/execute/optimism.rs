@@ -18,14 +18,15 @@ use anyhow::{anyhow, bail, Context, Result};
 #[cfg(not(target_os = "zkvm"))]
 use log::debug;
 use revm::{
+    interpreter::Host,
     primitives::{Address, ResultAndState, SpecId, TransactTo, TxEnv},
-    Database, DatabaseCommit, EVM,
+    Database, DatabaseCommit, Evm,
 };
 use ruint::aliases::U256;
 use zeth_primitives::{
     receipt::Receipt,
     transactions::{
-        ethereum::TransactionKind,
+        ethereum::{EthereumTxEssence, TransactionKind},
         optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
         TxEssence,
     },
@@ -33,7 +34,7 @@ use zeth_primitives::{
     Bloom, Bytes, RlpBytes,
 };
 
-use super::{ethereum::fill_eth_tx_env, TxExecStrategy};
+use super::{ethereum, TxExecStrategy};
 use crate::{builder::BlockBuilder, consts, guest_mem_forget};
 
 /// Minimum supported protocol version: Bedrock (Block no. 105235063).
@@ -73,7 +74,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                 .unwrap();
 
             info!("Block no. {}", header.number);
-            info!("  EVM spec ID: {:?}", spec_id);
+            info!("  Evm spec ID: {:?}", spec_id);
             info!("  Timestamp: {}", dt);
             info!("  Transactions: {}", block_builder.input.transactions.len());
             info!("  Fee Recipient: {:?}", block_builder.input.beneficiary);
@@ -82,24 +83,25 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             info!("  Extra data: {:?}", block_builder.input.extra_data);
         }
 
-        // initialize the EVM
-        let mut evm = EVM::new();
-
-        // set the EVM configuration
-        evm.env.cfg.chain_id = chain_id;
-        evm.env.cfg.spec_id = spec_id;
-        evm.env.cfg.optimism = true;
-
-        // set the EVM block environment
-        evm.env.block.number = header.number.try_into().unwrap();
-        evm.env.block.coinbase = block_builder.input.beneficiary;
-        evm.env.block.timestamp = header.timestamp;
-        evm.env.block.difficulty = U256::ZERO;
-        evm.env.block.prevrandao = Some(header.mix_hash);
-        evm.env.block.basefee = header.base_fee_per_gas;
-        evm.env.block.gas_limit = block_builder.input.gas_limit;
-
-        evm.database(block_builder.db.take().unwrap());
+        let mut evm = Evm::builder()
+            .spec_id(spec_id)
+            .modify_cfg_env(|cfg_env| {
+                // set the Evm configuration
+                cfg_env.chain_id = chain_id;
+                cfg_env.optimism = true;
+            })
+            .modify_block_env(|blk_env| {
+                // set the Evm block environment
+                blk_env.number = header.number.try_into().unwrap();
+                blk_env.coinbase = block_builder.input.beneficiary;
+                blk_env.timestamp = header.timestamp;
+                blk_env.difficulty = U256::ZERO;
+                blk_env.prevrandao = Some(header.mix_hash);
+                blk_env.basefee = header.base_fee_per_gas;
+                blk_env.gas_limit = block_builder.input.gas_limit;
+            })
+            .with_db(block_builder.db.take().unwrap())
+            .build();
 
         // bloom filter over all transaction logs
         let mut logs_bloom = Bloom::default();
@@ -142,22 +144,11 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                         debug!("  System Tx: {:?}", deposit.is_system_tx);
                     }
 
-                    evm.env.tx.optimism.source_hash = Some(deposit.source_hash);
-                    evm.env.tx.optimism.mint = Some(deposit.mint.try_into().unwrap());
-                    evm.env.tx.optimism.is_system_transaction = Some(deposit.is_system_tx);
-                    evm.env.tx.optimism.enveloped_tx = None; // only used for non-deposit txs
-
                     // Initialize tx environment
-                    fill_deposit_tx_env(&mut evm.env.tx, deposit, tx_from);
+                    fill_deposit_tx_env(&mut evm.env().tx, deposit, tx_from);
                 }
-                OptimismTxEssence::Ethereum(transaction) => {
-                    evm.env.tx.optimism.source_hash = None;
-                    evm.env.tx.optimism.mint = None;
-                    evm.env.tx.optimism.is_system_transaction = None;
-                    evm.env.tx.optimism.enveloped_tx = Some(Bytes::from(tx.to_rlp()));
-
-                    // Initialize tx environment
-                    fill_eth_tx_env(&mut evm.env.tx, transaction, tx_from);
+                OptimismTxEssence::Ethereum(essence) => {
+                    fill_eth_tx_env(&mut evm.env().tx, tx.to_rlp(), essence, tx_from);
                 }
             };
 
@@ -172,7 +163,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             #[cfg(not(target_os = "zkvm"))]
             debug!("  Ok: {:?}", result);
 
-            // create the receipt from the EVM result
+            // create the receipt from the Evm result
             let receipt = Receipt::new(
                 tx.essence.tx_type(),
                 result.is_success(),
@@ -209,8 +200,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                 }
             }
 
-            let db = evm.db().unwrap();
-            db.commit(state);
+            evm.context.evm.db.commit(state);
 
             // accumulate logs to the block bloom filter
             logs_bloom.accrue_bloom(&receipt.payload.logs_bloom);
@@ -235,23 +225,39 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
         // Leak memory, save cycles
         guest_mem_forget([tx_trie, receipt_trie]);
         // Return block builder with updated database
-        Ok(block_builder.with_db(evm.take_db()))
+        Ok(block_builder.with_db(evm.context.evm.db))
     }
 }
 
-fn fill_deposit_tx_env(tx_env: &mut TxEnv, tx: &TxEssenceOptimismDeposited, caller: Address) {
+fn fill_deposit_tx_env(tx_env: &mut TxEnv, essence: &TxEssenceOptimismDeposited, caller: Address) {
+    // initialize additional optimism tx fields
+    tx_env.optimism.source_hash = Some(essence.source_hash);
+    tx_env.optimism.mint = Some(essence.mint.try_into().unwrap());
+    tx_env.optimism.is_system_transaction = Some(essence.is_system_tx);
+    tx_env.optimism.enveloped_tx = None; // only used for non-deposit txs
+
     tx_env.caller = caller; // previously overridden to tx.from
-    tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
+    tx_env.gas_limit = essence.gas_limit.try_into().unwrap();
     tx_env.gas_price = U256::ZERO;
     tx_env.gas_priority_fee = None;
-    tx_env.transact_to = if let TransactionKind::Call(to_addr) = tx.to {
+    tx_env.transact_to = if let TransactionKind::Call(to_addr) = essence.to {
         TransactTo::Call(to_addr)
     } else {
         TransactTo::create()
     };
-    tx_env.value = tx.value;
-    tx_env.data = tx.data.clone();
+    tx_env.value = essence.value;
+    tx_env.data = essence.data.clone();
     tx_env.chain_id = None;
     tx_env.nonce = None;
     tx_env.access_list.clear();
+}
+
+fn fill_eth_tx_env(tx_env: &mut TxEnv, tx: Vec<u8>, essence: &EthereumTxEssence, caller: Address) {
+    // initialize additional optimism tx fields
+    tx_env.optimism.source_hash = None;
+    tx_env.optimism.mint = None;
+    tx_env.optimism.is_system_transaction = Some(false);
+    tx_env.optimism.enveloped_tx = Some(Bytes::from(tx));
+
+    ethereum::fill_eth_tx_env(tx_env, essence, caller);
 }

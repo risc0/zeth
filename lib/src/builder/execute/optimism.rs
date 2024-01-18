@@ -19,6 +19,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use log::debug;
 use revm::{
     interpreter::Host,
+    optimism,
     primitives::{Address, ResultAndState, SpecId, TransactTo, TxEnv},
     Database, DatabaseCommit, Evm,
 };
@@ -101,6 +102,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                 blk_env.gas_limit = block_builder.input.gas_limit;
             })
             .with_db(block_builder.db.take().unwrap())
+            .append_handler_register(optimism::optimism_handle_register)
             .build();
 
         // bloom filter over all transaction logs

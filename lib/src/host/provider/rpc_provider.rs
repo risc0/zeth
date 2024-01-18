@@ -13,9 +13,16 @@
 // limitations under the License.
 
 use anyhow::{anyhow, Result};
+#[cfg(feature = "taiko")]
+use ethers_core::types::Filter;
 use ethers_core::types::{Block, Bytes, EIP1186ProofResponse, Transaction, H256, U256};
 use ethers_providers::{Http, Middleware};
+#[cfg(not(feature = "taiko"))]
 use log::info;
+#[cfg(feature = "taiko")]
+use tracing::info;
+#[cfg(feature = "taiko")]
+use zeth_primitives::taiko::{filter_propose_block_event, BlockProposed};
 
 use super::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery};
 
@@ -128,6 +135,45 @@ impl Provider for RpcProvider {
                 .await
         })?;
 
+        Ok(out)
+    }
+
+    #[cfg(feature = "taiko")]
+    fn get_propose(&mut self, query: &super::ProposeQuery) -> Result<(Transaction, BlockProposed)> {
+        info!("Querying RPC for propose: {:?}", query);
+
+        let filter = Filter::new()
+            .address(query.l1_contract)
+            .from_block(query.l1_block_no)
+            .to_block(query.l1_block_no);
+        let logs = self
+            .tokio_handle
+            .block_on(async { self.http_client.get_logs(&filter).await })?;
+        let result =
+            filter_propose_block_event(&logs, zeth_primitives::U256::from(query.l2_block_no))?;
+        let (tx_hash, block_proposed) =
+            result.ok_or_else(|| anyhow!("No propose block event for {:?}", query))?;
+        let response = self
+            .tokio_handle
+            .block_on(async { self.http_client.get_transaction(tx_hash).await })?;
+        match response {
+            Some(out) => Ok((out, block_proposed)),
+            None => Err(anyhow!("No data for {:?}", query)),
+        }
+    }
+
+    #[cfg(feature = "taiko")]
+    /// get 256 blocks one time to reduce the fetch time cost
+    fn batch_get_partial_blocks(&mut self, query: &BlockQuery) -> Result<Vec<Block<H256>>> {
+        info!("Querying RPC for partial blocks: {:?}", query);
+
+        let out = self.tokio_handle.block_on(async {
+            use ethers_core::utils;
+            let id = utils::serialize(&query.block_no);
+            self.http_client
+                .request("taiko_getL2ParentHeaders", [id])
+                .await
+        })?;
         Ok(out)
     }
 }

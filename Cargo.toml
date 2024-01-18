@@ -1,12 +1,6 @@
 [workspace]
 resolver = "2"
-members = [
-    "guests",
-    "host",
-    "lib",
-    "primitives",
-    "testing/ef-tests"
-]
+members = ["lib", "primitives", "raiko-guest", "raiko-host", "sgx-ra"]
 
 # Always optimize; building and running the guest takes much longer without optimization.
 [profile.dev]
@@ -22,9 +16,24 @@ lto = true
 [profile.release.build-override]
 opt-level = 3
 
+[patch.crates-io]
+# use optimized risc0 circuit
+revm = { git = "https://github.com/johntaiko/revm", branch = "feat/taiko" }
+revm-primitives = { git = "https://github.com/johntaiko/revm", branch = "feat/taiko" }
+
+
 [workspace.dependencies]
 bonsai-sdk = "0.4"
 hashbrown = { version = "0.14", features = ["inline-more"] }
 risc0-build = "0.18"
 risc0-zkvm = { version = "0.18", default-features = false }
-revm = { version = "3.5", default-features = false, features = ["std", "serde", "optional_no_base_fee", "optional_balance_check"] }
+revm = { version = "3.5", default-features = false, features = [
+    "std",
+    "serde",
+    "taiko",
+    "optional_no_base_fee",
+    "optional_balance_check",
+] }
+revm-primitives = { version = "1.3", default_features = false, features = [
+    "taiko",
+] }

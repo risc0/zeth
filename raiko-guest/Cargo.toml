@@ -1,0 +1,28 @@
+[package]
+name = "raiko-guest"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+risc0-zkvm = { version = "0.18", default-features = false, features = ["std"] }
+zeth-lib = { path = "../lib", default-features = false, features = ["taiko"] }
+sgx-ra = { optional = true, path = "../sgx-ra" }
+tokio = { version = "1.23", features = ["full"] }
+anyhow = "1.0"
+secp256k1 = { version = "0.27.0", features = [
+    'rand-std',
+    'global-context',
+    "recovery",
+] }
+rand = "0.8.5"
+hex = "0.4.3"
+clap = { version = "4.4.6", features = ["derive"] }
+ethers-core = { version = "2.0", features = ["optimism"] }
+zeth-primitives = { path = "../primitives", features = ["taiko"] }
+rand_core = "0.6.4"
+sha3 = "0.10.8"
+
+[features]
+sgx-ra = ["dep:sgx-ra"]

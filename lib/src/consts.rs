@@ -21,7 +21,7 @@ use anyhow::bail;
 use once_cell::sync::Lazy;
 use revm::primitives::SpecId;
 use serde::{Deserialize, Serialize};
-use zeth_primitives::{uint, BlockNumber, ChainId, U256};
+use zeth_primitives::{uint, Address, BlockNumber, ChainId, U256};
 
 /// U256 representation of 0.
 pub const ZERO: U256 = U256::ZERO;
@@ -62,8 +62,50 @@ pub static ETH_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| {
             base_fee_max_decrease_denominator: uint!(8_U256),
             elasticity_multiplier: uint!(2_U256),
         },
+        l1_contract: None,
+        l1_signal_service: None,
+        l2_contract: None,
+        l2_signal_service: None,
     }
 });
+
+macro_rules! taiko_chain_spec {
+    ($a:ident, $b:ident ) => {
+        pub static $a: Lazy<ChainSpec> = Lazy::new(|| {
+            use zeth_primitives::taiko::$b::*;
+            ChainSpec {
+                chain_id: CHAIN_ID,
+                hard_forks: BTreeMap::from([
+                    (SpecId::SHANGHAI, ForkCondition::Block(0)),
+                    (SpecId::CANCUN, ForkCondition::TBD),
+                ]),
+                eip_1559_constants: Eip1559Constants {
+                    base_fee_change_denominator: uint!(8_U256),
+                    base_fee_max_increase_denominator: uint!(8_U256),
+                    base_fee_max_decrease_denominator: uint!(8_U256),
+                    elasticity_multiplier: uint!(2_U256),
+                },
+                l1_contract: Some(*L1_CONTRACT),
+                l1_signal_service: Some(*L1_SIGNAL_SERVICE),
+                l2_contract: Some(*L2_CONTRACT),
+                l2_signal_service: Some(*L2_SIGNAL_SERVICE),
+            }
+        });
+    };
+}
+
+taiko_chain_spec!(TAIKO_TESTNET_CHAIN_SPEC, testnet);
+taiko_chain_spec!(TAIKO_INTERNAL_DEVNET_A_CHAIN_SPEC, internal_devnet_a);
+taiko_chain_spec!(TAIKO_INTERNAL_DEVNET_B_CHAIN_SPEC, internal_devnet_b);
+
+pub fn get_taiko_chain_spec(chain: &str) -> ChainSpec {
+    match chain {
+        "testnet" => TAIKO_TESTNET_CHAIN_SPEC.clone(),
+        "internal_devnet_a" => TAIKO_INTERNAL_DEVNET_A_CHAIN_SPEC.clone(),
+        "internal_devnet_b" => TAIKO_INTERNAL_DEVNET_B_CHAIN_SPEC.clone(),
+        _ => panic!("unknown chain"),
+    }
+}
 
 /// The optimism mainnet specification.
 pub static OP_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
@@ -75,6 +117,10 @@ pub static OP_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
         base_fee_max_decrease_denominator: uint!(50_U256),
         elasticity_multiplier: uint!(6_U256),
     },
+    l1_contract: None,
+    l1_signal_service: None,
+    l2_contract: None,
+    l2_signal_service: None,
 });
 
 /// The condition at which a fork is activated.
@@ -123,6 +169,10 @@ pub struct ChainSpec {
     chain_id: ChainId,
     hard_forks: BTreeMap<SpecId, ForkCondition>,
     eip_1559_constants: Eip1559Constants,
+    pub l1_contract: Option<Address>,
+    pub l1_signal_service: Option<Address>,
+    pub l2_contract: Option<Address>,
+    pub l2_signal_service: Option<Address>,
 }
 
 impl ChainSpec {
@@ -136,6 +186,10 @@ impl ChainSpec {
             chain_id,
             hard_forks: BTreeMap::from([(spec_id, ForkCondition::Block(0))]),
             eip_1559_constants,
+            l1_contract: None,
+            l1_signal_service: None,
+            l2_contract: None,
+            l2_signal_service: None,
         }
     }
     /// Returns the network chain ID.

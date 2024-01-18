@@ -1,0 +1,50 @@
+# This is Gramine's manifest file.
+# To learn more see: https://gramine.readthedocs.io/en/stable/manifest-syntax.html
+#
+# How to use it?
+#
+# 1. Build the app with `cargo build`.
+# 2. Copy this file `target/debug`.
+# 3. Run:
+#     export SECRETS_DIR="./secrets"
+#     export INPUT_FILES_DIR="/tmp"
+#     gramine-manifest -Dlog_level=error -Darch_libdir=/lib/x86_64-linux-gnu/ raiko-guest.manifest.template raiko-guest.manifest
+#     gramine-sgx-sign --manifest raiko-guest.manifest --output raiko-guest.manifest.sgx
+#     gramine-sgx ./raiko-guest
+
+loader.entrypoint = "file:{{ gramine.libos }}"
+libos.entrypoint = "/raiko-guest"
+loader.log_level = "{{ log_level }}"
+loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}"
+loader.env.RUST_LOG = "info"
+
+fs.mounts = [
+  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/raiko-guest", uri = "file:raiko-guest" },
+  { path = "{{ arch_libdir }}", uri = "file:{{ arch_libdir }}" },
+  { path = "/usr/lib/ssl/certs/", uri = "file:/usr/lib/ssl/certs/" },
+  { path = "/tmp", uri = "file:/tmp" },
+  { path = "/secrets/", uri = "file:{{ env.get('SECRETS_DIR', '../../secrets') }}", type = "encrypted", key_name = "_sgx_mrsigner" },
+]
+sys.insecure__allow_eventfd = true
+loader.insecure__use_cmdline_argv = true
+
+sgx.debug = false
+sgx.edmm_enable = true
+
+sgx.trusted_files = [
+  "file:{{ gramine.libos }}",
+  "file:raiko-guest",
+  "file:{{ gramine.runtimedir() }}/",
+  "file:{{ arch_libdir }}/libgcc_s.so.1",
+  "file:{{ arch_libdir }}/libssl.so.3",
+  "file:{{ arch_libdir }}/libcrypto.so.3",
+  "file:/usr/lib/ssl/certs/",
+]
+sgx.max_threads = 16
+sys.enable_extra_runtime_domain_names_conf = true
+sgx.remote_attestation = "dcap"
+
+sgx.allowed_files = [
+  "file:{{ env.get('INPUT_FILES_DIR', '/tmp') }}",
+]

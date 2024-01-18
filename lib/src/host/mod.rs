@@ -122,6 +122,7 @@ where
         contracts: vec![],
         parent_header: init_block.clone().try_into()?,
         ancestor_headers: vec![],
+        base_fee_per_gas: Default::default(),
     };
 
     // Create the block builder, run the transactions and extract the DB
@@ -363,7 +364,7 @@ fn proofs_to_tries(
 
         let root_node = if let Some(root_node) = root_node {
             root_node
-        } else if proof.storage_hash.0 == EMPTY_ROOT.0 {
+        } else if proof.storage_hash.0 == EMPTY_ROOT.0 || proof.storage_hash.is_zero() {
             MptNode::default()
         } else {
             // if there are no storage proofs but the root is non-empty, create a dummy
@@ -469,6 +470,7 @@ impl<E: TxEssence> From<Init<E>> for Input<E> {
             parent_storage: storage.into_iter().collect(),
             contracts: contracts.into_values().collect(),
             ancestor_headers: value.ancestor_headers,
+            base_fee_per_gas: value.fini_block.base_fee_per_gas,
         }
     }
 }

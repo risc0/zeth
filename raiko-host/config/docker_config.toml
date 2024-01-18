@@ -1,0 +1,11 @@
+# Prod config file for raiko-host to be used with Docker container
+
+bind = "0.0.0.0:8080"
+cache = "/tmp/sgx"
+guest = "./guests"
+log_path = "/var/log/raiko"
+concurrency_limit = 10
+max_log_days = 7
+l2_chain = "internal_devnet_a" # "internal_devnet_b" or "testnet"
+log_level = "info"
+sgx_instance_id = 0            # your registered SGX instance ID, default 0

@@ -17,6 +17,8 @@ use std::collections::BTreeSet;
 use anyhow::{anyhow, Result};
 use ethers_core::types::{Block, Bytes, EIP1186ProofResponse, Transaction, H160, H256, U256};
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "taiko")]
+use zeth_primitives::taiko::BlockProposed;
 
 pub mod cached_rpc_provider;
 pub mod file_provider;
@@ -28,7 +30,7 @@ pub struct AccountQuery {
     pub address: H160,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialOrd, Ord, Eq, Hash, PartialEq, Serialize)]
 pub struct BlockQuery {
     pub block_no: u64,
 }
@@ -47,6 +49,14 @@ pub struct StorageQuery {
     pub index: H256,
 }
 
+#[cfg(feature = "taiko")]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub struct ProposeQuery {
+    pub l1_contract: H160,
+    pub l1_block_no: u64,
+    pub l2_block_no: u64,
+}
+
 pub trait Provider: Send {
     fn save(&self) -> Result<()>;
 
@@ -57,6 +67,12 @@ pub trait Provider: Send {
     fn get_balance(&mut self, query: &AccountQuery) -> Result<U256>;
     fn get_code(&mut self, query: &AccountQuery) -> Result<Bytes>;
     fn get_storage(&mut self, query: &StorageQuery) -> Result<H256>;
+
+    #[cfg(feature = "taiko")]
+    fn get_propose(&mut self, query: &ProposeQuery) -> Result<(Transaction, BlockProposed)>;
+    #[cfg(feature = "taiko")]
+    /// get 256 blocks one time to reduce the fetch time cost
+    fn batch_get_partial_blocks(&mut self, query: &BlockQuery) -> Result<Vec<Block<H256>>>;
 }
 
 pub trait MutProvider: Provider {
@@ -67,6 +83,9 @@ pub trait MutProvider: Provider {
     fn insert_balance(&mut self, query: AccountQuery, val: U256);
     fn insert_code(&mut self, query: AccountQuery, val: Bytes);
     fn insert_storage(&mut self, query: StorageQuery, val: H256);
+
+    #[cfg(feature = "taiko")]
+    fn insert_propose(&mut self, query: ProposeQuery, val: (Transaction, BlockProposed));
 }
 
 pub fn new_file_provider(file_path: String) -> Result<Box<dyn Provider>> {

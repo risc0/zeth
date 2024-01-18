@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#![feature(async_closure)]
 
 extern crate core;
 
@@ -25,6 +26,9 @@ pub mod initialization;
 pub mod input;
 pub mod mem_db;
 pub mod preparation;
+
+#[cfg(feature = "taiko")]
+pub mod taiko;
 
 pub use zeth_primitives::transactions::ethereum::EthereumTxEssence;
 

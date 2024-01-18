@@ -1,0 +1,16 @@
+version: "3.9"
+services:
+  raiko:
+    image: gcr.io/evmchain/raiko:latest-pos
+    container_name: raiko
+    command: --config-path=/etc/opt/raiko/config.toml
+    devices:
+      - "/dev/sgx_enclave:/dev/sgx_enclave"
+      - "/dev/sgx_provision:/dev/sgx_provision"
+    volumes:
+      - ${HOME}/.config/raiko/secrets:/opt/raiko/secrets
+      - /tmp/sgx:/tmp/sgx
+      - /var/log/raiko:/var/log/raiko
+      # - YOUR_CONFIG_PATH:/etc/opt/raiko/config.toml
+    ports:
+      - "8080:8080"

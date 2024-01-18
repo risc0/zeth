@@ -1,0 +1,16 @@
+[package]
+name = "sgx-ra"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+mbedtls = { git = "https://github.com/fortanix/rust-mbedtls.git", features = [
+    "ssl",
+] }
+hex = "0.3"
+
+[lib]
+name = "server_sgx"
+path = "src/server_sgx.rs"

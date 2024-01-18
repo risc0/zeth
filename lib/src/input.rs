@@ -51,6 +51,8 @@ pub struct Input<E: TxEssence> {
     pub contracts: Vec<Bytes>,
     /// List of at most 256 previous block headers
     pub ancestor_headers: Vec<Header>,
+    /// Base fee per gas
+    pub base_fee_per_gas: U256,
 }
 
 pub type StorageEntry = (MptNode, Vec<U256>);
@@ -76,6 +78,7 @@ mod tests {
             parent_storage: Default::default(),
             contracts: vec![],
             ancestor_headers: vec![],
+            base_fee_per_gas: Default::default(),
         };
         let _: Input<EthereumTxEssence> =
             bincode::deserialize(&bincode::serialize(&input).unwrap()).unwrap();

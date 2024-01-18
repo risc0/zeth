@@ -1,8 +1,4 @@
 {
-    "rust-analyzer.cargo.features": "all",
-    "rust-analyzer.linkedProjects": [
-        "./Cargo.toml",
-        "./guests/eth-block/Cargo.toml",
-        "./testing/ef-tests/testguest/Cargo.toml"
-    ]
+  "rust-analyzer.cargo.features": "all",
+  "rust-analyzer.linkedProjects": ["./Cargo.toml"]
 }

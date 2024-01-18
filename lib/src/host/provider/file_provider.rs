@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     fs::File,
     io::{Read, Write},
 };
@@ -22,6 +22,8 @@ use anyhow::{anyhow, Result};
 use ethers_core::types::{Block, Bytes, EIP1186ProofResponse, Transaction, H256, U256};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+#[cfg(feature = "taiko")]
+use zeth_primitives::taiko::BlockProposed;
 
 use super::{AccountQuery, BlockQuery, MutProvider, ProofQuery, Provider, StorageQuery};
 
@@ -35,7 +37,7 @@ pub struct FileProvider {
     #[serde_as(as = "Vec<(_, _)>")]
     full_blocks: HashMap<BlockQuery, Block<Transaction>>,
     #[serde_as(as = "Vec<(_, _)>")]
-    partial_blocks: HashMap<BlockQuery, Block<H256>>,
+    partial_blocks: BTreeMap<BlockQuery, Block<H256>>,
     #[serde_as(as = "Vec<(_, _)>")]
     proofs: HashMap<ProofQuery, EIP1186ProofResponse>,
     #[serde_as(as = "Vec<(_, _)>")]
@@ -46,6 +48,8 @@ pub struct FileProvider {
     code: HashMap<AccountQuery, Bytes>,
     #[serde_as(as = "Vec<(_, _)>")]
     storage: HashMap<StorageQuery, H256>,
+    #[cfg(feature = "taiko")]
+    propose: Option<(Transaction, BlockProposed)>,
 }
 
 impl FileProvider {
@@ -54,12 +58,14 @@ impl FileProvider {
             file_path,
             dirty: false,
             full_blocks: HashMap::new(),
-            partial_blocks: HashMap::new(),
+            partial_blocks: BTreeMap::new(),
             proofs: HashMap::new(),
             transaction_count: HashMap::new(),
             balance: HashMap::new(),
             code: HashMap::new(),
             storage: HashMap::new(),
+            #[cfg(feature = "taiko")]
+            propose: Default::default(),
         }
     }
 
@@ -142,6 +148,23 @@ impl Provider for FileProvider {
             None => Err(anyhow!("No data for {:?}", query)),
         }
     }
+
+    #[cfg(feature = "taiko")]
+    fn get_propose(&mut self, query: &super::ProposeQuery) -> Result<(Transaction, BlockProposed)> {
+        match self.propose {
+            Some(ref val) => Ok(val.clone()),
+            None => Err(anyhow!("No data for {:?}", query)),
+        }
+    }
+
+    #[cfg(feature = "taiko")]
+    fn batch_get_partial_blocks(&mut self, _: &BlockQuery) -> Result<Vec<Block<H256>>> {
+        if self.partial_blocks.is_empty() {
+            Err(anyhow!("No data for partial blocks"))
+        } else {
+            Ok(self.partial_blocks.values().cloned().collect())
+        }
+    }
 }
 
 impl MutProvider for FileProvider {
@@ -177,6 +200,12 @@ impl MutProvider for FileProvider {
 
     fn insert_storage(&mut self, query: StorageQuery, val: H256) {
         self.storage.insert(query, val);
+        self.dirty = true;
+    }
+
+    #[cfg(feature = "taiko")]
+    fn insert_propose(&mut self, _query: super::ProposeQuery, val: (Transaction, BlockProposed)) {
+        self.propose = Some(val);
         self.dirty = true;
     }
 }

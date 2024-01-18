@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
 
 env:
@@ -18,36 +18,36 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-    - uses: actions/checkout@v3
-      with:
-        submodules: recursive
-    - uses: risc0/risc0/.github/actions/rustup@release-0.18
-    - uses: risc0/risc0/.github/actions/sccache@release-0.18
-    - run: cargo install cargo-risczero && cargo risczero install
-    - run: cargo test --workspace --all-targets --all-features
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - uses: risc0/risc0/.github/actions/rustup@release-0.18
+      - uses: risc0/risc0/.github/actions/sccache@release-0.18
+      # - run: cargo install cargo-risczero && cargo risczero install
+      - run: cargo test --workspace --all-targets --all-features --exclude sgx-ra
 
   clippy:
     name: clippy
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-    - uses: actions/checkout@v3
-      with:
-        submodules: recursive
-    - uses: risc0/risc0/.github/actions/rustup@release-0.18
-    - uses: risc0/risc0/.github/actions/sccache@release-0.18
-    - uses: risc0/clippy-action@main
-      with:
-        reporter: 'github-pr-check'
-        fail_on_error: true
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        clippy_flags: --workspace --all-targets --all-features -- -Dwarnings
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - uses: risc0/risc0/.github/actions/rustup@release-0.18
+      - uses: risc0/risc0/.github/actions/sccache@release-0.18
+      - uses: risc0/clippy-action@main
+        with:
+          reporter: "github-pr-check"
+          fail_on_error: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          clippy_flags: --workspace --all-targets --all-features -- -Dwarnings
 
   fmt:
     name: fmt
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-    - uses: actions/checkout@v3
-    - uses: risc0/risc0/.github/actions/rustup@release-0.18
-    - run: cargo fmt --all --check
+      - uses: actions/checkout@v3
+      - uses: risc0/risc0/.github/actions/rustup@release-0.18
+      - run: cargo fmt --all --check

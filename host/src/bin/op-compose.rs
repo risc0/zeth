@@ -39,7 +39,10 @@ use zeth_lib::{
         DeriveInput, DeriveMachine,
     },
 };
-use zeth_primitives::{block::Header, tree::MerkleMountainRange};
+use zeth_primitives::{
+    block::Header,
+    tree::{MerkleMountainRange, MerkleProof},
+};
 
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
@@ -212,7 +215,7 @@ async fn main() -> anyhow::Result<()> {
             compose_image_id: OP_COMPOSE_ID,
             operation: ComposeInputOperation::LIFT {
                 derivation: derive_output,
-                eth_tail_proof: MerkleMountainRange::proof(&sibling_map, eth_tail_hash),
+                eth_tail_proof: MerkleProof::new(&sibling_map, eth_tail_hash),
             },
             eth_chain_merkle_root: eth_chain_root,
         };

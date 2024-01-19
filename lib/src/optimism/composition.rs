@@ -16,7 +16,11 @@ use anyhow::bail;
 #[cfg(target_os = "zkvm")]
 use risc0_zkvm::{guest::env, serde::to_vec, sha::Digest};
 use serde::{Deserialize, Serialize};
-use zeth_primitives::{block::Header, tree::MerkleMountainRange, BlockHash, BlockNumber};
+use zeth_primitives::{
+    block::Header,
+    tree::{MerkleMountainRange, MerkleProof},
+    BlockHash, BlockNumber,
+};
 
 use crate::optimism::DeriveOutput;
 
@@ -39,7 +43,7 @@ pub enum ComposeInputOperation {
     },
     LIFT {
         derivation: DeriveOutput,
-        eth_tail_proof: MerkleMountainRange,
+        eth_tail_proof: MerkleProof,
     },
     JOIN {
         left: ComposeOutput,
@@ -147,15 +151,10 @@ impl ComposeInput {
                         .expect("Failed to lift derivation receipt");
                 }
                 // Verify inclusion of ethereum tail in Merkle root
-                assert_eq!(
-                    self.eth_chain_merkle_root,
+                assert!(
                     eth_tail_proof
-                        .root(None)
-                        .expect("No proof included for ethereum tail")
-                );
-                assert_eq!(
-                    eth_tail_proof.roots.first().unwrap().unwrap(),
-                    derive_output.eth_tail.1 .0
+                        .verify(&self.eth_chain_merkle_root, &derive_output.eth_tail.1 .0),
+                    "Invalid ethereum tail inclusion proof!"
                 );
                 // Create output
                 ComposeOutput {

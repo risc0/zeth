@@ -30,7 +30,9 @@ use zeth_lib::{
     },
 };
 use zeth_primitives::{
-    block::Header, transactions::optimism::OptimismTxEssence, tree::MerkleMountainRange,
+    block::Header,
+    transactions::optimism::OptimismTxEssence,
+    tree::{MerkleMountainRange, MerkleProof},
 };
 
 use crate::{
@@ -402,7 +404,7 @@ pub async fn compose_derived_rollup_blocks(
             compose_image_id: OP_COMPOSE_ID,
             operation: ComposeInputOperation::LIFT {
                 derivation: derive_output,
-                eth_tail_proof: MerkleMountainRange::proof(&sibling_map, eth_tail_hash),
+                eth_tail_proof: MerkleProof::new(&sibling_map, eth_tail_hash),
             },
             eth_chain_merkle_root: eth_chain_root,
         };

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use core::iter::once;
+use std::mem;
 
 use alloy_sol_types::{sol, SolInterface};
 use anyhow::{bail, ensure, Context, Result};
@@ -32,7 +33,9 @@ use zeth_primitives::{
 };
 
 use crate::{
-    consts::ONE,
+    builder::{BlockBuilderStrategy, OptimismStrategy},
+    consts::{ONE, OP_MAINNET_CHAIN_SPEC},
+    input::Input,
     optimism::{
         batcher::{Batcher, BlockInfo},
         batcher_db::BatcherDb,
@@ -79,6 +82,8 @@ pub struct DeriveInput<D> {
     pub op_head_block_no: u64,
     /// Block count for the operation.
     pub op_derive_block_count: u64,
+    /// Block building data for execution
+    pub op_blocks: Vec<Input<OptimismTxEssence>>,
 }
 
 /// Represents the output of the derivation process.
@@ -300,6 +305,26 @@ impl<D: BatcherDb> DeriveMachine<D> {
                 if self.op_block_no == target_block_no {
                     break;
                 }
+            }
+        }
+
+        // Execute transactions to verify valid state transitions
+        let op_blocks = mem::take(&mut self.derive_input.op_blocks);
+        if op_blocks.len() != derived_op_blocks.len() {
+            bail!(
+                "Mismatch between number of input op blocks {} and derived block count {}",
+                op_blocks.len(),
+                derived_op_blocks.len()
+            );
+        }
+        for (i, input) in op_blocks.into_iter().enumerate() {
+            let (header, _) = OptimismStrategy::build_from(&OP_MAINNET_CHAIN_SPEC, input)?;
+            if header.hash() != derived_op_blocks[i].1 {
+                bail!(
+                    "Mismatch between built block {} and derived block {}.",
+                    header.number,
+                    &derived_op_blocks[i].0
+                )
             }
         }
 

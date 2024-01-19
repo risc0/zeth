@@ -18,7 +18,10 @@ use anyhow::Context;
 use log::info;
 use zeth_guests::*;
 use zeth_lib::{
-    host::rpc_db::RpcDb,
+    builder::OptimismStrategy,
+    consts::{Network, OP_MAINNET_CHAIN_SPEC},
+    host::{preflight::Preflight, rpc_db::RpcDb},
+    input::Input,
     optimism::{
         batcher_db::BatcherDb,
         composition::{ComposeInput, ComposeInputOperation, ComposeOutputOperation},
@@ -26,16 +29,62 @@ use zeth_lib::{
         DeriveInput, DeriveMachine,
     },
 };
-use zeth_primitives::{block::Header, tree::MerkleMountainRange};
+use zeth_primitives::{
+    block::Header, transactions::optimism::OptimismTxEssence, tree::MerkleMountainRange,
+};
 
 use crate::{
-    cli::Cli,
+    cache_file_path,
+    cli::{Cli, CoreArgs},
     operations::{execute, maybe_prove},
 };
+
+async fn fetch_op_blocks(
+    core_args: &CoreArgs,
+    block_number: u64,
+    block_count: u64,
+) -> anyhow::Result<Vec<Input<OptimismTxEssence>>> {
+    let mut op_blocks = vec![];
+    for i in 0..block_count {
+        let block_number = block_number + i;
+        let rpc_cache = core_args.cache.as_ref().map(|dir| {
+            cache_file_path(dir, &Network::Optimism.to_string(), block_number, "json.gz")
+        });
+        let rpc_url = core_args.op_rpc_url.clone();
+        // Collect block building data
+        let preflight_result = tokio::task::spawn_blocking(move || {
+            OptimismStrategy::run_preflight(
+                OP_MAINNET_CHAIN_SPEC.clone(),
+                rpc_cache,
+                rpc_url,
+                block_number,
+            )
+        })
+        .await?
+        .context("preflight failed")?;
+
+        // Create the guest input from [Init]
+        let input = preflight_result
+            .clone()
+            .try_into()
+            .context("invalid preflight data")?;
+
+        op_blocks.push(input);
+    }
+
+    Ok(op_blocks)
+}
 
 pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::Result<()> {
     info!("Fetching data ...");
     let core_args = cli.core_args().clone();
+    let op_blocks = fetch_op_blocks(
+        &core_args,
+        core_args.block_number + 1,
+        core_args.block_count,
+    )
+    .await?;
+
     let (derive_input, output) = tokio::task::spawn_blocking(move || {
         let derive_input = DeriveInput {
             db: RpcDb::new(
@@ -45,6 +94,7 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
             ),
             op_head_block_no: core_args.block_number,
             op_derive_block_count: core_args.block_count,
+            op_blocks: op_blocks.clone(),
         };
         let mut derive_machine = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input)
             .context("Could not create derive machine")?;
@@ -53,6 +103,7 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
             db: derive_machine.derive_input.db.get_mem_db(),
             op_head_block_no: core_args.block_number,
             op_derive_block_count: core_args.block_count,
+            op_blocks,
         };
         let out: anyhow::Result<_> = Ok((derive_input_mem, derive_output));
         out
@@ -227,11 +278,15 @@ pub async fn compose_derived_rollup_blocks(
             core_args.op_rpc_url.clone(),
             core_args.cache.clone(),
         );
+        let op_head_block_no = core_args.block_number + op_block_index;
+        let op_blocks = fetch_op_blocks(&core_args, op_head_block_no + 1, composition_size).await?;
+
         let (input, output, chain) = tokio::task::spawn_blocking(move || {
             let derive_input = DeriveInput {
                 db,
                 op_head_block_no: core_args.block_number + op_block_index,
                 op_derive_block_count: composition_size,
+                op_blocks: op_blocks.clone(),
             };
             let mut derive_machine = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input)
                 .expect("Could not create derive machine");
@@ -262,6 +317,7 @@ pub async fn compose_derived_rollup_blocks(
                 db: derive_machine.derive_input.db.get_mem_db(),
                 op_head_block_no: core_args.block_number + op_block_index,
                 op_derive_block_count: composition_size,
+                op_blocks,
             };
             let out: anyhow::Result<_> = Ok((derive_input_mem, derive_output, eth_chain));
             out

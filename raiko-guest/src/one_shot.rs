@@ -2,11 +2,14 @@ use std::{
     fs::{self, File, OpenOptions},
     io::prelude::*,
     os::unix::fs::PermissionsExt,
-    path::Path,
+    path::{Path, PathBuf},
     str::FromStr,
 };
 
 use anyhow::{anyhow, bail, Context, Error, Result};
+use base64_serde::base64_serde_type;
+use secp256k1::KeyPair;
+use serde::Serialize;
 use zeth_lib::{
     consts::{get_taiko_chain_spec, ChainSpec, ETH_MAINNET_CHAIN_SPEC},
     host::Init,
@@ -18,6 +21,7 @@ use zeth_lib::{
     EthereumTxEssence,
 };
 use zeth_primitives::{taiko::EvidenceType, Address, B256};
+base64_serde_type!(Base64Standard, base64::engine::general_purpose::STANDARD);
 
 use crate::{
     app_args::{GlobalOpts, OneShotArgs},
@@ -27,21 +31,73 @@ use crate::{
 pub const ATTESTATION_QUOTE_DEVICE_FILE: &str = "/dev/attestation/quote";
 pub const ATTESTATION_TYPE_DEVICE_FILE: &str = "/dev/attestation/attestation_type";
 pub const ATTESTATION_USER_REPORT_DATA_DEVICE_FILE: &str = "/dev/attestation/user_report_data";
+pub const BOOTSTRAP_INFO_FILENAME: &str = "bootstrap.json";
 pub const PRIV_KEY_FILENAME: &str = "priv.key";
 
-pub fn bootstrap(global_opts: GlobalOpts) -> Result<()> {
-    let privkey_path = global_opts.secrets_dir.join(PRIV_KEY_FILENAME);
-    let key_pair = generate_key();
-    let mut file =
-        fs::File::create(&privkey_path).with_context(|| "Failed to create private key file")?;
+#[derive(Serialize)]
+struct BootstrapData {
+    public_key: String,
+    new_instance: Address,
+    #[serde(with = "Base64Standard")]
+    quote: Vec<u8>,
+}
+
+fn save_priv_key(key_pair: &KeyPair, privkey_path: &PathBuf) -> Result<()> {
+    let mut file = fs::File::create(privkey_path).with_context(|| {
+        format!(
+            "Failed to create private key file {}",
+            privkey_path.display()
+        )
+    })?;
     let permissions = std::fs::Permissions::from_mode(0o600);
     file.set_permissions(permissions)
-        .with_context(|| "Failed to set permissions to private key file")?;
+        .context("Failed to set restrictive permissions of the private key file")?;
     file.write_all(&key_pair.secret_bytes())
-        .with_context(|| format!("Failed to write to {}", privkey_path.display()))?;
+        .context("Failed to save encrypted private key file")?;
+    Ok(())
+}
+
+fn get_sgx_quote() -> Result<Vec<u8>> {
+    let mut quote_file = File::open(ATTESTATION_QUOTE_DEVICE_FILE)?;
+    let mut quote = Vec::new();
+    quote_file.read_to_end(&mut quote)?;
+    Ok(quote)
+}
+
+fn save_bootstrap_details(
+    key_pair: &KeyPair,
+    new_instance: Address,
+    quote: Vec<u8>,
+    bootstrap_details_file_path: &Path,
+) -> Result<(), Error> {
+    let bootstrap_details = BootstrapData {
+        public_key: format!("0x{}", key_pair.public_key().to_string()),
+        new_instance,
+        quote,
+    };
+    let json = serde_json::to_string_pretty(&bootstrap_details)?;
+    fs::write(bootstrap_details_file_path, json).context(format!(
+        "Saving bootstrap data file {} failed",
+        bootstrap_details_file_path.display()
+    ))?;
+    Ok(())
+}
+
+pub fn bootstrap(global_opts: GlobalOpts) -> Result<()> {
+    let key_pair = generate_key();
+    let privkey_path = global_opts.secrets_dir.join(PRIV_KEY_FILENAME);
+    save_priv_key(&key_pair, &privkey_path)?;
     println!("Public key: 0x{}", key_pair.public_key());
     let new_instance = public_key_to_address(&key_pair.public_key());
     println!("Instance address: {}", new_instance);
+    let quote = get_sgx_quote()?;
+    let bootstrap_details_file_path = global_opts.config_dir.join(BOOTSTRAP_INFO_FILENAME);
+    save_bootstrap_details(&key_pair, new_instance, quote, &bootstrap_details_file_path)?;
+    println!(
+        "Bootstrap details saved in {}",
+        bootstrap_details_file_path.display()
+    );
+    println!("Encrypted private key saved in {}", privkey_path.display());
     Ok(())
 }
 
@@ -68,11 +124,9 @@ pub async fn one_shot(global_opts: GlobalOpts, args: OneShotArgs) -> Result<()> 
 
     let privkey_path = global_opts.secrets_dir.join(PRIV_KEY_FILENAME);
     let prev_privkey = load_private_key(&privkey_path)?;
-    // println!("Private key: {}", prev_privkey.display_secret());
     // let (new_privkey, new_pubkey) = generate_new_keypair()?;
     let new_pubkey = public_key(&prev_privkey);
     let new_instance = public_key_to_address(&new_pubkey);
-
     let l2_chain_spec = get_taiko_chain_spec(&args.l2_chain.unwrap());
 
     // fs::write(privkey_path, new_privkey.to_bytes())?;
@@ -180,9 +234,7 @@ fn print_sgx_info() -> Result<()> {
     let attestation_type = get_sgx_attestation_type()?;
     println!("Detected attestation type: {}", attestation_type.trim());
 
-    let mut quote_file = File::open(ATTESTATION_QUOTE_DEVICE_FILE)?;
-    let mut quote = Vec::new();
-    quote_file.read_to_end(&mut quote)?;
+    let quote = get_sgx_quote()?;
     println!(
         "Extracted SGX quote with size = {} and the following fields:",
         quote.len()

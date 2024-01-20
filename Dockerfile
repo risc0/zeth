@@ -23,15 +23,15 @@ RUN apt-get update && \
 RUN mkdir -p \
     ./bin \
     ./guests/sgx \
-    ./secrets \
-    /etc/opt/raiko \
+    /root/.config/raiko/config \
+    /root/.config/raiko/secrets \
     /tmp/sgx \
     /var/log/raiko
 
-COPY --from=builder /opt/raiko/target/release/raiko-guest ./guests/sgx/
-COPY --from=builder /opt/raiko/raiko-guest/config/raiko-guest.manifest.template ./guests/sgx/
+COPY --from=builder /opt/raiko/target/release/raiko-guest ./guests/sgx
+COPY --from=builder /opt/raiko/raiko-guest/config/raiko-guest.manifest.template ./guests/sgx
 COPY --from=builder /opt/raiko/target/release/raiko-host ./bin
-COPY --from=builder /opt/raiko/raiko-host/config/config.toml /etc/opt/raiko/
+COPY --from=builder /opt/raiko/raiko-host/config/config.toml /root/.config/raiko/config
 COPY --from=builder /opt/raiko/docker/entrypoint.sh ./bin
 COPY ./sgx-ra/src/*.so /usr/lib/
 

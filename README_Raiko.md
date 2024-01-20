@@ -116,7 +116,7 @@ To run `raiko-guest` in _one-shot_ mode with SGX using Gramine:
    -----------------------------------------------------------------------------------------------------------------------
    Bootstrapping the app
    Next public key: 0x021d90eee5c402692fa3a3d3edd43a052367efbd6e4d26b9ca14099516525b9d09
-   Entry: /secrets/priv.key
+   Entry: /root/.config/raiko/secrets/priv.key
    ```
 1. Run `raiko-guest` with the input file of your choice:
 

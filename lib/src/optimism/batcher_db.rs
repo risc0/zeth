@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
+use alloc::vec::Vec;
 
 use anyhow::{ensure, Result};
 use serde::{Deserialize, Serialize};

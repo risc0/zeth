@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use hashbrown::HashMap;
+use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
     block::Header,

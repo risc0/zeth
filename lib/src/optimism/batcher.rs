@@ -13,10 +13,9 @@
 // limitations under the License.
 
 use core::cmp::Ordering;
-use std::{
-    cmp::Reverse,
-    collections::{BinaryHeap, VecDeque},
-};
+use core::cmp::Reverse;
+use alloc::collections::{BinaryHeap, VecDeque};
+use alloc::vec::Vec;
 
 use anyhow::{ensure, Context, Result};
 use zeth_primitives::{

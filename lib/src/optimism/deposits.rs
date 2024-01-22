@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloc::{vec, vec::Vec};
 use alloy_sol_types::{sol_data, SolType};
 use anyhow::{ensure, Context};
 use zeth_primitives::{

@@ -12,14 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    collections::{BTreeMap, VecDeque},
-    io::Read,
-};
+// use std::io::Read;
+
+use alloc::collections::{BTreeMap, VecDeque};
+use alloc::vec::Vec;
 
 use anyhow::{bail, ensure, Context, Result};
 use bytes::Buf;
 use libflate::zlib::Decoder;
+use core2::io::Read;
 use zeth_primitives::{
     batch::Batch,
     rlp::Decodable,
@@ -285,6 +286,20 @@ impl Channel {
         Ok(decompressed)
     }
 }
+
+// struct Core2Error {
+//     inner: core2::io::Error
+// }
+// impl From<Core2Error> for anyhow::Error {
+//     fn from(err: Core2Error) -> Self {
+//         anyhow::Error::msg(err.inner.to_string())
+//     }
+// }
+// impl From<core2::io::Error> for Core2Error {
+//     fn from(err: core2::io::Error) -> Self {
+//         Self { inner: err }
+//     }
+// }
 
 /// A [Frame] is a chunk of data belonging to a [Channel]. Batcher transactions carry one
 /// or multiple frames. The reason to split a channel into frames is that a channel might

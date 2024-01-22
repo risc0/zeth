@@ -211,9 +211,11 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             let trie_key = tx_no.to_rlp();
             tx_trie
                 .insert_rlp(&trie_key, tx)
+                .map_err(|e|  Into::<anyhow::Error>::into(e))
                 .context("failed to insert transaction")?;
             receipt_trie
                 .insert_rlp(&trie_key, receipt)
+                .map_err(|e|  Into::<anyhow::Error>::into(e))
                 .context("failed to insert receipt")?;
         }
 

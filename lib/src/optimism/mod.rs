@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use core::iter::once;
-
+use alloc::vec::Vec;
 use alloy_sol_types::{sol, SolInterface};
 use anyhow::{bail, ensure, Context, Result};
 #[cfg(not(target_os = "zkvm"))]

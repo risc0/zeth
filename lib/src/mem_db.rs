@@ -14,6 +14,7 @@
 
 use anyhow::anyhow;
 use hashbrown::{hash_map::Entry, HashMap};
+use alloc::vec::Vec;
 use revm::{
     primitives::{Account, AccountInfo, Bytecode},
     Database, DatabaseCommit,
@@ -36,6 +37,15 @@ pub enum DbError {
     /// Unspecified error.
     #[error(transparent)]
     Unspecified(#[from] anyhow::Error),
+}
+
+impl From<DbError> for anyhow::Error {
+    fn from(e: DbError) -> Self {
+        match e {
+            DbError::Unspecified(e) => e,
+            _ => anyhow::Error::msg(e.to_string()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

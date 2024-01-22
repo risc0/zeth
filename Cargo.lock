@@ -4905,7 +4905,6 @@ dependencies = [
  "core2",
  "ethers-core",
  "ethers-providers",
- "flate2",
  "hashbrown 0.14.2",
  "libflate",
  "log",

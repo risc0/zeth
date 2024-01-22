@@ -21,6 +21,7 @@ pub use alloc::{vec, vec::Vec};
 
 pub mod access_list;
 pub mod block;
+pub mod batch;
 pub mod keccak;
 pub mod receipt;
 pub mod transactions;
@@ -30,7 +31,6 @@ pub mod withdrawal;
 #[cfg(feature = "ethers")]
 pub mod ethers;
 
-pub mod batch;
 #[cfg(feature = "revm")]
 pub mod revm;
 

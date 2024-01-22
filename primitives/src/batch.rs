@@ -24,6 +24,7 @@ pub use alloc::{
     vec,
     vec::Vec,
 };
+use thiserror_no_std::Error as ThisError;
 pub use core::{
     cmp::{Ord, Ordering, PartialOrd},
     convert::From,
@@ -123,6 +124,10 @@ impl Decodable for Batch {
         }
     }
 }
+
+#[derive(ThisError, Debug)]
+#[error(transparent)]
+pub struct AlloyRlpError(#[from] alloy_rlp::Error);
 
 #[cfg(test)]
 mod tests {

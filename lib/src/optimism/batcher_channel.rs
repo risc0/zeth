@@ -19,12 +19,13 @@ use alloc::{
     vec::Vec,
 };
 
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{anyhow, bail, ensure, Context, Result};
 use bytes::Buf;
 use core2::io::Read;
 use libflate::zlib::Decoder;
+use thiserror_no_std::Error as ThisError;
 use zeth_primitives::{
-    batch::Batch,
+    batch::{Batch, AlloyRlpError},
     rlp::Decodable,
     transactions::{ethereum::EthereumTxEssence, Transaction, TxEssence},
     Address, BlockNumber,
@@ -254,7 +255,9 @@ impl Channel {
 
         while !channel_data.is_empty() {
             let mut batch =
-                Batch::decode(&mut channel_data).context("failed to decode batch data")?;
+                Batch::decode(&mut channel_data)
+                .map_err(|e| anyhow!(AlloyRlpError::from(e)))
+                .context("failed to decode batch data")?;
             batch.inclusion_block_number = l1_block_number;
 
             batches.push(batch);
@@ -281,29 +284,19 @@ impl Channel {
         //  channel contained only the first MAX_RLP_BYTES_PER_CHANNEL decompressed bytes."
         let mut decompressed = Vec::new();
         Decoder::new(compressed.as_slice())
-            .map_err(|e| anyhow::Error::from(Core2Error::from(e)))?
+            .map_err(|e| anyhow!(Core2Error::from(e)))?
             .take(MAX_RLP_BYTES_PER_CHANNEL)
             .read_to_end(&mut decompressed)
-            .map_err(|e| anyhow::Error::from(Core2Error::from(e)))
+            .map_err(|e| anyhow!(Core2Error::from(e)))
             .context("failed to decompress")?;
 
         Ok(decompressed)
     }
 }
 
-struct Core2Error {
-    inner: core2::io::Error,
-}
-impl From<Core2Error> for anyhow::Error {
-    fn from(err: Core2Error) -> Self {
-        anyhow::Error::msg(err.inner.to_string())
-    }
-}
-impl From<core2::io::Error> for Core2Error {
-    fn from(err: core2::io::Error) -> Self {
-        Self { inner: err }
-    }
-}
+#[derive(ThisError, Debug)]
+#[error(transparent)]
+struct Core2Error(#[from] core2::io::Error);
 
 /// A [Frame] is a chunk of data belonging to a [Channel]. Batcher transactions carry one
 /// or multiple frames. The reason to split a channel into frames is that a channel might

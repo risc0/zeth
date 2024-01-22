@@ -13,10 +13,11 @@
 // limitations under the License.
 
 use alloc::vec::Vec;
+use thiserror_no_std::Error as ThisError;
 use core::iter::once;
 
 use alloy_sol_types::{sol, SolInterface};
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{anyhow, bail, ensure, Context, Result};
 #[cfg(not(target_os = "zkvm"))]
 use log::info;
 use serde::{Deserialize, Serialize};
@@ -69,6 +70,10 @@ sol! {
         );
     }
 }
+
+#[derive(ThisError, Debug)]
+#[error(transparent)]
+struct AlloySolError(#[from] alloy_sol_types::Error);
 
 /// Represents the input for the derivation process.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -133,11 +138,13 @@ impl<D: BatcherDb> DeriveMachine<D> {
         // decode the L1 attributes deposited transaction
         let set_l1_block_values = {
             let call = OpSystemInfo::OpSystemInfoCalls::abi_decode(l1_attributes_tx.data(), true)
+                .map_err(|e| anyhow!(AlloySolError::from(e)))
                 .context("invalid L1 attributes data")?;
             match call {
                 OpSystemInfo::OpSystemInfoCalls::setL1BlockValues(x) => x,
             }
         };
+
 
         let op_block_seq_no = set_l1_block_values.sequence_number;
 
@@ -382,3 +389,5 @@ fn validate_l1_attributes_deposited_tx(config: &ChainConfig, tx: &OptimismTxEsse
 
     Ok(())
 }
+
+

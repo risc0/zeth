@@ -15,7 +15,7 @@
 use alloc::{vec, vec::Vec};
 
 use alloy_sol_types::{sol_data, SolType};
-use anyhow::{ensure, Context};
+use anyhow::{anyhow, ensure, Context};
 use zeth_primitives::{
     fixed_bytes, keccak256,
     receipt::Log,
@@ -26,6 +26,8 @@ use zeth_primitives::{
     },
     Address, Bloom, BloomInput, B256, U160, U256,
 };
+
+use crate::optimism::AlloySolError;
 
 use super::{batcher_db::BlockInput, config::ChainConfig};
 
@@ -119,7 +121,9 @@ fn to_deposit_transaction(
 
     // the log data is just an ABI encoded `bytes` type representing the opaque_data
     let opaque_data: Vec<u8> =
-        sol_data::Bytes::abi_decode(&log.data, true).context("invalid data")?;
+        sol_data::Bytes::abi_decode(&log.data, true)
+        .map_err(|e| anyhow!(AlloySolError::from(e)))
+        .context("invalid data")?;
 
     ensure!(opaque_data.len() >= 73, "invalid opaque_data");
     let mint = U256::try_from_be_slice(&opaque_data[0..32]).context("invalid mint")?;

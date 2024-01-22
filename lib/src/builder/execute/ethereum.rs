@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use core::{fmt::Debug, mem::take};
+use alloc::format;
 
 use anyhow::{anyhow, bail, Context};
 #[cfg(not(target_os = "zkvm"))]

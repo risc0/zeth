@@ -38,7 +38,7 @@ use zeth_primitives::{
 use crate::{
     cache_file_path,
     cli::{Cli, CoreArgs},
-    operations::{execute, maybe_prove},
+    operations::{execute, maybe_prove, verify_bonsai_receipt},
 };
 
 async fn fetch_op_blocks(
@@ -152,73 +152,19 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
                 None,
             );
         }
-        Cli::Verify(..) => {
-            unimplemented!()
+        Cli::Verify(verify_args) => {
+            verify_bonsai_receipt(
+                OP_DERIVE_ID.into(),
+                &output,
+                verify_args.bonsai_receipt_uuid.clone(),
+                None,
+            )?;
         }
         Cli::OpInfo(..) => {
             unreachable!()
         }
     }
 
-    // let mut bonsai_session_uuid = args.verify_receipt_bonsai_uuid;
-
-    // Verify receipt from Bonsai (if requested)
-    // if let Some(session_uuid) = bonsai_session_uuid {
-    //     let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)
-    //         .expect("Could not create Bonsai client");
-    //     let session = bonsai_sdk::SessionId { uuid: session_uuid };
-    //
-    //     loop {
-    //         let res = session
-    //             .status(&client)
-    //             .expect("Could not fetch Bonsai status");
-    //         if res.status == "RUNNING" {
-    //             println!(
-    //                 "Current status: {} - state: {} - continue polling...",
-    //                 res.status,
-    //                 res.state.unwrap_or_default()
-    //             );
-    //             tokio::time::sleep(std::time::Duration::from_secs(15)).await;
-    //             continue;
-    //         }
-    //         if res.status == "SUCCEEDED" {
-    //             // Download the receipt, containing the output
-    //             let receipt_url = res
-    //                 .receipt_url
-    //                 .expect("API error, missing receipt on completed session");
-    //
-    //             let receipt_buf = client
-    //                 .download(&receipt_url)
-    //                 .expect("Could not download receipt");
-    //             let receipt: Receipt =
-    //                 bincode::deserialize(&receipt_buf).expect("Could not deserialize
-    // receipt");             receipt
-    //                 .verify(OP_DERIVE_ID)
-    //                 .expect("Receipt verification failed");
-    //
-    //             let bonsai_output: DeriveOutput = receipt.journal.decode().unwrap();
-    //
-    //             if output == bonsai_output {
-    //                 println!("Bonsai succeeded");
-    //             } else {
-    //                 error!(
-    //                     "Output mismatch! Bonsai: {:?}, expected: {:?}",
-    //                     bonsai_output, output,
-    //                 );
-    //             }
-    //         } else {
-    //             panic!(
-    //                 "Workflow exited: {} - | err: {}",
-    //                 res.status,
-    //                 res.error_msg.unwrap_or_default()
-    //             );
-    //         }
-    //
-    //         break;
-    //     }
-    //
-    //     info!("Bonsai request completed");
-    // }
     Ok(())
 }
 
@@ -469,7 +415,7 @@ pub async fn compose_derived_rollup_blocks(
         .process()
         .expect("Finish composition failed.");
 
-    let op_compose_receipt = if let (
+    if let (
         Some((prep_receipt_uuid, prep_receipt)),
         Some((aggregate_receipt_uuid, aggregate_receipt)),
     ) = (prep_compose_receipt, aggregate_receipt)
@@ -485,19 +431,19 @@ pub async fn compose_derived_rollup_blocks(
             ),
             file_reference,
             Some(&mut receipt_index),
-        )
+        );
+    } else if let Cli::Verify(verify_args) = cli {
+        verify_bonsai_receipt(
+            OP_COMPOSE_ID.into(),
+            &finish_compose_output,
+            verify_args.bonsai_receipt_uuid.clone(),
+            None,
+        )?;
     } else {
-        None
+        info!("Preflight successful!");
     };
 
     dbg!(&finish_compose_output);
-
-    if let Some((_final_receipt_uuid, final_receipt)) = op_compose_receipt {
-        final_receipt
-            .verify(OP_COMPOSE_ID)
-            .expect("Failed to verify final receipt");
-        info!("Verified final receipt!");
-    }
 
     Ok(())
 }

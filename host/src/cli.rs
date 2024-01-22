@@ -188,5 +188,5 @@ pub struct VerifyArgs {
     pub core_args: CoreArgs,
     #[clap(short, long, require_equals = true)]
     /// Verify the receipt from the provided Bonsai Session UUID.
-    pub receipt_bonsai_uuid: Option<String>,
+    pub bonsai_receipt_uuid: String,
 }

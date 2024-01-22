@@ -17,6 +17,7 @@ use std::fmt::Debug;
 use anyhow::Context;
 use ethers_core::types::Transaction as EthersTransaction;
 use log::info;
+use risc0_zkvm::compute_image_id;
 use serde::{Deserialize, Serialize};
 use zeth_lib::{
     builder::BlockBuilderStrategy,
@@ -28,7 +29,7 @@ use zeth_lib::{
 use crate::{
     cache_file_path,
     cli::Cli,
-    operations::{execute, maybe_prove},
+    operations::{execute, maybe_prove, verify_bonsai_receipt},
 };
 
 pub async fn build_chain_blocks<N: BlockBuilderStrategy>(
@@ -76,6 +77,7 @@ where
 
     info!("Final block hash derived successfully. {}", header.hash());
 
+    let expected_output = preflight_data.header.hash();
     match &cli {
         Cli::Build(..) => {}
         Cli::Run(run_args) => {
@@ -84,7 +86,7 @@ where
                 run_args.exec_args.local_exec,
                 run_args.exec_args.profile,
                 guest_elf,
-                &preflight_data.header.hash(),
+                &expected_output,
                 file_reference,
             );
         }
@@ -93,78 +95,24 @@ where
                 &cli,
                 &input,
                 guest_elf,
-                &preflight_data.header.hash(),
+                &expected_output,
                 Default::default(),
                 file_reference,
                 None,
             );
         }
-        Cli::Verify(..) => {
-            unimplemented!()
+        Cli::Verify(verify_args) => {
+            verify_bonsai_receipt(
+                compute_image_id(guest_elf)?,
+                &expected_output,
+                verify_args.bonsai_receipt_uuid.clone(),
+                None,
+            )?;
         }
         Cli::OpInfo(..) => {
             unreachable!()
         }
     }
-
-    // let mut bonsai_session_uuid = args.verify_receipt_bonsai_uuid;
-
-    // Verify receipt from Bonsai (if requested)
-    // if let Some(session_uuid) = bonsai_session_uuid {
-    //     let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)
-    //         .expect("Could not create Bonsai client");
-    //     let session = bonsai_sdk::SessionId { uuid: session_uuid };
-    //
-    //     loop {
-    //         let res = session
-    //             .status(&client)
-    //             .expect("Could not fetch Bonsai status");
-    //         if res.status == "RUNNING" {
-    //             println!(
-    //                 "Current status: {} - state: {} - continue polling...",
-    //                 res.status,
-    //                 res.state.unwrap_or_default()
-    //             );
-    //             tokio::time::sleep(std::time::Duration::from_secs(15)).await;
-    //             continue;
-    //         }
-    //         if res.status == "SUCCEEDED" {
-    //             // Download the receipt, containing the output
-    //             let receipt_url = res
-    //                 .receipt_url
-    //                 .expect("API error, missing receipt on completed session");
-    //
-    //             let receipt_buf = client
-    //                 .download(&receipt_url)
-    //                 .expect("Could not download receipt");
-    //             let receipt: Receipt =
-    //                 bincode::deserialize(&receipt_buf).expect("Could not deserialize
-    // receipt");             receipt
-    //                 .verify(guest_id)
-    //                 .expect("Receipt verification failed");
-    //
-    //             let expected_hash = preflight_data.header.hash();
-    //             let found_hash: BlockHash = receipt.journal.decode().unwrap();
-    //
-    //             if found_hash == expected_hash {
-    //                 info!("Block hash (from Bonsai): {}", found_hash);
-    //             } else {
-    //                 error!(
-    //                     "Final block hash mismatch (from Bonsai) {} (expected {})",
-    //                     found_hash, expected_hash,
-    //                 );
-    //             }
-    //         } else {
-    //             panic!(
-    //                 "Workflow exited: {} - | err: {}",
-    //                 res.status,
-    //                 res.error_msg.unwrap_or_default()
-    //             );
-    //         }
-    //
-    //         break;
-    //     }
-    // }
 
     Ok(())
 }

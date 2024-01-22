@@ -14,9 +14,9 @@
 
 use std::collections::BTreeSet;
 
+use anyhow::anyhow;
 use ethers_core::types::{EIP1186ProofResponse, H160, H256};
 use hashbrown::HashMap;
-use anyhow::anyhow;
 use revm::{
     primitives::{Account, AccountInfo, Bytecode},
     Database, DatabaseCommit,
@@ -187,8 +187,7 @@ impl Database for ProviderDb {
         }
 
         // ensure that the corresponding account is loaded
-        self.initial_db.basic(address)
-            .map_err(|e| anyhow!(e))?;
+        self.initial_db.basic(address).map_err(|e| anyhow!(e))?;
 
         let storage = {
             let bytes = index.to_be_bytes();

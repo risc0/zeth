@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use hashbrown::HashMap;
 use alloc::vec::Vec;
 
 use anyhow::{ensure, Result};
+use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
     block::Header,

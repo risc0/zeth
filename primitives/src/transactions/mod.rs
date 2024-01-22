@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use core::{clone::Clone, option::Option, panic};
 
 use alloy_primitives::{Address, Bytes, TxHash};
 use alloy_rlp::Encodable;

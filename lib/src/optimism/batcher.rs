@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::cmp::Ordering;
-use core::cmp::Reverse;
-use alloc::collections::{BinaryHeap, VecDeque};
-use alloc::vec::Vec;
+use alloc::{
+    collections::{BinaryHeap, VecDeque},
+    vec::Vec,
+};
+use core::cmp::{Ordering, Reverse};
 
 use anyhow::{ensure, Context, Result};
 use zeth_primitives::{

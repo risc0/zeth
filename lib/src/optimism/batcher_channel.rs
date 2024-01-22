@@ -14,13 +14,15 @@
 
 // use std::io::Read;
 
-use alloc::collections::{BTreeMap, VecDeque};
-use alloc::vec::Vec;
+use alloc::{
+    collections::{BTreeMap, VecDeque},
+    vec::Vec,
+};
 
 use anyhow::{bail, ensure, Context, Result};
 use bytes::Buf;
-use libflate::zlib::Decoder;
 use core2::io::Read;
+use libflate::zlib::Decoder;
 use zeth_primitives::{
     batch::Batch,
     rlp::Decodable,
@@ -290,7 +292,7 @@ impl Channel {
 }
 
 struct Core2Error {
-    inner: core2::io::Error
+    inner: core2::io::Error,
 }
 impl From<Core2Error> for anyhow::Error {
     fn from(err: Core2Error) -> Self {

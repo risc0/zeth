@@ -16,8 +16,9 @@
 extern crate alloc;
 
 use alloc::{
-    collections::BTreeMap, 
-    str::FromStr, string::{ToString, String}
+    collections::BTreeMap,
+    str::FromStr,
+    string::{String, ToString},
 };
 
 use anyhow::bail;

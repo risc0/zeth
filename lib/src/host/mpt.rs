@@ -73,10 +73,11 @@ pub fn mpt_from_proof(proof_nodes: &[MptNode]) -> Result<MptNode> {
 pub fn is_not_included(key: &[u8], proof_nodes: &[MptNode]) -> Result<bool> {
     let proof_trie = mpt_from_proof(proof_nodes).context("invalid trie")?;
     // for valid proofs, the get must not fail
-    let value = proof_trie.get(key)
-        .map_err(|e|  Into::<anyhow::Error>::into(e))
+    let value = proof_trie
+        .get(key)
+        .map_err(|e| Into::<anyhow::Error>::into(e))
         .context("invalid trie")?;
-    
+
     Ok(value.is_none())
 }
 

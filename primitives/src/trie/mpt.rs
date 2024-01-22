@@ -11,19 +11,33 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#[cfg(not(feature = "std"))]
-use crate::no_std_preflight::*;
 
-use anyhow::Result;
+// use crate::no_std_preflight::*;
+
+extern crate alloc;
+extern crate core;
+
+pub use alloc::{
+    boxed::Box,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 use core::{
     cell::RefCell,
     cmp,
     fmt::{Debug, Write},
     iter, mem,
+    cmp::PartialOrd,
+    convert::{AsRef, From},
+    default::Default,
+    option::{Option, Option::*},
+    result::Result::*,
 };
-
 use alloy_primitives::B256;
 use alloy_rlp::Encodable;
+use anyhow::Result;
 use rlp::{Decodable, DecoderError, Prototype, Rlp};
 use serde::{Deserialize, Serialize};
 use thiserror_no_std::Error as ThisError;

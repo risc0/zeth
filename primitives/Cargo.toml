@@ -26,5 +26,7 @@ hex-literal = "0.4"
 serde_json = "1.0"
 
 [features]
+default = ["std"]
+std = []
 ethers = ["dep:ethers-core"]
 revm = ["dep:revm-primitives"]

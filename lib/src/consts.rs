@@ -46,9 +46,6 @@ pub const MAX_BLOCK_HASH_AGE: u64 = 256;
 /// Multiplier for converting gwei to wei.
 pub const GWEI_TO_WEI: U256 = uint!(1_000_000_000_U256);
 
-/// Minimum supported protocol version: Paris (Block no. 15537394).
-pub const MIN_SPEC_ID: SpecId = SpecId::MERGE;
-
 /// The Ethereum mainnet specification.
 pub static ETH_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| {
     ChainSpec {
@@ -112,10 +109,16 @@ pub fn get_taiko_chain_spec(chain: &str) -> ChainSpec {
     }
 }
 
-/// The optimism mainnet specification.
+/// The Optimism mainnet specification.
 pub static OP_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
     chain_id: 10,
-    hard_forks: BTreeMap::from([(SpecId::MERGE, ForkCondition::Block(0))]),
+    hard_forks: BTreeMap::from([
+        (SpecId::FRONTIER, ForkCondition::Block(0)),
+        // previous versions not supported
+        (SpecId::BEDROCK, ForkCondition::Block(105235063)),
+        // Regolith is activated from day 1 of Bedrock on mainnet
+        (SpecId::REGOLITH, ForkCondition::Block(105235063)),
+    ]),
     eip_1559_constants: Eip1559Constants {
         base_fee_change_denominator: uint!(50_U256),
         base_fee_max_increase_denominator: uint!(10_U256),

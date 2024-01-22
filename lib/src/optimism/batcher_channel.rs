@@ -1,4 +1,4 @@
-// Copyright 2023 RISC Zero, Inc.
+// Copyright 2024 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ use zeth_primitives::{
     Address, BlockNumber,
 };
 
-use super::config::ChainConfig;
+use super::{batcher::BatchWithInclusion, config::ChainConfig};
 use crate::utils::MultiReader;
 
 pub const MAX_RLP_BYTES_PER_CHANNEL: u64 = 10_000_000;
@@ -37,7 +37,7 @@ pub struct BatcherChannels {
     max_channel_bank_size: u64,
     channel_timeout: u64,
     channels: VecDeque<Channel>,
-    batches: VecDeque<Vec<Batch>>,
+    batches: VecDeque<Vec<BatchWithInclusion>>,
 }
 
 impl BatcherChannels {
@@ -126,7 +126,7 @@ impl BatcherChannels {
         Ok(())
     }
 
-    pub fn read_batches(&mut self) -> Option<Vec<Batch>> {
+    pub fn read_batches(&mut self) -> Option<Vec<BatchWithInclusion>> {
         self.batches.pop_front()
     }
 
@@ -282,7 +282,7 @@ impl Channel {
 
     /// Reads all batches from an ready channel. If there is an invalid batch, the rest of
     /// the channel is skipped, but previous batches are returned.
-    fn read_batches(&self, block_number: BlockNumber) -> Vec<Batch> {
+    fn read_batches(&self, block_number: BlockNumber) -> Vec<BatchWithInclusion> {
         debug_assert!(self.is_ready());
 
         let mut batches = Vec::new();
@@ -297,18 +297,24 @@ impl Channel {
         batches
     }
 
-    fn decode_batches(&self, block_number: BlockNumber, batches: &mut Vec<Batch>) -> Result<()> {
+    fn decode_batches(
+        &self,
+        block_number: BlockNumber,
+        batches: &mut Vec<BatchWithInclusion>,
+    ) -> Result<()> {
         let decompressed = self
             .decompress()
             .context("failed to decompress channel data")?;
 
         let mut channel_data = decompressed.as_slice();
         while !channel_data.is_empty() {
-            let mut batch = Batch::decode(&mut channel_data)
+            let batch = Batch::decode(&mut channel_data)
                 .with_context(|| format!("failed to decode batch {}", batches.len()))?;
-            batch.inclusion_block_number = block_number;
 
-            batches.push(batch);
+            batches.push(BatchWithInclusion {
+                essence: batch.0,
+                inclusion_block_number: block_number,
+            });
         }
 
         Ok(())

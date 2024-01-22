@@ -147,7 +147,7 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
                 &derive_input,
                 OP_DERIVE_ELF,
                 &output,
-                vec![],
+                Default::default(),
                 file_reference,
                 None,
             );
@@ -161,47 +161,6 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
     }
 
     // let mut bonsai_session_uuid = args.verify_receipt_bonsai_uuid;
-
-    // Run in Bonsai (if requested)
-    // if bonsai_session_uuid.is_none() && args.submit_to_bonsai {
-    //     info!("Creating Bonsai client");
-    //     let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)
-    //         .expect("Could not create Bonsai client");
-    //
-    //     // create the memoryImg, upload it and return the imageId
-    //     info!("Uploading memory image");
-    //     let img_id = {
-    //         let program = Program::load_elf(OP_DERIVE_ELF, risc0_zkvm::GUEST_MAX_MEM as
-    // u32)             .expect("Could not load ELF");
-    //         let image = MemoryImage::new(&program, risc0_zkvm::PAGE_SIZE as u32)
-    //             .expect("Could not create memory image");
-    //         let image_id = hex::encode(image.compute_id());
-    //         let image = bincode::serialize(&image).expect("Failed to serialize memory
-    // img");
-    //
-    //         client
-    //             .upload_img(&image_id, image)
-    //             .expect("Could not upload ELF");
-    //         image_id
-    //     };
-    //
-    //     // Prepare input data and upload it.
-    //     info!("Uploading inputs");
-    //     let input_data = to_vec(&derive_input).unwrap();
-    //     let input_data = bytemuck::cast_slice(&input_data).to_vec();
-    //     let input_id = client
-    //         .upload_input(input_data)
-    //         .expect("Could not upload inputs");
-    //
-    //     // Start a session running the prover
-    //     info!("Starting session");
-    //     let session = client
-    //         .create_session(img_id, input_id)
-    //         .expect("Could not create Bonsai session");
-    //
-    //     println!("Bonsai session UUID: {}", session.uuid);
-    //     bonsai_session_uuid = Some(session.uuid)
-    // }
 
     // Verify receipt from Bonsai (if requested)
     // if let Some(session_uuid) = bonsai_session_uuid {
@@ -340,7 +299,7 @@ pub async fn compose_derived_rollup_blocks(
             &input,
             OP_DERIVE_ELF,
             &output,
-            vec![],
+            Default::default(),
             file_reference,
             Some(&mut receipt_index),
         );
@@ -390,7 +349,7 @@ pub async fn compose_derived_rollup_blocks(
         &prep_compose_input,
         OP_COMPOSE_ELF,
         &prep_compose_output,
-        vec![],
+        Default::default(),
         file_reference,
         Some(&mut receipt_index),
     );
@@ -414,13 +373,13 @@ pub async fn compose_derived_rollup_blocks(
             .process()
             .expect("Lift composition failed.");
 
-        let lift_compose_receipt = if let Some(receipt) = derive_receipt {
+        let lift_compose_receipt = if let Some((receipt_uuid, receipt)) = derive_receipt {
             maybe_prove(
                 &cli,
                 &lift_compose_input,
                 OP_COMPOSE_ELF,
                 &lift_compose_output,
-                vec![receipt.into()],
+                (vec![receipt.into()], vec![receipt_uuid]),
                 file_reference,
                 Some(&mut receipt_index),
             )
@@ -468,20 +427,26 @@ pub async fn compose_derived_rollup_blocks(
             .process()
             .expect("Join composition failed.");
 
-        let join_compose_receipt =
-            if let (Some(left_receipt), Some(right_receipt)) = (left_receipt, right_receipt) {
-                maybe_prove(
-                    &cli,
-                    &join_compose_input,
-                    OP_COMPOSE_ELF,
-                    &join_compose_output,
+        let join_compose_receipt = if let (
+            Some((left_receipt_uuid, left_receipt)),
+            Some((right_receipt_uuid, right_receipt)),
+        ) = (left_receipt, right_receipt)
+        {
+            maybe_prove(
+                &cli,
+                &join_compose_input,
+                OP_COMPOSE_ELF,
+                &join_compose_output,
+                (
                     vec![left_receipt.into(), right_receipt.into()],
-                    file_reference,
-                    Some(&mut receipt_index),
-                )
-            } else {
-                None
-            };
+                    vec![left_receipt_uuid, right_receipt_uuid],
+                ),
+                file_reference,
+                Some(&mut receipt_index),
+            )
+        } else {
+            None
+        };
 
         // Send workload to next round
         join_queue.push_back((join_compose_output, join_compose_receipt));
@@ -504,15 +469,20 @@ pub async fn compose_derived_rollup_blocks(
         .process()
         .expect("Finish composition failed.");
 
-    let op_compose_receipt = if let (Some(prep_receipt), Some(aggregate_receipt)) =
-        (prep_compose_receipt, aggregate_receipt)
+    let op_compose_receipt = if let (
+        Some((prep_receipt_uuid, prep_receipt)),
+        Some((aggregate_receipt_uuid, aggregate_receipt)),
+    ) = (prep_compose_receipt, aggregate_receipt)
     {
         maybe_prove(
             &cli,
             &finish_compose_input,
             OP_COMPOSE_ELF,
             &finish_compose_output,
-            vec![prep_receipt.into(), aggregate_receipt.into()],
+            (
+                vec![prep_receipt.into(), aggregate_receipt.into()],
+                vec![prep_receipt_uuid, aggregate_receipt_uuid],
+            ),
             file_reference,
             Some(&mut receipt_index),
         )
@@ -522,7 +492,7 @@ pub async fn compose_derived_rollup_blocks(
 
     dbg!(&finish_compose_output);
 
-    if let Some(final_receipt) = op_compose_receipt {
+    if let Some((_final_receipt_uuid, final_receipt)) = op_compose_receipt {
         final_receipt
             .verify(OP_COMPOSE_ID)
             .expect("Failed to verify final receipt");

@@ -94,7 +94,7 @@ where
                 &input,
                 guest_elf,
                 &preflight_data.header.hash(),
-                vec![],
+                Default::default(),
                 file_reference,
                 None,
             );
@@ -108,47 +108,6 @@ where
     }
 
     // let mut bonsai_session_uuid = args.verify_receipt_bonsai_uuid;
-
-    // Run in Bonsai (if requested)
-    // if bonsai_session_uuid.is_none() && args.submit_to_bonsai {
-    //     info!("Creating Bonsai client");
-    //     let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)
-    //         .expect("Could not create Bonsai client");
-    //
-    //     // create the memoryImg, upload it and return the imageId
-    //     info!("Uploading memory image");
-    //     let img_id = {
-    //         let program = Program::load_elf(guest_elf, risc0_zkvm::GUEST_MAX_MEM as u32)
-    //             .expect("Could not load ELF");
-    //         let image = MemoryImage::new(&program, risc0_zkvm::PAGE_SIZE as u32)
-    //             .expect("Could not create memory image");
-    //         let image_id = hex::encode(image.compute_id());
-    //         let image = bincode::serialize(&image).expect("Failed to serialize memory
-    // img");
-    //
-    //         client
-    //             .upload_img(&image_id, image)
-    //             .expect("Could not upload ELF");
-    //         image_id
-    //     };
-    //
-    //     // Prepare input data and upload it.
-    //     info!("Uploading inputs");
-    //     let input_data = to_vec(&input).unwrap();
-    //     let input_data = bytemuck::cast_slice(&input_data).to_vec();
-    //     let input_id = client
-    //         .upload_input(input_data)
-    //         .expect("Could not upload inputs");
-    //
-    //     // Start a session running the prover
-    //     info!("Starting session");
-    //     let session = client
-    //         .create_session(img_id, input_id)
-    //         .expect("Could not create Bonsai session");
-    //
-    //     println!("Bonsai session UUID: {}", session.uuid);
-    //     bonsai_session_uuid = Some(session.uuid)
-    // }
 
     // Verify receipt from Bonsai (if requested)
     // if let Some(session_uuid) = bonsai_session_uuid {

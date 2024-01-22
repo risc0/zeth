@@ -15,6 +15,7 @@
 extern crate alloc;
 
 use alloc::boxed::Box;
+use anyhow::Result;
 use core::{
     cell::RefCell,
     cmp,
@@ -69,6 +70,12 @@ pub enum Error {
     /// errors.
     #[error("RLP error")]
     LegacyRlp(#[from] DecoderError),
+}
+
+impl From<Error> for anyhow::Error {
+    fn from(error: Error) -> Self {
+        anyhow::Error::msg(error.to_string())
+    }
 }
 
 /// Represents the various types of data that can be stored within a node in the sparse

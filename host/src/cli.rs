@@ -121,7 +121,7 @@ pub struct CoreArgs {
 
     #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "rpc_cache")]
     /// Use a local directory as a cache for RPC calls. Accepts a custom directory.
-    /// [default: host/testdata]
+    /// [default: rpc_cache]
     pub cache: Option<PathBuf>,
 
     #[clap(short, long, require_equals = true)]
@@ -135,9 +135,9 @@ pub struct CoreArgs {
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct ExecutorArgs {
-    #[clap(short, long, require_equals = true, default_value_t = 20)]
+    #[clap(short = 'x', long, require_equals = true, default_value_t = 20)]
     /// The maximum segment cycle count as a power of 2.
-    pub local_exec: u32,
+    pub execution_po2: u32,
 
     #[clap(short, long, default_value_t = false)]
     /// Whether to profile the zkVM execution

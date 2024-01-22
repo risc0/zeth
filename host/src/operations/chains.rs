@@ -83,7 +83,7 @@ where
         Cli::Run(run_args) => {
             execute(
                 &input,
-                run_args.exec_args.local_exec,
+                run_args.exec_args.execution_po2,
                 run_args.exec_args.profile,
                 guest_elf,
                 &expected_output,

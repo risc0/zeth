@@ -134,7 +134,7 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
         Cli::Run(run_args) => {
             execute(
                 &derive_input,
-                run_args.exec_args.local_exec,
+                run_args.exec_args.execution_po2,
                 run_args.exec_args.profile,
                 OP_DERIVE_ELF,
                 &output,

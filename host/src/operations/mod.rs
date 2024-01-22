@@ -39,6 +39,7 @@ pub fn verify_bonsai_receipt<O: Eq + Debug + DeserializeOwned>(
     let client =
         client.unwrap_or_else(|| bonsai_sdk::Client::from_env(risc0_zkvm::VERSION).unwrap());
 
+    info!("Bonsai Receipt UUID: {}", uuid);
     let session = bonsai_sdk::SessionId { uuid };
 
     loop {
@@ -105,7 +106,7 @@ pub fn maybe_prove<I: Serialize, O: Eq + Debug + DeserializeOwned>(
             (
                 Default::default(),
                 prove_locally(
-                    prove_args.exec_args.local_exec,
+                    prove_args.exec_args.execution_po2,
                     encoded_input,
                     elf,
                     assumption_instances,

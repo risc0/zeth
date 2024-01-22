@@ -17,7 +17,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use risc0_zkvm::Receipt;
+use risc0_zkvm::{is_dev_mode, Receipt};
 
 pub mod cli;
 pub mod operations;
@@ -30,6 +30,10 @@ pub fn cache_file_path(cache_path: &Path, network: &str, block_no: u64, ext: &st
 }
 
 pub fn save_receipt(file_reference: &String, receipt: &Receipt, index: Option<&mut usize>) {
+    if is_dev_mode() {
+        // nothing to save
+        return;
+    }
     let receipt_serialized = bincode::serialize(receipt).expect("Failed to serialize receipt!");
     let path = if let Some(number) = index {
         *number += 1;

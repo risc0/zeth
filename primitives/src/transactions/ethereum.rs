@@ -11,6 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#[cfg(not(feature = "std"))]
+use crate::no_std_preflight::*;
 
 use alloy_primitives::{Address, Bytes, ChainId, TxNumber, B256, U256};
 use alloy_rlp::{Encodable, EMPTY_STRING_CODE};
@@ -22,7 +24,8 @@ use k256::{
     PublicKey as K256PublicKey,
 };
 use serde::{Deserialize, Serialize};
-
+use thiserror_no_std ::Error as ThisError;
+use anyhow::anyhow;
 use super::signature::TxSignature;
 use crate::{access_list::AccessList, keccak::keccak, transactions::TxEssence};
 
@@ -420,6 +423,7 @@ impl TxEssence for EthereumTxEssence {
         let is_y_odd = self.is_y_odd(signature).context("v invalid")?;
         let signature =
             K256Signature::from_scalars(signature.r.to_be_bytes(), signature.s.to_be_bytes())
+                .map_err(|e| anyhow!(EcdsaError::from(e)))
                 .context("r, s invalid")?;
 
         let verify_key = K256VerifyingKey::recover_from_prehash(
@@ -427,6 +431,7 @@ impl TxEssence for EthereumTxEssence {
             &signature,
             RecoveryId::new(is_y_odd, false),
         )
+        .map_err(|e| anyhow!(EcdsaError::from(e)))
         .context("invalid signature")?;
 
         let public_key = K256PublicKey::from(&verify_key);
@@ -454,6 +459,9 @@ impl TxEssence for EthereumTxEssence {
         }
     }
 }
+#[derive(ThisError, Debug)]
+#[error(transparent)]
+struct EcdsaError(#[from] k256::ecdsa::Error);
 
 #[cfg(test)]
 mod tests {

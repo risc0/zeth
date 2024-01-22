@@ -1722,26 +1722,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "no-std-thiserror"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd51a908f34bf466b13228b1f47639bf281c5580f6ef96a70cd6ddde90ce0380"
-dependencies = [
- "no-std-thiserror-impl",
-]
-
-[[package]]
-name = "no-std-thiserror-impl"
-version = "1.0.56"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0db3f7230e5876bd71547b860ac196513a1e38f0a854eea0cca293ccf055f554"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.48",
-]
-
-[[package]]
 name = "nom"
 version = "7.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3141,6 +3121,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "thiserror-impl-no-std"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58e6318948b519ba6dc2b442a6d0b904ebfb8d411a3ad3e07843615a72249758"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "thiserror-no-std"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3ad459d94dd517257cc96add8a43190ee620011bb6e6cdc82dafd97dfafafea"
+dependencies = [
+ "thiserror-impl-no-std",
+]
+
+[[package]]
 name = "threadpool"
 version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3864,13 +3864,13 @@ dependencies = [
  "hashbrown 0.14.2",
  "libflate",
  "log",
- "no-std-thiserror",
  "once_cell",
  "revm",
  "ruint",
  "serde",
  "serde_json",
  "serde_with",
+ "thiserror-no-std",
  "tokio",
  "zeth-primitives",
 ]
@@ -3886,11 +3886,11 @@ dependencies = [
  "bytes",
  "ethers-core",
  "k256",
- "no-std-thiserror",
  "revm-primitives",
  "rlp",
  "serde",
  "sha3",
+ "thiserror-no-std",
 ]
 
 [[patch.unused]]

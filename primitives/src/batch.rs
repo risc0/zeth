@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-use std::cmp::Ordering;
+#[cfg(not(feature = "std"))]
+use crate::no_std_preflight::*;
 
 use alloy_primitives::{BlockNumber, Bytes, B256};
 use alloy_rlp::{Decodable, Encodable};

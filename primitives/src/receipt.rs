@@ -11,6 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#[cfg(not(feature = "std"))]
+use crate::no_std_preflight::*;
 
 use alloy_primitives::{Address, Bloom, BloomInput, Bytes, B256, U256};
 use alloy_rlp::Encodable;

@@ -15,7 +15,7 @@ once_cell = "1.18"
 revm = { workspace = true }
 ruint = { version = "1.10", default-features = false }
 serde = "1.0"
-no-std-thiserror = {version = "0.1.0", default-features = false}
+thiserror-no-std = "2.0.2"
 zeth-primitives = { path = "../primitives", features = ["revm", "ethers"] }
 
 [target.'cfg(not(target_os = "zkvm"))'.dependencies]

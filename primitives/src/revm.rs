@@ -13,6 +13,8 @@
 // limitations under the License.
 
 //! Convert to revm types.
+#[cfg(not(feature = "std"))]
+use crate::no_std_preflight::*;
 
 use alloy_primitives::{Address, U256};
 use revm_primitives::Log as RevmLog;

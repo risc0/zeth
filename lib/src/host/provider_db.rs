@@ -16,6 +16,7 @@ use std::collections::BTreeSet;
 
 use ethers_core::types::{EIP1186ProofResponse, H160, H256};
 use hashbrown::HashMap;
+use anyhow::anyhow;
 use revm::{
     primitives::{Account, AccountInfo, Bytecode},
     Database, DatabaseCommit,
@@ -137,12 +138,12 @@ impl Database for ProviderDb {
         match self.latest_db.basic(address) {
             Ok(db_result) => return Ok(db_result),
             Err(DbError::AccountNotFound(_)) => {}
-            Err(err) => return Err(err.into()),
+            Err(err) => return Err(anyhow!(err)),
         }
         match self.initial_db.basic(address) {
             Ok(db_result) => return Ok(db_result),
             Err(DbError::AccountNotFound(_)) => {}
-            Err(err) => return Err(err.into()),
+            Err(err) => return Err(anyhow!(err)),
         }
 
         let account_info = {
@@ -177,16 +178,17 @@ impl Database for ProviderDb {
         match self.latest_db.storage(address, index) {
             Ok(db_result) => return Ok(db_result),
             Err(DbError::AccountNotFound(_)) | Err(DbError::SlotNotFound(_, _)) => {}
-            Err(err) => return Err(err.into()),
+            Err(err) => return Err(anyhow!(err)),
         }
         match self.initial_db.storage(address, index) {
             Ok(db_result) => return Ok(db_result),
             Err(DbError::AccountNotFound(_)) | Err(DbError::SlotNotFound(_, _)) => {}
-            Err(err) => return Err(err.into()),
+            Err(err) => return Err(anyhow!(err)),
         }
 
         // ensure that the corresponding account is loaded
-        self.initial_db.basic(address)?;
+        self.initial_db.basic(address)
+            .map_err(|e| anyhow!(e))?;
 
         let storage = {
             let bytes = index.to_be_bytes();
@@ -209,7 +211,7 @@ impl Database for ProviderDb {
         match self.initial_db.block_hash(number) {
             Ok(block_hash) => return Ok(block_hash),
             Err(DbError::BlockNotFound(_)) => {}
-            Err(err) => return Err(err.into()),
+            Err(err) => return Err(anyhow!(err)),
         }
 
         let block_no = u64::try_from(number).unwrap();

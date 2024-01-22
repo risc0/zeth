@@ -11,10 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#[cfg(not(feature = "std"))]
+use crate::no_std_preflight::*;
 
-extern crate alloc;
-
-use alloc::boxed::Box;
 use anyhow::Result;
 use core::{
     cell::RefCell,
@@ -27,7 +26,7 @@ use alloy_primitives::B256;
 use alloy_rlp::Encodable;
 use rlp::{Decodable, DecoderError, Prototype, Rlp};
 use serde::{Deserialize, Serialize};
-use thiserror::Error as ThisError;
+use thiserror_no_std::Error as ThisError;
 
 use crate::{keccak::keccak, trie::EMPTY_ROOT, RlpBytes};
 

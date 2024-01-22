@@ -278,28 +278,30 @@ impl Channel {
         //  of data). If the decompressed data exceeds the limit, things proceeds as though the
         //  channel contained only the first MAX_RLP_BYTES_PER_CHANNEL decompressed bytes."
         let mut decompressed = Vec::new();
-        Decoder::new(compressed.as_slice())?
+        Decoder::new(compressed.as_slice())
+            .map_err(|e| anyhow::Error::from(Core2Error::from(e)))?
             .take(MAX_RLP_BYTES_PER_CHANNEL)
             .read_to_end(&mut decompressed)
+            .map_err(|e| anyhow::Error::from(Core2Error::from(e)))
             .context("failed to decompress")?;
 
         Ok(decompressed)
     }
 }
 
-// struct Core2Error {
-//     inner: core2::io::Error
-// }
-// impl From<Core2Error> for anyhow::Error {
-//     fn from(err: Core2Error) -> Self {
-//         anyhow::Error::msg(err.inner.to_string())
-//     }
-// }
-// impl From<core2::io::Error> for Core2Error {
-//     fn from(err: core2::io::Error) -> Self {
-//         Self { inner: err }
-//     }
-// }
+struct Core2Error {
+    inner: core2::io::Error
+}
+impl From<Core2Error> for anyhow::Error {
+    fn from(err: Core2Error) -> Self {
+        anyhow::Error::msg(err.inner.to_string())
+    }
+}
+impl From<core2::io::Error> for Core2Error {
+    fn from(err: core2::io::Error) -> Self {
+        Self { inner: err }
+    }
+}
 
 /// A [Frame] is a chunk of data belonging to a [Channel]. Batcher transactions carry one
 /// or multiple frames. The reason to split a channel into frames is that a channel might

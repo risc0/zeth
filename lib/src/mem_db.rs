@@ -19,7 +19,7 @@ use revm::{
     primitives::{Account, AccountInfo, Bytecode},
     Database, DatabaseCommit,
 };
-use thiserror::Error as ThisError;
+use thiserror_no_std::Error as ThisError;
 use zeth_primitives::{Address, B256, U256};
 
 /// Error returned by the [MemDb].
@@ -39,14 +39,14 @@ pub enum DbError {
     Unspecified(#[from] anyhow::Error),
 }
 
-impl From<DbError> for anyhow::Error {
-    fn from(e: DbError) -> Self {
-        match e {
-            DbError::Unspecified(e) => e,
-            _ => anyhow::Error::msg(e.to_string()),
-        }
-    }
-}
+// impl From<DbError> for anyhow::Error {
+//     fn from(e: DbError) -> Self {
+//         match e {
+//             DbError::Unspecified(e) => e,
+//             _ => anyhow::Error::msg(e.to_string()),
+//         }
+//     }
+// }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum AccountState {

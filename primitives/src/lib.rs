@@ -12,7 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate core;
+#![cfg_attr(not(feature = "std"), no_std)]
+#[cfg(not(feature = "std"))]
+mod no_std_preflight {
+    extern crate core;
+    extern crate alloc;
+
+    pub use alloc::vec::Vec;
+    pub use alloc::vec;
+    pub use alloc::boxed::Box;
+    pub use alloc::string::String;
+    pub use alloc::string::ToString;
+    pub use alloc::format;
+
+    pub use core::option::{Option, Option::*};
+    pub use core::result::{Result, Result::*};
+    pub use core::default::Default;
+    pub use core::convert::From;
+    pub use core::cmp::Ordering;
+}
+
+#[cfg(not(feature = "std"))]
+pub use no_std_preflight::*;
 
 pub mod access_list;
 pub mod block;

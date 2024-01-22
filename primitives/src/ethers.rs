@@ -13,6 +13,9 @@
 // limitations under the License.
 
 //! Convert from Ethers types.
+#[cfg(not(feature = "std"))]
+use crate::no_std_preflight::*;
+use core::num::TryFromIntError;
 
 use alloy_primitives::{Address, Bloom, Bytes, B256, U256};
 use anyhow::{anyhow, Context};
@@ -275,6 +278,7 @@ impl TryFrom<EthersReceipt> for Receipt {
                 .context("transaction_type missing")?
                 .as_u64()
                 .try_into()
+                .map_err(|e: TryFromIntError| anyhow!(e))
                 .context("invalid transaction_type")?,
             payload: ReceiptPayload {
                 success: receipt.status.context("status missing")? == U64::one(),

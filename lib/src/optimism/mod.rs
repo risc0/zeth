@@ -105,6 +105,8 @@ pub struct DeriveMachine<D> {
 impl<D: BatcherDb> DeriveMachine<D> {
     /// Creates a new instance of DeriveMachine.
     pub fn new(chain_config: &ChainConfig, mut derive_input: DeriveInput<D>) -> Result<Self> {
+        derive_input.db.validate()?;
+
         let op_block_no = derive_input.op_head_block_no;
 
         // read system config from op_head (seq_no/epoch_no..etc)
@@ -279,8 +281,10 @@ impl<D: BatcherDb> DeriveMachine<D> {
                         let l1_epoch_header = self
                             .derive_input
                             .db
-                            .get_eth_block_header(op_batch.essence.epoch_num)
-                            .context("eth block not found")?;
+                            .get_full_eth_block(op_batch.essence.epoch_num)
+                            .context("eth block not found")?
+                            .block_header
+                            .clone();
                         ensure!(
                             new_op_head.mix_hash == l1_epoch_header.mix_hash,
                             "Invalid op block mix hash"

@@ -108,7 +108,7 @@ async fn main() -> Result<()> {
         let output_mem = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input.clone())
             .context("Could not create derive machine")?
             .derive()
-            .unwrap();
+            .context("could not derive")?;
         assert_eq!(output, output_mem);
     }
 

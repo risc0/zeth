@@ -47,7 +47,6 @@ fn op_cache_path(cache: &Option<PathBuf>, block_no: u64) -> Option<PathBuf> {
         .map(|dir| cache_file_path(dir, "optimism", block_no, "json.gz"))
 }
 
-#[derive(Clone)]
 pub struct RpcDb {
     eth_rpc_url: Option<String>,
     op_rpc_url: Option<String>,
@@ -75,6 +74,10 @@ impl RpcDb {
 }
 
 impl BatcherDb for RpcDb {
+    fn validate(&self) -> anyhow::Result<()> {
+        Ok(())
+    }
+
     fn get_full_op_block(
         &mut self,
         block_no: u64,
@@ -117,7 +120,7 @@ impl BatcherDb for RpcDb {
     fn get_full_eth_block(
         &mut self,
         block_no: u64,
-    ) -> anyhow::Result<BlockInput<EthereumTxEssence>> {
+    ) -> anyhow::Result<&BlockInput<EthereumTxEssence>> {
         let query = BlockQuery { block_no };
         let mut provider = new_provider(
             eth_cache_path(&self.cache, block_no),
@@ -157,23 +160,8 @@ impl BatcherDb for RpcDb {
                 receipts,
             }
         };
-        self.mem_db.full_eth_block.insert(block_no, block.clone());
+        self.mem_db.full_eth_block.insert(block_no, block);
         provider.save()?;
-        Ok(block)
-    }
-
-    fn get_eth_block_header(&mut self, block_no: u64) -> anyhow::Result<Header> {
-        let mut provider = new_provider(
-            eth_cache_path(&self.cache, block_no),
-            self.eth_rpc_url.clone(),
-        )?;
-        let header: Header = provider
-            .get_partial_block(&BlockQuery { block_no })?
-            .try_into()?;
-        self.mem_db
-            .eth_block_header
-            .insert(block_no, header.clone());
-        provider.save()?;
-        Ok(header)
+        self.mem_db.get_full_eth_block(block_no)
     }
 }

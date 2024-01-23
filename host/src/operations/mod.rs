@@ -45,7 +45,7 @@ pub fn verify_bonsai_receipt<O: Eq + Debug + DeserializeOwned>(
     loop {
         let res = session.status(&client)?;
         if res.status == "RUNNING" {
-            eprintln!(
+            info!(
                 "Current status: {} - state: {} - continue polling...",
                 res.status,
                 res.state.unwrap_or_default()

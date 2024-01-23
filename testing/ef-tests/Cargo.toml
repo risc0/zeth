@@ -16,7 +16,7 @@ serde_json = "1.0"
 serde_with = "3.1"
 zeth-lib = { path = "../../lib" }
 zeth-primitives = { path = "../../primitives" }
-host_util = { path = "../../host" }
+zeth = { path = "../../host" }
 
 [dev-dependencies]
 diff = "0.1"

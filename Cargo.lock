@@ -990,6 +990,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "diff"
+version = "0.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56254986775e3233ffa9c4d7d3faaf6d36a2c09d30b20687e9f88bc8bafc16c8"
+
+[[package]]
 name = "difflib"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4932,6 +4938,29 @@ dependencies = [
  "serde_json",
  "sha3",
  "thiserror-no-std",
+]
+
+[[package]]
+name = "zeth-testeth"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "diff",
+ "env_logger",
+ "ethers-core",
+ "hashbrown 0.14.2",
+ "log",
+ "revm",
+ "risc0-build",
+ "risc0-zkvm",
+ "rstest",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "tempfile",
+ "zeth",
+ "zeth-lib",
+ "zeth-primitives",
 ]
 
 [[package]]

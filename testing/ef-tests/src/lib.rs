@@ -40,7 +40,7 @@ use zeth_primitives::{
     withdrawal::Withdrawal,
     Address, Bloom, Bytes, RlpBytes, StorageKey, B256, B64, U256, U64,
 };
-use host_util::{
+use zeth::util::{
     preflight::Data,
     provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
     provider_db::ProviderDb,

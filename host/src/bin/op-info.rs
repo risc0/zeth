@@ -17,10 +17,8 @@ use std::path::{Path, PathBuf};
 use alloy_sol_types::SolInterface;
 use anyhow::Result;
 use clap::Parser;
-use zeth_lib::{
-    host::provider::{new_provider, BlockQuery},
-    optimism::OpSystemInfo,
-};
+use zeth_lib::optimism::OpSystemInfo;
+use util::provider::{new_provider, BlockQuery};
 
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]

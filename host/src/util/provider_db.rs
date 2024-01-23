@@ -28,7 +28,7 @@ use zeth_primitives::{
 };
 
 use crate::{
-    host::provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
+    util::provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
     mem_db::{DbError, MemDb},
 };
 

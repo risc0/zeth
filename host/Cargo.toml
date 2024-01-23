@@ -3,6 +3,18 @@ name = "zeth"
 version = "0.1.0"
 edition = "2021"
 
+# [[bin]]
+# name = "zeth"
+# path = "src/main.rs"
+
+# [[bin]]
+# name = "op_derive"
+# path = "src/op_derive.rs"
+
+[lib]
+name = "util"
+path = "src/util/lib.rs"
+
 [dependencies]
 alloy-sol-types = "0.6"
 anyhow = { version = "1.0", default-features = false }

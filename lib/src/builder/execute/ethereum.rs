@@ -1,4 +1,4 @@
-// Copyright 2023 RISC Zero, Inc.
+// Copyright 2024 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,9 @@ use anyhow::{anyhow, bail, Context};
 #[cfg(not(target_os = "zkvm"))]
 use log::debug;
 use revm::{
+    interpreter::Host,
     primitives::{Account, Address, ResultAndState, SpecId, TransactTo, TxEnv},
-    Database, DatabaseCommit, EVM,
+    Database, DatabaseCommit, Evm,
 };
 use ruint::aliases::U256;
 use zeth_primitives::{
@@ -33,12 +34,10 @@ use zeth_primitives::{
 };
 
 use super::TxExecStrategy;
-use crate::{
-    builder::BlockBuilder,
-    consts,
-    consts::{GWEI_TO_WEI, MIN_SPEC_ID},
-    guest_mem_forget,
-};
+use crate::{builder::BlockBuilder, consts, guest_mem_forget};
+
+/// Minimum supported protocol version: Paris (Block no. 15537394).
+const MIN_SPEC_ID: SpecId = SpecId::MERGE;
 
 pub struct EthTxExecStrategy {}
 
@@ -83,23 +82,26 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             info!("  Extra data: {:?}", block_builder.input.extra_data);
         }
 
-        // initialize the EVM
-        let mut evm = EVM::new();
-
-        // set the EVM configuration
-        evm.env.cfg.chain_id = block_builder.chain_spec.chain_id();
-        evm.env.cfg.spec_id = spec_id;
-
-        // set the EVM block environment
-        evm.env.block.number = header.number.try_into().unwrap();
-        evm.env.block.coinbase = block_builder.input.beneficiary;
-        evm.env.block.timestamp = header.timestamp;
-        evm.env.block.difficulty = U256::ZERO;
-        evm.env.block.prevrandao = Some(header.mix_hash);
-        evm.env.block.basefee = header.base_fee_per_gas;
-        evm.env.block.gas_limit = block_builder.input.gas_limit;
-
-        evm.database(block_builder.db.take().unwrap());
+        // initialize the Evm
+        let mut evm = Evm::builder()
+            .spec_id(spec_id)
+            .modify_cfg_env(|cfg_env| {
+                // set the EVM configuration
+                cfg_env.chain_id = block_builder.chain_spec.chain_id();
+                cfg_env.optimism = false;
+            })
+            .modify_block_env(|blk_env| {
+                // set the EVM block environment
+                blk_env.number = header.number.try_into().unwrap();
+                blk_env.coinbase = block_builder.input.beneficiary;
+                blk_env.timestamp = header.timestamp;
+                blk_env.difficulty = U256::ZERO;
+                blk_env.prevrandao = Some(header.mix_hash);
+                blk_env.basefee = header.base_fee_per_gas;
+                blk_env.gas_limit = block_builder.input.gas_limit;
+            })
+            .with_db(block_builder.db.take().unwrap())
+            .build();
 
         // bloom filter over all transaction logs
         let mut logs_bloom = Bloom::default();
@@ -134,7 +136,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             }
 
             // process the transaction
-            fill_eth_tx_env(&mut evm.env.tx, &tx.essence, tx_from);
+            fill_eth_tx_env(&mut evm.env().tx, &tx.essence, tx_from);
             let ResultAndState { result, state } = evm
                 .transact()
                 .map_err(|evm_err| anyhow!("Error at transaction {}: {:?}", tx_no, evm_err))?;
@@ -195,10 +197,8 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
                 }
             }
 
-            evm.db().unwrap().commit(state);
+            evm.context.evm.db.commit(state);
         }
-
-        let mut db = evm.take_db();
 
         // process withdrawals unconditionally after any transactions
         let mut withdrawals_trie = MptNode::default();
@@ -207,7 +207,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             .enumerate()
         {
             // the withdrawal amount is given in Gwei
-            let amount_wei = GWEI_TO_WEI
+            let amount_wei = consts::GWEI_TO_WEI
                 .checked_mul(withdrawal.amount.try_into().unwrap())
                 .unwrap();
 
@@ -218,7 +218,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
                 debug!("  Value: {}", amount_wei);
             }
             // Credit withdrawal amount
-            increase_account_balance(&mut db, withdrawal.address, amount_wei)?;
+            increase_account_balance(&mut evm.context.evm.db, withdrawal.address, amount_wei)?;
             // Add withdrawal to trie
             withdrawals_trie
                 .insert_rlp(&i.to_rlp(), withdrawal)
@@ -239,7 +239,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
         // Leak memory, save cycles
         guest_mem_forget([tx_trie, receipt_trie, withdrawals_trie]);
         // Return block builder with updated database
-        Ok(block_builder.with_db(db))
+        Ok(block_builder.with_db(evm.context.evm.db))
     }
 }
 

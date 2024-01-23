@@ -105,6 +105,8 @@ pub struct DeriveMachine<D> {
 impl<D: BatcherDb> DeriveMachine<D> {
     /// Creates a new instance of DeriveMachine.
     pub fn new(chain_config: &ChainConfig, mut derive_input: DeriveInput<D>) -> Result<Self> {
+        derive_input.db.validate()?;
+
         let op_block_no = derive_input.op_head_block_no;
 
         // read system config from op_head (seq_no/epoch_no..etc)
@@ -171,7 +173,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                         hash: set_l1_block_values.hash,
                     },
                 },
-                &eth_head,
+                eth_head,
             )?
         };
 
@@ -208,7 +210,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     .context("block not found")?;
 
                 self.op_batcher
-                    .process_l1_block(&eth_block)
+                    .process_l1_block(eth_block)
                     .context("failed to create batcher transactions")?;
             }
             process_next_eth_block = true;
@@ -247,23 +249,54 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     Vec::new()
                 };
 
-                // Obtain new Op head
+                // obtain verified op block header
                 let new_op_head = {
                     // load the next op block header
                     let new_op_head = self
                         .derive_input
                         .db
                         .get_op_block_header(self.op_block_no)
-                        .context("block not found")?;
+                        .context("op block not found")?;
 
-                    // Verify new op head has the expected parent
+                    // Verify that the op block header loaded from the DB matches the payload
+                    // attributes of the batch.
                     ensure!(
                         new_op_head.parent_hash == self.op_batcher.state.safe_head.hash,
                         "Invalid op block parent hash"
                     );
+                    ensure!(
+                        new_op_head.beneficiary == self.op_batcher.config.sequencer_fee_vault,
+                        "Invalid op block beneficiary"
+                    );
+                    ensure!(
+                        new_op_head.gas_limit == self.op_batcher.config.system_config.gas_limit,
+                        "Invalid op block gas limit"
+                    );
+                    ensure!(
+                        new_op_head.timestamp == U256::from(op_batch.0.timestamp),
+                        "Invalid op block timestamp"
+                    );
+                    ensure!(
+                        new_op_head.extra_data.is_empty(),
+                        "Invalid op block extra data"
+                    );
 
-                    // Verify that the new op head transactions are consistent with the batch
-                    // transactions
+                    // verify that the new op head mix hash matches the mix hash of the L1 block
+                    {
+                        let l1_epoch_header = self
+                            .derive_input
+                            .db
+                            .get_full_eth_block(op_batch.0.epoch_num)
+                            .context("eth block not found")?
+                            .block_header
+                            .clone();
+                        ensure!(
+                            new_op_head.mix_hash == l1_epoch_header.mix_hash,
+                            "Invalid op block mix hash"
+                        );
+                    }
+
+                    // verify that the new op head transactions match the batch transactions
                     {
                         // From the spec:
                         // The first transaction MUST be a L1 attributes deposited transaction,
@@ -279,11 +312,17 @@ impl<D: BatcherDb> DeriveMachine<D> {
                             let trie_key = tx_no.to_rlp();
                             tx_trie.insert(&trie_key, tx)?;
                         }
+
                         ensure!(
                             tx_trie.hash() == new_op_head.transactions_root,
-                            "Invalid op block transaction data! Transaction trie root does not match"
+                            "Invalid op block transactions"
                         );
                     }
+
+                    ensure!(
+                        new_op_head.withdrawals_root.is_none(),
+                        "Invalid op block withdrawals"
+                    );
 
                     new_op_head
                 };

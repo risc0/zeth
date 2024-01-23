@@ -238,7 +238,7 @@ impl TryFrom<EthersTransaction> for OptimismTxEssence {
                 value: from_ethers_u256(tx.value),
                 data: tx.input.0.into(),
                 source_hash: from_ethers_h256(tx.source_hash),
-                mint: from_ethers_u256(tx.mint.unwrap_or_default()),
+                mint: from_ethers_u256(tx.mint.context("mint missing")?),
                 is_system_tx: tx.is_system_tx,
             }),
             _ => OptimismTxEssence::Ethereum(tx.try_into()?),

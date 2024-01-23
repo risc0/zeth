@@ -296,22 +296,29 @@ pub async fn compose_derived_rollup_blocks(
             let eth_head = derive_machine
                 .derive_input
                 .db
-                .get_eth_block_header(eth_head_no)
-                .context("could not fetch eth head")?;
+                .get_full_eth_block(eth_head_no)
+                .context("could not fetch eth head")?
+                .block_header
+                .clone();
             let derive_output = derive_machine.derive().context("could not derive")?;
             let eth_tail = derive_machine
                 .derive_input
                 .db
-                .get_eth_block_header(derive_output.eth_tail.0)
-                .context("could not fetch eth tail")?;
+                .get_full_eth_block(derive_output.eth_tail.0)
+                .context("could not fetch eth tail")?
+                .block_header
+                .clone();
             let mut eth_chain = vec![eth_head];
             for block_no in (eth_head_no + 1)..eth_tail.number {
-                let eth_block = derive_machine
-                    .derive_input
-                    .db
-                    .get_eth_block_header(block_no)
-                    .context("could not fetch eth block")?;
-                eth_chain.push(eth_block);
+                eth_chain.push(
+                    derive_machine
+                        .derive_input
+                        .db
+                        .get_full_eth_block(block_no)
+                        .context("could not fetch eth block")?
+                        .block_header
+                        .clone(),
+                );
             }
             eth_chain.push(eth_tail);
 
@@ -331,7 +338,7 @@ pub async fn compose_derived_rollup_blocks(
             let output_mem = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, input.clone())
                 .expect("Could not create derive machine")
                 .derive()
-                .unwrap();
+                .context("could not derive")?;
             assert_eq!(output, output_mem);
         }
 

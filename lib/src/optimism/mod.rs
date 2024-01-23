@@ -22,7 +22,9 @@ use log::info;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
     batch::Batch,
+    block::Header,
     keccak::keccak,
+    rlp::Decodable,
     transactions::{
         ethereum::TransactionKind,
         optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
@@ -101,8 +103,7 @@ pub struct DeriveOutput {
 pub struct DeriveMachine<D> {
     /// Input for the derivation process.
     pub derive_input: DeriveInput<D>,
-    op_head_block_hash: BlockHash,
-    op_block_no: u64,
+    op_head_block_header: Header,
     op_block_seq_no: u64,
     pub op_batcher: Batcher,
 }
@@ -112,16 +113,16 @@ impl<D: BatcherDb> DeriveMachine<D> {
     pub fn new(chain_config: &ChainConfig, mut derive_input: DeriveInput<D>) -> Result<Self> {
         derive_input.db.validate()?;
 
-        let op_block_no = derive_input.op_head_block_no;
-
         // read system config from op_head (seq_no/epoch_no..etc)
-        let op_head = derive_input.db.get_full_op_block(op_block_no)?;
+        let op_head = derive_input
+            .db
+            .get_full_op_block(derive_input.op_head_block_no)?;
         let op_head_block_hash = op_head.block_header.hash();
 
         #[cfg(not(target_os = "zkvm"))]
         info!(
             "Fetched Op head (block no {}) {}",
-            op_block_no, op_head_block_hash
+            derive_input.op_head_block_no, op_head_block_hash
         );
 
         // the first transaction in a block MUST be a L1 attributes deposited transaction
@@ -184,25 +185,28 @@ impl<D: BatcherDb> DeriveMachine<D> {
 
         Ok(DeriveMachine {
             derive_input,
-            op_head_block_hash,
-            op_block_no,
+            op_head_block_header: op_head.block_header,
             op_block_seq_no,
             op_batcher,
         })
     }
 
     pub fn derive(&mut self) -> Result<DeriveOutput> {
+        ensure!(
+            self.op_head_block_header.number == self.derive_input.op_head_block_no,
+            "Op head block number mismatch!"
+        );
         let target_block_no =
             self.derive_input.op_head_block_no + self.derive_input.op_derive_block_count;
 
         let mut derived_op_blocks = Vec::new();
         let mut process_next_eth_block = false;
 
-        while self.op_block_no < target_block_no {
+        while self.op_head_block_header.number < target_block_no {
             #[cfg(not(target_os = "zkvm"))]
             info!(
                 "op_block_no = {}, eth_block_no = {}",
-                self.op_block_no, self.op_batcher.state.current_l1_block_number
+                self.op_head_block_header.number, self.op_batcher.state.current_l1_block_number
             );
 
             // Process next Eth block. We do this on every iteration, except the first iteration.
@@ -223,12 +227,12 @@ impl<D: BatcherDb> DeriveMachine<D> {
             // Process batches
             while let Some(op_batch) = self.op_batcher.read_batch()? {
                 // Process the batch
-                self.op_block_no += 1;
+                // self.op_block_no += 1;
 
                 #[cfg(not(target_os = "zkvm"))]
                 info!(
                     "Read batch for Op block {}: timestamp={}, epoch={}, tx count={}, parent hash={:?}",
-                    self.op_block_no,
+                    self.op_head_block_header.number + 1,
                     op_batch.0.timestamp,
                     op_batch.0.epoch_num,
                     op_batch.0.transactions.len(),
@@ -241,17 +245,63 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     self.op_block_seq_no = 0;
                     self.op_batcher.state.do_next_epoch()?;
 
-                    self.op_batcher
-                        .state
-                        .epoch
-                        .deposits
-                        .iter()
-                        .map(|tx| tx.to_rlp())
-                        .collect()
+                    self.op_batcher.state.epoch.deposits.clone()
                 } else {
                     self.op_block_seq_no += 1;
 
-                    Vec::new()
+                    vec![]
+                };
+
+                let l1_epoch_header_mix_hash = self
+                    .derive_input
+                    .db
+                    .get_full_eth_block(op_batch.0.epoch_num)
+                    .context("eth block not found")?
+                    .block_header
+                    .mix_hash;
+
+                // From the spec:
+                // The first transaction MUST be a L1 attributes deposited transaction,
+                // followed by an array of zero-or-more user-deposited transactions.
+                let l1_attributes_tx = self.derive_l1_attributes_deposited_tx(&op_batch);
+                // TODO: revise that skipping undecodable transactions is part of spec
+                let decoded_batch_transactions: Vec<_> = op_batch
+                    .0
+                    .transactions
+                    .iter()
+                    .map(|tx| Transaction::decode(&mut tx.as_ref()))
+                    .filter_map(|tx| tx.ok())
+                    .collect();
+
+                let derived_transactions: Vec<_> = once(l1_attributes_tx)
+                    .chain(deposits)
+                    .chain(decoded_batch_transactions)
+                    .collect();
+                let derived_transactions_rlp = derived_transactions
+                    .iter()
+                    .map(|tx| tx.to_rlp())
+                    .enumerate();
+
+                let mut tx_trie = MptNode::default();
+                for (tx_no, tx) in derived_transactions_rlp {
+                    let trie_key = tx_no.to_rlp();
+                    tx_trie.insert(&trie_key, tx)?;
+                }
+
+                let _new_op_head_input = Input {
+                    parent_header: Default::default(),
+                    beneficiary: self.op_batcher.config.sequencer_fee_vault,
+                    gas_limit: self.op_batcher.config.system_config.gas_limit,
+                    timestamp: U256::from(op_batch.0.timestamp),
+                    extra_data: Default::default(),
+                    mix_hash: l1_epoch_header_mix_hash,
+                    transactions: derived_transactions,
+                    withdrawals: vec![],
+                    // TODO
+                    parent_state_trie: Default::default(),
+                    parent_storage: Default::default(),
+                    contracts: vec![],
+                    ancestor_headers: vec![],
                 };
 
                 // obtain verified op block header
@@ -260,7 +310,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     let new_op_head = self
                         .derive_input
                         .db
-                        .get_op_block_header(self.op_block_no)
+                        .get_op_block_header(self.op_head_block_header.number + 1)
                         .context("op block not found")?;
 
                     // Verify that the op block header loaded from the DB matches the payload
@@ -287,42 +337,16 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     );
 
                     // verify that the new op head mix hash matches the mix hash of the L1 block
-                    {
-                        let l1_epoch_header = self
-                            .derive_input
-                            .db
-                            .get_full_eth_block(op_batch.0.epoch_num)
-                            .context("eth block not found")?
-                            .block_header
-                            .clone();
-                        ensure!(
-                            new_op_head.mix_hash == l1_epoch_header.mix_hash,
-                            "Invalid op block mix hash"
-                        );
-                    }
+                    ensure!(
+                        new_op_head.mix_hash == l1_epoch_header_mix_hash,
+                        "Invalid op block mix hash"
+                    );
 
                     // verify that the new op head transactions match the batch transactions
-                    {
-                        // From the spec:
-                        // The first transaction MUST be a L1 attributes deposited transaction,
-                        // followed by an array of zero-or-more user-deposited transactions.
-                        let l1_attributes_tx = self.derive_l1_attributes_deposited_tx(&op_batch);
-                        let derived_transactions = once(l1_attributes_tx.to_rlp())
-                            .chain(deposits)
-                            .chain(op_batch.0.transactions.iter().map(|tx| tx.to_vec()))
-                            .enumerate();
-
-                        let mut tx_trie = MptNode::default();
-                        for (tx_no, tx) in derived_transactions {
-                            let trie_key = tx_no.to_rlp();
-                            tx_trie.insert(&trie_key, tx)?;
-                        }
-
-                        ensure!(
-                            tx_trie.hash() == new_op_head.transactions_root,
-                            "Invalid op block transactions"
-                        );
-                    }
+                    ensure!(
+                        tx_trie.hash() == new_op_head.transactions_root,
+                        "Invalid op block transactions"
+                    );
 
                     ensure!(
                         new_op_head.withdrawals_root.is_none(),
@@ -350,8 +374,9 @@ impl<D: BatcherDb> DeriveMachine<D> {
                 };
 
                 derived_op_blocks.push((new_op_head.number, new_op_head_hash));
+                self.op_head_block_header = new_op_head;
 
-                if self.op_block_no == target_block_no {
+                if self.op_head_block_header.number == target_block_no {
                     break;
                 }
             }
@@ -382,7 +407,10 @@ impl<D: BatcherDb> DeriveMachine<D> {
                 self.op_batcher.state.current_l1_block_number,
                 self.op_batcher.state.current_l1_block_hash,
             ),
-            op_head: (self.derive_input.op_head_block_no, self.op_head_block_hash),
+            op_head: (
+                self.op_head_block_header.number,
+                self.op_head_block_header.hash(),
+            ),
             derived_op_blocks,
         })
     }

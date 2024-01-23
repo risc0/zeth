@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use alloy_primitives::{Address, Bytes, TxHash};
-use alloy_rlp::Encodable;
+use alloy_rlp::{Decodable, Encodable};
 use serde::{Deserialize, Serialize};
 
 use self::{
@@ -44,9 +44,13 @@ pub struct Transaction<E: TxEssence> {
     pub signature: TxSignature,
 }
 
+pub trait HeaderlessDecodable: Sized {
+    fn headerless_decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self>;
+}
+
 /// Represents the core details of a [Transaction], specifically the portion that gets
 /// signed.
-pub trait TxEssence: Encodable + Clone {
+pub trait TxEssence: HeaderlessDecodable + Encodable + Clone {
     /// Returns the EIP-2718 transaction type or `0x00` for Legacy transactions.
     fn tx_type(&self) -> u8;
     /// Returns the gas limit set for the transaction.
@@ -124,6 +128,20 @@ impl<E: TxEssence> Encodable for Transaction<E> {
     }
 }
 
+impl<E: TxEssence> Decodable for Transaction<E> {
+    fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
+        let essence = E::headerless_decode(buf)?;
+        let signature = if let (Ok(v), Ok(r), Ok(s)) =
+            (u64::decode(buf), U256::decode(buf), U256::decode(buf))
+        {
+            TxSignature { v, r, s }
+        } else {
+            TxSignature::default()
+        };
+        Ok(Self { essence, signature })
+    }
+}
+
 impl<E: TxEssence> Transaction<E> {
     /// Calculates the Keccak hash of the RLP-encoded transaction.
     ///
@@ -184,7 +202,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
-    use crate::transactions::EthereumTransaction;
+    use crate::{transactions::EthereumTransaction, RlpBytes};
 
     #[test]
     fn rlp_length() {
@@ -207,6 +225,11 @@ mod tests {
           }
         });
         let transaction: EthereumTransaction = serde_json::from_value(tx).unwrap();
+
+        // verify that rlp encode/decode works
+        let recoded_transaction: Transaction<EthereumTxEssence> =
+            Transaction::decode(&mut transaction.to_rlp().as_ref()).unwrap();
+        assert_eq!(transaction.to_rlp(), recoded_transaction.to_rlp());
 
         let encoded = alloy_rlp::encode(&transaction.essence);
         assert_eq!(encoded.len(), transaction.essence.length());

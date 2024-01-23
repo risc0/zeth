@@ -173,7 +173,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                         hash: set_l1_block_values.hash,
                     },
                 },
-                &eth_head,
+                eth_head,
             )?
         };
 
@@ -210,7 +210,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     .context("block not found")?;
 
                 self.op_batcher
-                    .process_l1_block(&eth_block)
+                    .process_l1_block(eth_block)
                     .context("failed to create batcher transactions")?;
             }
             process_next_eth_block = true;
@@ -273,7 +273,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                         "Invalid op block gas limit"
                     );
                     ensure!(
-                        new_op_head.timestamp == U256::from(op_batch.essence.timestamp),
+                        new_op_head.timestamp == U256::from(op_batch.0.timestamp),
                         "Invalid op block timestamp"
                     );
                     ensure!(
@@ -286,7 +286,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                         let l1_epoch_header = self
                             .derive_input
                             .db
-                            .get_full_eth_block(op_batch.essence.epoch_num)
+                            .get_full_eth_block(op_batch.0.epoch_num)
                             .context("eth block not found")?
                             .block_header
                             .clone();

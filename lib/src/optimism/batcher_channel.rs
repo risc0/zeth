@@ -25,7 +25,7 @@ use core2::io::Read;
 use libflate::zlib::Decoder;
 use thiserror_no_std::Error as ThisError;
 use zeth_primitives::{
-    batch::{Batch, AlloyRlpError},
+    batch::{AlloyRlpError, Batch},
     rlp::Decodable,
     transactions::{ethereum::EthereumTxEssence, Transaction, TxEssence},
     Address, BlockNumber,
@@ -254,8 +254,7 @@ impl Channel {
         let mut batches = Vec::new();
 
         while !channel_data.is_empty() {
-            let mut batch =
-                Batch::decode(&mut channel_data)
+            let mut batch = Batch::decode(&mut channel_data)
                 .map_err(|e| anyhow!(AlloyRlpError::from(e)))
                 .context("failed to decode batch data")?;
             batch.inclusion_block_number = l1_block_number;

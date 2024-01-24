@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::{fmt::Debug, mem::take};
 use alloc::format;
+use core::{fmt::Debug, mem::take};
 
 use anyhow::{anyhow, bail, Context};
 #[cfg(not(target_os = "zkvm"))]

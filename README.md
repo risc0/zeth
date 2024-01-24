@@ -31,7 +31,7 @@ Zeth is experimental and may still contain bugs.
 
 ```console
 $ cargo install cargo-risczero
-$ cargo risczero install
+ $ cargo risczero install
 ```
 
 - Clone the repository and build with `cargo`:

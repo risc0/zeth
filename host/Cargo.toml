@@ -17,11 +17,16 @@ clap = { version = "4.0", features = ["derive"] }
 env_logger = "0.10"
 ethers-core = { version = "2.0", features = ["optimism"] }
 hex = "0.4.3"
+hashbrown = { workspace = true }
 log = "0.4"
 revm = { workspace = true }
 risc0-zkvm = { workspace = true, features = ["prove", "profiler"] }
 ruint = { version = "1.10", default-features = false }
 serde = "1.0"
+serde_json = { version = "1.0", features = ["std"] }
+serde_with = { version = "3.0" }
+flate2 = { version = "1.0.26" }
+ethers-providers = { version = "2.0", features = ["optimism"] }
 tempfile = "3.6"
 tokio = { version = "1.23", features = ["full"] }
 zeth-guests = { path = "../guests" }

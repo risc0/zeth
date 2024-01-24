@@ -20,8 +20,8 @@ extern crate core;
 pub use alloc::{vec, vec::Vec};
 
 pub mod access_list;
-pub mod block;
 pub mod batch;
+pub mod block;
 pub mod keccak;
 pub mod receipt;
 pub mod transactions;

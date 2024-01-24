@@ -31,20 +31,17 @@ use risc0_zkvm::{
     serde::to_vec, ExecutorEnv, ExecutorImpl, FileSegmentRef, MemoryImage, Program, Receipt,
 };
 use tempfile::tempdir;
+use util::provider::{new_provider, BlockQuery};
 use zeth_guests::{OP_DERIVE_ELF, OP_DERIVE_ID, OP_DERIVE_PATH};
-use zeth_lib::{
-    optimism::{
-        batcher_db::{BatcherDb, BlockInput, MemDb},
-        config::OPTIMISM_CHAIN_SPEC,
-        DeriveInput, DeriveMachine, DeriveOutput,
-    },
+use zeth_lib::optimism::{
+    batcher_db::{BatcherDb, BlockInput, MemDb},
+    config::OPTIMISM_CHAIN_SPEC,
+    DeriveInput, DeriveMachine, DeriveOutput,
 };
 use zeth_primitives::{
     block::Header,
     transactions::{ethereum::EthereumTxEssence, optimism::OptimismTxEssence},
 };
-use util::provider::{new_provider, BlockQuery};
-
 
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]

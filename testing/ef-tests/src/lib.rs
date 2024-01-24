@@ -18,6 +18,11 @@ use anyhow::bail;
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, NoneAsEmptyString};
+use zeth::util::{
+    preflight::Data,
+    provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
+    provider_db::ProviderDb,
+};
 use zeth_lib::{
     builder::{BlockBuilder, BlockBuilderStrategy, EthereumStrategy},
     consts::ChainSpec,
@@ -40,11 +45,7 @@ use zeth_primitives::{
     withdrawal::Withdrawal,
     Address, Bloom, Bytes, RlpBytes, StorageKey, B256, B64, U256, U64,
 };
-use zeth::util::{
-    preflight::Data,
-    provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
-    provider_db::ProviderDb,
-};
+
 use crate::ethers::TestProvider;
 
 pub mod ethers;

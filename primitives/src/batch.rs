@@ -24,7 +24,6 @@ pub use alloc::{
     vec,
     vec::Vec,
 };
-use thiserror_no_std::Error as ThisError;
 pub use core::{
     cmp::{Ord, Ordering, PartialOrd},
     convert::From,
@@ -37,6 +36,7 @@ use alloy_primitives::{BlockNumber, Bytes, B256};
 use alloy_rlp::{Decodable, Encodable};
 use alloy_rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Serialize};
+use thiserror_no_std::Error as ThisError;
 
 pub type RawTransaction = Bytes;
 

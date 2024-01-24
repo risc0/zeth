@@ -20,6 +20,12 @@ use ethers_core::types::{
 };
 use hashbrown::{HashMap, HashSet};
 use log::info;
+use zeth_lib::{
+    builder::{BlockBuilder, BlockBuilderStrategy},
+    consts::ChainSpec,
+    input::{Input, StorageEntry},
+    mem_db::MemDb,
+};
 use zeth_primitives::{
     block::Header,
     ethers::{from_ethers_h160, from_ethers_h256, from_ethers_u256},
@@ -30,16 +36,10 @@ use zeth_primitives::{
     Address, B256, U256,
 };
 
-use crate::{
-    builder::{BlockBuilder, BlockBuilderStrategy},
-    consts::ChainSpec,
-    util::{
-        mpt::{is_not_included, mpt_from_proof, parse_proof, resolve_nodes, shorten_node_path},
-        provider::{new_provider, BlockQuery},
-        provider_db::ProviderDb,
-    },
-    input::{Input, StorageEntry},
-    mem_db::MemDb,
+use super::{
+    mpt::{is_not_included, mpt_from_proof, parse_proof, resolve_nodes, shorten_node_path},
+    provider::{new_provider, BlockQuery},
+    provider_db::ProviderDb,
 };
 
 /// The initial data required to build a block as returned by the [Preflight].

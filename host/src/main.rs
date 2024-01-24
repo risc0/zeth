@@ -30,17 +30,16 @@ use risc0_zkvm::{
 };
 use serde::{Deserialize, Serialize};
 use tempfile::tempdir;
+use util::{preflight::Preflight, verify::Verifier};
 use zeth_guests::{
     ETH_BLOCK_ELF, ETH_BLOCK_ID, ETH_BLOCK_PATH, OP_BLOCK_ELF, OP_BLOCK_ID, OP_BLOCK_PATH,
 };
-
 use zeth_lib::{
     builder::{BlockBuilderStrategy, EthereumStrategy, OptimismStrategy},
     consts::{ChainSpec, Network, ETH_MAINNET_CHAIN_SPEC, OP_MAINNET_CHAIN_SPEC},
     input::Input,
 };
 use zeth_primitives::BlockHash;
-use util::{preflight::Preflight, verify::Verifier};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]

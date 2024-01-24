@@ -27,9 +27,9 @@ pub use alloc::{
     vec::Vec,
 };
 pub use core::{
-    num::TryFromIntError,
     convert::From,
     default::Default,
+    num::TryFromIntError,
     option::{Option, Option::*},
     result::{Result, Result::*},
 };

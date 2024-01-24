@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloc::{format, vec::Vec};
 use core::{fmt::Debug, mem::take};
-use alloc::format;
-use alloc::vec::Vec;
+
 use anyhow::{anyhow, bail, Context, Result};
 #[cfg(not(target_os = "zkvm"))]
 use log::debug;

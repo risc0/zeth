@@ -27,14 +27,15 @@ pub use alloc::{
 use core::{
     cell::RefCell,
     cmp,
-    fmt::{Debug, Write},
-    iter, mem,
     cmp::PartialOrd,
     convert::{AsRef, From},
     default::Default,
+    fmt::{Debug, Write},
+    iter, mem,
     option::{Option, Option::*},
     result::Result::*,
 };
+
 use alloy_primitives::B256;
 use alloy_rlp::Encodable;
 use anyhow::Result;

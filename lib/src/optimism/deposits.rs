@@ -27,9 +27,8 @@ use zeth_primitives::{
     Address, Bloom, BloomInput, B256, U160, U256,
 };
 
-use crate::optimism::AlloySolError;
-
 use super::{batcher_db::BlockInput, config::ChainConfig};
+use crate::optimism::AlloySolError;
 
 /// Signature of the deposit transaction event, i.e.
 /// keccak-256 hash of "TransactionDeposited(address,address,uint256,bytes)"
@@ -120,8 +119,7 @@ fn to_deposit_transaction(
     );
 
     // the log data is just an ABI encoded `bytes` type representing the opaque_data
-    let opaque_data: Vec<u8> =
-        sol_data::Bytes::abi_decode(&log.data, true)
+    let opaque_data: Vec<u8> = sol_data::Bytes::abi_decode(&log.data, true)
         .map_err(|e| anyhow!(AlloySolError::from(e)))
         .context("invalid data")?;
 

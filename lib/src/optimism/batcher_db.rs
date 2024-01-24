@@ -14,7 +14,7 @@
 
 use alloc::vec::Vec;
 
-use anyhow::{ensure, Result};
+use anyhow::{ensure, Context, Result};
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
@@ -41,10 +41,10 @@ pub struct BlockInput<E: TxEssence> {
 }
 
 pub trait BatcherDb {
+    fn validate(&self) -> Result<()>;
     fn get_full_op_block(&mut self, block_no: u64) -> Result<BlockInput<OptimismTxEssence>>;
     fn get_op_block_header(&mut self, block_no: u64) -> Result<Header>;
-    fn get_full_eth_block(&mut self, block_no: u64) -> Result<BlockInput<EthereumTxEssence>>;
-    fn get_eth_block_header(&mut self, block_no: u64) -> Result<Header>;
+    fn get_full_eth_block(&mut self, block_no: u64) -> Result<&BlockInput<EthereumTxEssence>>;
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -73,92 +73,107 @@ impl Default for MemDb {
 }
 
 impl BatcherDb for MemDb {
-    fn get_full_op_block(&mut self, block_no: u64) -> Result<BlockInput<OptimismTxEssence>> {
-        let op_block = self.full_op_block.remove(&block_no).unwrap();
-        assert_eq!(block_no, op_block.block_header.number);
-
-        // Validate tx list
-        {
-            let mut tx_trie = MptNode::default();
-            for (tx_no, tx) in op_block.transactions.iter().enumerate() {
-                let trie_key = tx_no.to_rlp();
-                tx_trie.insert_rlp(&trie_key, tx)?;
-            }
+    fn validate(&self) -> Result<()> {
+        for (block_no, op_block) in &self.full_op_block {
             ensure!(
-                tx_trie.hash() == op_block.block_header.transactions_root,
-                "Invalid op block transaction data!"
+                *block_no == op_block.block_header.number,
+                "Block number mismatch"
+            );
+
+            // Validate tx list
+            {
+                let mut tx_trie = MptNode::default();
+                for (tx_no, tx) in op_block.transactions.iter().enumerate() {
+                    let trie_key = tx_no.to_rlp();
+                    tx_trie.insert_rlp(&trie_key, tx)?;
+                }
+                ensure!(
+                    tx_trie.hash() == op_block.block_header.transactions_root,
+                    "Invalid op block transaction data!"
+                );
+            }
+
+            // Validate receipts
+            ensure!(
+                op_block.receipts.is_none(),
+                "Op blocks should not contain receipts"
             );
         }
 
-        // Validate receipts
-        ensure!(
-            op_block.receipts.is_none(),
-            "Op blocks should not contain receipts"
-        );
+        for (block_no, op_block) in &self.op_block_header {
+            ensure!(*block_no == op_block.number, "Block number mismatch");
+        }
+
+        for (block_no, eth_block) in &self.full_eth_block {
+            ensure!(
+                *block_no == eth_block.block_header.number,
+                "Block number mismatch"
+            );
+
+            // Validate tx list
+            {
+                let mut tx_trie = MptNode::default();
+                for (tx_no, tx) in eth_block.transactions.iter().enumerate() {
+                    let trie_key = tx_no.to_rlp();
+                    tx_trie.insert_rlp(&trie_key, tx)?;
+                }
+                ensure!(
+                    tx_trie.hash() == eth_block.block_header.transactions_root,
+                    "Invalid eth block transaction data!"
+                );
+            }
+
+            // Validate receipts
+            if eth_block.receipts.is_some() {
+                let mut receipt_trie = MptNode::default();
+                for (tx_no, receipt) in eth_block.receipts.as_ref().unwrap().iter().enumerate() {
+                    let trie_key = tx_no.to_rlp();
+                    receipt_trie.insert_rlp(&trie_key, receipt)?;
+                }
+                ensure!(
+                    receipt_trie.hash() == eth_block.block_header.receipts_root,
+                    "Invalid eth block receipt data!"
+                );
+            } else {
+                let can_contain_deposits = deposits::can_contain(
+                    &OPTIMISM_CHAIN_SPEC.deposit_contract,
+                    &eth_block.block_header.logs_bloom,
+                );
+                let can_contain_config = system_config::can_contain(
+                    &OPTIMISM_CHAIN_SPEC.system_config_contract,
+                    &eth_block.block_header.logs_bloom,
+                );
+                ensure!(
+                    !can_contain_deposits,
+                    "Eth block has no receipts, but bloom filter indicates it has deposits"
+                );
+                ensure!(
+                    !can_contain_config,
+                    "Eth block has no receipts, but bloom filter indicates it has config updates"
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    fn get_full_op_block(&mut self, block_no: u64) -> Result<BlockInput<OptimismTxEssence>> {
+        let op_block = self.full_op_block.remove(&block_no).unwrap();
 
         Ok(op_block)
     }
 
     fn get_op_block_header(&mut self, block_no: u64) -> Result<Header> {
-        let op_block = self.op_block_header.remove(&block_no).unwrap();
-        assert_eq!(block_no, op_block.number);
+        let op_block = self
+            .op_block_header
+            .remove(&block_no)
+            .context("not or no longer in db")?;
 
         Ok(op_block)
     }
 
-    fn get_full_eth_block(&mut self, block_no: u64) -> Result<BlockInput<EthereumTxEssence>> {
-        let eth_block = self.full_eth_block.remove(&block_no).unwrap();
-        assert_eq!(block_no, eth_block.block_header.number);
-
-        // Validate tx list
-        {
-            let mut tx_trie = MptNode::default();
-            for (tx_no, tx) in eth_block.transactions.iter().enumerate() {
-                let trie_key = tx_no.to_rlp();
-                tx_trie.insert_rlp(&trie_key, tx)?;
-            }
-            ensure!(
-                tx_trie.hash() == eth_block.block_header.transactions_root,
-                "Invalid eth block transaction data!"
-            );
-        }
-
-        // Validate receipts
-        if eth_block.receipts.is_some() {
-            let mut receipt_trie = MptNode::default();
-            for (tx_no, receipt) in eth_block.receipts.as_ref().unwrap().iter().enumerate() {
-                let trie_key = tx_no.to_rlp();
-                receipt_trie.insert_rlp(&trie_key, receipt)?;
-            }
-            ensure!(
-                receipt_trie.hash() == eth_block.block_header.receipts_root,
-                "Invalid eth block receipt data!"
-            );
-        } else {
-            let can_contain_deposits = deposits::can_contain(
-                &OPTIMISM_CHAIN_SPEC.deposit_contract,
-                &eth_block.block_header.logs_bloom,
-            );
-            let can_contain_config = system_config::can_contain(
-                &OPTIMISM_CHAIN_SPEC.system_config_contract,
-                &eth_block.block_header.logs_bloom,
-            );
-            ensure!(
-                !can_contain_deposits,
-                "Eth block has no receipts, but bloom filter indicates it has deposits"
-            );
-            ensure!(
-                !can_contain_config,
-                "Eth block has no receipts, but bloom filter indicates it has config updates"
-            );
-        }
-
-        Ok(eth_block)
-    }
-
-    fn get_eth_block_header(&mut self, block_no: u64) -> Result<Header> {
-        let eth_block = self.eth_block_header.remove(&block_no).unwrap();
-        assert_eq!(block_no, eth_block.number);
+    fn get_full_eth_block(&mut self, block_no: u64) -> Result<&BlockInput<EthereumTxEssence>> {
+        let eth_block = self.full_eth_block.get(&block_no).unwrap();
 
         Ok(eth_block)
     }

@@ -25,6 +25,8 @@ pub mod input;
 pub mod mem_db;
 pub mod optimism;
 
+mod utils;
+
 pub use zeth_primitives::transactions::{ethereum::EthereumTxEssence, optimism::OptimismTxEssence};
 
 /// call forget only if running inside the guest

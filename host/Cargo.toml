@@ -9,7 +9,7 @@ path = "src/util/lib.rs"
 
 [dependencies]
 alloy-sol-types = "0.6"
-anyhow = { version = "1.0", default-features = false }
+anyhow = "1.0"
 bincode = "1.3.3"
 bonsai-sdk = { workspace = true }
 bytemuck = "1.13"

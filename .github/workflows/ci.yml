@@ -56,3 +56,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: risc0/risc0/.github/actions/rustup@release-0.19
       - run: cargo fmt --all --check
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: 🚀 Run yamllint
+        uses: frenck/action-yamllint@v1
+        with:
+          path: ".github/"
+          config: ".yamllint"

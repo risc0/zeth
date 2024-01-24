@@ -34,7 +34,6 @@ use zeth_primitives::{
     },
     trie::MptNode,
     Bloom, Bytes, RlpBytes,
-    Bloom, Bytes, RlpBytes,
 };
 
 use super::{ethereum, TxExecStrategy};

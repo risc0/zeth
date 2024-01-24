@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use alloc::{
-    collections::{BinaryHeap, VecDeque},
+    collections::{BinaryHeap, VecDeque, BTreeMap},
     vec::Vec,
 };
 use core::cmp::{Ordering, Reverse};

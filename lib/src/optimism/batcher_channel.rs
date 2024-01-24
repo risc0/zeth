@@ -15,6 +15,7 @@
 // use std::io::Read;
 
 use alloc::{
+    format,
     collections::{BTreeMap, VecDeque},
     vec::Vec,
 };
@@ -312,10 +313,8 @@ impl Channel {
 
         let mut channel_data = decompressed.as_slice();
         while !channel_data.is_empty() {
-            let mut batch = Batch::decode(&mut channel_data)
-                .map_err(|e| anyhow!(AlloyRlpError::from(e)))
-                .context("failed to decode batch data")?;
-            batch.inclusion_block_number = l1_block_number;
+            let batch = Batch::decode(&mut channel_data)
+                .with_context(|| format!("failed to decode batch {}", batches.len()))?;
 
             batches.push(BatchWithInclusion {
                 essence: batch.0,
@@ -336,13 +335,12 @@ impl Channel {
         //  types of attack (where a small compressed input decompresses to a humongous amount
         //  of data). If the decompressed data exceeds the limit, things proceeds as though the
         //  channel contained only the first MAX_RLP_BYTES_PER_CHANNEL decompressed bytes."
-        let mut decompressed = Vec::new();
-        Decoder::new(compressed.as_slice())
+        let mut buf = Vec::new();
+        Decoder::new(data)
             .map_err(|e| anyhow!(Core2Error::from(e)))?
             .take(MAX_RLP_BYTES_PER_CHANNEL)
-            .read_to_end(&mut decompressed)
-            .map_err(|e| anyhow!(Core2Error::from(e)))
-            .context("failed to decompress")?;
+            .read_to_end(&mut buf)
+            .map_err(|e| anyhow!(Core2Error::from(e)))?;
 
         Ok(buf)
     }

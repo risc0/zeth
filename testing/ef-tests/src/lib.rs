@@ -22,7 +22,7 @@ use zeth_lib::{
     builder::{BlockBuilder, BlockBuilderStrategy, EthereumStrategy},
     consts::ChainSpec,
     host::{
-        preflight::Data,
+        preflight::BlockBuildPreflightData,
         provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
         provider_db::ProviderDb,
     },
@@ -359,7 +359,7 @@ pub fn create_input(
     let proofs = provider_db.get_latest_proofs().unwrap();
     let ancestor_headers = provider_db.get_ancestor_headers().unwrap();
 
-    let preflight_data = Data {
+    let preflight_data = BlockBuildPreflightData {
         db: provider_db.get_initial_db().clone(),
         parent_header,
         parent_proofs,

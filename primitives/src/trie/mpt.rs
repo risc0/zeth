@@ -71,6 +71,15 @@ pub enum Error {
     LegacyRlp(#[from] DecoderError),
 }
 
+impl From<B256> for MptNode {
+    fn from(value: B256) -> Self {
+        MptNode {
+            data: MptNodeData::Digest(value),
+            cached_reference: RefCell::new(None),
+        }
+    }
+}
+
 /// Represents the various types of data that can be stored within a node in the sparse
 /// Merkle Patricia Trie (MPT).
 ///

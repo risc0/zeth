@@ -98,7 +98,7 @@ fn evm(
                     diff::Result::Both(l, _) => println!(" {}", l),
                 }
             }
-            assert_eq!(new_block_state, exp_state.hash());
+            assert_eq!(new_block_state.hash(), exp_state.hash());
         }
 
         // the headers should match

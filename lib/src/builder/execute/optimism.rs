@@ -117,19 +117,18 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             .into_iter()
             .enumerate()
         {
-            // verify the transaction signature
-            let tx_from = tx
-                .recover_from()
-                .with_context(|| format!("Error recovering address for transaction {}", tx_no))?;
-
             #[cfg(not(target_os = "zkvm"))]
             {
                 let tx_hash = tx.hash();
                 debug!("Tx no. {} (hash: {})", tx_no, tx_hash);
                 debug!("  Type: {}", tx.essence.tx_type());
-                debug!("  Fr: {:?}", tx_from);
                 debug!("  To: {:?}", tx.essence.to().unwrap_or_default());
             }
+
+            // verify the transaction signature
+            let tx_from = tx
+                .recover_from()
+                .with_context(|| format!("Error recovering address for transaction {}", tx_no))?;
 
             // verify transaction gas
             let block_available_gas = block_builder.input.gas_limit - cumulative_gas_used;

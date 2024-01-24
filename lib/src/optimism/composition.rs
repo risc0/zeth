@@ -25,7 +25,7 @@ use zeth_primitives::{
 use crate::optimism::DeriveOutput;
 
 /// Denotes a zkVM Image ID.
-type ImageId = [u32; 8];
+pub type ImageId = [u32; 8];
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ComposeInput {

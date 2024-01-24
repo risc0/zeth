@@ -30,7 +30,7 @@ use zeth_primitives::{
 pub type StorageEntry = (MptNode, Vec<U256>);
 
 /// External block input.
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize, Serialize)]
 pub struct BlockBuildInput<E: TxEssence> {
     /// Previous block header
     pub parent_header: Header,

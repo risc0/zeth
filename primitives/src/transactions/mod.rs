@@ -20,6 +20,8 @@ use self::{
     optimism::{OptimismTxEssence, OPTIMISM_DEPOSITED_TX_TYPE},
     signature::TxSignature,
 };
+#[cfg(not(target_os = "zkvm"))]
+use crate::RlpBytes;
 use crate::{keccak::keccak, transactions::ethereum::EthereumTxEssence, U256};
 
 pub mod ethereum;
@@ -130,6 +132,10 @@ impl<E: TxEssence> Encodable for Transaction<E> {
 
 impl<E: TxEssence> Decodable for Transaction<E> {
     fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
+        // sanity check
+        #[cfg(not(target_os = "zkvm"))]
+        let buf_clone = Vec::from(*buf);
+
         let essence = E::headerless_decode(buf)?;
         let signature = if let (Ok(v), Ok(r), Ok(s)) =
             (u64::decode(buf), U256::decode(buf), U256::decode(buf))
@@ -138,7 +144,15 @@ impl<E: TxEssence> Decodable for Transaction<E> {
         } else {
             TxSignature::default()
         };
-        Ok(Self { essence, signature })
+        let result = Self { essence, signature };
+
+        #[cfg(not(target_os = "zkvm"))]
+        {
+            let result_rlp = result.to_rlp();
+            assert_eq!(result_rlp, buf_clone, "insanity!");
+        }
+
+        Ok(result)
     }
 }
 

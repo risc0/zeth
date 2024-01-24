@@ -16,11 +16,14 @@ use alloy_sol_types::SolInterface;
 use log::warn;
 use zeth_lib::{
     consts::Network,
-    host::provider::{new_provider, BlockQuery},
+    host::{
+        cache_file_path,
+        provider::{new_provider, BlockQuery},
+    },
     optimism::OpSystemInfo,
 };
 
-use crate::{cache_file_path, cli::Cli};
+use crate::cli::Cli;
 
 pub async fn op_info(cli: Cli) -> anyhow::Result<()> {
     let core_args = cli.core_args().clone();

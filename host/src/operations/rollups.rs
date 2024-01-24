@@ -18,10 +18,9 @@ use anyhow::Context;
 use log::info;
 use zeth_guests::*;
 use zeth_lib::{
-    builder::OptimismStrategy,
+    builder::{BlockBuilderStrategy, OptimismStrategy},
     consts::{Network, OP_MAINNET_CHAIN_SPEC},
-    host::{preflight::Preflight, rpc_db::RpcDb},
-    input::BlockBuildInput,
+    host::{rpc_db::RpcDb, ProviderFactory},
     optimism::{
         batcher_db::BatcherDb,
         composition::{ComposeInput, ComposeInputOperation, ComposeOutputOperation},
@@ -31,61 +30,22 @@ use zeth_lib::{
 };
 use zeth_primitives::{
     block::Header,
-    transactions::optimism::OptimismTxEssence,
     tree::{MerkleMountainRange, MerkleProof},
 };
 
 use crate::{
-    cache_file_path,
-    cli::{Cli, CoreArgs},
+    cli::Cli,
     operations::{execute, maybe_prove},
 };
-
-async fn fetch_op_blocks(
-    core_args: &CoreArgs,
-    block_number: u64,
-    block_count: u64,
-) -> anyhow::Result<Vec<BlockBuildInput<OptimismTxEssence>>> {
-    let mut op_blocks = vec![];
-    for i in 0..block_count {
-        let block_number = block_number + i;
-        let rpc_cache = core_args.cache.as_ref().map(|dir| {
-            cache_file_path(dir, &Network::Optimism.to_string(), block_number, "json.gz")
-        });
-        let rpc_url = core_args.op_rpc_url.clone();
-        // Collect block building data
-        let preflight_result = tokio::task::spawn_blocking(move || {
-            OptimismStrategy::run_preflight(
-                OP_MAINNET_CHAIN_SPEC.clone(),
-                rpc_cache,
-                rpc_url,
-                block_number,
-            )
-        })
-        .await?
-        .context("preflight failed")?;
-
-        // Create the guest input from [Init]
-        let input = preflight_result
-            .clone()
-            .try_into()
-            .context("invalid preflight data")?;
-
-        op_blocks.push(input);
-    }
-
-    Ok(op_blocks)
-}
 
 pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::Result<()> {
     info!("Fetching data ...");
     let core_args = cli.core_args().clone();
-    let op_blocks = fetch_op_blocks(
-        &core_args,
-        core_args.block_number + 1,
-        core_args.block_count,
-    )
-    .await?;
+    let op_builder_provider_factory = ProviderFactory::new(
+        core_args.cache.clone(),
+        Network::Optimism,
+        core_args.op_rpc_url.clone(),
+    );
 
     let (derive_input, output) = tokio::task::spawn_blocking(move || {
         let derive_input = DeriveInput {
@@ -96,16 +56,31 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
             ),
             op_head_block_no: core_args.block_number,
             op_derive_block_count: core_args.block_count,
-            op_blocks: op_blocks.clone(),
+            op_block_outputs: vec![],
+            builder_image_id: OP_BLOCK_ID,
         };
-        let mut derive_machine = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input)
-            .context("Could not create derive machine")?;
+        let mut derive_machine = DeriveMachine::new(
+            &OPTIMISM_CHAIN_SPEC,
+            derive_input,
+            Some(op_builder_provider_factory),
+        )
+        .context("Could not create derive machine")?;
         let derive_output = derive_machine.derive().context("could not derive")?;
+        let op_block_outputs = derive_output
+            .op_block_inputs
+            .clone()
+            .into_iter()
+            .map(|input| {
+                OptimismStrategy::build_from(&OP_MAINNET_CHAIN_SPEC, input)
+                    .expect("Failed to build op block")
+            })
+            .collect();
         let derive_input_mem = DeriveInput {
             db: derive_machine.derive_input.db.get_mem_db(),
             op_head_block_no: core_args.block_number,
             op_derive_block_count: core_args.block_count,
-            op_blocks,
+            op_block_outputs,
+            builder_image_id: OP_BLOCK_ID,
         };
         let out: anyhow::Result<_> = Ok((derive_input_mem, derive_output));
         out
@@ -115,10 +90,21 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
 
     info!("Running from memory ...");
     {
-        let output_mem = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input.clone())
-            .context("Could not create derive machine")?
-            .derive()
-            .unwrap();
+        // todo: run without factory (using outputs)
+        let core_args = cli.core_args().clone();
+        let op_builder_provider_factory = ProviderFactory::new(
+            core_args.cache.clone(),
+            Network::Optimism,
+            core_args.op_rpc_url.clone(),
+        );
+        let output_mem = DeriveMachine::new(
+            &OPTIMISM_CHAIN_SPEC,
+            derive_input.clone(),
+            Some(op_builder_provider_factory),
+        )
+        .context("Could not create derive machine")?
+        .derive()
+        .unwrap();
         assert_eq!(output, output_mem);
     }
 
@@ -280,18 +266,26 @@ pub async fn compose_derived_rollup_blocks(
             core_args.op_rpc_url.clone(),
             core_args.cache.clone(),
         );
-        let op_head_block_no = core_args.block_number + op_block_index;
-        let op_blocks = fetch_op_blocks(&core_args, op_head_block_no + 1, composition_size).await?;
+        let op_builder_provider_factory = ProviderFactory::new(
+            core_args.cache.clone(),
+            Network::Optimism,
+            core_args.op_rpc_url.clone(),
+        );
 
         let (input, output, chain) = tokio::task::spawn_blocking(move || {
             let derive_input = DeriveInput {
                 db,
                 op_head_block_no: core_args.block_number + op_block_index,
                 op_derive_block_count: composition_size,
-                op_blocks: op_blocks.clone(),
+                op_block_outputs: vec![],
+                builder_image_id: OP_BLOCK_ID,
             };
-            let mut derive_machine = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input)
-                .expect("Could not create derive machine");
+            let mut derive_machine = DeriveMachine::new(
+                &OPTIMISM_CHAIN_SPEC,
+                derive_input,
+                Some(op_builder_provider_factory),
+            )
+            .expect("Could not create derive machine");
             let eth_head_no = derive_machine.op_batcher.state.epoch.number;
             let eth_head = derive_machine
                 .derive_input
@@ -322,11 +316,21 @@ pub async fn compose_derived_rollup_blocks(
             }
             eth_chain.push(eth_tail);
 
+            let op_block_outputs = derive_output
+                .op_block_inputs
+                .clone()
+                .into_iter()
+                .map(|input| {
+                    OptimismStrategy::build_from(&OP_MAINNET_CHAIN_SPEC, input)
+                        .expect("Failed to build op block")
+                })
+                .collect();
             let derive_input_mem = DeriveInput {
                 db: derive_machine.derive_input.db.get_mem_db(),
                 op_head_block_no: core_args.block_number + op_block_index,
                 op_derive_block_count: composition_size,
-                op_blocks,
+                op_block_outputs,
+                builder_image_id: OP_BLOCK_ID,
             };
             let out: anyhow::Result<_> = Ok((derive_input_mem, derive_output, eth_chain));
             out
@@ -335,10 +339,19 @@ pub async fn compose_derived_rollup_blocks(
 
         info!("Deriving ...");
         {
-            let output_mem = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, input.clone())
-                .expect("Could not create derive machine")
-                .derive()
-                .context("could not derive")?;
+            let op_builder_provider_factory = ProviderFactory::new(
+                core_args.cache.clone(),
+                Network::Optimism,
+                core_args.op_rpc_url.clone(),
+            );
+            let output_mem = DeriveMachine::new(
+                &OPTIMISM_CHAIN_SPEC,
+                input.clone(),
+                Some(op_builder_provider_factory),
+            )
+            .expect("Could not create derive machine")
+            .derive()
+            .context("could not derive")?;
             assert_eq!(output, output_mem);
         }
 

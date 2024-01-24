@@ -21,13 +21,12 @@ use serde::{Deserialize, Serialize};
 use zeth_lib::{
     builder::BlockBuilderStrategy,
     consts::ChainSpec,
-    host::{preflight::Preflight, verify::Verifier},
+    host::{cache_file_path, preflight::Preflight, verify::Verifier},
     input::BlockBuildInput,
     output::BlockBuildOutput,
 };
 
 use crate::{
-    cache_file_path,
     cli::Cli,
     operations::{execute, maybe_prove},
 };

@@ -18,6 +18,8 @@ use alloy_sol_types::{sol, SolInterface};
 use anyhow::{bail, ensure, Context, Result};
 #[cfg(not(target_os = "zkvm"))]
 use log::info;
+#[cfg(target_os = "zkvm")]
+use risc0_zkvm::{guest::env, serde::to_vec, sha::Digest};
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
     batch::Batch,
@@ -33,14 +35,22 @@ use zeth_primitives::{
     uint, Address, BlockHash, BlockNumber, FixedBytes, RlpBytes, B256, U256,
 };
 
+#[cfg(not(target_os = "zkvm"))]
+use crate::{
+    builder::{BlockBuilderStrategy, OptimismStrategy},
+    consts::OP_MAINNET_CHAIN_SPEC,
+    host::{preflight::Preflight, provider_db::ProviderDb, ProviderFactory},
+};
 use crate::{
     consts::ONE,
     input::BlockBuildInput,
     optimism::{
         batcher::{Batcher, BlockId, L2BlockInfo},
         batcher_db::BatcherDb,
+        composition::ImageId,
         config::ChainConfig,
     },
+    output::BlockBuildOutput,
 };
 
 pub mod batcher;
@@ -83,7 +93,9 @@ pub struct DeriveInput<D> {
     /// Block count for the operation.
     pub op_derive_block_count: u64,
     /// Block building data for execution
-    pub op_blocks: Vec<BlockBuildInput<OptimismTxEssence>>,
+    pub op_block_outputs: Vec<BlockBuildOutput>,
+    /// Image id of block builder guest
+    pub builder_image_id: ImageId,
 }
 
 /// Represents the output of the derivation process.
@@ -95,7 +107,14 @@ pub struct DeriveOutput {
     pub op_head: (BlockNumber, BlockHash),
     /// Derived Optimism blocks.
     pub derived_op_blocks: Vec<(BlockNumber, BlockHash)>,
+    /// Dependent op block inputs
+    pub op_block_inputs: Vec<BlockBuildInput<OptimismTxEssence>>,
+    /// Image id of block builder guest
+    pub builder_image_id: ImageId,
 }
+
+#[cfg(target_os = "zkvm")]
+type ProviderFactory = ();
 
 /// Implementation of the actual derivation process.
 pub struct DeriveMachine<D> {
@@ -104,12 +123,19 @@ pub struct DeriveMachine<D> {
     op_head_block_header: Header,
     op_block_seq_no: u64,
     pub op_batcher: Batcher,
+    pub provider_factory: Option<ProviderFactory>,
 }
 
 impl<D: BatcherDb> DeriveMachine<D> {
     /// Creates a new instance of DeriveMachine.
-    pub fn new(chain_config: &ChainConfig, mut derive_input: DeriveInput<D>) -> Result<Self> {
+    pub fn new(
+        chain_config: &ChainConfig,
+        mut derive_input: DeriveInput<D>,
+        provider_factory: Option<ProviderFactory>,
+    ) -> Result<Self> {
         derive_input.db.validate()?;
+        #[cfg(not(target_os = "zkvm"))]
+        ensure!(provider_factory.is_some(), "Missing provider factory!");
 
         // read system config from op_head (seq_no/epoch_no..etc)
         let op_head = derive_input
@@ -186,6 +212,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
             op_head_block_header: op_head.block_header,
             op_block_seq_no,
             op_batcher,
+            provider_factory,
         })
     }
 
@@ -199,6 +226,14 @@ impl<D: BatcherDb> DeriveMachine<D> {
 
         let mut derived_op_blocks = Vec::new();
         let mut process_next_eth_block = false;
+
+        #[cfg(target_os = "zkvm")]
+        let mut op_block_output_iter =
+            core::mem::take(&mut self.derive_input.op_block_outputs).into_iter();
+        #[cfg(not(target_os = "zkvm"))]
+        let mut op_block_inputs = vec![];
+        #[cfg(target_os = "zkvm")]
+        let op_block_inputs = vec![];
 
         while self.op_head_block_header.number < target_block_no {
             #[cfg(not(target_os = "zkvm"))]
@@ -225,7 +260,6 @@ impl<D: BatcherDb> DeriveMachine<D> {
             // Process batches
             while let Some(op_batch) = self.op_batcher.read_batch()? {
                 // Process the batch
-                // self.op_block_no += 1;
 
                 #[cfg(not(target_os = "zkvm"))]
                 info!(
@@ -286,8 +320,8 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     tx_trie.insert(&trie_key, tx)?;
                 }
 
-                let _new_op_head_input = BlockBuildInput {
-                    parent_header: Default::default(),
+                let new_op_head_input = BlockBuildInput {
+                    parent_header: self.op_head_block_header.clone(),
                     beneficiary: self.op_batcher.config.sequencer_fee_vault,
                     gas_limit: self.op_batcher.config.system_config.gas_limit,
                     timestamp: U256::from(op_batch.0.timestamp),
@@ -295,114 +329,150 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     mix_hash: l1_epoch_header_mix_hash,
                     transactions: derived_transactions,
                     withdrawals: vec![],
-                    // TODO
+                    // initializing these fields is not needed here
                     parent_state_trie: Default::default(),
                     parent_storage: Default::default(),
                     contracts: vec![],
                     ancestor_headers: vec![],
                 };
 
-                // in guest: ask for receipt about this (without RLP decoding)
-                // on host: go run the preflight and queue up the input data (using RLP decoded
+                // host: go run the preflight and queue up the input data (using RLP decoded
                 // transactions)
-
-                // obtain verified op block header
-                let new_op_head = {
-                    // load the next op block header
-                    let new_op_head = self
-                        .derive_input
-                        .db
-                        .get_op_block_header(self.op_head_block_header.number + 1)
-                        .context("op block not found")?;
-
-                    // Verify that the op block header loaded from the DB matches the payload
-                    // attributes of the batch.
-                    ensure!(
-                        new_op_head.parent_hash == self.op_batcher.state.safe_head.hash,
-                        "Invalid op block parent hash"
-                    );
-                    ensure!(
-                        new_op_head.beneficiary == self.op_batcher.config.sequencer_fee_vault,
-                        "Invalid op block beneficiary"
-                    );
-                    ensure!(
-                        new_op_head.gas_limit == self.op_batcher.config.system_config.gas_limit,
-                        "Invalid op block gas limit"
-                    );
-                    ensure!(
-                        new_op_head.timestamp == U256::from(op_batch.0.timestamp),
-                        "Invalid op block timestamp"
-                    );
-                    ensure!(
-                        new_op_head.extra_data.is_empty(),
-                        "Invalid op block extra data"
-                    );
-
-                    // verify that the new op head mix hash matches the mix hash of the L1 block
-                    ensure!(
-                        new_op_head.mix_hash == l1_epoch_header_mix_hash,
-                        "Invalid op block mix hash"
-                    );
-
-                    // verify that the new op head transactions match the batch transactions
-                    ensure!(
-                        tx_trie.hash() == new_op_head.transactions_root,
-                        "Invalid op block transactions"
-                    );
-
-                    ensure!(
-                        new_op_head.withdrawals_root.is_none(),
-                        "Invalid op block withdrawals"
-                    );
-
-                    new_op_head
-                };
-
-                let new_op_head_hash = new_op_head.hash();
-
                 #[cfg(not(target_os = "zkvm"))]
-                info!(
-                    "Derived Op block {} w/ hash {}",
-                    new_op_head.number, new_op_head_hash
-                );
+                let op_block_output = {
+                    // Create the provider DB
+                    let provider_db = ProviderDb::new(
+                        self.provider_factory
+                            .as_ref()
+                            .unwrap()
+                            .create_provider(self.op_head_block_header.number)?,
+                        self.op_head_block_header.number,
+                    );
+                    let preflight_data = OptimismStrategy::preflight_input_with_provider_db(
+                        OP_MAINNET_CHAIN_SPEC.clone(),
+                        provider_db,
+                        new_op_head_input.clone(),
+                    )
+                    .map(|mut headerless_preflight_data| {
+                        headerless_preflight_data.header = Header {
+                            beneficiary: new_op_head_input.beneficiary,
+                            gas_limit: new_op_head_input.gas_limit,
+                            timestamp: new_op_head_input.timestamp,
+                            extra_data: new_op_head_input.extra_data.clone(),
+                            mix_hash: new_op_head_input.mix_hash,
+                            // unnecessary
+                            parent_hash: Default::default(),
+                            ommers_hash: Default::default(),
+                            state_root: Default::default(),
+                            transactions_root: Default::default(),
+                            receipts_root: Default::default(),
+                            logs_bloom: Default::default(),
+                            difficulty: Default::default(),
+                            number: 0,
+                            gas_used: Default::default(),
+                            nonce: Default::default(),
+                            base_fee_per_gas: Default::default(),
+                            withdrawals_root: None,
+                        };
+                        headerless_preflight_data
+                    })?;
 
-                self.op_batcher.state.safe_head = L2BlockInfo {
-                    hash: new_op_head_hash,
-                    timestamp: new_op_head.timestamp.try_into().unwrap(),
-                    l1_origin: BlockId {
-                        number: self.op_batcher.state.epoch.number,
-                        hash: self.op_batcher.state.epoch.hash,
-                    },
+                    let executable_input: BlockBuildInput<OptimismTxEssence> =
+                        preflight_data.try_into()?;
+                    op_block_inputs.push(executable_input.clone());
+
+                    OptimismStrategy::build_from(&OP_MAINNET_CHAIN_SPEC, executable_input)?
+                };
+                // guest: ask for receipt about provided block build output
+                #[cfg(target_os = "zkvm")]
+                let op_block_output = {
+                    let output = op_block_output_iter.next().unwrap();
+                    // A valid receipt should be provided for block building results
+                    let builder_journal =
+                        to_vec(&output).expect("Failed to encode builder journal");
+                    env::verify(
+                        Digest::from(self.derive_input.builder_image_id),
+                        &builder_journal,
+                    )
+                    .expect("Failed to validate block build output");
+                    output
                 };
 
-                derived_op_blocks.push((new_op_head.number, new_op_head_hash));
-                self.op_head_block_header = new_op_head;
+                match op_block_output {
+                    BlockBuildOutput::SUCCESS {
+                        new_block_hash,
+                        new_block_head,
+                        ..
+                    } => {
+                        // Verify that the built op block matches the payload attributes of the
+                        // batch.
+                        ensure!(
+                            new_block_head.parent_hash == self.op_batcher.state.safe_head.hash,
+                            "Invalid op block parent hash"
+                        );
+                        ensure!(
+                            new_block_head.beneficiary
+                                == self.op_batcher.config.sequencer_fee_vault,
+                            "Invalid op block beneficiary"
+                        );
+                        ensure!(
+                            new_block_head.gas_limit
+                                == self.op_batcher.config.system_config.gas_limit,
+                            "Invalid op block gas limit"
+                        );
+                        ensure!(
+                            new_block_head.timestamp == U256::from(op_batch.0.timestamp),
+                            "Invalid op block timestamp"
+                        );
+                        ensure!(
+                            new_block_head.extra_data.is_empty(),
+                            "Invalid op block extra data"
+                        );
+                        ensure!(
+                            new_block_head.mix_hash == l1_epoch_header_mix_hash,
+                            "Invalid op block mix hash"
+                        );
+                        ensure!(
+                            tx_trie.hash() == new_block_head.transactions_root,
+                            "Invalid op block transactions"
+                        );
+                        ensure!(
+                            new_block_head.withdrawals_root.is_none(),
+                            "Invalid op block withdrawals"
+                        );
 
-                if self.op_head_block_header.number == target_block_no {
-                    break;
-                }
+                        // obtain verified op block header
+                        #[cfg(not(target_os = "zkvm"))]
+                        info!(
+                            "Derived Op block {} w/ hash {}",
+                            new_block_head.number, new_block_hash
+                        );
+
+                        self.op_batcher.state.safe_head = L2BlockInfo {
+                            hash: new_block_hash,
+                            timestamp: new_block_head.timestamp.try_into().unwrap(),
+                            l1_origin: BlockId {
+                                number: self.op_batcher.state.epoch.number,
+                                hash: self.op_batcher.state.epoch.hash,
+                            },
+                        };
+
+                        derived_op_blocks.push((new_block_head.number, new_block_hash));
+                        self.op_head_block_header = new_block_head;
+
+                        if self.op_head_block_header.number == target_block_no {
+                            break;
+                        }
+                    }
+                    BlockBuildOutput::FAILURE { bad_input_hash } => {
+                        ensure!(
+                            new_op_head_input.partial_hash() == bad_input_hash,
+                            "Invalid input partial hash"
+                        );
+                    }
+                };
             }
         }
-
-        // // Execute transactions to verify valid state transitions
-        // let op_blocks = mem::take(&mut self.derive_input.op_blocks);
-        // if op_blocks.len() != derived_op_blocks.len() {
-        //     bail!(
-        //         "Mismatch between number of input op blocks {} and derived block count {}",
-        //         op_blocks.len(),
-        //         derived_op_blocks.len()
-        //     );
-        // }
-        // for (i, input) in op_blocks.into_iter().enumerate() {
-        //     let (header, _) = OptimismStrategy::build_from(&OP_MAINNET_CHAIN_SPEC, input)?;
-        //     if header.hash() != derived_op_blocks[i].1 {
-        //         bail!(
-        //             "Mismatch between built block {} and derived block {}.",
-        //             header.number,
-        //             &derived_op_blocks[i].0
-        //         )
-        //     }
-        // }
 
         Ok(DeriveOutput {
             eth_tail: (
@@ -414,6 +484,8 @@ impl<D: BatcherDb> DeriveMachine<D> {
                 self.op_head_block_header.hash(),
             ),
             derived_op_blocks,
+            op_block_inputs,
+            builder_image_id: self.derive_input.builder_image_id,
         })
     }
 

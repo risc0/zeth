@@ -25,6 +25,13 @@ Zeth is experimental and may still contain bugs.
 
 ## Usage
 
+### Install Cargo
+
+- Install `cargo` with `curl`
+```console
+$ curl https://sh.rustup.rs -sSf | sh
+```
+
 ### Building
 
 - Install the `cargo risczero` tool and the `risc0` toolchain:
@@ -37,6 +44,8 @@ $ cargo risczero install
 - Clone the repository and build with `cargo`:
 
 ```console
+$ git clone https://github.com/risc0/zeth.git
+$ cd zeth
 $ cargo build --release
 ```
 

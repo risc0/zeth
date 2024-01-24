@@ -27,7 +27,7 @@ use zeth_primitives::{
     keccak::keccak,
     rlp::Decodable,
     transactions::{
-        ethereum::TransactionKind,
+        ethereum::{EthereumTxEssence, TransactionKind},
         optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
         Transaction, TxEssence,
     },
@@ -38,11 +38,10 @@ use zeth_primitives::{
 #[cfg(not(target_os = "zkvm"))]
 use crate::{
     builder::{BlockBuilderStrategy, OptimismStrategy},
-    consts::OP_MAINNET_CHAIN_SPEC,
     host::{preflight::Preflight, provider_db::ProviderDb, ProviderFactory},
 };
 use crate::{
-    consts::ONE,
+    consts::{ONE, OP_MAINNET_CHAIN_SPEC},
     input::BlockBuildInput,
     optimism::{
         batcher::{Batcher, BlockId, L2BlockInfo},
@@ -303,6 +302,18 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     .iter()
                     .map(|tx| Transaction::decode(&mut tx.as_ref()))
                     .filter_map(|tx| tx.ok())
+                    // We always assume that chain id exists here
+                    .map(
+                        |mut tx: Transaction<OptimismTxEssence>| match &mut tx.essence {
+                            OptimismTxEssence::Ethereum(EthereumTxEssence::Legacy(essence)) => {
+                                if essence.chain_id.is_none() {
+                                    essence.chain_id = Some(OP_MAINNET_CHAIN_SPEC.chain_id())
+                                }
+                                tx
+                            }
+                            _ => tx,
+                        },
+                    )
                     .collect();
 
                 let derived_transactions: Vec<_> = once(l1_attributes_tx)

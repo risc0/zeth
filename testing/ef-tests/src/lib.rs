@@ -18,7 +18,7 @@ use anyhow::bail;
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, NoneAsEmptyString};
-use zeth::util::{
+use util::{
     preflight::Data,
     provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
     provider_db::ProviderDb,

@@ -11,13 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 #![cfg_attr(not(feature = "std"), no_std)]
 extern crate alloc;
 extern crate core;
-
-// #[cfg(any(not(target_os = "zkvm"), not(feature = "std")))]
-// pub mod host;
 
 pub mod builder;
 pub mod consts;

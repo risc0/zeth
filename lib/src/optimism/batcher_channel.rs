@@ -15,8 +15,8 @@
 // use std::io::Read;
 
 use alloc::{
-    format,
     collections::{BTreeMap, VecDeque},
+    format, vec,
     vec::Vec,
 };
 
@@ -314,6 +314,7 @@ impl Channel {
         let mut channel_data = decompressed.as_slice();
         while !channel_data.is_empty() {
             let batch = Batch::decode(&mut channel_data)
+                .map_err(|e| anyhow!(AlloyRlpError::from(e)))
                 .with_context(|| format!("failed to decode batch {}", batches.len()))?;
 
             batches.push(BatchWithInclusion {
@@ -584,10 +585,10 @@ mod tests {
                 let mut channel = new_channel();
                 channel.add_frame(frame_a).unwrap();
                 assert_eq!(channel.size, 209);
-                assert_eq!(channel.is_ready(), false);
+                assert!(!channel.is_ready());
                 channel.add_frame(frame_b).unwrap();
                 assert_eq!(channel.size, 420);
-                assert_eq!(channel.is_ready(), true);
+                assert!(channel.is_ready());
                 assert_eq!(channel.decompress().unwrap(), b"Hello World!");
             }
         }

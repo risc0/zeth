@@ -30,7 +30,7 @@ pub use core::{
     result::{Result, Result::*},
 };
 
-use alloy_primitives::{BlockNumber, Bytes, B256};
+use alloy_primitives::{Bytes, B256};
 use alloy_rlp::{Decodable, Encodable};
 use alloy_rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Serialize};

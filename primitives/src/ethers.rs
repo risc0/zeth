@@ -13,8 +13,6 @@
 // limitations under the License.
 
 //! Convert from Ethers types.
-// #[cfg(not(feature = "std"))]
-// use crate::no_std_preflight::*;
 
 extern crate alloc;
 extern crate core;

@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use alloc::{
-    collections::{BinaryHeap, VecDeque, BTreeMap},
+    collections::{BTreeMap, VecDeque},
     vec::Vec,
 };
-use core::cmp::{Ordering, Reverse};
+use core::cmp::Ordering;
 
 use anyhow::{bail, ensure, Context, Result};
 use zeth_primitives::{

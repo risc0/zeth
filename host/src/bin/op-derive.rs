@@ -20,7 +20,6 @@
 // --cache \
 // --op-block-no=109279674 \
 // --op-blocks=6
-
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};

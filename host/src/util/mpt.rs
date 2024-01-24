@@ -75,7 +75,7 @@ pub fn is_not_included(key: &[u8], proof_nodes: &[MptNode]) -> Result<bool> {
     // for valid proofs, the get must not fail
     let value = proof_trie
         .get(key)
-        .map_err(|e| Into::<anyhow::Error>::into(e))
+        .map_err(Into::<anyhow::Error>::into)
         .context("invalid trie")?;
 
     Ok(value.is_none())

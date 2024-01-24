@@ -28,8 +28,9 @@ use crate::{
         prepare::{EthHeaderPrepStrategy, HeaderPrepStrategy},
     },
     consts::ChainSpec,
-    input::Input,
+    input::BlockBuildInput,
     mem_db::MemDb,
+    output::BlockBuildOutput,
 };
 
 mod execute;
@@ -41,7 +42,7 @@ mod prepare;
 #[derive(Clone, Debug)]
 pub struct BlockBuilder<'a, D, E: TxEssence> {
     pub(crate) chain_spec: &'a ChainSpec,
-    pub(crate) input: Input<E>,
+    pub(crate) input: BlockBuildInput<E>,
     pub(crate) db: Option<D>,
     pub(crate) header: Option<Header>,
 }
@@ -53,7 +54,7 @@ where
     E: TxEssence,
 {
     /// Creates a new block builder.
-    pub fn new(chain_spec: &ChainSpec, input: Input<E>) -> BlockBuilder<'_, D, E> {
+    pub fn new(chain_spec: &ChainSpec, input: BlockBuildInput<E>) -> BlockBuilder<'_, D, E> {
         BlockBuilder {
             chain_spec,
             db: None,
@@ -111,13 +112,41 @@ pub trait BlockBuilderStrategy {
     /// Builds a block from the given input.
     fn build_from(
         chain_spec: &ChainSpec,
-        input: Input<Self::TxEssence>,
-    ) -> Result<(Header, MptNode)> {
-        BlockBuilder::<MemDb, Self::TxEssence>::new(chain_spec, input)
-            .initialize_database::<Self::DbInitStrategy>()?
-            .prepare_header::<Self::HeaderPrepStrategy>()?
-            .execute_transactions::<Self::TxExecStrategy>()?
-            .finalize::<Self::BlockFinalizeStrategy>()
+        input: BlockBuildInput<Self::TxEssence>,
+    ) -> Result<BlockBuildOutput> {
+        // Database initialization failure does not mean the block is faulty
+        let input_hash = input.partial_hash();
+        let initialized = BlockBuilder::<MemDb, Self::TxEssence>::new(chain_spec, input)
+            .initialize_database::<Self::DbInitStrategy>()?;
+
+        // Header validation errors mean a faulty block
+        let prepared = match initialized.prepare_header::<Self::HeaderPrepStrategy>() {
+            Ok(builder) => builder,
+            Err(_) => {
+                return Ok(BlockBuildOutput::FAILURE {
+                    bad_input_hash: input_hash.into(),
+                })
+            }
+        };
+
+        // Transaction execution errors mean a faulty block
+        let executed = match prepared.execute_transactions::<Self::TxExecStrategy>() {
+            Ok(builder) => builder,
+            Err(_) => {
+                return Ok(BlockBuildOutput::FAILURE {
+                    bad_input_hash: input_hash.into(),
+                })
+            }
+        };
+
+        // Finalization does not indicate a faulty block
+        let (header, state) = executed.finalize::<Self::BlockFinalizeStrategy>()?;
+
+        Ok(BlockBuildOutput::SUCCESS {
+            new_block_hash: header.hash(),
+            new_block_head: header,
+            new_block_state: state,
+        })
     }
 }
 

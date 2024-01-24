@@ -21,7 +21,7 @@ use zeth_lib::{
     builder::OptimismStrategy,
     consts::{Network, OP_MAINNET_CHAIN_SPEC},
     host::{preflight::Preflight, rpc_db::RpcDb},
-    input::Input,
+    input::BlockBuildInput,
     optimism::{
         batcher_db::BatcherDb,
         composition::{ComposeInput, ComposeInputOperation, ComposeOutputOperation},
@@ -45,7 +45,7 @@ async fn fetch_op_blocks(
     core_args: &CoreArgs,
     block_number: u64,
     block_count: u64,
-) -> anyhow::Result<Vec<Input<OptimismTxEssence>>> {
+) -> anyhow::Result<Vec<BlockBuildInput<OptimismTxEssence>>> {
     let mut op_blocks = vec![];
     for i in 0..block_count {
         let block_number = block_number + i;

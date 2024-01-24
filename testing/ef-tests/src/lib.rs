@@ -26,7 +26,7 @@ use zeth_lib::{
         provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
         provider_db::ProviderDb,
     },
-    input::Input,
+    input::BlockBuildInput,
     mem_db::{AccountState, DbAccount, MemDb},
 };
 use zeth_primitives::{
@@ -315,7 +315,7 @@ pub fn create_input(
     transactions: Vec<TestTransaction>,
     withdrawals: Vec<Withdrawal>,
     state: TestState,
-) -> Input<EthereumTxEssence> {
+) -> BlockBuildInput<EthereumTxEssence> {
     // create the provider DB
     let provider_db = ProviderDb::new(
         Box::new(TestProvider {
@@ -330,7 +330,7 @@ pub fn create_input(
         .into_iter()
         .map(EthereumTransaction::from)
         .collect();
-    let input = Input {
+    let input = BlockBuildInput {
         beneficiary: header.beneficiary,
         gas_limit: header.gas_limit,
         timestamp: header.timestamp,

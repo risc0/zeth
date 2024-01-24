@@ -38,7 +38,7 @@ use crate::{
         provider::{new_provider, BlockQuery},
         provider_db::ProviderDb,
     },
-    input::{Input, StorageEntry},
+    input::{BlockBuildInput, StorageEntry},
     mem_db::MemDb,
 };
 
@@ -149,7 +149,7 @@ where
 fn new_preflight_input<E>(
     block: EthersBlock<EthersTransaction>,
     parent_header: Header,
-) -> Result<Input<E>>
+) -> Result<BlockBuildInput<E>>
 where
     E: TxEssence + TryFrom<EthersTransaction>,
     <E as TryFrom<EthersTransaction>>::Error: Debug,
@@ -176,7 +176,7 @@ where
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    let input = Input {
+    let input = BlockBuildInput {
         beneficiary: from_ethers_h160(block.author.context("author missing")?),
         gas_limit: from_ethers_u256(block.gas_limit),
         timestamp: from_ethers_u256(block.timestamp),
@@ -193,12 +193,12 @@ where
     Ok(input)
 }
 
-/// Converts the [Data] returned by the [Preflight] into [Input] required by the
+/// Converts the [Data] returned by the [Preflight] into [BlockBuildInput] required by the
 /// [BlockBuilder].
-impl<E: TxEssence> TryFrom<Data<E>> for Input<E> {
+impl<E: TxEssence> TryFrom<Data<E>> for BlockBuildInput<E> {
     type Error = anyhow::Error;
 
-    fn try_from(data: Data<E>) -> Result<Input<E>> {
+    fn try_from(data: Data<E>) -> Result<BlockBuildInput<E>> {
         // collect the code from each account
         let mut contracts = HashSet::new();
         for account in data.db.accounts.values() {
@@ -225,7 +225,7 @@ impl<E: TxEssence> TryFrom<Data<E>> for Input<E> {
         );
 
         // Create the block builder input
-        let input = Input {
+        let input = BlockBuildInput {
             parent_header: data.parent_header,
             beneficiary: data.header.beneficiary,
             gas_limit: data.header.gas_limit,

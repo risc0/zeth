@@ -16,13 +16,14 @@ use std::fmt::Debug;
 
 use anyhow::Context;
 use ethers_core::types::Transaction as EthersTransaction;
-use log::info;
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use zeth_lib::{
     builder::BlockBuilderStrategy,
     consts::ChainSpec,
     host::{preflight::Preflight, verify::Verifier},
-    input::Input,
+    input::BlockBuildInput,
+    output::BlockBuildOutput,
 };
 
 use crate::{
@@ -61,20 +62,30 @@ where
     let preflight_data = preflight_result.context("preflight failed")?;
 
     // Create the guest input from [Init]
-    let input: Input<N::TxEssence> = preflight_data
+    let input: BlockBuildInput<N::TxEssence> = preflight_data
         .clone()
         .try_into()
         .context("invalid preflight data")?;
 
     // Verify that the transactions run correctly
     info!("Running from memory ...");
-    let (header, state_trie) =
-        N::build_from(&chain_spec, input.clone()).context("Error while building block")?;
+    let output = N::build_from(&chain_spec, input.clone()).context("Error while building block")?;
 
-    info!("Verifying final state using provider data ...");
-    preflight_data.verify_block(&header, &state_trie)?;
+    match &output {
+        BlockBuildOutput::SUCCESS {
+            new_block_hash,
+            new_block_head,
+            new_block_state,
+        } => {
+            info!("Verifying final state using provider data ...");
+            preflight_data.verify_block(new_block_head, new_block_state)?;
 
-    info!("Final block hash derived successfully. {}", header.hash());
+            info!("Final block hash derived successfully. {}", new_block_hash);
+        }
+        BlockBuildOutput::FAILURE { .. } => {
+            warn!("Proving bad block construction!")
+        }
+    }
 
     match &cli {
         Cli::Build(..) => {}
@@ -84,7 +95,7 @@ where
                 run_args.exec_args.local_exec,
                 run_args.exec_args.profile,
                 guest_elf,
-                &preflight_data.header.hash(),
+                &output,
                 file_reference,
             );
         }
@@ -93,7 +104,7 @@ where
                 &cli,
                 &input,
                 guest_elf,
-                &preflight_data.header.hash(),
+                &output,
                 vec![],
                 file_reference,
                 None,

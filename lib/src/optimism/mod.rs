@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use core::iter::once;
-use std::mem;
 
 use alloy_sol_types::{sol, SolInterface};
 use anyhow::{bail, ensure, Context, Result};
@@ -35,9 +34,8 @@ use zeth_primitives::{
 };
 
 use crate::{
-    builder::{BlockBuilderStrategy, OptimismStrategy},
-    consts::{ONE, OP_MAINNET_CHAIN_SPEC},
-    input::Input,
+    consts::ONE,
+    input::BlockBuildInput,
     optimism::{
         batcher::{Batcher, BlockId, L2BlockInfo},
         batcher_db::BatcherDb,
@@ -85,7 +83,7 @@ pub struct DeriveInput<D> {
     /// Block count for the operation.
     pub op_derive_block_count: u64,
     /// Block building data for execution
-    pub op_blocks: Vec<Input<OptimismTxEssence>>,
+    pub op_blocks: Vec<BlockBuildInput<OptimismTxEssence>>,
 }
 
 /// Represents the output of the derivation process.
@@ -288,7 +286,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     tx_trie.insert(&trie_key, tx)?;
                 }
 
-                let _new_op_head_input = Input {
+                let _new_op_head_input = BlockBuildInput {
                     parent_header: Default::default(),
                     beneficiary: self.op_batcher.config.sequencer_fee_vault,
                     gas_limit: self.op_batcher.config.system_config.gas_limit,
@@ -303,6 +301,10 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     contracts: vec![],
                     ancestor_headers: vec![],
                 };
+
+                // in guest: ask for receipt about this (without RLP decoding)
+                // on host: go run the preflight and queue up the input data (using RLP decoded
+                // transactions)
 
                 // obtain verified op block header
                 let new_op_head = {
@@ -382,25 +384,25 @@ impl<D: BatcherDb> DeriveMachine<D> {
             }
         }
 
-        // Execute transactions to verify valid state transitions
-        let op_blocks = mem::take(&mut self.derive_input.op_blocks);
-        if op_blocks.len() != derived_op_blocks.len() {
-            bail!(
-                "Mismatch between number of input op blocks {} and derived block count {}",
-                op_blocks.len(),
-                derived_op_blocks.len()
-            );
-        }
-        for (i, input) in op_blocks.into_iter().enumerate() {
-            let (header, _) = OptimismStrategy::build_from(&OP_MAINNET_CHAIN_SPEC, input)?;
-            if header.hash() != derived_op_blocks[i].1 {
-                bail!(
-                    "Mismatch between built block {} and derived block {}.",
-                    header.number,
-                    &derived_op_blocks[i].0
-                )
-            }
-        }
+        // // Execute transactions to verify valid state transitions
+        // let op_blocks = mem::take(&mut self.derive_input.op_blocks);
+        // if op_blocks.len() != derived_op_blocks.len() {
+        //     bail!(
+        //         "Mismatch between number of input op blocks {} and derived block count {}",
+        //         op_blocks.len(),
+        //         derived_op_blocks.len()
+        //     );
+        // }
+        // for (i, input) in op_blocks.into_iter().enumerate() {
+        //     let (header, _) = OptimismStrategy::build_from(&OP_MAINNET_CHAIN_SPEC, input)?;
+        //     if header.hash() != derived_op_blocks[i].1 {
+        //         bail!(
+        //             "Mismatch between built block {} and derived block {}.",
+        //             header.number,
+        //             &derived_op_blocks[i].0
+        //         )
+        //     }
+        // }
 
         Ok(DeriveOutput {
             eth_tail: (

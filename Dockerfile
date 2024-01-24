@@ -23,22 +23,17 @@ RUN apt-get update && \
 RUN mkdir -p \
     ./bin \
     ./guests/sgx \
-    /root/.config/raiko/config \
-    /root/.config/raiko/secrets \
     /tmp/sgx \
     /var/log/raiko
 
-COPY --from=builder /opt/raiko/target/release/raiko-guest ./guests/sgx
-COPY --from=builder /opt/raiko/raiko-guest/config/raiko-guest.manifest.template ./guests/sgx
-COPY --from=builder /opt/raiko/target/release/raiko-host ./bin
-COPY --from=builder /opt/raiko/raiko-host/config/config.toml /root/.config/raiko/config
-COPY --from=builder /opt/raiko/docker/entrypoint.sh ./bin
+COPY --from=builder /opt/raiko/docker/entrypoint.sh ./bin/
+COPY --from=builder /opt/raiko/raiko-guest/config/raiko-guest.manifest.template ./guests/sgx/
+COPY --from=builder /opt/raiko/raiko-host/config/config.toml /etc/raiko/
+COPY --from=builder /opt/raiko/target/release/raiko-guest ./guests/sgx/
+COPY --from=builder /opt/raiko/target/release/raiko-host ./bin/
 COPY ./sgx-ra/src/*.so /usr/lib/
 
 RUN cd ./guests/sgx && \
-    gramine-manifest -Dlog_level=error -Darch_libdir=/lib/x86_64-linux-gnu/ raiko-guest.manifest.template raiko-guest.manifest && \
-    gramine-sgx-gen-private-key && \
-    gramine-sgx-sign --manifest raiko-guest.manifest --output raiko-guest.manifest.sgx && \
-    cd -
+    gramine-manifest -Dlog_level=error -Darch_libdir=/lib/x86_64-linux-gnu/ raiko-guest.manifest.template raiko-guest.manifest
 
 ENTRYPOINT [ "/opt/raiko/bin/entrypoint.sh" ]

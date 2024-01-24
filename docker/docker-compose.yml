@@ -3,13 +3,15 @@ services:
   raiko:
     image: gcr.io/evmchain/raiko:latest
     container_name: raiko
-    command: --config-path=/root/.config/raiko/config/config.toml
+    command: --config-path=/etc/raiko/config.toml
     devices:
       - "/dev/sgx_enclave:/dev/sgx_enclave"
       - "/dev/sgx_provision:/dev/sgx_provision"
     volumes:
       - /tmp/sgx:/tmp/sgx
       - /var/log/raiko:/var/log/raiko
+      - ${HOME}/.config/gramine:/root/.config/gramine
+      # make sure you have ${HOME}/.config/raiko directory
       - ${HOME}/.config/raiko:/root/.config/raiko
     ports:
       - "8080:8080"

@@ -25,7 +25,7 @@ pub enum Command {
 
 #[derive(Debug, Args)]
 pub struct ServerArgs {
-    #[clap(short, long, require_equals = true, default_value = "127.0.0.1:8080")]
+    #[clap(short, long, require_equals = true, default_value = "0.0.0.0:8080")]
     pub addr: String,
 }
 

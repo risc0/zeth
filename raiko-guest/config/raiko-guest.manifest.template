@@ -21,7 +21,7 @@ sys.insecure__allow_eventfd = true
 loader.insecure__use_cmdline_argv = true
 
 sgx.debug = false
-sgx.edmm_enable = true
+sgx.edmm_enable = false
 
 sgx.trusted_files = [
   "file:{{ gramine.libos }}",

@@ -63,7 +63,7 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
         op_head_block_no: core_args.block_number,
         op_derive_block_count: core_args.block_count,
         op_block_outputs: vec![],
-        builder_image_id: OP_BLOCK_ID,
+        block_image_id: OP_BLOCK_ID,
     };
     let mut derive_machine = DeriveMachine::new(
         &OPTIMISM_CHAIN_SPEC,
@@ -84,7 +84,7 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
         op_head_block_no: core_args.block_number,
         op_derive_block_count: core_args.block_count,
         op_block_outputs,
-        builder_image_id: OP_BLOCK_ID,
+        block_image_id: OP_BLOCK_ID,
     };
 
     info!("Running from memory ...");
@@ -254,7 +254,7 @@ pub async fn compose_derived_rollup_blocks(
             op_head_block_no: core_args.block_number + op_block_index,
             op_derive_block_count: composition_size,
             op_block_outputs: vec![],
-            builder_image_id: OP_BLOCK_ID,
+            block_image_id: OP_BLOCK_ID,
         };
         let mut derive_machine = DeriveMachine::new(
             &OPTIMISM_CHAIN_SPEC,
@@ -303,7 +303,7 @@ pub async fn compose_derived_rollup_blocks(
             op_head_block_no: core_args.block_number + op_block_index,
             op_derive_block_count: composition_size,
             op_block_outputs,
-            builder_image_id: OP_BLOCK_ID,
+            block_image_id: OP_BLOCK_ID,
         };
 
         info!("Deriving ...");
@@ -355,6 +355,7 @@ pub async fn compose_derived_rollup_blocks(
         .root(Some(&mut sibling_map))
         .expect("No eth blocks loaded!");
     let prep_compose_input = ComposeInput {
+        block_image_id: OP_BLOCK_ID,
         derive_image_id: OP_DERIVE_ID,
         compose_image_id: OP_COMPOSE_ID,
         operation: ComposeInputOperation::PREP {
@@ -383,7 +384,9 @@ pub async fn compose_derived_rollup_blocks(
     let mut join_queue = VecDeque::new();
     for (derive_output, derive_receipt) in lift_queue {
         let eth_tail_hash = derive_output.eth_tail.1 .0;
+        info!("Lifting ... {:?}", &derive_output);
         let lift_compose_input = ComposeInput {
+            block_image_id: OP_BLOCK_ID,
             derive_image_id: OP_DERIVE_ID,
             compose_image_id: OP_COMPOSE_ID,
             operation: ComposeInputOperation::LIFT {
@@ -392,11 +395,11 @@ pub async fn compose_derived_rollup_blocks(
             },
             eth_chain_merkle_root: eth_chain_root,
         };
-        info!("Lifting ...");
         let lift_compose_output = lift_compose_input
             .clone()
             .process()
             .expect("Lift composition failed.");
+        info!("Lifted ... {:?}", &lift_compose_output);
 
         let lift_compose_receipt = if let Some(receipt) = derive_receipt {
             maybe_prove(
@@ -417,8 +420,11 @@ pub async fn compose_derived_rollup_blocks(
 
     // Join
     while join_queue.len() > 1 {
+        // Pop left output
         let (left, left_receipt) = join_queue.pop_front().unwrap();
+        // Only peek at right output
         let (right, _right_receipt) = join_queue.front().unwrap();
+        info!("Joining");
         let ComposeOutputOperation::AGGREGATE {
             op_tail: left_op_tail,
             ..
@@ -435,12 +441,17 @@ pub async fn compose_derived_rollup_blocks(
         };
         // Push dangling workloads (odd block count) to next round
         if left_op_tail != right_op_head {
+            info!(
+                "Skipping dangling workload: {} - {}",
+                left_op_tail.0, right_op_head.0
+            );
             join_queue.push_back((left, left_receipt));
             continue;
         }
-        // Pair up join
+        // Actually pop right output for pairing
         let (right, right_receipt) = join_queue.pop_front().unwrap();
         let join_compose_input = ComposeInput {
+            block_image_id: OP_BLOCK_ID,
             derive_image_id: OP_DERIVE_ID,
             compose_image_id: OP_COMPOSE_ID,
             operation: ComposeInputOperation::JOIN { left, right },
@@ -474,6 +485,7 @@ pub async fn compose_derived_rollup_blocks(
     // Finish
     let (aggregate_output, aggregate_receipt) = join_queue.pop_front().unwrap();
     let finish_compose_input = ComposeInput {
+        block_image_id: OP_BLOCK_ID,
         derive_image_id: OP_DERIVE_ID,
         compose_image_id: OP_COMPOSE_ID,
         operation: ComposeInputOperation::FINISH {

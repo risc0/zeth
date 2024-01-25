@@ -94,7 +94,7 @@ pub struct DeriveInput<D> {
     /// Block building data for execution
     pub op_block_outputs: Vec<BlockBuildOutput>,
     /// Image id of block builder guest
-    pub builder_image_id: ImageId,
+    pub block_image_id: ImageId,
 }
 
 /// Represents the output of the derivation process.
@@ -107,7 +107,7 @@ pub struct DeriveOutput {
     /// Derived Optimism blocks.
     pub derived_op_blocks: Vec<(BlockNumber, BlockHash)>,
     /// Image id of block builder guest
-    pub builder_image_id: ImageId,
+    pub block_image_id: ImageId,
 }
 
 #[cfg(target_os = "zkvm")]
@@ -226,6 +226,12 @@ impl<D: BatcherDb> DeriveMachine<D> {
         );
         let target_block_no =
             self.derive_input.op_head_block_no + self.derive_input.op_derive_block_count;
+
+        // Save starting op_head
+        let op_head = (
+            self.op_head_block_header.number,
+            self.op_head_block_header.hash(),
+        );
 
         let mut derived_op_blocks = Vec::new();
         let mut process_next_eth_block = false;
@@ -407,7 +413,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     let builder_journal =
                         to_vec(&output).expect("Failed to encode builder journal");
                     env::verify(
-                        Digest::from(self.derive_input.builder_image_id),
+                        Digest::from(self.derive_input.block_image_id),
                         &builder_journal,
                     )
                     .expect("Failed to validate block build output");
@@ -495,12 +501,9 @@ impl<D: BatcherDb> DeriveMachine<D> {
                 self.op_batcher.state.current_l1_block_number,
                 self.op_batcher.state.current_l1_block_hash,
             ),
-            op_head: (
-                self.op_head_block_header.number,
-                self.op_head_block_header.hash(),
-            ),
+            op_head,
             derived_op_blocks,
-            builder_image_id: self.derive_input.builder_image_id,
+            block_image_id: self.derive_input.block_image_id,
         })
     }
 

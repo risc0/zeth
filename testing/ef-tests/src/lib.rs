@@ -347,7 +347,7 @@ pub fn create_input(
     };
 
     // create and run the block builder once to create the initial DB
-    let mut builder = BlockBuilder::new(&chain_spec, input)
+    let mut builder = BlockBuilder::new(&chain_spec, input, None)
         .with_db(provider_db)
         .prepare_header::<<EthereumStrategy as BlockBuilderStrategy>::HeaderPrepStrategy>()
         .unwrap()

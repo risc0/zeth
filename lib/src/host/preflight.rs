@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{fmt::Debug, path::PathBuf};
+use std::{
+    fmt::Debug,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use anyhow::{anyhow, Context, Result};
 use ethers_core::types::{
@@ -131,13 +135,17 @@ where
         let parent_header = input.parent_header.clone();
         let transactions = input.transactions.clone();
         let withdrawals = input.withdrawals.clone();
-        // Create the block builder, run the transactions and extract the DB
-        // todo: support erroneous preflight
-        let mut builder = BlockBuilder::new(&chain_spec, input)
-            .with_db(provider_db)
-            .prepare_header::<N::HeaderPrepStrategy>()?
-            .execute_transactions::<N::TxExecStrategy>()?;
-        let provider_db = builder.mut_db().unwrap();
+        // Create the block builder, run the transactions and extract the DB even if run fails
+        let db_backup = Arc::new(Mutex::new(None));
+        let builder =
+            BlockBuilder::new(&chain_spec, input, Some(db_backup.clone())).with_db(provider_db);
+        let mut provider_db = match builder.prepare_header::<N::HeaderPrepStrategy>() {
+            Ok(builder) => match builder.execute_transactions::<N::TxExecStrategy>() {
+                Ok(builder) => builder.take_db().unwrap(),
+                Err(_) => db_backup.lock().unwrap().take().unwrap(),
+            },
+            Err(_) => db_backup.lock().unwrap().take().unwrap(),
+        };
 
         info!("Gathering inclusion proofs ...");
 

@@ -16,7 +16,7 @@ use alloy_primitives::{b256, Address, BlockHash, BlockNumber, Bloom, Bytes, B256
 use alloy_rlp_derive::RlpEncodable;
 use serde::{Deserialize, Serialize};
 
-use crate::{keccak::keccak, trie::EMPTY_ROOT};
+use crate::{keccak::keccak, transactions::EthereumTransaction, trie::EMPTY_ROOT};
 
 /// Keccak-256 hash of the RLP of an empty list.
 pub const EMPTY_LIST_HASH: B256 =
@@ -61,6 +61,9 @@ pub struct Header {
     /// Shanghai update.
     #[serde(default)]
     pub withdrawals_root: Option<B256>,
+    #[rlp(skip)]
+    #[serde(skip)]
+    pub transactions: Vec<EthereumTransaction>,
 }
 
 impl Default for Header {
@@ -84,6 +87,7 @@ impl Default for Header {
             nonce: B64::ZERO,
             base_fee_per_gas: U256::ZERO,
             withdrawals_root: None,
+            transactions: Default::default(),
         }
     }
 }

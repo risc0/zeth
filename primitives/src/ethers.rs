@@ -121,6 +121,7 @@ impl<T> TryFrom<EthersBlock<T>> for Header {
                 block.base_fee_per_gas.context("base_fee_per_gas missing")?,
             ),
             withdrawals_root: block.withdrawals_root.map(from_ethers_h256),
+            transactions: Default::default(),
         })
     }
 }

@@ -13,7 +13,7 @@
 !/rust-toolchain
 !/sgx-ra
 !/taiko.toml
-
+!/tests
 # Ignore unnecessary files inside allowed directories
 # This should go after the allowed directories
 **/raiko-host/guests/sgx

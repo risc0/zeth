@@ -109,7 +109,9 @@ impl TxExecStrategy<EthereumTxEssence> for TaikoTxExecStrategy {
 
         // process all the transactions
         let mut tx_trie = MptNode::default();
+        let mut txs = vec![];
         let mut receipt_trie = MptNode::default();
+        let mut actual_tx_no = 0usize;
         for (tx_no, tx) in take(&mut block_builder.input.transactions)
             .into_iter()
             .enumerate()
@@ -199,27 +201,27 @@ impl TxExecStrategy<EthereumTxEssence> for TaikoTxExecStrategy {
             logs_bloom.accrue_bloom(&receipt.payload.logs_bloom);
 
             // Add receipt and tx to tries
-            let trie_key = tx_no.to_rlp();
+            let trie_key = actual_tx_no.to_rlp();
+            actual_tx_no += 1;
+            txs.push(tx.clone());
             match tx_trie.insert_rlp(&trie_key, tx) {
                 Ok(_) => (),
                 Err(err) => {
                     if is_anchor {
-                        bail!("Failed to insert transaction {}: {:?}", tx_no, err);
+                        bail!("Failed to insert transaction {}: {:?}", actual_tx_no, err);
                     }
                     #[cfg(not(target_os = "zkvm"))]
-                    debug!("Failed to insert transaction {}: {:?}", tx_no, err);
-                    continue;
+                    debug!("Failed to insert transaction {}: {:?}", actual_tx_no, err);
                 }
             }
             match receipt_trie.insert_rlp(&trie_key, receipt) {
                 Ok(_) => (),
                 Err(err) => {
                     if is_anchor {
-                        bail!("Failed to insert receipt {}: {:?}", tx_no, err);
+                        bail!("Failed to insert receipt {}: {:?}", actual_tx_no, err);
                     }
                     #[cfg(not(target_os = "zkvm"))]
-                    debug!("Failed to insert receipt {}: {:?}", tx_no, err);
-                    continue;
+                    debug!("Failed to insert receipt {}: {:?}", actual_tx_no, err);
                 }
             }
 
@@ -285,6 +287,7 @@ impl TxExecStrategy<EthereumTxEssence> for TaikoTxExecStrategy {
 
         // Update result header with computed values
         header.transactions_root = tx_trie.hash();
+        header.transactions = txs;
         header.receipts_root = receipt_trie.hash();
         header.logs_bloom = logs_bloom;
         header.gas_used = cumulative_gas_used;

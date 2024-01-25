@@ -3,12 +3,12 @@ use std::{fs, path::Path};
 use rand_core::OsRng;
 use secp256k1::{
     ecdsa::{RecoverableSignature, RecoveryId},
-    Error, KeyPair, Message, PublicKey, Secp256k1, SecretKey, SECP256K1,
+    Error, KeyPair, Message, PublicKey, SecretKey, SECP256K1,
 };
 use zeth_primitives::{keccak256, signature::TxSignature, Address, B256, U256};
 
 pub fn generate_key() -> KeyPair {
-    KeyPair::new(&Secp256k1::new(), &mut OsRng)
+    KeyPair::new_global(&mut OsRng)
 }
 
 /// Recovers the address of the sender using secp256k1 pubkey recovery.
@@ -20,8 +20,10 @@ pub fn generate_key() -> KeyPair {
 /// underlying secp256k1 library.
 #[allow(dead_code)]
 pub fn recover_signer_unchecked(sig: &[u8; 65], msg: &[u8; 32]) -> Result<Address, Error> {
-    let sig =
-        RecoverableSignature::from_compact(&sig[0..64], RecoveryId::from_i32(sig[64] as i32)?)?;
+    let sig = RecoverableSignature::from_compact(
+        &sig[0..64],
+        RecoveryId::from_i32(sig[64] as i32 - 27)?,
+    )?;
 
     let public = SECP256K1.recover_ecdsa(&Message::from_slice(&msg[..32])?, &sig)?;
     Ok(public_key_to_address(&public))
@@ -58,7 +60,7 @@ pub fn load_private_key<T: AsRef<Path>>(path: T) -> Result<SecretKey, Error> {
 }
 
 pub fn public_key(secret: &SecretKey) -> PublicKey {
-    PublicKey::from_secret_key(&Secp256k1::new(), secret)
+    PublicKey::from_secret_key_global(secret)
 }
 
 #[cfg(test)]
@@ -68,7 +70,7 @@ mod tests {
     use super::*;
     #[test]
     fn recover() {
-        let proof = "01000000c13bd882edb37ffbabc9f9e34a0d9789633b850fe55e625b768cc8e5feed7d9f7ab536cbc210c2fcc1385aaf88d8a91d8adc2740245f9deee5fd3d61dd2a71662fb6639515f1e2f3354361a82d86c1952352c1a800";
+        let proof = "01000000c13bd882edb37ffbabc9f9e34a0d9789633b850fe55e625b768cc8e5feed7d9f7ab536cbc210c2fcc1385aaf88d8a91d8adc2740245f9deee5fd3d61dd2a71662fb6639515f1e2f3354361a82d86c1952352c1a81b";
         let proof_bytes = hex::decode(proof).unwrap();
         let msg = "216ac5cd5a5e13b0c9a81efb1ad04526b9f4ddd2fe6ebc02819c5097dfb0958c";
         let msg_bytes = hex::decode(msg).unwrap();

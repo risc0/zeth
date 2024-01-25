@@ -106,8 +106,6 @@ pub struct DeriveOutput {
     pub op_head: (BlockNumber, BlockHash),
     /// Derived Optimism blocks.
     pub derived_op_blocks: Vec<(BlockNumber, BlockHash)>,
-    /// Dependent op block inputs
-    pub op_block_inputs: Vec<BlockBuildInput<OptimismTxEssence>>,
     /// Image id of block builder guest
     pub builder_image_id: ImageId,
 }
@@ -215,7 +213,13 @@ impl<D: BatcherDb> DeriveMachine<D> {
         })
     }
 
-    pub fn derive(&mut self) -> Result<DeriveOutput> {
+    pub fn derive(
+        &mut self,
+        mut op_block_inputs: Option<&mut Vec<BlockBuildInput<OptimismTxEssence>>>,
+    ) -> Result<DeriveOutput> {
+        #[cfg(target_os = "zkvm")]
+        op_block_inputs.take();
+
         ensure!(
             self.op_head_block_header.number == self.derive_input.op_head_block_no,
             "Op head block number mismatch!"
@@ -229,10 +233,6 @@ impl<D: BatcherDb> DeriveMachine<D> {
         #[cfg(target_os = "zkvm")]
         let mut op_block_output_iter =
             core::mem::take(&mut self.derive_input.op_block_outputs).into_iter();
-        #[cfg(not(target_os = "zkvm"))]
-        let mut op_block_inputs = vec![];
-        #[cfg(target_os = "zkvm")]
-        let op_block_inputs = vec![];
 
         while self.op_head_block_header.number < target_block_no {
             #[cfg(not(target_os = "zkvm"))]
@@ -352,6 +352,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                 #[cfg(not(target_os = "zkvm"))]
                 let op_block_output = {
                     // Create the provider DB
+                    // todo: run without factory (using outputs)
                     let provider_db = ProviderDb::new(
                         self.provider_factory
                             .as_ref()
@@ -390,11 +391,15 @@ impl<D: BatcherDb> DeriveMachine<D> {
 
                     let executable_input: BlockBuildInput<OptimismTxEssence> =
                         preflight_data.try_into()?;
-                    op_block_inputs.push(executable_input.clone());
+                    if let Some(ref mut inputs_vec) = op_block_inputs {
+                        inputs_vec.push(executable_input.clone());
+                    }
 
                     OptimismStrategy::build_from(&OP_MAINNET_CHAIN_SPEC, executable_input)?
+                        .with_state_compressed()
                 };
-                // guest: ask for receipt about provided block build output
+                // guest: ask for receipt about provided block build output (compressed state trie
+                // expected)
                 #[cfg(target_os = "zkvm")]
                 let op_block_output = {
                     let output = op_block_output_iter.next().unwrap();
@@ -495,7 +500,6 @@ impl<D: BatcherDb> DeriveMachine<D> {
                 self.op_head_block_header.hash(),
             ),
             derived_op_blocks,
-            op_block_inputs,
             builder_image_id: self.derive_input.builder_image_id,
         })
     }

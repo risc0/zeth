@@ -19,7 +19,6 @@ use zeth_lib::{
     builder::{BlockBuilderStrategy, OptimismStrategy},
     consts::OP_MAINNET_CHAIN_SPEC,
 };
-use zeth_lib::output::BlockBuildOutput;
 
 risc0_zkvm::guest::entry!(main);
 
@@ -30,8 +29,7 @@ pub fn main() {
     let mut output = OptimismStrategy::build_from(&OP_MAINNET_CHAIN_SPEC, input)
         .expect("Failed to build the resulting block");
     // Abridge successful construction results
-    if let BlockBuildOutput::SUCCESS { new_block_head, new_block_state, .. } = &mut output {
-        let trie_root = core::mem::replace(new_block_state, new_block_head.state_root.into());
+    if let Some(trie_root) = output.compress_state() {
         // Leak memory, save cycles
         core::mem::forget(trie_root);
     }

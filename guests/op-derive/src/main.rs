@@ -26,7 +26,7 @@ pub fn main() {
     let mut derive_machine = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input, None)
         .expect("Could not create derive machine");
     let output = derive_machine
-        .derive()
+        .derive(None)
         .expect("Failed to process derivation input");
     env::commit(&output);
 }

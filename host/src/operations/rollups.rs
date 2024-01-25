@@ -12,31 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::VecDeque;
+use std::{
+    borrow::BorrowMut,
+    collections::VecDeque,
+    sync::{Arc, Mutex},
+};
 
 use anyhow::Context;
 use log::info;
+use risc0_zkvm::Assumption;
 use zeth_guests::*;
 use zeth_lib::{
     builder::{BlockBuilderStrategy, OptimismStrategy},
     consts::{Network, OP_MAINNET_CHAIN_SPEC},
     host::{rpc_db::RpcDb, ProviderFactory},
+    input::BlockBuildInput,
     optimism::{
         batcher_db::BatcherDb,
         composition::{ComposeInput, ComposeInputOperation, ComposeOutputOperation},
         config::OPTIMISM_CHAIN_SPEC,
         DeriveInput, DeriveMachine,
     },
+    output::BlockBuildOutput,
 };
 use zeth_primitives::{
     block::Header,
+    transactions::optimism::OptimismTxEssence,
     tree::{MerkleMountainRange, MerkleProof},
 };
 
-use crate::{
-    cli::Cli,
-    operations::{execute, maybe_prove},
-};
+use crate::{cli::Cli, operations::maybe_prove};
 
 pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::Result<()> {
     info!("Fetching data ...");
@@ -46,105 +51,77 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
         Network::Optimism,
         core_args.op_rpc_url.clone(),
     );
+    let receipt_index = Arc::new(Mutex::new(0usize));
 
-    let (derive_input, output) = tokio::task::spawn_blocking(move || {
-        let derive_input = DeriveInput {
-            db: RpcDb::new(
-                core_args.eth_rpc_url.clone(),
-                core_args.op_rpc_url.clone(),
-                core_args.cache.clone(),
-            ),
-            op_head_block_no: core_args.block_number,
-            op_derive_block_count: core_args.block_count,
-            op_block_outputs: vec![],
-            builder_image_id: OP_BLOCK_ID,
-        };
-        let mut derive_machine = DeriveMachine::new(
-            &OPTIMISM_CHAIN_SPEC,
-            derive_input,
-            Some(op_builder_provider_factory),
-        )
-        .context("Could not create derive machine")?;
-        let derive_output = derive_machine.derive().context("could not derive")?;
-        let op_block_outputs = derive_output
-            .op_block_inputs
-            .clone()
-            .into_iter()
-            .map(|input| {
-                OptimismStrategy::build_from(&OP_MAINNET_CHAIN_SPEC, input)
-                    .expect("Failed to build op block")
-            })
-            .collect();
-        let derive_input_mem = DeriveInput {
-            db: derive_machine.derive_input.db.get_mem_db(),
-            op_head_block_no: core_args.block_number,
-            op_derive_block_count: core_args.block_count,
-            op_block_outputs,
-            builder_image_id: OP_BLOCK_ID,
-        };
-        let out: anyhow::Result<_> = Ok((derive_input_mem, derive_output));
-        out
-    })
-    .await?
-    .context("preflight failed")?;
+    info!("Running preflight");
+    let derive_input = DeriveInput {
+        db: RpcDb::new(
+            core_args.eth_rpc_url.clone(),
+            core_args.op_rpc_url.clone(),
+            core_args.cache.clone(),
+        ),
+        op_head_block_no: core_args.block_number,
+        op_derive_block_count: core_args.block_count,
+        op_block_outputs: vec![],
+        builder_image_id: OP_BLOCK_ID,
+    };
+    let mut derive_machine = DeriveMachine::new(
+        &OPTIMISM_CHAIN_SPEC,
+        derive_input,
+        Some(op_builder_provider_factory.clone()),
+    )
+    .context("Could not create derive machine")?;
+    let mut op_block_inputs = vec![];
+    let derive_output = derive_machine
+        .derive(Some(&mut op_block_inputs))
+        .context("could not derive")?;
+
+    let (assumptions, op_block_outputs) =
+        build_op_blocks(&cli, file_reference, receipt_index.clone(), op_block_inputs);
+
+    let derive_input_mem = DeriveInput {
+        db: derive_machine.derive_input.db.get_mem_db(),
+        op_head_block_no: core_args.block_number,
+        op_derive_block_count: core_args.block_count,
+        op_block_outputs,
+        builder_image_id: OP_BLOCK_ID,
+    };
 
     info!("Running from memory ...");
     {
-        // todo: run without factory (using outputs)
-        let core_args = cli.core_args().clone();
-        let op_builder_provider_factory = ProviderFactory::new(
-            core_args.cache.clone(),
-            Network::Optimism,
-            core_args.op_rpc_url.clone(),
-        );
         let output_mem = DeriveMachine::new(
             &OPTIMISM_CHAIN_SPEC,
-            derive_input.clone(),
+            derive_input_mem.clone(),
             Some(op_builder_provider_factory),
         )
         .context("Could not create derive machine")?
-        .derive()
+        .derive(None)
         .unwrap();
-        assert_eq!(output, output_mem);
+        assert_eq!(derive_output, output_mem);
     }
 
     info!("In-memory test complete");
-    println!("Eth tail: {} {}", output.eth_tail.0, output.eth_tail.1);
-    println!("Op Head: {} {}", output.op_head.0, output.op_head.1);
-    for derived_block in &output.derived_op_blocks {
+    println!(
+        "Eth tail: {} {}",
+        derive_output.eth_tail.0, derive_output.eth_tail.1
+    );
+    println!(
+        "Op Head: {} {}",
+        derive_output.op_head.0, derive_output.op_head.1
+    );
+    for derived_block in &derive_output.derived_op_blocks {
         println!("Derived: {} {}", derived_block.0, derived_block.1);
     }
 
-    match &cli {
-        Cli::Build(..) => {}
-        Cli::Run(run_args) => {
-            execute(
-                &derive_input,
-                run_args.exec_args.local_exec,
-                run_args.exec_args.profile,
-                OP_DERIVE_ELF,
-                &output,
-                file_reference,
-            );
-        }
-        Cli::Prove(..) => {
-            maybe_prove(
-                &cli,
-                &derive_input,
-                OP_DERIVE_ELF,
-                &output,
-                vec![],
-                file_reference,
-                None,
-            );
-        }
-        Cli::Verify(..) => {
-            unimplemented!()
-        }
-        Cli::OpInfo(..) => {
-            unreachable!()
-        }
-    }
+    maybe_prove(
+        &cli,
+        &derive_input_mem,
+        OP_DERIVE_ELF,
+        &derive_output,
+        assumptions,
+        file_reference,
+        Some(receipt_index.lock().unwrap().borrow_mut()),
+    );
 
     // let mut bonsai_session_uuid = args.verify_receipt_bonsai_uuid;
 
@@ -258,8 +235,8 @@ pub async fn compose_derived_rollup_blocks(
     // OP Composition
     info!("Fetching data ...");
     let mut lift_queue = Vec::new();
-    let mut receipt_index = 0;
-    let mut eth_chain: Vec<Header> = Vec::new();
+    let receipt_index = Arc::new(Mutex::new(0usize));
+    let mut complete_eth_chain: Vec<Header> = Vec::new();
     for op_block_index in (0..core_args.block_count).step_by(composition_size as usize) {
         let db = RpcDb::new(
             core_args.eth_rpc_url.clone(),
@@ -272,110 +249,97 @@ pub async fn compose_derived_rollup_blocks(
             core_args.op_rpc_url.clone(),
         );
 
-        let (input, output, chain) = tokio::task::spawn_blocking(move || {
-            let derive_input = DeriveInput {
-                db,
-                op_head_block_no: core_args.block_number + op_block_index,
-                op_derive_block_count: composition_size,
-                op_block_outputs: vec![],
-                builder_image_id: OP_BLOCK_ID,
-            };
-            let mut derive_machine = DeriveMachine::new(
-                &OPTIMISM_CHAIN_SPEC,
-                derive_input,
-                Some(op_builder_provider_factory),
-            )
-            .expect("Could not create derive machine");
-            let eth_head_no = derive_machine.op_batcher.state.epoch.number;
-            let eth_head = derive_machine
-                .derive_input
-                .db
-                .get_full_eth_block(eth_head_no)
-                .context("could not fetch eth head")?
-                .block_header
-                .clone();
-            let derive_output = derive_machine.derive().context("could not derive")?;
-            let eth_tail = derive_machine
-                .derive_input
-                .db
-                .get_full_eth_block(derive_output.eth_tail.0)
-                .context("could not fetch eth tail")?
-                .block_header
-                .clone();
-            let mut eth_chain = vec![eth_head];
-            for block_no in (eth_head_no + 1)..eth_tail.number {
-                eth_chain.push(
-                    derive_machine
-                        .derive_input
-                        .db
-                        .get_full_eth_block(block_no)
-                        .context("could not fetch eth block")?
-                        .block_header
-                        .clone(),
-                );
-            }
-            eth_chain.push(eth_tail);
+        let derive_input = DeriveInput {
+            db,
+            op_head_block_no: core_args.block_number + op_block_index,
+            op_derive_block_count: composition_size,
+            op_block_outputs: vec![],
+            builder_image_id: OP_BLOCK_ID,
+        };
+        let mut derive_machine = DeriveMachine::new(
+            &OPTIMISM_CHAIN_SPEC,
+            derive_input,
+            Some(op_builder_provider_factory.clone()),
+        )
+        .expect("Could not create derive machine");
+        let eth_head_no = derive_machine.op_batcher.state.epoch.number;
+        let eth_head = derive_machine
+            .derive_input
+            .db
+            .get_full_eth_block(eth_head_no)
+            .context("could not fetch eth head")?
+            .block_header
+            .clone();
+        let mut op_block_inputs = vec![];
+        let derive_output = derive_machine
+            .derive(Some(&mut op_block_inputs))
+            .context("could not derive")?;
+        let eth_tail = derive_machine
+            .derive_input
+            .db
+            .get_full_eth_block(derive_output.eth_tail.0)
+            .context("could not fetch eth tail")?
+            .block_header
+            .clone();
+        let mut eth_chain = vec![eth_head];
+        for block_no in (eth_head_no + 1)..eth_tail.number {
+            eth_chain.push(
+                derive_machine
+                    .derive_input
+                    .db
+                    .get_full_eth_block(block_no)
+                    .context("could not fetch eth block")?
+                    .block_header
+                    .clone(),
+            );
+        }
+        eth_chain.push(eth_tail);
 
-            let op_block_outputs = derive_output
-                .op_block_inputs
-                .clone()
-                .into_iter()
-                .map(|input| {
-                    OptimismStrategy::build_from(&OP_MAINNET_CHAIN_SPEC, input)
-                        .expect("Failed to build op block")
-                })
-                .collect();
-            let derive_input_mem = DeriveInput {
-                db: derive_machine.derive_input.db.get_mem_db(),
-                op_head_block_no: core_args.block_number + op_block_index,
-                op_derive_block_count: composition_size,
-                op_block_outputs,
-                builder_image_id: OP_BLOCK_ID,
-            };
-            let out: anyhow::Result<_> = Ok((derive_input_mem, derive_output, eth_chain));
-            out
-        })
-        .await??;
+        let (assumptions, op_block_outputs) =
+            build_op_blocks(&cli, file_reference, receipt_index.clone(), op_block_inputs);
+
+        let derive_input_mem = DeriveInput {
+            db: derive_machine.derive_input.db.get_mem_db(),
+            op_head_block_no: core_args.block_number + op_block_index,
+            op_derive_block_count: composition_size,
+            op_block_outputs,
+            builder_image_id: OP_BLOCK_ID,
+        };
 
         info!("Deriving ...");
         {
-            let op_builder_provider_factory = ProviderFactory::new(
-                core_args.cache.clone(),
-                Network::Optimism,
-                core_args.op_rpc_url.clone(),
-            );
             let output_mem = DeriveMachine::new(
                 &OPTIMISM_CHAIN_SPEC,
-                input.clone(),
+                derive_input_mem.clone(),
                 Some(op_builder_provider_factory),
             )
             .expect("Could not create derive machine")
-            .derive()
+            .derive(None)
             .context("could not derive")?;
-            assert_eq!(output, output_mem);
+            assert_eq!(derive_output, output_mem);
         }
 
         let receipt = maybe_prove(
             &cli,
-            &input,
+            &derive_input_mem,
             OP_DERIVE_ELF,
-            &output,
-            vec![],
+            &derive_output,
+            assumptions,
             file_reference,
-            Some(&mut receipt_index),
+            Some(receipt_index.lock().unwrap().borrow_mut()),
         );
 
         // Append derivation outputs to lift queue
-        lift_queue.push((output, receipt));
+        lift_queue.push((derive_output, receipt));
         // Extend block chain
-        for block in chain {
-            let tail_num = match eth_chain.last() {
+        for block in eth_chain {
+            let tail_num = match complete_eth_chain.last() {
                 None => 0u64,
                 Some(tail) => tail.number,
             };
             // This check should be sufficient
             if tail_num < block.number {
-                eth_chain.push(block);
+                complete_eth_chain.push(block);
             }
         }
     }
@@ -384,7 +348,7 @@ pub async fn compose_derived_rollup_blocks(
     // Prep
     let mut sibling_map = Default::default();
     let mut eth_mountain_range: MerkleMountainRange = Default::default();
-    for block in &eth_chain {
+    for block in &complete_eth_chain {
         eth_mountain_range.append_leaf(block.hash().0, Some(&mut sibling_map));
     }
     let eth_chain_root = eth_mountain_range
@@ -394,7 +358,7 @@ pub async fn compose_derived_rollup_blocks(
         derive_image_id: OP_DERIVE_ID,
         compose_image_id: OP_COMPOSE_ID,
         operation: ComposeInputOperation::PREP {
-            eth_blocks: eth_chain,
+            eth_blocks: complete_eth_chain,
             prior_prep: None,
         },
         eth_chain_merkle_root: eth_chain_root,
@@ -412,7 +376,7 @@ pub async fn compose_derived_rollup_blocks(
         &prep_compose_output,
         vec![],
         file_reference,
-        Some(&mut receipt_index),
+        Some(receipt_index.lock().unwrap().borrow_mut()),
     );
 
     // Lift
@@ -442,7 +406,7 @@ pub async fn compose_derived_rollup_blocks(
                 &lift_compose_output,
                 vec![receipt.into()],
                 file_reference,
-                Some(&mut receipt_index),
+                Some(receipt_index.lock().unwrap().borrow_mut()),
             )
         } else {
             None
@@ -497,7 +461,7 @@ pub async fn compose_derived_rollup_blocks(
                     &join_compose_output,
                     vec![left_receipt.into(), right_receipt.into()],
                     file_reference,
-                    Some(&mut receipt_index),
+                    Some(receipt_index.lock().unwrap().borrow_mut()),
                 )
             } else {
                 None
@@ -534,7 +498,7 @@ pub async fn compose_derived_rollup_blocks(
             &finish_compose_output,
             vec![prep_receipt.into(), aggregate_receipt.into()],
             file_reference,
-            Some(&mut receipt_index),
+            Some(receipt_index.lock().unwrap().borrow_mut()),
         )
     } else {
         None
@@ -550,4 +514,33 @@ pub async fn compose_derived_rollup_blocks(
     }
 
     Ok(())
+}
+
+fn build_op_blocks(
+    cli: &Cli,
+    file_reference: &String,
+    receipt_index: Arc<Mutex<usize>>,
+    op_block_inputs: Vec<BlockBuildInput<OptimismTxEssence>>,
+) -> (Vec<Assumption>, Vec<BlockBuildOutput>) {
+    let mut assumptions: Vec<Assumption> = vec![];
+    let mut op_block_outputs = vec![];
+    for input in op_block_inputs {
+        let output = OptimismStrategy::build_from(&OP_MAINNET_CHAIN_SPEC, input.clone())
+            .expect("Failed to build op block")
+            .with_state_compressed();
+
+        if let Some(receipt) = maybe_prove(
+            cli,
+            &input,
+            OP_BLOCK_ELF,
+            &output,
+            vec![],
+            file_reference,
+            Some(receipt_index.lock().unwrap().borrow_mut()),
+        ) {
+            assumptions.push(receipt.into());
+        }
+        op_block_outputs.push(output);
+    }
+    (assumptions, op_block_outputs)
 }

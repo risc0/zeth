@@ -35,4 +35,25 @@ impl BlockBuildOutput {
             BlockBuildOutput::FAILURE { .. } => false,
         }
     }
+
+    pub fn compress_state(&mut self) -> Option<MptNode> {
+        if let BlockBuildOutput::SUCCESS {
+            new_block_head,
+            new_block_state,
+            ..
+        } = self
+        {
+            Some(core::mem::replace(
+                new_block_state,
+                new_block_head.state_root.into(),
+            ))
+        } else {
+            None
+        }
+    }
+
+    pub fn with_state_compressed(mut self) -> Self {
+        self.compress_state();
+        self
+    }
 }

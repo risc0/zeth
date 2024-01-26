@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use ethers_core::k256::sha2::{Digest, Sha256};
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
     block::Header,
     transactions::{Transaction, TxEssence},
+    tree::Hash,
     trie::MptNode,
     withdrawal::Withdrawal,
-    Address, Bytes, B256, U256,
+    Address, Bytes, RlpBytes, B256, U256,
 };
 
 /// Represents the state of an account's storage.
@@ -28,8 +30,8 @@ use zeth_primitives::{
 pub type StorageEntry = (MptNode, Vec<U256>);
 
 /// External block input.
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
-pub struct Input<E: TxEssence> {
+#[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize, Serialize)]
+pub struct BlockBuildInput<E: TxEssence> {
     /// Previous block header
     pub parent_header: Header,
     /// Address to which all priority fees in this block are transferred.
@@ -56,6 +58,24 @@ pub struct Input<E: TxEssence> {
     pub ancestor_headers: Vec<Header>,
 }
 
+impl<E: TxEssence> BlockBuildInput<E> {
+    pub fn partial_hash(&self) -> Hash {
+        let mut hasher = Sha256::new();
+
+        hasher.update(self.parent_header.to_rlp());
+        hasher.update(self.beneficiary.0);
+        hasher.update(self.gas_limit.as_le_slice());
+        hasher.update(self.timestamp.as_le_slice());
+        hasher.update(self.extra_data.as_ref());
+        hasher.update(self.mix_hash.0);
+        // todo: use precalculated trie root hashes if available
+        hasher.update(self.transactions.to_rlp());
+        hasher.update(self.withdrawals.to_rlp());
+
+        hasher.finalize().into()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use zeth_primitives::transactions::ethereum::EthereumTxEssence;
@@ -64,7 +84,7 @@ mod tests {
 
     #[test]
     fn input_serde_roundtrip() {
-        let input = Input::<EthereumTxEssence> {
+        let input = BlockBuildInput::<EthereumTxEssence> {
             parent_header: Default::default(),
             beneficiary: Default::default(),
             gas_limit: Default::default(),
@@ -78,7 +98,7 @@ mod tests {
             contracts: vec![],
             ancestor_headers: vec![],
         };
-        let _: Input<EthereumTxEssence> =
+        let _: BlockBuildInput<EthereumTxEssence> =
             bincode::deserialize(&bincode::serialize(&input).unwrap()).unwrap();
     }
 }

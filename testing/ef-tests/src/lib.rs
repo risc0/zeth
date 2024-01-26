@@ -22,11 +22,11 @@ use zeth_lib::{
     builder::{BlockBuilder, BlockBuilderStrategy, EthereumStrategy},
     consts::ChainSpec,
     host::{
-        preflight::Data,
+        preflight::BlockBuildPreflightData,
         provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
         provider_db::ProviderDb,
     },
-    input::Input,
+    input::BlockBuildInput,
     mem_db::{AccountState, DbAccount, MemDb},
 };
 use zeth_primitives::{
@@ -315,7 +315,7 @@ pub fn create_input(
     transactions: Vec<TestTransaction>,
     withdrawals: Vec<Withdrawal>,
     state: TestState,
-) -> Input<EthereumTxEssence> {
+) -> BlockBuildInput<EthereumTxEssence> {
     // create the provider DB
     let provider_db = ProviderDb::new(
         Box::new(TestProvider {
@@ -330,7 +330,7 @@ pub fn create_input(
         .into_iter()
         .map(EthereumTransaction::from)
         .collect();
-    let input = Input {
+    let input = BlockBuildInput {
         beneficiary: header.beneficiary,
         gas_limit: header.gas_limit,
         timestamp: header.timestamp,
@@ -347,7 +347,7 @@ pub fn create_input(
     };
 
     // create and run the block builder once to create the initial DB
-    let mut builder = BlockBuilder::new(&chain_spec, input)
+    let mut builder = BlockBuilder::new(&chain_spec, input, None)
         .with_db(provider_db)
         .prepare_header::<<EthereumStrategy as BlockBuilderStrategy>::HeaderPrepStrategy>()
         .unwrap()
@@ -359,7 +359,7 @@ pub fn create_input(
     let proofs = provider_db.get_latest_proofs().unwrap();
     let ancestor_headers = provider_db.get_ancestor_headers().unwrap();
 
-    let preflight_data = Data {
+    let preflight_data = BlockBuildPreflightData {
         db: provider_db.get_initial_db().clone(),
         parent_header,
         parent_proofs,

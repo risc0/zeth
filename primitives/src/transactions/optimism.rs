@@ -13,15 +13,15 @@
 // limitations under the License.
 
 use alloy_primitives::{Address, Bytes, B256, U256};
-use alloy_rlp::Encodable;
-use alloy_rlp_derive::RlpEncodable;
-use bytes::BufMut;
+use alloy_rlp::{Decodable, Encodable};
+use alloy_rlp_derive::{RlpDecodable, RlpEncodable};
+use bytes::{Buf, BufMut};
 use serde::{Deserialize, Serialize};
 
 use super::signature::TxSignature;
 use crate::transactions::{
     ethereum::{EthereumTxEssence, TransactionKind},
-    TxEssence,
+    HeaderlessDecodable, TxEssence,
 };
 
 /// The EIP-2718 transaction type for an Optimism deposited transaction.
@@ -29,7 +29,9 @@ pub const OPTIMISM_DEPOSITED_TX_TYPE: u8 = 0x7E;
 
 /// Represents an Optimism depositing transaction that is a L2 transaction that was
 /// derived from L1 and included in a L2 block.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, RlpEncodable)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, RlpEncodable, RlpDecodable,
+)]
 pub struct TxEssenceOptimismDeposited {
     /// The source hash which uniquely identifies the origin of the deposit.
     pub source_hash: B256,
@@ -48,6 +50,21 @@ pub struct TxEssenceOptimismDeposited {
     pub is_system_tx: bool,
     /// The transaction's payload, represented as a variable-length byte array.
     pub data: Bytes,
+}
+
+impl HeaderlessDecodable for TxEssenceOptimismDeposited {
+    fn headerless_decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
+        Ok(Self {
+            source_hash: B256::decode(buf)?,
+            from: Address::decode(buf)?,
+            to: TransactionKind::decode(buf)?,
+            mint: U256::decode(buf)?,
+            value: U256::decode(buf)?,
+            gas_limit: U256::decode(buf)?,
+            is_system_tx: bool::decode(buf)?,
+            data: Bytes::decode(buf)?,
+        })
+    }
 }
 
 /// Represents the core essence of an Optimism transaction, specifically the portion that
@@ -79,6 +96,24 @@ impl Encodable for OptimismTxEssence {
         match self {
             OptimismTxEssence::Ethereum(eth) => eth.length(),
             OptimismTxEssence::OptimismDeposited(op) => op.length(),
+        }
+    }
+}
+
+impl HeaderlessDecodable for OptimismTxEssence {
+    fn headerless_decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
+        match buf.first().copied() {
+            Some(0x7e) => {
+                buf.advance(1);
+                alloy_rlp::Header::decode(buf)?;
+                Ok(OptimismTxEssence::OptimismDeposited(
+                    TxEssenceOptimismDeposited::headerless_decode(buf)?,
+                ))
+            }
+            Some(_) => Ok(OptimismTxEssence::Ethereum(
+                EthereumTxEssence::headerless_decode(buf)?,
+            )),
+            None => Err(alloy_rlp::Error::InputTooShort),
         }
     }
 }
@@ -134,7 +169,10 @@ mod tests {
     use serde_json::json;
 
     use super::*;
-    use crate::transactions::OptimismTransaction;
+    use crate::{
+        transactions::{OptimismTransaction, Transaction},
+        RlpBytes,
+    };
 
     #[test]
     fn ethereum() {
@@ -164,6 +202,11 @@ mod tests {
         .unwrap();
 
         let transaction = OptimismTransaction { essence, signature };
+
+        // verify that rlp encode/decode works
+        let recoded_transaction: Transaction<EthereumTxEssence> =
+            Transaction::decode(&mut transaction.to_rlp().as_ref()).unwrap();
+        assert_eq!(transaction.to_rlp(), recoded_transaction.to_rlp());
 
         // verify that bincode serialization works
         let _: OptimismTransaction =
@@ -204,6 +247,11 @@ mod tests {
             essence,
             signature: TxSignature::default(),
         };
+
+        // verify that rlp encode/decode works
+        let recoded_transaction: Transaction<OptimismTxEssence> =
+            Transaction::decode(&mut transaction.to_rlp().as_ref()).unwrap();
+        assert_eq!(transaction.to_rlp(), recoded_transaction.to_rlp());
 
         // verify that bincode serialization works
         let _: OptimismTransaction =

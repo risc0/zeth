@@ -16,18 +16,18 @@ use std::fmt::Debug;
 
 use anyhow::Context;
 use ethers_core::types::Transaction as EthersTransaction;
-use log::info;
+use log::{info, warn};
 use risc0_zkvm::compute_image_id;
 use serde::{Deserialize, Serialize};
 use zeth_lib::{
     builder::BlockBuilderStrategy,
     consts::ChainSpec,
-    host::{preflight::Preflight, verify::Verifier},
-    input::Input,
+    host::{cache_file_path, preflight::Preflight, verify::Verifier},
+    input::BlockBuildInput,
+    output::BlockBuildOutput,
 };
 
 use crate::{
-    cache_file_path,
     cli::Cli,
     operations::{execute, maybe_prove, verify_bonsai_receipt},
 };
@@ -62,22 +62,33 @@ where
     let preflight_data = preflight_result.context("preflight failed")?;
 
     // Create the guest input from [Init]
-    let input: Input<N::TxEssence> = preflight_data
+    let input: BlockBuildInput<N::TxEssence> = preflight_data
         .clone()
         .try_into()
         .context("invalid preflight data")?;
 
     // Verify that the transactions run correctly
     info!("Running from memory ...");
-    let (header, state_trie) =
-        N::build_from(&chain_spec, input.clone()).context("Error while building block")?;
+    let output = N::build_from(&chain_spec, input.clone())
+        .context("Error while building block")?
+        .with_state_compressed();
 
-    info!("Verifying final state using provider data ...");
-    preflight_data.verify_block(&header, &state_trie)?;
+    match &output {
+        BlockBuildOutput::SUCCESS {
+            new_block_hash,
+            new_block_head,
+            new_block_state,
+        } => {
+            info!("Verifying final state using provider data ...");
+            preflight_data.verify_block(new_block_head, new_block_state)?;
 
-    info!("Final block hash derived successfully. {}", header.hash());
+            info!("Final block hash derived successfully. {}", new_block_hash);
+        }
+        BlockBuildOutput::FAILURE { .. } => {
+            warn!("Proving bad block construction!")
+        }
+    }
 
-    let expected_output = preflight_data.header.hash();
     match &cli {
         Cli::Build(..) => {}
         Cli::Run(run_args) => {
@@ -86,7 +97,7 @@ where
                 run_args.exec_args.local_exec,
                 run_args.exec_args.profile,
                 guest_elf,
-                &expected_output,
+                &output,
                 file_reference,
             );
         }
@@ -95,7 +106,7 @@ where
                 &cli,
                 &input,
                 guest_elf,
-                &expected_output,
+                &output,
                 Default::default(),
                 file_reference,
                 None,
@@ -104,7 +115,7 @@ where
         Cli::Verify(verify_args) => {
             verify_bonsai_receipt(
                 compute_image_id(guest_elf)?,
-                &expected_output,
+                &output,
                 verify_args.bonsai_receipt_uuid.clone(),
                 None,
             )?;

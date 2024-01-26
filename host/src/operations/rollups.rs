@@ -12,22 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::VecDeque;
+use std::{
+    borrow::BorrowMut,
+    collections::VecDeque,
+    sync::{Arc, Mutex},
+};
 
 use anyhow::Context;
 use log::info;
+use risc0_zkvm::Assumption;
 use zeth_guests::*;
 use zeth_lib::{
-    builder::OptimismStrategy,
+    builder::{BlockBuilderStrategy, OptimismStrategy},
     consts::{Network, OP_MAINNET_CHAIN_SPEC},
-    host::{preflight::Preflight, rpc_db::RpcDb},
-    input::Input,
+    host::{rpc_db::RpcDb, ProviderFactory},
+    input::BlockBuildInput,
     optimism::{
         batcher_db::BatcherDb,
         composition::{ComposeInput, ComposeInputOperation, ComposeOutputOperation},
         config::OPTIMISM_CHAIN_SPEC,
         DeriveInput, DeriveMachine,
     },
+    output::BlockBuildOutput,
 };
 use zeth_primitives::{
     block::Header,
@@ -36,126 +42,98 @@ use zeth_primitives::{
 };
 
 use crate::{
-    cache_file_path,
-    cli::{Cli, CoreArgs},
-    operations::{execute, maybe_prove, verify_bonsai_receipt},
+    cli::Cli,
+    operations::{maybe_prove, verify_bonsai_receipt},
 };
-
-async fn fetch_op_blocks(
-    core_args: &CoreArgs,
-    block_number: u64,
-    block_count: u64,
-) -> anyhow::Result<Vec<Input<OptimismTxEssence>>> {
-    let mut op_blocks = vec![];
-    for i in 0..block_count {
-        let block_number = block_number + i;
-        let rpc_cache = core_args.cache.as_ref().map(|dir| {
-            cache_file_path(dir, &Network::Optimism.to_string(), block_number, "json.gz")
-        });
-        let rpc_url = core_args.op_rpc_url.clone();
-        // Collect block building data
-        let preflight_result = tokio::task::spawn_blocking(move || {
-            OptimismStrategy::run_preflight(
-                OP_MAINNET_CHAIN_SPEC.clone(),
-                rpc_cache,
-                rpc_url,
-                block_number,
-            )
-        })
-        .await?
-        .context("preflight failed")?;
-
-        // Create the guest input from [Init]
-        let input = preflight_result
-            .clone()
-            .try_into()
-            .context("invalid preflight data")?;
-
-        op_blocks.push(input);
-    }
-
-    Ok(op_blocks)
-}
 
 pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::Result<()> {
     info!("Fetching data ...");
     let core_args = cli.core_args().clone();
-    let op_blocks = fetch_op_blocks(
-        &core_args,
-        core_args.block_number + 1,
-        core_args.block_count,
-    )
-    .await?;
+    let op_builder_provider_factory = ProviderFactory::new(
+        core_args.cache.clone(),
+        Network::Optimism,
+        core_args.op_rpc_url.clone(),
+    );
+    let receipt_index = Arc::new(Mutex::new(0usize));
 
-    let (derive_input, output) = tokio::task::spawn_blocking(move || {
-        let derive_input = DeriveInput {
-            db: RpcDb::new(
-                core_args.eth_rpc_url.clone(),
-                core_args.op_rpc_url.clone(),
-                core_args.cache.clone(),
-            ),
-            op_head_block_no: core_args.block_number,
-            op_derive_block_count: core_args.block_count,
-            op_blocks: op_blocks.clone(),
-        };
-        let mut derive_machine = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input)
-            .context("Could not create derive machine")?;
-        let derive_output = derive_machine.derive().context("could not derive")?;
-        let derive_input_mem = DeriveInput {
-            db: derive_machine.derive_input.db.get_mem_db(),
-            op_head_block_no: core_args.block_number,
-            op_derive_block_count: core_args.block_count,
-            op_blocks,
-        };
-        let out: anyhow::Result<_> = Ok((derive_input_mem, derive_output));
-        out
-    })
-    .await?
-    .context("preflight failed")?;
+    info!("Running preflight");
+    let derive_input = DeriveInput {
+        db: RpcDb::new(
+            core_args.eth_rpc_url.clone(),
+            core_args.op_rpc_url.clone(),
+            core_args.cache.clone(),
+        ),
+        op_head_block_no: core_args.block_number,
+        op_derive_block_count: core_args.block_count,
+        op_block_outputs: vec![],
+        block_image_id: OP_BLOCK_ID,
+    };
+    let mut derive_machine = DeriveMachine::new(
+        &OPTIMISM_CHAIN_SPEC,
+        derive_input,
+        Some(op_builder_provider_factory.clone()),
+    )
+    .context("Could not create derive machine")?;
+    let mut op_block_inputs = vec![];
+    let derive_output = derive_machine
+        .derive(Some(&mut op_block_inputs))
+        .context("could not derive")?;
+
+    let (assumptions, bonsai_receipt_uuids, op_block_outputs) =
+        build_op_blocks(&cli, file_reference, receipt_index.clone(), op_block_inputs);
+
+    let derive_input_mem = DeriveInput {
+        db: derive_machine.derive_input.db.get_mem_db(),
+        op_head_block_no: core_args.block_number,
+        op_derive_block_count: core_args.block_count,
+        op_block_outputs,
+        block_image_id: OP_BLOCK_ID,
+    };
 
     info!("Running from memory ...");
     {
-        let output_mem = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input.clone())
-            .context("Could not create derive machine")?
-            .derive()
-            .unwrap();
-        assert_eq!(output, output_mem);
+        let output_mem = DeriveMachine::new(
+            &OPTIMISM_CHAIN_SPEC,
+            derive_input_mem.clone(),
+            Some(op_builder_provider_factory),
+        )
+        .context("Could not create derive machine")?
+        .derive(None)
+        .unwrap();
+        assert_eq!(derive_output, output_mem);
     }
 
     info!("In-memory test complete");
-    println!("Eth tail: {} {}", output.eth_tail.0, output.eth_tail.1);
-    println!("Op Head: {} {}", output.op_head.0, output.op_head.1);
-    for derived_block in &output.derived_op_blocks {
+    println!(
+        "Eth tail: {} {}",
+        derive_output.eth_tail.0, derive_output.eth_tail.1
+    );
+    println!(
+        "Op Head: {} {}",
+        derive_output.op_head.0, derive_output.op_head.1
+    );
+    for derived_block in &derive_output.derived_op_blocks {
         println!("Derived: {} {}", derived_block.0, derived_block.1);
     }
 
     match &cli {
         Cli::Build(..) => {}
-        Cli::Run(run_args) => {
-            execute(
-                &derive_input,
-                run_args.exec_args.local_exec,
-                run_args.exec_args.profile,
-                OP_DERIVE_ELF,
-                &output,
-                file_reference,
-            );
-        }
+        Cli::Run(..) => {}
         Cli::Prove(..) => {
             maybe_prove(
                 &cli,
-                &derive_input,
+                &derive_input_mem,
                 OP_DERIVE_ELF,
-                &output,
-                Default::default(),
+                &derive_output,
+                (assumptions, bonsai_receipt_uuids),
                 file_reference,
-                None,
+                Some(receipt_index.lock().unwrap().borrow_mut()),
             );
         }
         Cli::Verify(verify_args) => {
             verify_bonsai_receipt(
                 OP_DERIVE_ID.into(),
-                &output,
+                &derive_output,
                 verify_args.bonsai_receipt_uuid.clone(),
                 None,
             )?;
@@ -177,90 +155,111 @@ pub async fn compose_derived_rollup_blocks(
     // OP Composition
     info!("Fetching data ...");
     let mut lift_queue = Vec::new();
-    let mut receipt_index = 0;
-    let mut eth_chain: Vec<Header> = Vec::new();
+    let receipt_index = Arc::new(Mutex::new(0usize));
+    let mut complete_eth_chain: Vec<Header> = Vec::new();
     for op_block_index in (0..core_args.block_count).step_by(composition_size as usize) {
         let db = RpcDb::new(
             core_args.eth_rpc_url.clone(),
             core_args.op_rpc_url.clone(),
             core_args.cache.clone(),
         );
-        let op_head_block_no = core_args.block_number + op_block_index;
-        let op_blocks = fetch_op_blocks(&core_args, op_head_block_no + 1, composition_size).await?;
+        let op_builder_provider_factory = ProviderFactory::new(
+            core_args.cache.clone(),
+            Network::Optimism,
+            core_args.op_rpc_url.clone(),
+        );
 
-        let (input, output, chain) = tokio::task::spawn_blocking(move || {
-            let derive_input = DeriveInput {
-                db,
-                op_head_block_no: core_args.block_number + op_block_index,
-                op_derive_block_count: composition_size,
-                op_blocks: op_blocks.clone(),
-            };
-            let mut derive_machine = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input)
-                .expect("Could not create derive machine");
-            let eth_head_no = derive_machine.op_batcher.state.epoch.number;
-            let eth_head = derive_machine
-                .derive_input
-                .db
-                .get_eth_block_header(eth_head_no)
-                .context("could not fetch eth head")?;
-            let derive_output = derive_machine.derive().context("could not derive")?;
-            let eth_tail = derive_machine
-                .derive_input
-                .db
-                .get_eth_block_header(derive_output.eth_tail.0)
-                .context("could not fetch eth tail")?;
-            let mut eth_chain = vec![eth_head];
-            for block_no in (eth_head_no + 1)..eth_tail.number {
-                let eth_block = derive_machine
+        let derive_input = DeriveInput {
+            db,
+            op_head_block_no: core_args.block_number + op_block_index,
+            op_derive_block_count: composition_size,
+            op_block_outputs: vec![],
+            block_image_id: OP_BLOCK_ID,
+        };
+        let mut derive_machine = DeriveMachine::new(
+            &OPTIMISM_CHAIN_SPEC,
+            derive_input,
+            Some(op_builder_provider_factory.clone()),
+        )
+        .expect("Could not create derive machine");
+        let eth_head_no = derive_machine.op_batcher.state.epoch.number;
+        let eth_head = derive_machine
+            .derive_input
+            .db
+            .get_full_eth_block(eth_head_no)
+            .context("could not fetch eth head")?
+            .block_header
+            .clone();
+        let mut op_block_inputs = vec![];
+        let derive_output = derive_machine
+            .derive(Some(&mut op_block_inputs))
+            .context("could not derive")?;
+        let eth_tail = derive_machine
+            .derive_input
+            .db
+            .get_full_eth_block(derive_output.eth_tail.0)
+            .context("could not fetch eth tail")?
+            .block_header
+            .clone();
+        let mut eth_chain = vec![eth_head];
+        for block_no in (eth_head_no + 1)..eth_tail.number {
+            eth_chain.push(
+                derive_machine
                     .derive_input
                     .db
-                    .get_eth_block_header(block_no)
-                    .context("could not fetch eth block")?;
-                eth_chain.push(eth_block);
-            }
-            eth_chain.push(eth_tail);
+                    .get_full_eth_block(block_no)
+                    .context("could not fetch eth block")?
+                    .block_header
+                    .clone(),
+            );
+        }
+        eth_chain.push(eth_tail);
 
-            let derive_input_mem = DeriveInput {
-                db: derive_machine.derive_input.db.get_mem_db(),
-                op_head_block_no: core_args.block_number + op_block_index,
-                op_derive_block_count: composition_size,
-                op_blocks,
-            };
-            let out: anyhow::Result<_> = Ok((derive_input_mem, derive_output, eth_chain));
-            out
-        })
-        .await??;
+        let (assumptions, bonsai_receipt_uuids, op_block_outputs) =
+            build_op_blocks(&cli, file_reference, receipt_index.clone(), op_block_inputs);
+
+        let derive_input_mem = DeriveInput {
+            db: derive_machine.derive_input.db.get_mem_db(),
+            op_head_block_no: core_args.block_number + op_block_index,
+            op_derive_block_count: composition_size,
+            op_block_outputs,
+            block_image_id: OP_BLOCK_ID,
+        };
 
         info!("Deriving ...");
         {
-            let output_mem = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, input.clone())
-                .expect("Could not create derive machine")
-                .derive()
-                .unwrap();
-            assert_eq!(output, output_mem);
+            let output_mem = DeriveMachine::new(
+                &OPTIMISM_CHAIN_SPEC,
+                derive_input_mem.clone(),
+                Some(op_builder_provider_factory),
+            )
+            .expect("Could not create derive machine")
+            .derive(None)
+            .context("could not derive")?;
+            assert_eq!(derive_output, output_mem);
         }
 
         let receipt = maybe_prove(
             &cli,
-            &input,
+            &derive_input_mem,
             OP_DERIVE_ELF,
-            &output,
-            Default::default(),
+            &derive_output,
+            (assumptions, bonsai_receipt_uuids),
             file_reference,
-            Some(&mut receipt_index),
+            Some(receipt_index.lock().unwrap().borrow_mut()),
         );
 
         // Append derivation outputs to lift queue
-        lift_queue.push((output, receipt));
+        lift_queue.push((derive_output, receipt));
         // Extend block chain
-        for block in chain {
-            let tail_num = match eth_chain.last() {
+        for block in eth_chain {
+            let tail_num = match complete_eth_chain.last() {
                 None => 0u64,
                 Some(tail) => tail.number,
             };
             // This check should be sufficient
             if tail_num < block.number {
-                eth_chain.push(block);
+                complete_eth_chain.push(block);
             }
         }
     }
@@ -269,17 +268,18 @@ pub async fn compose_derived_rollup_blocks(
     // Prep
     let mut sibling_map = Default::default();
     let mut eth_mountain_range: MerkleMountainRange = Default::default();
-    for block in &eth_chain {
+    for block in &complete_eth_chain {
         eth_mountain_range.append_leaf(block.hash().0, Some(&mut sibling_map));
     }
     let eth_chain_root = eth_mountain_range
         .root(Some(&mut sibling_map))
         .expect("No eth blocks loaded!");
     let prep_compose_input = ComposeInput {
+        block_image_id: OP_BLOCK_ID,
         derive_image_id: OP_DERIVE_ID,
         compose_image_id: OP_COMPOSE_ID,
         operation: ComposeInputOperation::PREP {
-            eth_blocks: eth_chain,
+            eth_blocks: complete_eth_chain,
             prior_prep: None,
         },
         eth_chain_merkle_root: eth_chain_root,
@@ -297,14 +297,16 @@ pub async fn compose_derived_rollup_blocks(
         &prep_compose_output,
         Default::default(),
         file_reference,
-        Some(&mut receipt_index),
+        Some(receipt_index.lock().unwrap().borrow_mut()),
     );
 
     // Lift
     let mut join_queue = VecDeque::new();
     for (derive_output, derive_receipt) in lift_queue {
         let eth_tail_hash = derive_output.eth_tail.1 .0;
+        info!("Lifting ... {:?}", &derive_output);
         let lift_compose_input = ComposeInput {
+            block_image_id: OP_BLOCK_ID,
             derive_image_id: OP_DERIVE_ID,
             compose_image_id: OP_COMPOSE_ID,
             operation: ComposeInputOperation::LIFT {
@@ -313,11 +315,11 @@ pub async fn compose_derived_rollup_blocks(
             },
             eth_chain_merkle_root: eth_chain_root,
         };
-        info!("Lifting ...");
         let lift_compose_output = lift_compose_input
             .clone()
             .process()
             .expect("Lift composition failed.");
+        info!("Lifted ... {:?}", &lift_compose_output);
 
         let lift_compose_receipt = if let Some((receipt_uuid, receipt)) = derive_receipt {
             maybe_prove(
@@ -327,7 +329,7 @@ pub async fn compose_derived_rollup_blocks(
                 &lift_compose_output,
                 (vec![receipt.into()], vec![receipt_uuid]),
                 file_reference,
-                Some(&mut receipt_index),
+                Some(receipt_index.lock().unwrap().borrow_mut()),
             )
         } else {
             None
@@ -338,8 +340,11 @@ pub async fn compose_derived_rollup_blocks(
 
     // Join
     while join_queue.len() > 1 {
+        // Pop left output
         let (left, left_receipt) = join_queue.pop_front().unwrap();
+        // Only peek at right output
         let (right, _right_receipt) = join_queue.front().unwrap();
+        info!("Joining");
         let ComposeOutputOperation::AGGREGATE {
             op_tail: left_op_tail,
             ..
@@ -356,12 +361,17 @@ pub async fn compose_derived_rollup_blocks(
         };
         // Push dangling workloads (odd block count) to next round
         if left_op_tail != right_op_head {
+            info!(
+                "Skipping dangling workload: {} - {}",
+                left_op_tail.0, right_op_head.0
+            );
             join_queue.push_back((left, left_receipt));
             continue;
         }
-        // Pair up join
+        // Actually pop right output for pairing
         let (right, right_receipt) = join_queue.pop_front().unwrap();
         let join_compose_input = ComposeInput {
+            block_image_id: OP_BLOCK_ID,
             derive_image_id: OP_DERIVE_ID,
             compose_image_id: OP_COMPOSE_ID,
             operation: ComposeInputOperation::JOIN { left, right },
@@ -388,7 +398,7 @@ pub async fn compose_derived_rollup_blocks(
                     vec![left_receipt_uuid, right_receipt_uuid],
                 ),
                 file_reference,
-                Some(&mut receipt_index),
+                Some(receipt_index.lock().unwrap().borrow_mut()),
             )
         } else {
             None
@@ -401,6 +411,7 @@ pub async fn compose_derived_rollup_blocks(
     // Finish
     let (aggregate_output, aggregate_receipt) = join_queue.pop_front().unwrap();
     let finish_compose_input = ComposeInput {
+        block_image_id: OP_BLOCK_ID,
         derive_image_id: OP_DERIVE_ID,
         compose_image_id: OP_COMPOSE_ID,
         operation: ComposeInputOperation::FINISH {
@@ -430,7 +441,7 @@ pub async fn compose_derived_rollup_blocks(
                 vec![prep_receipt_uuid, aggregate_receipt_uuid],
             ),
             file_reference,
-            Some(&mut receipt_index),
+            Some(receipt_index.lock().unwrap().borrow_mut()),
         );
     } else if let Cli::Verify(verify_args) = cli {
         verify_bonsai_receipt(
@@ -446,4 +457,35 @@ pub async fn compose_derived_rollup_blocks(
     dbg!(&finish_compose_output);
 
     Ok(())
+}
+
+fn build_op_blocks(
+    cli: &Cli,
+    file_reference: &String,
+    receipt_index: Arc<Mutex<usize>>,
+    op_block_inputs: Vec<BlockBuildInput<OptimismTxEssence>>,
+) -> (Vec<Assumption>, Vec<String>, Vec<BlockBuildOutput>) {
+    let mut assumptions: Vec<Assumption> = vec![];
+    let mut bonsai_uuids = vec![];
+    let mut op_block_outputs = vec![];
+    for input in op_block_inputs {
+        let output = OptimismStrategy::build_from(&OP_MAINNET_CHAIN_SPEC, input.clone())
+            .expect("Failed to build op block")
+            .with_state_compressed();
+
+        if let Some((bonsai_receipt_uuid, receipt)) = maybe_prove(
+            cli,
+            &input,
+            OP_BLOCK_ELF,
+            &output,
+            Default::default(),
+            file_reference,
+            Some(receipt_index.lock().unwrap().borrow_mut()),
+        ) {
+            assumptions.push(receipt.into());
+            bonsai_uuids.push(bonsai_receipt_uuid);
+        }
+        op_block_outputs.push(output);
+    }
+    (assumptions, bonsai_uuids, op_block_outputs)
 }

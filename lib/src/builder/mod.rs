@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(not(target_os = "zkvm"))]
+use std::sync::{Arc, Mutex};
+
 use anyhow::Result;
 use revm::{Database, DatabaseCommit};
 use zeth_primitives::{
@@ -28,8 +31,9 @@ use crate::{
         prepare::{EthHeaderPrepStrategy, HeaderPrepStrategy},
     },
     consts::ChainSpec,
-    input::Input,
+    input::BlockBuildInput,
     mem_db::MemDb,
+    output::BlockBuildOutput,
 };
 
 mod execute;
@@ -37,13 +41,33 @@ mod finalize;
 mod initialize;
 mod prepare;
 
+#[cfg(not(target_os = "zkvm"))]
+type DatabaseRescue<D> = Arc<Mutex<Option<D>>>;
+#[cfg(target_os = "zkvm")]
+type DatabaseRescue<D> = core::marker::PhantomData<D>;
+
 /// A generic builder for building a block.
 #[derive(Clone, Debug)]
 pub struct BlockBuilder<'a, D, E: TxEssence> {
     pub(crate) chain_spec: &'a ChainSpec,
-    pub(crate) input: Input<E>,
+    pub(crate) input: BlockBuildInput<E>,
     pub(crate) db: Option<D>,
     pub(crate) header: Option<Header>,
+    pub db_drop_destination: Option<DatabaseRescue<D>>,
+}
+
+// This implementation allows us to recover data during erroneous block builds on the host
+#[cfg(not(target_os = "zkvm"))]
+impl<'a, D, E: TxEssence> Drop for BlockBuilder<'a, D, E> {
+    fn drop(&mut self) {
+        if let Some(backup_target) = &mut self.db_drop_destination {
+            if let Some(dropped_db) = self.db.take() {
+                if let Ok(mut target_option) = backup_target.lock() {
+                    target_option.replace(dropped_db);
+                }
+            }
+        }
+    }
 }
 
 impl<D, E> BlockBuilder<'_, D, E>
@@ -53,12 +77,17 @@ where
     E: TxEssence,
 {
     /// Creates a new block builder.
-    pub fn new(chain_spec: &ChainSpec, input: Input<E>) -> BlockBuilder<'_, D, E> {
+    pub fn new(
+        chain_spec: &ChainSpec,
+        input: BlockBuildInput<E>,
+        db_backup: Option<DatabaseRescue<D>>,
+    ) -> BlockBuilder<'_, D, E> {
         BlockBuilder {
             chain_spec,
             db: None,
             header: None,
             input,
+            db_drop_destination: db_backup,
         }
     }
 
@@ -97,6 +126,11 @@ where
     pub fn mut_db(&mut self) -> Option<&mut D> {
         self.db.as_mut()
     }
+
+    /// Destroys the builder and returns the database
+    pub fn take_db(mut self) -> Option<D> {
+        self.db.take()
+    }
 }
 
 /// A bundle of strategies for building a block using [BlockBuilder].
@@ -111,13 +145,41 @@ pub trait BlockBuilderStrategy {
     /// Builds a block from the given input.
     fn build_from(
         chain_spec: &ChainSpec,
-        input: Input<Self::TxEssence>,
-    ) -> Result<(Header, MptNode)> {
-        BlockBuilder::<MemDb, Self::TxEssence>::new(chain_spec, input)
-            .initialize_database::<Self::DbInitStrategy>()?
-            .prepare_header::<Self::HeaderPrepStrategy>()?
-            .execute_transactions::<Self::TxExecStrategy>()?
-            .finalize::<Self::BlockFinalizeStrategy>()
+        input: BlockBuildInput<Self::TxEssence>,
+    ) -> Result<BlockBuildOutput> {
+        // Database initialization failure does not mean the block is faulty
+        let input_hash = input.partial_hash();
+        let initialized = BlockBuilder::<MemDb, Self::TxEssence>::new(chain_spec, input, None)
+            .initialize_database::<Self::DbInitStrategy>()?;
+
+        // Header validation errors mean a faulty block
+        let prepared = match initialized.prepare_header::<Self::HeaderPrepStrategy>() {
+            Ok(builder) => builder,
+            Err(_) => {
+                return Ok(BlockBuildOutput::FAILURE {
+                    bad_input_hash: input_hash.into(),
+                })
+            }
+        };
+
+        // Transaction execution errors mean a faulty block
+        let executed = match prepared.execute_transactions::<Self::TxExecStrategy>() {
+            Ok(builder) => builder,
+            Err(_) => {
+                return Ok(BlockBuildOutput::FAILURE {
+                    bad_input_hash: input_hash.into(),
+                })
+            }
+        };
+
+        // Finalization does not indicate a faulty block
+        let (header, state) = executed.finalize::<Self::BlockFinalizeStrategy>()?;
+
+        Ok(BlockBuildOutput::SUCCESS {
+            new_block_hash: header.hash(),
+            new_block_head: header,
+            new_block_state: state,
+        })
     }
 }
 

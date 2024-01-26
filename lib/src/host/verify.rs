@@ -63,7 +63,7 @@ pub trait Verifier {
 }
 
 /// Verify using the preflight data.
-impl<E: TxEssence> Verifier for preflight::Data<E> {
+impl<E: TxEssence> Verifier for preflight::BlockBuildPreflightData<E> {
     fn verify_block(&self, header: &Header, state: &MptNode) -> Result<()> {
         let errors =
             verify_state_trie(state, &self.proofs).context("failed to verify state trie")?;

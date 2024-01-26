@@ -29,7 +29,7 @@ use serde_with::serde_as;
 use super::{AccountQuery, BlockQuery, MutProvider, ProofQuery, Provider, StorageQuery};
 
 #[serde_as]
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct FileProvider {
     #[serde(skip)]
     file_path: PathBuf,

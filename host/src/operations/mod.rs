@@ -19,7 +19,7 @@ pub mod rollups;
 use std::fmt::Debug;
 
 use bonsai_sdk::alpha as bonsai_sdk;
-use log::{error, info};
+use log::{error, info, warn};
 use risc0_zkvm::{
     default_prover, serde::to_vec, sha::Digest, Assumption, ExecutorEnv, ExecutorImpl,
     FileSegmentRef, Receipt, Session,
@@ -35,24 +35,30 @@ pub fn verify_bonsai_receipt<O: Eq + Debug + DeserializeOwned>(
     uuid: String,
     client: Option<bonsai_sdk::Client>,
 ) -> anyhow::Result<(String, Receipt)> {
-    info!("Creating Bonsai client");
+    info!("Tracking receipt uuid: {}", uuid);
     let client =
         client.unwrap_or_else(|| bonsai_sdk::Client::from_env(risc0_zkvm::VERSION).unwrap());
 
     let session = bonsai_sdk::SessionId { uuid };
 
     loop {
-        let res = session.status(&client)?;
+        let res = match session.status(&client) {
+            Ok(res) => res,
+            Err(err) => {
+                warn!("{}", err);
+                std::thread::sleep(std::time::Duration::from_secs(15));
+                continue;
+            }
+        };
+
         if res.status == "RUNNING" {
-            eprintln!(
+            info!(
                 "Current status: {} - state: {} - continue polling...",
                 res.status,
                 res.state.unwrap_or_default()
             );
             std::thread::sleep(std::time::Duration::from_secs(15));
-            continue;
-        }
-        if res.status == "SUCCEEDED" {
+        } else if res.status == "SUCCEEDED" {
             // Download the receipt, containing the output
             let receipt_url = res
                 .receipt_url
@@ -139,20 +145,48 @@ pub fn prove_bonsai<O: Eq + Debug + DeserializeOwned>(
     expected_output: &O,
     assumption_uuids: Vec<String>,
 ) -> anyhow::Result<(String, Receipt)> {
-    info!("Creating Bonsai client");
+    info!("Proving on Bonsai");
     let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)?;
 
     // Compute the image_id, then upload the ELF with the image_id as its key.
     let image_id = risc0_zkvm::compute_image_id(elf)?;
     let encoded_image_id = hex::encode(image_id);
-    client.upload_img(&encoded_image_id, elf.to_vec())?;
-
-    // Prepare input data and upload it.
+    // if at first you don't succeed...
+    loop {
+        match client.upload_img(&encoded_image_id, elf.to_vec()) {
+            Ok(_) => break,
+            Err(err) => {
+                warn!("{}", err);
+                std::thread::sleep(std::time::Duration::from_secs(15));
+            }
+        }
+    }
+    // Prepare input data
     let input_data = bytemuck::cast_slice(&encoded_input).to_vec();
-    let input_id = client.upload_input(input_data)?;
-
+    // upload it
+    let input_id = loop {
+        match client.upload_input(input_data.clone()) {
+            Ok(session) => break session,
+            Err(err) => {
+                warn!("{}", err);
+                std::thread::sleep(std::time::Duration::from_secs(15));
+            }
+        }
+    };
     // Start a session running the prover
-    let session = client.create_session(encoded_image_id, input_id, assumption_uuids)?;
+    let session = loop {
+        match client.create_session(
+            encoded_image_id.clone(),
+            input_id.clone(),
+            assumption_uuids.clone(),
+        ) {
+            Ok(session) => break session,
+            Err(err) => {
+                warn!("{}", err);
+                std::thread::sleep(std::time::Duration::from_secs(15));
+            }
+        }
+    };
     // Return the result
     verify_bonsai_receipt(image_id, expected_output, session.uuid, Some(client))
 }

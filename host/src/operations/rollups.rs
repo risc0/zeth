@@ -136,6 +136,7 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
                 &derive_output,
                 verify_args.bonsai_receipt_uuid.clone(),
                 None,
+                4,
             )?;
         }
         Cli::OpInfo(..) => {
@@ -449,6 +450,7 @@ pub async fn compose_derived_rollup_blocks(
             &finish_compose_output,
             verify_args.bonsai_receipt_uuid.clone(),
             None,
+            4,
         )?;
     } else {
         info!("Preflight successful!");

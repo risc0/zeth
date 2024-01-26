@@ -33,23 +33,42 @@ pub fn verify_bonsai_receipt<O: Eq + Debug + DeserializeOwned>(
     image_id: Digest,
     expected_output: &O,
     uuid: String,
-    client: Option<bonsai_sdk::Client>,
+    client: Option<&bonsai_sdk::Client>,
+    max_retries: usize,
 ) -> anyhow::Result<(String, Receipt)> {
     info!("Tracking receipt uuid: {}", uuid);
-    let client =
-        client.unwrap_or_else(|| bonsai_sdk::Client::from_env(risc0_zkvm::VERSION).unwrap());
+    let mut local_client = None;
+
+    let client = client.unwrap_or_else(|| {
+        local_client = Some(bonsai_sdk::Client::from_env(risc0_zkvm::VERSION).unwrap());
+        local_client.as_ref().unwrap()
+    });
 
     let session = bonsai_sdk::SessionId { uuid };
 
     loop {
-        let res = match session.status(&client) {
-            Ok(res) => res,
-            Err(err) => {
-                warn!("{}", err);
-                std::thread::sleep(std::time::Duration::from_secs(15));
-                continue;
+        let mut res = None;
+        for attempt in 1..=max_retries {
+            match session.status(&client) {
+                Ok(response) => {
+                    res = Some(response);
+                    break;
+                }
+                Err(err) => {
+                    if attempt == max_retries {
+                        anyhow::bail!(err);
+                    }
+                    warn!(
+                        "Attempt {}/{} for session status request: {}",
+                        attempt, max_retries, err
+                    );
+                    std::thread::sleep(std::time::Duration::from_secs(15));
+                    continue;
+                }
             }
-        };
+        }
+
+        let res = res.unwrap();
 
         if res.status == "RUNNING" {
             info!(
@@ -151,44 +170,53 @@ pub fn prove_bonsai<O: Eq + Debug + DeserializeOwned>(
     // Compute the image_id, then upload the ELF with the image_id as its key.
     let image_id = risc0_zkvm::compute_image_id(elf)?;
     let encoded_image_id = hex::encode(image_id);
+    // Prepare input data
+    let input_data = bytemuck::cast_slice(&encoded_input).to_vec();
+
     // if at first you don't succeed...
     loop {
         match client.upload_img(&encoded_image_id, elf.to_vec()) {
-            Ok(_) => break,
             Err(err) => {
-                warn!("{}", err);
+                warn!("Retrying image upload: {}", err);
                 std::thread::sleep(std::time::Duration::from_secs(15));
+                continue;
             }
+            _ => {}
         }
-    }
-    // Prepare input data
-    let input_data = bytemuck::cast_slice(&encoded_input).to_vec();
-    // upload it
-    let input_id = loop {
-        match client.upload_input(input_data.clone()) {
-            Ok(session) => break session,
-            Err(err) => {
-                warn!("{}", err);
-                std::thread::sleep(std::time::Duration::from_secs(15));
+
+        // upload input
+        let input_id = loop {
+            match client.upload_input(input_data.clone()) {
+                Ok(session) => break session,
+                Err(err) => {
+                    warn!("Retrying input upload: {}", err);
+                    std::thread::sleep(std::time::Duration::from_secs(15));
+                }
             }
-        }
-    };
-    // Start a session running the prover
-    let session = loop {
-        match client.create_session(
+        };
+
+        // Start a session running the prover
+        let session = match client.create_session(
             encoded_image_id.clone(),
             input_id.clone(),
             assumption_uuids.clone(),
         ) {
-            Ok(session) => break session,
+            Ok(session) => session,
             Err(err) => {
-                warn!("{}", err);
+                warn!("Retrying session creation request: {}", err);
                 std::thread::sleep(std::time::Duration::from_secs(15));
+                continue;
             }
+        };
+
+        // Return the result
+        match verify_bonsai_receipt(image_id, expected_output, session.uuid, Some(&client), 4) {
+            Err(err) => {
+                warn!("Retrying session creation: {}", err);
+            }
+            result => return result,
         }
-    };
-    // Return the result
-    verify_bonsai_receipt(image_id, expected_output, session.uuid, Some(client))
+    }
 }
 
 pub fn prove_locally(

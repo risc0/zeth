@@ -117,6 +117,7 @@ where
                 &compressed_output,
                 verify_args.bonsai_receipt_uuid.clone(),
                 None,
+                4,
             )?;
         }
         Cli::OpInfo(..) => {

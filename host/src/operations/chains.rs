@@ -69,9 +69,7 @@ where
 
     // Verify that the transactions run correctly
     info!("Running from memory ...");
-    let output = N::build_from(&chain_spec, input.clone())
-        .context("Error while building block")?
-        .with_state_compressed();
+    let output = N::build_from(&chain_spec, input.clone()).context("Error while building block")?;
 
     match &output {
         BlockBuildOutput::SUCCESS {
@@ -89,6 +87,7 @@ where
         }
     }
 
+    let compressed_output = output.with_state_compressed();
     match &cli {
         Cli::Build(..) => {}
         Cli::Run(run_args) => {
@@ -97,7 +96,7 @@ where
                 run_args.exec_args.local_exec,
                 run_args.exec_args.profile,
                 guest_elf,
-                &output,
+                &compressed_output,
                 file_reference,
             );
         }
@@ -106,7 +105,7 @@ where
                 &cli,
                 &input,
                 guest_elf,
-                &output,
+                &compressed_output,
                 Default::default(),
                 file_reference,
                 None,
@@ -115,7 +114,7 @@ where
         Cli::Verify(verify_args) => {
             verify_bonsai_receipt(
                 compute_image_id(guest_elf)?,
-                &output,
+                &compressed_output,
                 verify_args.bonsai_receipt_uuid.clone(),
                 None,
             )?;

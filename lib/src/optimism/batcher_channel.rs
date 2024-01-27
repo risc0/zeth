@@ -12,16 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
+// use std::io::Read;
+
+use alloc::{
     collections::{BTreeMap, VecDeque},
-    io::Read,
+    format, vec,
+    vec::Vec,
 };
 
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{anyhow, bail, ensure, Context, Result};
 use bytes::Buf;
+use core2::io::Read;
 use libflate::zlib::Decoder;
+use thiserror_no_std::Error as ThisError;
 use zeth_primitives::{
-    batch::Batch,
+    batch::{AlloyRlpError, Batch},
     rlp::Decodable,
     transactions::{ethereum::EthereumTxEssence, Transaction, TxEssence},
     Address, BlockNumber,
@@ -309,6 +314,7 @@ impl Channel {
         let mut channel_data = decompressed.as_slice();
         while !channel_data.is_empty() {
             let batch = Batch::decode(&mut channel_data)
+                .map_err(|e| anyhow!(AlloyRlpError::from(e)))
                 .with_context(|| format!("failed to decode batch {}", batches.len()))?;
 
             batches.push(BatchWithInclusion {
@@ -331,13 +337,19 @@ impl Channel {
         //  of data). If the decompressed data exceeds the limit, things proceeds as though the
         //  channel contained only the first MAX_RLP_BYTES_PER_CHANNEL decompressed bytes."
         let mut buf = Vec::new();
-        Decoder::new(data)?
+        Decoder::new(data)
+            .map_err(|e| anyhow!(Core2Error::from(e)))?
             .take(MAX_RLP_BYTES_PER_CHANNEL)
-            .read_to_end(&mut buf)?;
+            .read_to_end(&mut buf)
+            .map_err(|e| anyhow!(Core2Error::from(e)))?;
 
         Ok(buf)
     }
 }
+
+#[derive(ThisError, Debug)]
+#[error(transparent)]
+struct Core2Error(#[from] core2::io::Error);
 
 /// A [Frame] is a chunk of data belonging to a [Channel]. Batcher transactions carry one
 /// or multiple frames. The reason to split a channel into frames is that a channel might
@@ -573,10 +585,10 @@ mod tests {
                 let mut channel = new_channel();
                 channel.add_frame(frame_a).unwrap();
                 assert_eq!(channel.size, 209);
-                assert_eq!(channel.is_ready(), false);
+                assert!(!channel.is_ready());
                 channel.add_frame(frame_b).unwrap();
                 assert_eq!(channel.size, 420);
-                assert_eq!(channel.is_ready(), true);
+                assert!(channel.is_ready());
                 assert_eq!(channel.decompress().unwrap(), b"Hello World!");
             }
         }

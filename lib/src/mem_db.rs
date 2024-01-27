@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloc::vec::Vec;
+
 use anyhow::anyhow;
 use hashbrown::{hash_map::Entry, HashMap};
 use revm::{
     primitives::{Account, AccountInfo, Bytecode},
     Database, DatabaseCommit,
 };
-use thiserror::Error as ThisError;
+use thiserror_no_std::Error as ThisError;
 use zeth_primitives::{Address, B256, U256};
 
 /// Error returned by the [MemDb].

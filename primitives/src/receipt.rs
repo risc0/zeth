@@ -12,6 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+extern crate alloc;
+extern crate core;
+
+pub use alloc::{
+    boxed::Box,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+pub use core::{
+    convert::From,
+    default::Default,
+    option::{Option, Option::*},
+    result::{Result, Result::*},
+};
+
 use alloy_primitives::{Address, Bloom, BloomInput, Bytes, B256, U256};
 use alloy_rlp::Encodable;
 use alloy_rlp_derive::RlpEncodable;

@@ -14,6 +14,23 @@
 
 //! Convert to revm types.
 
+extern crate alloc;
+extern crate core;
+
+pub use alloc::{
+    boxed::Box,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+pub use core::{
+    convert::From,
+    default::Default,
+    option::{Option, Option::*},
+    result::{Result, Result::*},
+};
+
 use alloy_primitives::{Address, U256};
 use revm_primitives::Log as RevmLog;
 

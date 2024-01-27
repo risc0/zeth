@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::default::Default;
+
 use alloy_primitives::{TxNumber, B256, U256};
 use alloy_rlp_derive::{RlpDecodable, RlpEncodable, RlpMaxEncodedLen};
 use serde::{Deserialize, Serialize};

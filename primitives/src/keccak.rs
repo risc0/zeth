@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use core::convert::AsRef;
 
 use alloy_primitives::{b256, B256};
 use sha3::{Digest, Keccak256};

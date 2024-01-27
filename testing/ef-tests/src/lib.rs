@@ -18,14 +18,14 @@ use anyhow::bail;
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, NoneAsEmptyString};
+use util::{
+    preflight::Data,
+    provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
+    provider_db::ProviderDb,
+};
 use zeth_lib::{
     builder::{BlockBuilder, BlockBuilderStrategy, EthereumStrategy},
     consts::ChainSpec,
-    host::{
-        preflight::Data,
-        provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
-        provider_db::ProviderDb,
-    },
     input::Input,
     mem_db::{AccountState, DbAccount, MemDb},
 };

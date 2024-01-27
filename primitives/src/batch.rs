@@ -12,10 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+extern crate alloc;
+extern crate core;
+
+pub use alloc::{
+    boxed::Box,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+pub use core::{
+    cmp::{Ord, Ordering, PartialOrd},
+    convert::From,
+    default::Default,
+    option::{Option, Option::*},
+    result::{Result, Result::*},
+};
+
 use alloy_primitives::{Bytes, B256};
 use alloy_rlp::{Decodable, Encodable};
 use alloy_rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Serialize};
+use thiserror_no_std::Error as ThisError;
 
 /// Bytes for RLP-encoded transactions.
 pub type RawTransaction = Bytes;
@@ -83,6 +102,10 @@ impl Decodable for Batch {
         }
     }
 }
+
+#[derive(ThisError, Debug)]
+#[error(transparent)]
+pub struct AlloyRlpError(#[from] alloy_rlp::Error);
 
 #[cfg(test)]
 mod tests {

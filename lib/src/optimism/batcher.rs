@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloc::{
+    collections::{BTreeMap, VecDeque},
+    vec::Vec,
+};
 use core::cmp::Ordering;
-use std::collections::{BTreeMap, VecDeque};
 
 use anyhow::{bail, ensure, Context, Result};
 use zeth_primitives::{

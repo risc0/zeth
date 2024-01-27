@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 extern crate core;
 
 use std::{
@@ -30,13 +29,13 @@ use risc0_zkvm::{
 };
 use serde::{Deserialize, Serialize};
 use tempfile::tempdir;
+use util::{preflight::Preflight, verify::Verifier};
 use zeth_guests::{
     ETH_BLOCK_ELF, ETH_BLOCK_ID, ETH_BLOCK_PATH, OP_BLOCK_ELF, OP_BLOCK_ID, OP_BLOCK_PATH,
 };
 use zeth_lib::{
     builder::{BlockBuilderStrategy, EthereumStrategy, OptimismStrategy},
     consts::{ChainSpec, Network, ETH_MAINNET_CHAIN_SPEC, OP_MAINNET_CHAIN_SPEC},
-    host::{preflight::Preflight, verify::Verifier},
     input::Input,
 };
 use zeth_primitives::BlockHash;

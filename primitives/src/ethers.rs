@@ -14,6 +14,24 @@
 
 //! Convert from Ethers types.
 
+extern crate alloc;
+extern crate core;
+
+pub use alloc::{
+    boxed::Box,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+pub use core::{
+    convert::From,
+    default::Default,
+    num::TryFromIntError,
+    option::{Option, Option::*},
+    result::{Result, Result::*},
+};
+
 use alloy_primitives::{Address, Bloom, Bytes, B256, U256};
 use anyhow::{anyhow, Context};
 use ethers_core::types::{
@@ -275,6 +293,7 @@ impl TryFrom<EthersReceipt> for Receipt {
                 .context("transaction_type missing")?
                 .as_u64()
                 .try_into()
+                .map_err(|e: TryFromIntError| anyhow!(e))
                 .context("invalid transaction_type")?,
             payload: ReceiptPayload {
                 success: receipt.status.context("status missing")? == U64::one(),

@@ -111,9 +111,9 @@ fn derive_base_fee(parent: &Header, eip_1559_constants: &Eip1559Constants) -> Re
     let parent_gas_target = parent.gas_limit / eip_1559_constants.elasticity_multiplier;
 
     match parent.gas_used.cmp(&parent_gas_target) {
-        std::cmp::Ordering::Equal => Ok(parent.base_fee_per_gas),
+        core::cmp::Ordering::Equal => Ok(parent.base_fee_per_gas),
 
-        std::cmp::Ordering::Greater => {
+        core::cmp::Ordering::Greater => {
             let gas_used_delta = parent.gas_used - parent_gas_target;
             let base_fee_delta = ONE
                 .max(
@@ -127,7 +127,7 @@ fn derive_base_fee(parent: &Header, eip_1559_constants: &Eip1559Constants) -> Re
             Ok(parent.base_fee_per_gas + base_fee_delta)
         }
 
-        std::cmp::Ordering::Less => {
+        core::cmp::Ordering::Less => {
             let gas_used_delta = parent_gas_target - parent.gas_used;
             let base_fee_delta = (parent.base_fee_per_gas * gas_used_delta
                 / parent_gas_target

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::{option::Option, result::Result::*};
+
 use alloy_primitives::{Address, Bytes, B256, U256};
 use alloy_rlp::Encodable;
 use alloy_rlp_derive::RlpEncodable;

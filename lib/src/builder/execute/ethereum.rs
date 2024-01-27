@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloc::format;
 use core::{fmt::Debug, mem::take};
 
 use anyhow::{anyhow, bail, Context};
@@ -162,9 +163,11 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             let trie_key = tx_no.to_rlp();
             tx_trie
                 .insert_rlp(&trie_key, tx)
+                .map_err(Into::<anyhow::Error>::into)
                 .context("failed to insert transaction")?;
             receipt_trie
                 .insert_rlp(&trie_key, receipt)
+                .map_err(Into::<anyhow::Error>::into)
                 .context("failed to insert receipt")?;
 
             // update account states
@@ -222,6 +225,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             // Add withdrawal to trie
             withdrawals_trie
                 .insert_rlp(&i.to_rlp(), withdrawal)
+                .map_err(Into::<anyhow::Error>::into)
                 .context("failed to insert withdrawal")?;
         }
 

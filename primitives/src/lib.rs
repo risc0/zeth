@@ -12,9 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![cfg_attr(not(feature = "std"), no_std)]
+
+extern crate alloc;
 extern crate core;
 
+pub use alloc::{vec, vec::Vec};
+
 pub mod access_list;
+pub mod batch;
 pub mod block;
 pub mod keccak;
 pub mod receipt;
@@ -25,7 +31,6 @@ pub mod withdrawal;
 #[cfg(feature = "ethers")]
 pub mod ethers;
 
-pub mod batch;
 #[cfg(feature = "revm")]
 pub mod revm;
 

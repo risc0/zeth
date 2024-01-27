@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloc::{format, vec::Vec};
 use core::{fmt::Debug, mem::take};
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -211,9 +212,11 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             let trie_key = tx_no.to_rlp();
             tx_trie
                 .insert_rlp(&trie_key, tx)
+                .map_err(Into::<anyhow::Error>::into)
                 .context("failed to insert transaction")?;
             receipt_trie
                 .insert_rlp(&trie_key, receipt)
+                .map_err(Into::<anyhow::Error>::into)
                 .context("failed to insert receipt")?;
         }
 

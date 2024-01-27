@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloc::{vec, vec::Vec};
+
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{

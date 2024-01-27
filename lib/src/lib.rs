@@ -22,6 +22,7 @@ pub mod consts;
 pub mod input;
 pub mod mem_db;
 pub mod optimism;
+pub mod output;
 
 mod utils;
 

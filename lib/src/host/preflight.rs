@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{fmt::Debug, path::PathBuf};
+use std::{
+    fmt::Debug,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use anyhow::{anyhow, Context, Result};
 use ethers_core::types::{
@@ -38,13 +42,13 @@ use crate::{
         provider::{new_provider, BlockQuery},
         provider_db::ProviderDb,
     },
-    input::{Input, StorageEntry},
+    input::{BlockBuildInput, StorageEntry},
     mem_db::MemDb,
 };
 
 /// The initial data required to build a block as returned by the [Preflight].
 #[derive(Debug, Clone)]
-pub struct Data<E: TxEssence> {
+pub struct BlockBuildPreflightData<E: TxEssence> {
     pub db: MemDb,
     pub parent_header: Header,
     pub parent_proofs: HashMap<Address, EIP1186ProofResponse>,
@@ -63,7 +67,13 @@ pub trait Preflight<E: TxEssence> {
         cache_path: Option<PathBuf>,
         rpc_url: Option<String>,
         block_no: u64,
-    ) -> Result<Data<E>>;
+    ) -> Result<BlockBuildPreflightData<E>>;
+
+    fn preflight_input_with_provider_db(
+        chain_spec: ChainSpec,
+        provider_db: ProviderDb,
+        input: BlockBuildInput<E>,
+    ) -> Result<BlockBuildPreflightData<E>>;
 }
 
 /// Implements the [Preflight] trait for all compatible [BlockBuilderStrategy]s.
@@ -77,7 +87,7 @@ where
         cache_path: Option<PathBuf>,
         rpc_url: Option<String>,
         block_no: u64,
-    ) -> Result<Data<N::TxEssence>> {
+    ) -> Result<BlockBuildPreflightData<N::TxEssence>> {
         let mut provider = new_provider(cache_path, rpc_url)?;
 
         // Fetch the parent block
@@ -107,15 +117,35 @@ where
 
         // Create the input data
         let input = new_preflight_input(block.clone(), parent_header.clone())?;
-        let transactions = input.transactions.clone();
-        let withdrawals = input.withdrawals.clone();
 
         // Create the block builder, run the transactions and extract the DB
-        let mut builder = BlockBuilder::new(&chain_spec, input)
-            .with_db(provider_db)
-            .prepare_header::<N::HeaderPrepStrategy>()?
-            .execute_transactions::<N::TxExecStrategy>()?;
-        let provider_db = builder.mut_db().unwrap();
+        Self::preflight_input_with_provider_db(chain_spec, provider_db, input).map(
+            move |mut headerless_preflight_data| {
+                headerless_preflight_data.header = block.try_into().expect("invalid block");
+                headerless_preflight_data
+            },
+        )
+    }
+
+    fn preflight_input_with_provider_db(
+        chain_spec: ChainSpec,
+        provider_db: ProviderDb,
+        input: BlockBuildInput<N::TxEssence>,
+    ) -> Result<BlockBuildPreflightData<N::TxEssence>> {
+        let parent_header = input.parent_header.clone();
+        let transactions = input.transactions.clone();
+        let withdrawals = input.withdrawals.clone();
+        // Create the block builder, run the transactions and extract the DB even if run fails
+        let db_backup = Arc::new(Mutex::new(None));
+        let builder =
+            BlockBuilder::new(&chain_spec, input, Some(db_backup.clone())).with_db(provider_db);
+        let mut provider_db = match builder.prepare_header::<N::HeaderPrepStrategy>() {
+            Ok(builder) => match builder.execute_transactions::<N::TxExecStrategy>() {
+                Ok(builder) => builder.take_db().unwrap(),
+                Err(_) => db_backup.lock().unwrap().take().unwrap(),
+            },
+            Err(_) => db_backup.lock().unwrap().take().unwrap(),
+        };
 
         info!("Gathering inclusion proofs ...");
 
@@ -129,15 +159,16 @@ where
         info!("Saving provider cache ...");
 
         // Save the provider cache
-        provider_db.get_provider().save()?;
+        provider_db.save_provider()?;
 
         info!("Provider-backed execution is Done!");
 
-        Ok(Data {
+        // Fetch the target block
+        Ok(BlockBuildPreflightData {
             db: provider_db.get_initial_db().clone(),
             parent_header,
             parent_proofs,
-            header: block.try_into().context("invalid block")?,
+            header: Default::default(),
             transactions,
             withdrawals,
             proofs,
@@ -149,7 +180,7 @@ where
 fn new_preflight_input<E>(
     block: EthersBlock<EthersTransaction>,
     parent_header: Header,
-) -> Result<Input<E>>
+) -> Result<BlockBuildInput<E>>
 where
     E: TxEssence + TryFrom<EthersTransaction>,
     <E as TryFrom<EthersTransaction>>::Error: Debug,
@@ -176,7 +207,8 @@ where
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    let input = Input {
+    let input = BlockBuildInput {
+        parent_header,
         beneficiary: from_ethers_h160(block.author.context("author missing")?),
         gas_limit: from_ethers_u256(block.gas_limit),
         timestamp: from_ethers_u256(block.timestamp),
@@ -187,18 +219,17 @@ where
         parent_state_trie: Default::default(),
         parent_storage: Default::default(),
         contracts: Default::default(),
-        parent_header,
         ancestor_headers: Default::default(),
     };
     Ok(input)
 }
 
-/// Converts the [Data] returned by the [Preflight] into [Input] required by the
-/// [BlockBuilder].
-impl<E: TxEssence> TryFrom<Data<E>> for Input<E> {
+/// Converts the [BlockBuildPreflightData] returned by the [Preflight] into
+/// [BlockBuildInput] required by the [BlockBuilder].
+impl<E: TxEssence> TryFrom<BlockBuildPreflightData<E>> for BlockBuildInput<E> {
     type Error = anyhow::Error;
 
-    fn try_from(data: Data<E>) -> Result<Input<E>> {
+    fn try_from(data: BlockBuildPreflightData<E>) -> Result<BlockBuildInput<E>> {
         // collect the code from each account
         let mut contracts = HashSet::new();
         for account in data.db.accounts.values() {
@@ -225,7 +256,7 @@ impl<E: TxEssence> TryFrom<Data<E>> for Input<E> {
         );
 
         // Create the block builder input
-        let input = Input {
+        let input = BlockBuildInput {
             parent_header: data.parent_header,
             beneficiary: data.header.beneficiary,
             gas_limit: data.header.gas_limit,

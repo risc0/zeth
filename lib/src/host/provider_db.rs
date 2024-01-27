@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+extern crate alloc;
+
 use std::collections::BTreeSet;
 
 use ethers_core::types::{EIP1186ProofResponse, H160, H256};
@@ -48,8 +50,8 @@ impl ProviderDb {
         }
     }
 
-    pub fn get_provider(&self) -> &dyn Provider {
-        self.provider.as_ref()
+    pub fn save_provider(&self) -> anyhow::Result<()> {
+        self.provider.save()
     }
 
     pub fn get_initial_db(&self) -> &MemDb {

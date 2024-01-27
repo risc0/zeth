@@ -12,22 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::fs;
 
 use risc0_zkvm::{is_dev_mode, Receipt};
 
 pub mod cli;
 pub mod operations;
-
-pub fn cache_file_path(cache_path: &Path, network: &str, block_no: u64, ext: &str) -> PathBuf {
-    cache_path
-        .join(network)
-        .join(block_no.to_string())
-        .with_extension(ext)
-}
 
 pub fn save_receipt(file_reference: &String, receipt: &Receipt, index: Option<&mut usize>) {
     if is_dev_mode() {

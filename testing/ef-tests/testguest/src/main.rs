@@ -28,10 +28,15 @@ pub fn main() {
     // Read the input previous block and transaction data
     let input = env::read();
     // Build the resulting block
-    let (header, state) = EthereumStrategy::build_from(&chain_spec, input)
+    let mut output = EthereumStrategy::build_from(&chain_spec, input)
         .expect("Failed to build the resulting block");
-    // Output the resulting block's hash to the journal
-    env::commit(&header.hash());
+    // Abridge successful construction results
+    if let Some(trie_root) = output.compress_state() {
+        // Leak memory, save cycles
+        core::mem::forget(trie_root);
+    }
+    // Output the construction result
+    env::commit(&output);
     // Leak memory, save cycles
-    core::mem::forget((header, state));
+    core::mem::forget(output);
 }

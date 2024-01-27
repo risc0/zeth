@@ -13,9 +13,10 @@
 // limitations under the License.
 
 use alloy_primitives::{Address, Bytes, ChainId, TxNumber, B256, U256};
-use alloy_rlp::{Encodable, EMPTY_STRING_CODE};
-use alloy_rlp_derive::RlpEncodable;
+use alloy_rlp::{Decodable, Encodable, EMPTY_STRING_CODE};
+use alloy_rlp_derive::{RlpDecodable, RlpEncodable};
 use anyhow::Context;
+use bytes::Buf;
 use k256::{
     ecdsa::{RecoveryId, Signature as K256Signature, VerifyingKey as K256VerifyingKey},
     elliptic_curve::sec1::ToEncodedPoint,
@@ -24,7 +25,11 @@ use k256::{
 use serde::{Deserialize, Serialize};
 
 use super::signature::TxSignature;
-use crate::{access_list::AccessList, keccak::keccak, transactions::TxEssence};
+use crate::{
+    access_list::AccessList,
+    keccak::keccak,
+    transactions::{HeaderlessDecodable, TxEssence},
+};
 
 /// Represents a legacy Ethereum transaction as detailed in [EIP-155](https://eips.ethereum.org/EIPS/eip-155).
 ///
@@ -145,13 +150,30 @@ impl Encodable for TxEssenceLegacy {
     }
 }
 
+impl HeaderlessDecodable for TxEssenceLegacy {
+    fn headerless_decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
+        alloy_rlp::Header::decode(buf)?;
+        Ok(Self {
+            chain_id: None,
+            nonce: TxNumber::decode(buf)?,
+            gas_price: U256::decode(buf)?,
+            gas_limit: U256::decode(buf)?,
+            to: TransactionKind::decode(buf)?,
+            value: U256::decode(buf)?,
+            data: Bytes::decode(buf)?,
+        })
+    }
+}
+
 /// Represents an Ethereum transaction with an access list, as detailed in [EIP-2930](https://eips.ethereum.org/EIPS/eip-2930).
 ///
 /// The `TxEssenceEip2930` struct encapsulates the core components of an Ethereum
 /// transaction that includes an access list. Access lists are a feature introduced in
 /// EIP-2930 to specify a list of addresses and storage keys that the transaction will
 /// access, allowing for more predictable gas costs.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, RlpEncodable)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, RlpEncodable, RlpDecodable,
+)]
 pub struct TxEssenceEip2930 {
     /// The network's chain ID, ensuring the transaction is valid on the intended chain.
     pub chain_id: ChainId,
@@ -175,13 +197,30 @@ pub struct TxEssenceEip2930 {
     pub access_list: AccessList,
 }
 
+impl HeaderlessDecodable for TxEssenceEip2930 {
+    fn headerless_decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
+        Ok(Self {
+            chain_id: ChainId::decode(buf)?,
+            nonce: TxNumber::decode(buf)?,
+            gas_price: U256::decode(buf)?,
+            gas_limit: U256::decode(buf)?,
+            to: TransactionKind::decode(buf)?,
+            value: U256::decode(buf)?,
+            data: Bytes::decode(buf)?,
+            access_list: AccessList::decode(buf)?,
+        })
+    }
+}
+
 /// Represents an Ethereum transaction with a priority fee, as detailed in [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559).
 ///
 /// The `TxEssenceEip1559` struct encapsulates the core components of an Ethereum
 /// transaction that incorporates the priority fee mechanism introduced in EIP-1559. This
 /// mechanism aims to improve the predictability of gas fees and enhance the overall user
 /// experience.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, RlpEncodable)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, RlpEncodable, RlpDecodable,
+)]
 pub struct TxEssenceEip1559 {
     /// The network's chain ID, ensuring the transaction is valid on the intended chain,
     /// as introduced in EIP-155.
@@ -207,6 +246,22 @@ pub struct TxEssenceEip1559 {
     /// A list of addresses and storage keys that the transaction will access, aiding in
     /// gas optimization.
     pub access_list: AccessList,
+}
+
+impl HeaderlessDecodable for TxEssenceEip1559 {
+    fn headerless_decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
+        Ok(Self {
+            chain_id: ChainId::decode(buf)?,
+            nonce: TxNumber::decode(buf)?,
+            max_priority_fee_per_gas: U256::decode(buf)?,
+            max_fee_per_gas: U256::decode(buf)?,
+            gas_limit: U256::decode(buf)?,
+            to: TransactionKind::decode(buf)?,
+            value: U256::decode(buf)?,
+            data: Bytes::decode(buf)?,
+            access_list: AccessList::decode(buf)?,
+        })
+    }
 }
 
 /// Represents the type of an Ethereum transaction: either a contract creation or a call
@@ -277,6 +332,17 @@ impl Encodable for TransactionKind {
     }
 }
 
+impl Decodable for TransactionKind {
+    fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
+        if buf == &mut [EMPTY_STRING_CODE] {
+            buf.advance(1);
+            Ok(TransactionKind::Create)
+        } else {
+            Ok(TransactionKind::Call(Address::decode(buf)?))
+        }
+    }
+}
+
 /// Represents the core essence of an Ethereum transaction, specifically the portion that
 /// gets signed.
 ///
@@ -323,6 +389,32 @@ impl Encodable for EthereumTxEssence {
             EthereumTxEssence::Legacy(tx) => tx.length(),
             EthereumTxEssence::Eip2930(tx) => tx.length(),
             EthereumTxEssence::Eip1559(tx) => tx.length(),
+        }
+    }
+}
+
+impl HeaderlessDecodable for EthereumTxEssence {
+    fn headerless_decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
+        // check the EIP-2718 transaction type for non-legacy transactions
+        match buf.first().copied() {
+            Some(value) if value <= 0x7f => {
+                buf.advance(1);
+                alloy_rlp::Header::decode(buf)?;
+                // typed tx
+                match value {
+                    0x01 => Ok(EthereumTxEssence::Eip2930(
+                        TxEssenceEip2930::headerless_decode(buf)?,
+                    )),
+                    0x02 => Ok(EthereumTxEssence::Eip1559(
+                        TxEssenceEip1559::headerless_decode(buf)?,
+                    )),
+                    _ => Err(alloy_rlp::Error::Custom("Unsupported transaction type")),
+                }
+            }
+            Some(_) => Ok(EthereumTxEssence::Legacy(
+                TxEssenceLegacy::headerless_decode(buf)?,
+            )),
+            None => Err(alloy_rlp::Error::InputTooShort),
         }
     }
 }
@@ -461,7 +553,10 @@ mod tests {
     use serde_json::json;
 
     use super::*;
-    use crate::transactions::EthereumTransaction;
+    use crate::{
+        transactions::{EthereumTransaction, Transaction},
+        RlpBytes,
+    };
 
     #[test]
     fn legacy() {
@@ -485,6 +580,11 @@ mod tests {
         }))
         .unwrap();
         let transaction = EthereumTransaction { essence, signature };
+
+        // verify that rlp encode/decode works
+        let recoded_transaction: Transaction<EthereumTxEssence> =
+            Transaction::decode(&mut transaction.to_rlp().as_ref()).unwrap();
+        assert_eq!(transaction.to_rlp(), recoded_transaction.to_rlp());
 
         // verify that bincode serialization works
         let _: EthereumTransaction =
@@ -524,6 +624,11 @@ mod tests {
         }))
         .unwrap();
         let transaction = EthereumTransaction { essence, signature };
+
+        // verify that rlp encode/decode works
+        let recoded_transaction: Transaction<EthereumTxEssence> =
+            Transaction::decode(&mut transaction.to_rlp().as_ref()).unwrap();
+        assert_eq!(transaction.to_rlp(), recoded_transaction.to_rlp());
 
         // verify that bincode serialization works
         let _: EthereumTransaction =
@@ -601,6 +706,11 @@ mod tests {
         .unwrap();
         let transaction = EthereumTransaction { essence, signature };
 
+        // verify that rlp encode/decode works
+        let recoded_transaction: Transaction<EthereumTxEssence> =
+            Transaction::decode(&mut transaction.to_rlp().as_ref()).unwrap();
+        assert_eq!(transaction.to_rlp(), recoded_transaction.to_rlp());
+
         // verify that bincode serialization works
         let _: EthereumTransaction =
             bincode::deserialize(&bincode::serialize(&transaction).unwrap()).unwrap();
@@ -641,6 +751,11 @@ mod tests {
         }))
         .unwrap();
         let transaction = EthereumTransaction { essence, signature };
+
+        // verify that rlp encode/decode works
+        let recoded_transaction: Transaction<EthereumTxEssence> =
+            Transaction::decode(&mut transaction.to_rlp().as_ref()).unwrap();
+        assert_eq!(transaction.to_rlp(), recoded_transaction.to_rlp());
 
         // verify that bincode serialization works
         let _: EthereumTransaction =

@@ -682,6 +682,7 @@ dependencies = [
  "reqwest",
  "serde",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]
@@ -4894,6 +4895,7 @@ dependencies = [
  "serde",
  "tempfile",
  "tokio",
+ "tracing",
  "zeth-guests",
  "zeth-lib",
  "zeth-primitives",

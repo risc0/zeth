@@ -16,9 +16,12 @@ pub mod chains;
 pub mod info;
 pub mod rollups;
 
-use std::fmt::Debug;
+use std::{
+    borrow::BorrowMut,
+    fmt::Debug,
+    sync::{Arc, Mutex},
+};
 
-use bonsai_sdk::alpha as bonsai_sdk;
 use log::{error, info, warn};
 use risc0_zkvm::{
     default_prover, serde::to_vec, sha::Digest, Assumption, ExecutorEnv, ExecutorImpl,
@@ -29,26 +32,21 @@ use tempfile::tempdir;
 
 use crate::{cli::Cli, save_receipt};
 
-pub fn verify_bonsai_receipt<O: Eq + Debug + DeserializeOwned>(
+pub async fn verify_bonsai_receipt<O: Eq + Debug + DeserializeOwned>(
     image_id: Digest,
     expected_output: &O,
     uuid: String,
-    client: Option<&bonsai_sdk::Client>,
     max_retries: usize,
 ) -> anyhow::Result<(String, Receipt)> {
     info!("Tracking receipt uuid: {}", uuid);
-    let mut local_client = None;
-
-    let client = client.unwrap_or_else(|| {
-        local_client = Some(bonsai_sdk::Client::from_env(risc0_zkvm::VERSION).unwrap());
-        local_client.as_ref().unwrap()
-    });
-
-    let session = bonsai_sdk::SessionId { uuid };
+    let session = bonsai_sdk::alpha::SessionId { uuid };
 
     loop {
         let mut res = None;
         for attempt in 1..=max_retries {
+            // let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)?;
+            let client = bonsai_sdk::alpha_async::get_client_from_env(risc0_zkvm::VERSION).await?;
+
             match session.status(&client) {
                 Ok(response) => {
                     res = Some(response);
@@ -59,7 +57,7 @@ pub fn verify_bonsai_receipt<O: Eq + Debug + DeserializeOwned>(
                         anyhow::bail!(err);
                     }
                     warn!(
-                        "Attempt {}/{} for session status request: {}",
+                        "Attempt {}/{} for session status request: {:?}",
                         attempt, max_retries, err
                     );
                     std::thread::sleep(std::time::Duration::from_secs(15));
@@ -82,7 +80,8 @@ pub fn verify_bonsai_receipt<O: Eq + Debug + DeserializeOwned>(
             let receipt_url = res
                 .receipt_url
                 .expect("API error, missing receipt on completed session");
-
+            // let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)?;
+            let client = bonsai_sdk::alpha_async::get_client_from_env(risc0_zkvm::VERSION).await?;
             let receipt_buf = client.download(&receipt_url)?;
             let receipt: Receipt = bincode::deserialize(&receipt_buf)?;
             receipt
@@ -109,22 +108,32 @@ pub fn verify_bonsai_receipt<O: Eq + Debug + DeserializeOwned>(
     }
 }
 
-pub fn maybe_prove<I: Serialize, O: Eq + Debug + DeserializeOwned>(
+pub async fn maybe_prove<I: Serialize, O: Eq + Debug + DeserializeOwned>(
     cli: &Cli,
     input: &I,
     elf: &[u8],
     expected_output: &O,
     assumptions: (Vec<Assumption>, Vec<String>),
     file_reference: &String,
-    receipt_index: Option<&mut usize>,
+    receipt_index: Option<Arc<Mutex<usize>>>,
 ) -> Option<(String, Receipt)> {
     let (assumption_instances, assumption_uuids) = assumptions;
     if let Cli::Prove(prove_args) = cli {
         let encoded_input = to_vec(input).expect("Could not serialize composition prep input!");
         let (receipt_uuid, receipt) = if prove_args.submit_to_bonsai {
-            // query bonsai service
-            prove_bonsai(encoded_input, elf, expected_output, assumption_uuids)
-                .expect("Failed to prove on Bonsai")
+            // query bonsai service until it works
+            loop {
+                if let Ok(result) = prove_bonsai(
+                    encoded_input.clone(),
+                    elf,
+                    expected_output,
+                    assumption_uuids.clone(),
+                )
+                .await
+                {
+                    break result;
+                }
+            }
         } else {
             // run prover
             (
@@ -150,7 +159,15 @@ pub fn maybe_prove<I: Serialize, O: Eq + Debug + DeserializeOwned>(
             );
         }
         // save receipt
-        save_receipt(file_reference, &receipt, receipt_index);
+        if let Some(arc) = receipt_index {
+            save_receipt(
+                file_reference,
+                &receipt,
+                Some(arc.lock().unwrap().borrow_mut()),
+            );
+        } else {
+            save_receipt(file_reference, &receipt, None);
+        }
         // return result
         Some((receipt_uuid, receipt))
     } else {
@@ -158,65 +175,32 @@ pub fn maybe_prove<I: Serialize, O: Eq + Debug + DeserializeOwned>(
     }
 }
 
-pub fn prove_bonsai<O: Eq + Debug + DeserializeOwned>(
+pub async fn prove_bonsai<O: Eq + Debug + DeserializeOwned>(
     encoded_input: Vec<u32>,
     elf: &[u8],
     expected_output: &O,
     assumption_uuids: Vec<String>,
 ) -> anyhow::Result<(String, Receipt)> {
     info!("Proving on Bonsai");
-    let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)?;
-
     // Compute the image_id, then upload the ELF with the image_id as its key.
     let image_id = risc0_zkvm::compute_image_id(elf)?;
     let encoded_image_id = hex::encode(image_id);
     // Prepare input data
     let input_data = bytemuck::cast_slice(&encoded_input).to_vec();
 
-    // if at first you don't succeed...
-    loop {
-        match client.upload_img(&encoded_image_id, elf.to_vec()) {
-            Err(err) => {
-                warn!("Retrying image upload: {}", err);
-                std::thread::sleep(std::time::Duration::from_secs(15));
-                continue;
-            }
-            _ => {}
-        }
+    // let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)?;
+    let client = bonsai_sdk::alpha_async::get_client_from_env(risc0_zkvm::VERSION).await?;
+    client.upload_img(&encoded_image_id, elf.to_vec())?;
+    // upload input
+    let input_id = client.upload_input(input_data.clone())?;
 
-        // upload input
-        let input_id = loop {
-            match client.upload_input(input_data.clone()) {
-                Ok(session) => break session,
-                Err(err) => {
-                    warn!("Retrying input upload: {}", err);
-                    std::thread::sleep(std::time::Duration::from_secs(15));
-                }
-            }
-        };
+    let session = client.create_session(
+        encoded_image_id.clone(),
+        input_id.clone(),
+        assumption_uuids.clone(),
+    )?;
 
-        // Start a session running the prover
-        let session = match client.create_session(
-            encoded_image_id.clone(),
-            input_id.clone(),
-            assumption_uuids.clone(),
-        ) {
-            Ok(session) => session,
-            Err(err) => {
-                warn!("Retrying session creation request: {}", err);
-                std::thread::sleep(std::time::Duration::from_secs(15));
-                continue;
-            }
-        };
-
-        // Return the result
-        match verify_bonsai_receipt(image_id, expected_output, session.uuid, Some(&client), 4) {
-            Err(err) => {
-                warn!("Retrying session creation: {}", err);
-            }
-            result => return result,
-        }
-    }
+    verify_bonsai_receipt(image_id, expected_output, session.uuid.clone(), 8).await
 }
 
 pub fn prove_locally(

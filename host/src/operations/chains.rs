@@ -109,16 +109,17 @@ where
                 Default::default(),
                 file_reference,
                 None,
-            );
+            )
+            .await;
         }
         Cli::Verify(verify_args) => {
             verify_bonsai_receipt(
                 compute_image_id(guest_elf)?,
                 &compressed_output,
                 verify_args.bonsai_receipt_uuid.clone(),
-                None,
                 4,
-            )?;
+            )
+            .await?;
         }
         Cli::OpInfo(..) => {
             unreachable!()

@@ -15,13 +15,13 @@ fs.mounts = [
   { path = "/usr/lib/ssl/certs/", uri = "file:/usr/lib/ssl/certs/" },
   { path = "/tmp", uri = "file:/tmp" },
   { path = "/root/.config/raiko/config", uri = "file:/root/.config/raiko/config" },
-  { path = "/root/.config/raiko/secrets", uri = "file:{{ '/root/.config/raiko/secrets' }}", type = "encrypted", key_name = "_sgx_mrsigner" },
+  { path = "/root/.config/raiko/secrets", uri = "file:/root/.config/raiko/secrets", type = "encrypted", key_name = "_sgx_mrsigner" },
 ]
 sys.insecure__allow_eventfd = true
 loader.insecure__use_cmdline_argv = true
 
 sgx.debug = false
-sgx.edmm_enable = false
+sgx.edmm_enable = true
 
 sgx.trusted_files = [
   "file:{{ gramine.libos }}",

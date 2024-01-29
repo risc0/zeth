@@ -16,9 +16,10 @@ extern crate core;
 
 use anyhow::Result;
 use clap::Parser;
+use log::info;
 use zeth::{
     cli::Cli,
-    operations::{chains, info, rollups},
+    operations::{chains, info::op_info, rollups},
 };
 use zeth_guests::*;
 use zeth_lib::{
@@ -29,12 +30,29 @@ use zeth_lib::{
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
+    info!("Using the following image ids:");
+    info!(
+        "eth-block: {}",
+        hex::encode(bytemuck::cast_slice(&ETH_BLOCK_ID))
+    );
+    info!(
+        "op-block: {}",
+        hex::encode(bytemuck::cast_slice(&OP_BLOCK_ID))
+    );
+    info!(
+        "op-derive: {}",
+        hex::encode(bytemuck::cast_slice(&OP_DERIVE_ID))
+    );
+    info!(
+        "op-compose: {}",
+        hex::encode(bytemuck::cast_slice(&OP_COMPOSE_ID))
+    );
 
     let cli = Cli::parse();
 
     // Run simple debug info command
     if let Cli::OpInfo(..) = &cli {
-        return info::op_info(cli).await;
+        return op_info(cli).await;
     }
 
     // Execute other commands

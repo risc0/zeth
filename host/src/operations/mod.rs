@@ -122,15 +122,14 @@ pub async fn maybe_prove<I: Serialize, O: Eq + Debug + Serialize + DeserializeOw
     let computed_image_id = compute_image_id(elf).expect("Failed to compute elf image id!");
 
     let receipt_label = format!(
-        "{}_{}_{}",
+        "{}-{}",
         hex::encode(computed_image_id),
-        hex::encode(keccak(bytemuck::cast_slice(&encoded_input))),
         hex::encode(keccak(bytemuck::cast_slice(&encoded_output)))
     );
 
     // get receipt
-    let (receipt_uuid, receipt, cached) =
-        if let Ok(Some(cached_data)) = load_receipt(&receipt_label, prove_args.submit_to_bonsai) {
+    let (mut receipt_uuid, receipt, cached) =
+        if let Ok(Some(cached_data)) = load_receipt(&receipt_label) {
             info!("Loaded locally cached receipt");
             (cached_data.0, cached_data.1, true)
         } else if prove_args.submit_to_bonsai {
@@ -174,13 +173,28 @@ pub async fn maybe_prove<I: Serialize, O: Eq + Debug + Serialize + DeserializeOw
         );
     }
 
+    // upload receipt to bonsai
+    if prove_args.submit_to_bonsai && receipt_uuid.is_empty() {
+        info!("Uploading cached receipt without UUID to Bonsai.");
+        receipt_uuid = upload_receipt(&receipt)
+            .await
+            .expect("Failed to upload cached receipt to Bonsai");
+    }
+
+    let result = (receipt_uuid, receipt);
+
     // save receipt
     if !cached {
-        save_receipt(&receipt_label, &receipt);
+        save_receipt(&receipt_label, &result);
     }
 
     // return result
-    Some((receipt_uuid, receipt))
+    Some(result)
+}
+
+pub async fn upload_receipt(receipt: &Receipt) -> anyhow::Result<String> {
+    let client = bonsai_sdk::alpha_async::get_client_from_env(risc0_zkvm::VERSION).await?;
+    Ok(client.upload_receipt(bincode::serialize(receipt)?)?)
 }
 
 pub async fn prove_bonsai<O: Eq + Debug + DeserializeOwned>(

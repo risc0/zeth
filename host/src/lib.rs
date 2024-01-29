@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fs;
+use std::{fs, path::Path};
 
 use risc0_zkvm::{is_dev_mode, Receipt};
 use tracing::debug;
@@ -20,16 +20,13 @@ use tracing::debug;
 pub mod cli;
 pub mod operations;
 
-pub fn load_receipt(
-    file_name: &String,
-    require_uuid: bool,
-) -> anyhow::Result<Option<(String, Receipt)>> {
+pub fn load_receipt(file_name: &String) -> anyhow::Result<Option<(String, Receipt)>> {
     if is_dev_mode() {
         // Nothing to load
         return Ok(None);
     }
 
-    let receipt_serialized = match fs::read(receipt_extension(file_name)) {
+    let receipt_serialized = match fs::read(zkp_cache_path(file_name)) {
         Ok(receipt_serialized) => receipt_serialized,
         Err(err) => {
             debug!("Could not load cached receipt with label: {}", &file_name);
@@ -38,26 +35,23 @@ pub fn load_receipt(
         }
     };
 
-    let result: (String, Receipt) = bincode::deserialize(&receipt_serialized)?;
-    if result.0.is_empty() && require_uuid {
-        // saved local receipt while uuid is needed
-        return Ok(None);
-    }
-
-    Ok(Some(result))
+    Ok(Some(bincode::deserialize(&receipt_serialized)?))
 }
 
-pub fn save_receipt(receipt_label: &String, receipt: &Receipt) {
-    if is_dev_mode() {
-        // nothing to save
-        return;
-    }
-    let receipt_serialized = bincode::serialize(receipt).expect("Failed to serialize receipt!");
-
-    fs::write(receipt_extension(receipt_label), receipt_serialized)
+pub fn save_receipt(receipt_label: &String, receipt_data: &(String, Receipt)) {
+    if !is_dev_mode() {
+        fs::write(
+            zkp_cache_path(receipt_label),
+            bincode::serialize(receipt_data).expect("Failed to serialize receipt!"),
+        )
         .expect("Failed to save receipt output file.");
+    }
 }
 
-fn receipt_extension(receipt_label: &String) -> String {
-    format!("{}.zkp", receipt_label)
+fn zkp_cache_path(receipt_label: &String) -> String {
+    Path::new("cache_zkp")
+        .join(format!("{}.zkp", receipt_label))
+        .to_str()
+        .unwrap()
+        .to_string()
 }

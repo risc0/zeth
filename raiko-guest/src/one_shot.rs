@@ -89,6 +89,7 @@ pub fn bootstrap(global_opts: GlobalOpts) -> Result<()> {
     save_priv_key(&key_pair, &privkey_path)?;
     println!("Public key: 0x{}", key_pair.public_key());
     let new_instance = public_key_to_address(&key_pair.public_key());
+    save_attestation_user_report_data(new_instance)?;
     println!("Instance address: {}", new_instance);
     let quote = get_sgx_quote()?;
     let bootstrap_details_file_path = global_opts.config_dir.join(BOOTSTRAP_INFO_FILENAME);
@@ -152,9 +153,14 @@ pub async fn one_shot(global_opts: GlobalOpts, args: OneShotArgs) -> Result<()> 
     proof.extend(new_instance);
     proof.extend(sig.to_bytes());
     let proof = hex::encode(proof);
-    println!("Proof: 0x{}", proof);
-    println!("Public key: 0x{}", new_pubkey);
-    println!("Instance address: {}", new_instance);
+    let quote = get_sgx_quote()?;
+    let data = serde_json::json!({
+        "proof": format!("0x{}", proof),
+        "quote": hex::encode(quote),
+        "public_key": format!("0x{}", new_pubkey),
+        "instance_address": new_instance.to_string(),
+    });
+    println!("{}", data);
 
     save_attestation_user_report_data(new_instance)?;
     print_sgx_info()

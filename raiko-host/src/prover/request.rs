@@ -41,6 +41,7 @@ pub enum ProofResponse {
 pub struct SgxResponse {
     /// proof format: 4b(id)+20b(pubkey)+65b(signature)
     pub proof: String,
+    pub quote: String,
 }
 
 #[derive(Clone, Serialize, Deserialize)]

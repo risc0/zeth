@@ -1,5 +1,6 @@
 use std::str;
 
+use serde_json::Value;
 use tokio::{fs, process::Command};
 use tracing::{debug, info};
 
@@ -62,13 +63,26 @@ pub async fn execute_sgx(ctx: &Context, req: &SgxRequest) -> Result<SgxResponse,
 }
 
 fn parse_sgx_result(output: Vec<u8>) -> Result<SgxResponse, String> {
-    // parse result of sgx execution
+    let mut json_value: Option<Value> = None;
     let output = String::from_utf8(output).map_err(|e| e.to_string())?;
-    let mut proof = String::new();
+
     for line in output.lines() {
-        if let Some(_proof) = line.trim().strip_prefix(SGX_PROOF_PREFIX) {
-            proof = _proof.trim().to_owned();
+        if let Ok(value) = serde_json::from_str::<Value>(line.trim()) {
+            json_value = Some(value);
+            break;
         }
     }
-    Ok(SgxResponse { proof })
+
+    let extract_field = |field| {
+        json_value
+            .as_ref()
+            .and_then(|json| json.get(field).and_then(|v| v.as_str()))
+            .unwrap_or("")
+            .to_string()
+    };
+
+    let proof = extract_field("proof");
+    let quote = extract_field("quote");
+
+    Ok(SgxResponse { proof, quote })
 }

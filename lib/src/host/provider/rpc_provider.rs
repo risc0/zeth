@@ -49,7 +49,7 @@ impl Provider for RpcProvider {
 
         let response = self
             .tokio_handle
-            .block_on(async { self.http_client.get_block_with_txs(query.block_no).await })?;
+            .block_on(self.http_client.get_block_with_txs(query.block_no))?;
 
         match response {
             Some(out) => Ok(out),
@@ -62,7 +62,7 @@ impl Provider for RpcProvider {
 
         let response = self
             .tokio_handle
-            .block_on(async { self.http_client.get_block(query.block_no).await })?;
+            .block_on(self.http_client.get_block(query.block_no))?;
 
         match response {
             Some(out) => Ok(out),
@@ -75,7 +75,7 @@ impl Provider for RpcProvider {
 
         let response = self
             .tokio_handle
-            .block_on(async { self.http_client.get_block_receipts(query.block_no).await })?;
+            .block_on(self.http_client.get_block_receipts(query.block_no))?;
 
         Ok(response)
     }
@@ -83,15 +83,11 @@ impl Provider for RpcProvider {
     fn get_proof(&mut self, query: &ProofQuery) -> Result<EIP1186ProofResponse> {
         info!("Querying RPC for inclusion proof: {:?}", query);
 
-        let out = self.tokio_handle.block_on(async {
-            self.http_client
-                .get_proof(
-                    query.address,
-                    query.indices.iter().cloned().collect(),
-                    Some(query.block_no.into()),
-                )
-                .await
-        })?;
+        let out = self.tokio_handle.block_on(self.http_client.get_proof(
+            query.address,
+            query.indices.iter().cloned().collect(),
+            Some(query.block_no.into()),
+        ))?;
 
         Ok(out)
     }
@@ -99,11 +95,10 @@ impl Provider for RpcProvider {
     fn get_transaction_count(&mut self, query: &AccountQuery) -> Result<U256> {
         info!("Querying RPC for transaction count: {:?}", query);
 
-        let out = self.tokio_handle.block_on(async {
+        let out = self.tokio_handle.block_on(
             self.http_client
-                .get_transaction_count(query.address, Some(query.block_no.into()))
-                .await
-        })?;
+                .get_transaction_count(query.address, Some(query.block_no.into())),
+        )?;
 
         Ok(out)
     }
@@ -111,11 +106,10 @@ impl Provider for RpcProvider {
     fn get_balance(&mut self, query: &AccountQuery) -> Result<U256> {
         info!("Querying RPC for balance: {:?}", query);
 
-        let out = self.tokio_handle.block_on(async {
+        let out = self.tokio_handle.block_on(
             self.http_client
-                .get_balance(query.address, Some(query.block_no.into()))
-                .await
-        })?;
+                .get_balance(query.address, Some(query.block_no.into())),
+        )?;
 
         Ok(out)
     }
@@ -123,11 +117,10 @@ impl Provider for RpcProvider {
     fn get_code(&mut self, query: &AccountQuery) -> Result<Bytes> {
         info!("Querying RPC for code: {:?}", query);
 
-        let out = self.tokio_handle.block_on(async {
+        let out = self.tokio_handle.block_on(
             self.http_client
-                .get_code(query.address, Some(query.block_no.into()))
-                .await
-        })?;
+                .get_code(query.address, Some(query.block_no.into())),
+        )?;
 
         Ok(out)
     }
@@ -135,11 +128,11 @@ impl Provider for RpcProvider {
     fn get_storage(&mut self, query: &StorageQuery) -> Result<H256> {
         info!("Querying RPC for storage: {:?}", query);
 
-        let out = self.tokio_handle.block_on(async {
-            self.http_client
-                .get_storage_at(query.address, query.index, Some(query.block_no.into()))
-                .await
-        })?;
+        let out = self.tokio_handle.block_on(self.http_client.get_storage_at(
+            query.address,
+            query.index,
+            Some(query.block_no.into()),
+        ))?;
 
         Ok(out)
     }

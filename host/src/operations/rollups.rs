@@ -68,12 +68,10 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
         block_image_id: OP_BLOCK_ID,
     };
     let factory_clone = op_builder_provider_factory.clone();
-    let mut derive_machine = tokio::task::spawn_blocking(move || {
-        DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input, Some(factory_clone))
-            .context("Could not create derive machine")
-    })
-    .await??;
     let (op_block_inputs, derive_machine, derive_output) = tokio::task::spawn_blocking(move || {
+        let mut derive_machine =
+            DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input, Some(factory_clone))
+                .expect("Could not create derive machine");
         let mut op_block_inputs = vec![];
         let derive_output = derive_machine
             .derive(Some(&mut op_block_inputs))

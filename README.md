@@ -102,7 +102,7 @@ Options:
 For every command, the `--network` parameter can be set to either `ethereum` or `optimism` for provable construction
 of single blocks from either chain on its own.
 To provably derive Optimism blocks using the data posted on the Ethereum chain, use `--network=optimism-derived`,
-but `optimism-derived` supported by the `run` and `op-info` commands.
+but `optimism-derived` is not supported by the `run` and `op-info` commands.
 
 #### build
 *This command only natively builds blocks and does not generate any proofs.*
@@ -211,15 +211,8 @@ RUST_LOG=info ./target/release/zeth run \
   --network=optimism \
   --block-number=107728767
 ```
-```console
-RUST_LOG=info ./target/release/zeth run \
-  --network=optimism-derived \
-  --cache=host/testdata/derivation \
-  --block-number=109279674 \
-  --block-count=2
-```
 
-Notably, the `run` command does not support composition because receipts are required for this process inside the
+The `run` command does not support proof composition (required by `--network=optimism-derived`) because receipts are required for this process inside the
 executor.
 Alternatively, one can call the `prove` command in dev mode (`RISC0_DEV_MODE=true`) for the same functionality, as
 demonstrated in the next section.

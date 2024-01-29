@@ -65,16 +65,19 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
         op_block_outputs: vec![],
         block_image_id: OP_BLOCK_ID,
     };
-    let mut derive_machine = DeriveMachine::new(
-        &OPTIMISM_CHAIN_SPEC,
-        derive_input,
-        Some(op_builder_provider_factory.clone()),
-    )
-    .context("Could not create derive machine")?;
-    let mut op_block_inputs = vec![];
-    let derive_output = derive_machine
-        .derive(Some(&mut op_block_inputs))
-        .context("could not derive")?;
+    let factory_clone = op_builder_provider_factory.clone();
+    let (op_block_inputs, derive_machine, derive_output) = tokio::task::spawn_blocking(move || {
+        let mut derive_machine =
+            DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input, Some(factory_clone))
+                .expect("Could not create derive machine");
+        let mut op_block_inputs = vec![];
+
+        let derive_output = derive_machine
+            .derive(Some(&mut op_block_inputs))
+            .expect("could not derive");
+        (op_block_inputs, derive_machine, derive_output)
+    })
+    .await?;
 
     let (assumptions, op_block_outputs) =
         build_op_blocks(&cli, file_reference, receipt_index.clone(), op_block_inputs);
@@ -89,14 +92,18 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
 
     info!("Running from memory ...");
     {
-        let output_mem = DeriveMachine::new(
-            &OPTIMISM_CHAIN_SPEC,
-            derive_input_mem.clone(),
-            Some(op_builder_provider_factory),
-        )
-        .context("Could not create derive machine")?
-        .derive(None)
-        .unwrap();
+        let input_clone = derive_input_mem.clone();
+        let output_mem = tokio::task::spawn_blocking(move || {
+            DeriveMachine::new(
+                &OPTIMISM_CHAIN_SPEC,
+                input_clone,
+                Some(op_builder_provider_factory),
+            )
+            .expect("Could not create derive machine")
+            .derive(None)
+            .unwrap()
+        })
+        .await?;
         assert_eq!(derive_output, output_mem);
     }
 
@@ -256,12 +263,12 @@ pub async fn compose_derived_rollup_blocks(
             op_block_outputs: vec![],
             block_image_id: OP_BLOCK_ID,
         };
-        let mut derive_machine = DeriveMachine::new(
-            &OPTIMISM_CHAIN_SPEC,
-            derive_input,
-            Some(op_builder_provider_factory.clone()),
-        )
-        .expect("Could not create derive machine");
+        let factory_clone = op_builder_provider_factory.clone();
+        let mut derive_machine = tokio::task::spawn_blocking(move || {
+            DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input, Some(factory_clone))
+                .expect("Could not create derive machine")
+        })
+        .await?;
         let eth_head_no = derive_machine.op_batcher.state.epoch.number;
         let eth_head = derive_machine
             .derive_input
@@ -270,10 +277,16 @@ pub async fn compose_derived_rollup_blocks(
             .context("could not fetch eth head")?
             .block_header
             .clone();
-        let mut op_block_inputs = vec![];
-        let derive_output = derive_machine
-            .derive(Some(&mut op_block_inputs))
-            .context("could not derive")?;
+        let (op_block_inputs, mut derive_machine, derive_output) =
+            tokio::task::spawn_blocking(move || {
+                let mut op_block_inputs = vec![];
+                let derive_output = derive_machine
+                    .derive(Some(&mut op_block_inputs))
+                    .expect("could not derive");
+                (op_block_inputs, derive_machine, derive_output)
+            })
+            .await?;
+
         let eth_tail = derive_machine
             .derive_input
             .db
@@ -308,14 +321,18 @@ pub async fn compose_derived_rollup_blocks(
 
         info!("Deriving ...");
         {
-            let output_mem = DeriveMachine::new(
-                &OPTIMISM_CHAIN_SPEC,
-                derive_input_mem.clone(),
-                Some(op_builder_provider_factory),
-            )
-            .expect("Could not create derive machine")
-            .derive(None)
-            .context("could not derive")?;
+            let input_clone = derive_input_mem.clone();
+            let output_mem = tokio::task::spawn_blocking(move || {
+                DeriveMachine::new(
+                    &OPTIMISM_CHAIN_SPEC,
+                    input_clone,
+                    Some(op_builder_provider_factory),
+                )
+                .expect("Could not create derive machine")
+                .derive(None)
+                .context("could not derive")
+            })
+            .await??;
             assert_eq!(derive_output, output_mem);
         }
 

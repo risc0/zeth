@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    collections::VecDeque,
-    sync::{Arc, Mutex},
-};
+use std::collections::VecDeque;
 
 use anyhow::Context;
 use log::info;
@@ -45,7 +42,7 @@ use crate::{
     operations::{maybe_prove, verify_bonsai_receipt},
 };
 
-pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::Result<()> {
+pub async fn derive_rollup_blocks(cli: Cli) -> anyhow::Result<()> {
     info!("Fetching data ...");
     let core_args = cli.core_args().clone();
     let op_builder_provider_factory = ProviderFactory::new(
@@ -53,7 +50,6 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
         Network::Optimism,
         core_args.op_rpc_url.clone(),
     );
-    let receipt_index = Arc::new(Mutex::new(0usize));
 
     info!("Running preflight");
     let derive_input = DeriveInput {
@@ -81,7 +77,7 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
     .await?;
 
     let (assumptions, bonsai_receipt_uuids, op_block_outputs) =
-        build_op_blocks(&cli, file_reference, receipt_index.clone(), op_block_inputs).await;
+        build_op_blocks(&cli, op_block_inputs).await;
 
     let derive_input_mem = DeriveInput {
         db: derive_machine.derive_input.db.get_mem_db(),
@@ -131,8 +127,6 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
                 OP_DERIVE_ELF,
                 &derive_output,
                 (assumptions, bonsai_receipt_uuids),
-                file_reference,
-                Some(receipt_index.clone()),
             )
             .await;
         }
@@ -153,16 +147,11 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
     Ok(())
 }
 
-pub async fn compose_derived_rollup_blocks(
-    cli: Cli,
-    composition_size: u64,
-    file_reference: &String,
-) -> anyhow::Result<()> {
+pub async fn compose_derived_rollup_blocks(cli: Cli, composition_size: u64) -> anyhow::Result<()> {
     let core_args = cli.core_args().clone();
     // OP Composition
     info!("Fetching data ...");
     let mut lift_queue = Vec::new();
-    let receipt_index = Arc::new(Mutex::new(0usize));
     let mut complete_eth_chain: Vec<Header> = Vec::new();
     for op_block_index in (0..core_args.block_count).step_by(composition_size as usize) {
         let db = RpcDb::new(
@@ -229,7 +218,7 @@ pub async fn compose_derived_rollup_blocks(
         eth_chain.push(eth_tail);
 
         let (assumptions, bonsai_receipt_uuids, op_block_outputs) =
-            build_op_blocks(&cli, file_reference, receipt_index.clone(), op_block_inputs).await;
+            build_op_blocks(&cli, op_block_inputs).await;
 
         let derive_input_mem = DeriveInput {
             db: derive_machine.derive_input.db.get_mem_db(),
@@ -262,8 +251,6 @@ pub async fn compose_derived_rollup_blocks(
             OP_DERIVE_ELF,
             &derive_output,
             (assumptions, bonsai_receipt_uuids),
-            file_reference,
-            Some(receipt_index.clone()),
         )
         .await;
 
@@ -314,8 +301,6 @@ pub async fn compose_derived_rollup_blocks(
         OP_COMPOSE_ELF,
         &prep_compose_output,
         Default::default(),
-        file_reference,
-        Some(receipt_index.clone()),
     )
     .await;
 
@@ -347,8 +332,6 @@ pub async fn compose_derived_rollup_blocks(
                 OP_COMPOSE_ELF,
                 &lift_compose_output,
                 (vec![receipt.into()], vec![receipt_uuid]),
-                file_reference,
-                Some(receipt_index.clone()),
             )
             .await
         } else {
@@ -417,8 +400,6 @@ pub async fn compose_derived_rollup_blocks(
                     vec![left_receipt.into(), right_receipt.into()],
                     vec![left_receipt_uuid, right_receipt_uuid],
                 ),
-                file_reference,
-                Some(receipt_index.clone()),
             )
             .await
         } else {
@@ -461,8 +442,6 @@ pub async fn compose_derived_rollup_blocks(
                 vec![prep_receipt.into(), aggregate_receipt.into()],
                 vec![prep_receipt_uuid, aggregate_receipt_uuid],
             ),
-            file_reference,
-            Some(receipt_index.clone()),
         )
         .await;
     } else if let Cli::Verify(verify_args) = cli {
@@ -484,8 +463,6 @@ pub async fn compose_derived_rollup_blocks(
 
 async fn build_op_blocks(
     cli: &Cli,
-    file_reference: &String,
-    receipt_index: Arc<Mutex<usize>>,
     op_block_inputs: Vec<BlockBuildInput<OptimismTxEssence>>,
 ) -> (Vec<Assumption>, Vec<String>, Vec<BlockBuildOutput>) {
     let mut assumptions: Vec<Assumption> = vec![];
@@ -496,16 +473,8 @@ async fn build_op_blocks(
             .expect("Failed to build op block")
             .with_state_compressed();
 
-        if let Some((bonsai_receipt_uuid, receipt)) = maybe_prove(
-            cli,
-            &input,
-            OP_BLOCK_ELF,
-            &output,
-            Default::default(),
-            file_reference,
-            Some(receipt_index.clone()),
-        )
-        .await
+        if let Some((bonsai_receipt_uuid, receipt)) =
+            maybe_prove(cli, &input, OP_BLOCK_ELF, &output, Default::default()).await
         {
             assumptions.push(receipt.into());
             bonsai_uuids.push(bonsai_receipt_uuid);

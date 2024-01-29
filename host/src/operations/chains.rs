@@ -34,7 +34,6 @@ use crate::{
 
 pub async fn build_chain_blocks<N: BlockBuilderStrategy>(
     cli: Cli,
-    file_reference: &String,
     rpc_url: Option<String>,
     chain_spec: ChainSpec,
     guest_elf: &[u8],
@@ -97,7 +96,7 @@ where
                 run_args.exec_args.profile,
                 guest_elf,
                 &compressed_output,
-                file_reference,
+                &cli.execution_label(),
             );
         }
         Cli::Prove(..) => {
@@ -107,8 +106,6 @@ where
                 guest_elf,
                 &compressed_output,
                 Default::default(),
-                file_reference,
-                None,
             )
             .await;
         }

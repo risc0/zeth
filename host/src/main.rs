@@ -39,17 +39,12 @@ async fn main() -> Result<()> {
 
     // Execute other commands
     let core_args = cli.core_args();
-    let sys_time = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap();
-    let file_reference = format!("{}_{}", sys_time.as_secs(), cli.to_string());
 
     match core_args.network {
         Network::Ethereum => {
             let rpc_url = core_args.eth_rpc_url.clone();
             chains::build_chain_blocks::<EthereumStrategy>(
                 cli,
-                &file_reference,
                 rpc_url,
                 ETH_MAINNET_CHAIN_SPEC.clone(),
                 ETH_BLOCK_ELF,
@@ -60,7 +55,6 @@ async fn main() -> Result<()> {
             let rpc_url = core_args.op_rpc_url.clone();
             chains::build_chain_blocks::<OptimismStrategy>(
                 cli,
-                &file_reference,
                 rpc_url,
                 OP_MAINNET_CHAIN_SPEC.clone(),
                 OP_BLOCK_ELF,
@@ -69,9 +63,9 @@ async fn main() -> Result<()> {
         }
         Network::OptimismDerived => {
             if let Some(composition_size) = cli.composition() {
-                rollups::compose_derived_rollup_blocks(cli, composition_size, &file_reference).await
+                rollups::compose_derived_rollup_blocks(cli, composition_size).await
             } else {
-                rollups::derive_rollup_blocks(cli, &file_reference).await
+                rollups::derive_rollup_blocks(cli).await
             }
         }
     }

@@ -15,21 +15,49 @@
 use std::fs;
 
 use risc0_zkvm::{is_dev_mode, Receipt};
+use tracing::debug;
 
 pub mod cli;
 pub mod operations;
 
-pub fn save_receipt(file_reference: &String, receipt: &Receipt, index: Option<&mut usize>) {
+pub fn load_receipt(
+    file_name: &String,
+    require_uuid: bool,
+) -> anyhow::Result<Option<(String, Receipt)>> {
+    if is_dev_mode() {
+        // Nothing to load
+        return Ok(None);
+    }
+
+    let receipt_serialized = match fs::read(receipt_extension(file_name)) {
+        Ok(receipt_serialized) => receipt_serialized,
+        Err(err) => {
+            debug!("Could not load cached receipt with label: {}", &file_name);
+            debug!("{:?}", err);
+            return Ok(None);
+        }
+    };
+
+    let result: (String, Receipt) = bincode::deserialize(&receipt_serialized)?;
+    if result.0.is_empty() && require_uuid {
+        // saved local receipt while uuid is needed
+        return Ok(None);
+    }
+
+    Ok(Some(result))
+}
+
+pub fn save_receipt(receipt_label: &String, receipt: &Receipt) {
     if is_dev_mode() {
         // nothing to save
         return;
     }
     let receipt_serialized = bincode::serialize(receipt).expect("Failed to serialize receipt!");
-    let path = if let Some(number) = index {
-        *number += 1;
-        format!("receipt_{}-{}.zkp", file_reference, *number - 1)
-    } else {
-        format!("receipt_{}.zkp", file_reference)
-    };
-    fs::write(path, receipt_serialized).expect("Failed to save receipt output file.");
+
+    fs::write(receipt_extension(receipt_label), receipt_serialized)
+        .expect("Failed to save receipt output file.");
+}
+
+fn receipt_extension(receipt_label: &String) -> String {
+    format!("{}.zkp", receipt_label)
 }

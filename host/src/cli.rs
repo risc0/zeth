@@ -51,6 +51,13 @@ impl Cli {
             _ => None,
         }
     }
+
+    pub fn execution_label(&self) -> String {
+        let sys_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap();
+        format!("{}_{}", sys_time.as_secs(), self.to_string())
+    }
 }
 
 impl ToString for Cli {

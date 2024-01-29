@@ -17,7 +17,7 @@ use core::iter::once;
 use alloy_sol_types::{sol, SolInterface};
 use anyhow::{bail, ensure, Context, Result};
 #[cfg(not(target_os = "zkvm"))]
-use log::info;
+use log::{debug, info};
 #[cfg(target_os = "zkvm")]
 use risc0_zkvm::{guest::env, serde::to_vec, sha::Digest};
 use serde::{Deserialize, Serialize};
@@ -141,7 +141,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
         let op_head_block_hash = op_head.block_header.hash();
 
         #[cfg(not(target_os = "zkvm"))]
-        info!(
+        debug!(
             "Fetched Op head (block no {}) {}",
             derive_input.op_head_block_no, op_head_block_hash
         );
@@ -177,7 +177,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
             "Ethereum head block hash mismatch"
         );
         #[cfg(not(target_os = "zkvm"))]
-        info!(
+        debug!(
             "Fetched Eth head (block no {}) {}",
             eth_block_no, set_l1_block_values.hash
         );
@@ -242,7 +242,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
 
         while self.op_head_block_header.number < target_block_no {
             #[cfg(not(target_os = "zkvm"))]
-            info!(
+            debug!(
                 "op_block_no = {}, eth_block_no = {}",
                 self.op_head_block_header.number, self.op_batcher.state.current_l1_block_number
             );
@@ -267,7 +267,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                 // Process the batch
 
                 #[cfg(not(target_os = "zkvm"))]
-                info!(
+                debug!(
                     "Read batch for Op block {}: timestamp={}, epoch={}, tx count={}, parent hash={:?}",
                     self.op_head_block_header.number + 1,
                     op_batch.0.timestamp,

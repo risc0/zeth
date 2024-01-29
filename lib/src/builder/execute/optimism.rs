@@ -69,19 +69,18 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
         #[cfg(not(target_os = "zkvm"))]
         {
             use chrono::{TimeZone, Utc};
-            use log::info;
             let dt = Utc
                 .timestamp_opt(block_builder.input.timestamp.try_into().unwrap(), 0)
                 .unwrap();
 
-            info!("Block no. {}", header.number);
-            info!("  EVM spec ID: {:?}", spec_id);
-            info!("  Timestamp: {}", dt);
-            info!("  Transactions: {}", block_builder.input.transactions.len());
-            info!("  Fee Recipient: {:?}", block_builder.input.beneficiary);
-            info!("  Gas limit: {}", block_builder.input.gas_limit);
-            info!("  Base fee per gas: {}", header.base_fee_per_gas);
-            info!("  Extra data: {:?}", block_builder.input.extra_data);
+            debug!("Block no. {}", header.number);
+            debug!("  EVM spec ID: {:?}", spec_id);
+            debug!("  Timestamp: {}", dt);
+            debug!("  Transactions: {}", block_builder.input.transactions.len());
+            debug!("  Fee Recipient: {:?}", block_builder.input.beneficiary);
+            debug!("  Gas limit: {}", block_builder.input.gas_limit);
+            debug!("  Base fee per gas: {}", header.base_fee_per_gas);
+            debug!("  Extra data: {:?}", block_builder.input.extra_data);
         }
 
         let mut evm = Evm::builder()

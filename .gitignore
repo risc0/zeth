@@ -2,6 +2,7 @@
 target/
 tmp/
 cache_rpc/
+cache_zkp/
 log.txt
 *.pb
 *.zkp

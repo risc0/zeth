@@ -119,9 +119,9 @@ pub struct CoreArgs {
     /// URL of the Optimism RPC node.
     pub op_rpc_url: Option<String>,
 
-    #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "rpc_cache")]
+    #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "cache_rpc")]
     /// Use a local directory as a cache for RPC calls. Accepts a custom directory.
-    /// [default: rpc_cache]
+    /// [default: cache_rpc]
     pub cache: Option<PathBuf>,
 
     #[clap(short, long, require_equals = true)]

@@ -119,7 +119,7 @@ Options:
   -w, --network=<NETWORK>            Network name (ethereum/optimism/optimism-derived) [default: ethereum]
   -e, --eth-rpc-url=<ETH_RPC_URL>    URL of the Ethereum RPC node
   -o, --op-rpc-url=<OP_RPC_URL>      URL of the Optimism RPC node
-  -c, --cache[=<CACHE>]              Use a local directory as a cache for RPC calls. Accepts a custom directory. [default: rpc_cache]
+  -c, --cache[=<CACHE>]              Use a local directory as a cache for RPC calls. Accepts a custom directory. [default: cache_rpc]
   -b, --block-number=<BLOCK_NUMBER>  Block number to begin from
   -n, --block-count=<BLOCK_COUNT>    Number of blocks to provably derive [default: 1]
   -m, --composition[=<COMPOSITION>]  Compose separate block derivation proofs together. Accepts a custom number of blocks to process per derivation call. (optimism-derived network only) [default: 1]
@@ -182,7 +182,7 @@ Options:
   -w, --network=<NETWORK>            Network name (ethereum/optimism/optimism-derived) [default: ethereum]
   -e, --eth-rpc-url=<ETH_RPC_URL>    URL of the Ethereum RPC node
   -o, --op-rpc-url=<OP_RPC_URL>      URL of the Optimism RPC node
-  -c, --cache[=<CACHE>]              Use a local directory as a cache for RPC calls. Accepts a custom directory. [default: rpc_cache]
+  -c, --cache[=<CACHE>]              Use a local directory as a cache for RPC calls. Accepts a custom directory. [default: cache_rpc]
   -b, --block-number=<BLOCK_NUMBER>  Block number to begin from
   -n, --block-count=<BLOCK_COUNT>    Number of blocks to provably derive [default: 1]
   -x, --execution-po2=<LOCAL_EXEC>      The maximum segment cycle count as a power of 2 [default: 20]
@@ -231,7 +231,7 @@ Options:
   -w, --network=<NETWORK>            Network name (ethereum/optimism/optimism-derived) [default: ethereum]
   -e, --eth-rpc-url=<ETH_RPC_URL>    URL of the Ethereum RPC node
   -o, --op-rpc-url=<OP_RPC_URL>      URL of the Optimism RPC node
-  -c, --cache[=<CACHE>]              Use a local directory as a cache for RPC calls. Accepts a custom directory. [default: rpc_cache]
+  -c, --cache[=<CACHE>]              Use a local directory as a cache for RPC calls. Accepts a custom directory. [default: cache_rpc]
   -b, --block-number=<BLOCK_NUMBER>  Block number to begin from
   -n, --block-count=<BLOCK_COUNT>    Number of blocks to provably derive [default: 1]
   -x, --execution-po2=<LOCAL_EXEC>      The maximum segment cycle count as a power of 2 [default: 20]
@@ -306,7 +306,7 @@ Options:
   -o, --op-rpc-url=<OP_RPC_URL>
           URL of the Optimism RPC node
   -c, --cache[=<CACHE>]
-          Use a local directory as a cache for RPC calls. Accepts a custom directory. [default: rpc_cache]
+          Use a local directory as a cache for RPC calls. Accepts a custom directory. [default: cache_rpc]
   -b, --block-number=<BLOCK_NUMBER>
           Block number to begin from
   -n, --block-count=<BLOCK_COUNT>
@@ -334,7 +334,7 @@ Options:
   -w, --network=<NETWORK>            Network name (ethereum/optimism/optimism-derived) [default: ethereum]
   -e, --eth-rpc-url=<ETH_RPC_URL>    URL of the Ethereum RPC node
   -o, --op-rpc-url=<OP_RPC_URL>      URL of the Optimism RPC node
-  -c, --cache[=<CACHE>]              Use a local directory as a cache for RPC calls. Accepts a custom directory. [default: rpc_cache]
+  -c, --cache[=<CACHE>]              Use a local directory as a cache for RPC calls. Accepts a custom directory. [default: cache_rpc]
   -b, --block-number=<BLOCK_NUMBER>  Block number to begin from
   -n, --block-count=<BLOCK_COUNT>    Number of blocks to provably derive [default: 1]
   -h, --help                         Print help

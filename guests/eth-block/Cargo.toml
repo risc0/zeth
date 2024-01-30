@@ -6,7 +6,7 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-risc0-zkvm = { version = "0.20.0-rc.3", default-features = false, features = ['std'] }
+risc0-zkvm = { version = "0.20.0", default-features = false, features = ['std'] }
 zeth-lib = { path = "../../lib", default-features = false }
 
 [patch.crates-io]

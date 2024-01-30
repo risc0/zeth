@@ -17,10 +17,10 @@ lto = true
 opt-level = 3
 
 [workspace.dependencies]
-bonsai-sdk = { version = "0.6.0-rc.3", features = ["async"] }
-hashbrown = { version = "0.14", features = ["inline-more"] }
-risc0-build = { version = "0.20.0-rc.3" }
-risc0-zkvm = { version = "0.20.0-rc.3", default-features = false }
+bonsai-sdk = { version = "0.6.0", features = ["async"] }
+hashbrown = { version = "0.14.3", features = ["inline-more"] }
+risc0-build = { version = "0.20.0" }
+risc0-zkvm = { version = "0.20.0", default-features = false }
 revm-primitives = { git = "https://github.com/bluealloy/revm.git", rev = "6cd0bfc96da64513affe01c1964dd80beeb8c620", default_features = false }
 revm = { git = "https://github.com/bluealloy/revm.git", rev = "6cd0bfc96da64513affe01c1964dd80beeb8c620", default-features = false, features = [
     "std",

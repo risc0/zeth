@@ -3996,6 +3996,7 @@ dependencies = [
  "bytes",
  "ethers-core",
  "k256",
+ "log",
  "revm-primitives",
  "rlp",
  "serde",

@@ -16,7 +16,7 @@ use core::{fmt::Debug, mem::take};
 
 use anyhow::{anyhow, bail, Context};
 #[cfg(not(target_os = "zkvm"))]
-use log::debug;
+use log::trace;
 use revm::{
     interpreter::Host,
     primitives::{Account, Address, ResultAndState, SpecId, TransactTo, TxEnv},
@@ -70,15 +70,15 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
                 .timestamp_opt(block_builder.input.timestamp.try_into().unwrap(), 0)
                 .unwrap();
 
-            debug!("Block no. {}", header.number);
-            debug!("  EVM spec ID: {:?}", spec_id);
-            debug!("  Timestamp: {}", dt);
-            debug!("  Transactions: {}", block_builder.input.transactions.len());
-            debug!("  Withdrawals: {}", block_builder.input.withdrawals.len());
-            debug!("  Fee Recipient: {:?}", block_builder.input.beneficiary);
-            debug!("  Gas limit: {}", block_builder.input.gas_limit);
-            debug!("  Base fee per gas: {}", header.base_fee_per_gas);
-            debug!("  Extra data: {:?}", block_builder.input.extra_data);
+            trace!("Block no. {}", header.number);
+            trace!("  EVM spec ID: {:?}", spec_id);
+            trace!("  Timestamp: {}", dt);
+            trace!("  Transactions: {}", block_builder.input.transactions.len());
+            trace!("  Withdrawals: {}", block_builder.input.withdrawals.len());
+            trace!("  Fee Recipient: {:?}", block_builder.input.beneficiary);
+            trace!("  Gas limit: {}", block_builder.input.gas_limit);
+            trace!("  Base fee per gas: {}", header.base_fee_per_gas);
+            trace!("  Extra data: {:?}", block_builder.input.extra_data);
         }
 
         // initialize the Evm
@@ -122,10 +122,10 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             #[cfg(not(target_os = "zkvm"))]
             {
                 let tx_hash = tx.hash();
-                debug!("Tx no. {} (hash: {})", tx_no, tx_hash);
-                debug!("  Type: {}", tx.essence.tx_type());
-                debug!("  Fr: {:?}", tx_from);
-                debug!("  To: {:?}", tx.essence.to().unwrap_or_default());
+                trace!("Tx no. {} (hash: {})", tx_no, tx_hash);
+                trace!("  Type: {}", tx.essence.tx_type());
+                trace!("  Fr: {:?}", tx_from);
+                trace!("  To: {:?}", tx.essence.to().unwrap_or_default());
             }
 
             // verify transaction gas
@@ -144,7 +144,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             cumulative_gas_used = cumulative_gas_used.checked_add(gas_used).unwrap();
 
             #[cfg(not(target_os = "zkvm"))]
-            debug!("  Ok: {:?}", result);
+            trace!("  Ok: {:?}", result);
 
             // create the receipt from the EVM result
             let receipt = Receipt::new(
@@ -171,7 +171,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             for (address, account) in &state {
                 if account.is_touched() {
                     // log account
-                    debug!(
+                    trace!(
                         "  State {:?} (is_selfdestructed={}, is_loaded_as_not_existing={}, is_created={}, is_empty={})",
                         address,
                         account.is_selfdestructed(),
@@ -180,17 +180,18 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
                         account.is_empty(),
                     );
                     // log balance changes
-                    debug!(
+                    trace!(
                         "     After balance: {} (Nonce: {})",
-                        account.info.balance, account.info.nonce
+                        account.info.balance,
+                        account.info.nonce
                     );
 
                     // log state changes
                     for (addr, slot) in &account.storage {
                         if slot.is_changed() {
-                            debug!("    Storage address: {:?}", addr);
-                            debug!("      Before: {:?}", slot.original_value());
-                            debug!("       After: {:?}", slot.present_value());
+                            trace!("    Storage address: {:?}", addr);
+                            trace!("      Before: {:?}", slot.original_value());
+                            trace!("       After: {:?}", slot.present_value());
                         }
                     }
                 }
@@ -212,9 +213,9 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
 
             #[cfg(not(target_os = "zkvm"))]
             {
-                debug!("Withdrawal no. {}", withdrawal.index);
-                debug!("  Recipient: {:?}", withdrawal.address);
-                debug!("  Value: {}", amount_wei);
+                trace!("Withdrawal no. {}", withdrawal.index);
+                trace!("  Recipient: {:?}", withdrawal.address);
+                trace!("  Value: {}", amount_wei);
             }
             // Credit withdrawal amount
             increase_account_balance(&mut evm.context.evm.db, withdrawal.address, amount_wei)?;

@@ -242,9 +242,10 @@ impl<D: BatcherDb> DeriveMachine<D> {
 
         while self.op_head_block_header.number < target_block_no {
             #[cfg(not(target_os = "zkvm"))]
-            debug!(
+            log::trace!(
                 "op_block_no = {}, eth_block_no = {}",
-                self.op_head_block_header.number, self.op_batcher.state.current_l1_block_number
+                self.op_head_block_header.number,
+                self.op_batcher.state.current_l1_block_number
             );
 
             // Process next Eth block. We do this on every iteration, except the first iteration.
@@ -307,7 +308,13 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     .transactions
                     .iter()
                     .map(|tx| Transaction::decode(&mut tx.as_ref()))
-                    .filter_map(|tx| tx.ok())
+                    .filter_map(|tx| {
+                        #[cfg(not(target_os = "zkvm"))]
+                        if let Err(err) = &tx {
+                            log::warn!("Failed to decode transaction: {:?}", err);
+                        }
+                        tx.ok()
+                    })
                     // We always assume that chain id exists here
                     .map(
                         |mut tx: Transaction<OptimismTxEssence>| match &mut tx.essence {
@@ -487,6 +494,8 @@ impl<D: BatcherDb> DeriveMachine<D> {
                         }
                     }
                     BlockBuildOutput::FAILURE { bad_input_hash } => {
+                        #[cfg(not(target_os = "zkvm"))]
+                        log::warn!("Failed to build block from batch");
                         ensure!(
                             new_op_head_input.partial_hash() == bad_input_hash,
                             "Invalid input partial hash"

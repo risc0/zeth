@@ -334,11 +334,12 @@ impl Encodable for TransactionKind {
 
 impl Decodable for TransactionKind {
     fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
-        if buf == &mut [EMPTY_STRING_CODE] {
-            buf.advance(1);
-            Ok(TransactionKind::Create)
-        } else {
-            Ok(TransactionKind::Call(Address::decode(buf)?))
+        match buf.first().copied() {
+            Some(EMPTY_STRING_CODE) => {
+                buf.advance(1);
+                Ok(TransactionKind::Create)
+            }
+            _ => Ok(TransactionKind::Call(Address::decode(buf)?)),
         }
     }
 }

@@ -25,6 +25,9 @@ sha2 = { version = "=0.10.6", default-features = false}
 sha3 = "0.10"
 thiserror = "1.0"
 
+[target.'cfg(not(target_os = "zkvm"))'.dependencies]
+log = "0.4"
+
 [dev-dependencies]
 bincode = "1.3"
 hex-literal = "0.4"

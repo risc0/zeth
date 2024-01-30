@@ -5054,6 +5054,7 @@ dependencies = [
  "ethers-core",
  "hex-literal",
  "k256",
+ "log",
  "revm-primitives",
  "rlp",
  "serde",

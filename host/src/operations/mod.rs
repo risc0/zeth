@@ -44,7 +44,6 @@ pub async fn verify_bonsai_receipt<O: Eq + Debug + DeserializeOwned>(
     loop {
         let mut res = None;
         for attempt in 1..=max_retries {
-            // let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)?;
             let client = bonsai_sdk::alpha_async::get_client_from_env(risc0_zkvm::VERSION).await?;
 
             match session.status(&client) {
@@ -80,7 +79,6 @@ pub async fn verify_bonsai_receipt<O: Eq + Debug + DeserializeOwned>(
             let receipt_url = res
                 .receipt_url
                 .expect("API error, missing receipt on completed session");
-            // let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)?;
             let client = bonsai_sdk::alpha_async::get_client_from_env(risc0_zkvm::VERSION).await?;
             let receipt_buf = client.download(&receipt_url)?;
             let receipt: Receipt = bincode::deserialize(&receipt_buf)?;
@@ -188,7 +186,6 @@ pub async fn prove_bonsai<O: Eq + Debug + DeserializeOwned>(
     // Prepare input data
     let input_data = bytemuck::cast_slice(&encoded_input).to_vec();
 
-    // let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)?;
     let client = bonsai_sdk::alpha_async::get_client_from_env(risc0_zkvm::VERSION).await?;
     client.upload_img(&encoded_image_id, elf.to_vec())?;
     // upload input

@@ -15,7 +15,7 @@
 use std::collections::VecDeque;
 
 use anyhow::Context;
-use log::info;
+use log::{info, trace};
 use risc0_zkvm::Assumption;
 use zeth_guests::*;
 use zeth_lib::{
@@ -305,10 +305,11 @@ pub async fn compose_derived_rollup_blocks(cli: Cli, composition_size: u64) -> a
     .await;
 
     // Lift
+    info!("Lifting {} proofs...", lift_queue.len());
     let mut join_queue = VecDeque::new();
     for (derive_output, derive_receipt) in lift_queue {
         let eth_tail_hash = derive_output.eth_tail.1 .0;
-        info!("Lifting ... {:?}", &derive_output);
+        trace!("Lifting ... {:?}", &derive_output);
         let lift_compose_input = ComposeInput {
             block_image_id: OP_BLOCK_ID,
             derive_image_id: OP_DERIVE_ID,
@@ -323,7 +324,7 @@ pub async fn compose_derived_rollup_blocks(cli: Cli, composition_size: u64) -> a
             .clone()
             .process()
             .expect("Lift composition failed.");
-        info!("Lifted ... {:?}", &lift_compose_output);
+        trace!("Lifted ... {:?}", &lift_compose_output);
 
         let lift_compose_receipt = if let Some((receipt_uuid, receipt)) = derive_receipt {
             maybe_prove(
@@ -342,12 +343,13 @@ pub async fn compose_derived_rollup_blocks(cli: Cli, composition_size: u64) -> a
     }
 
     // Join
+    info!("Composing {} proofs...", join_queue.len());
     while join_queue.len() > 1 {
         // Pop left output
         let (left, left_receipt) = join_queue.pop_front().unwrap();
         // Only peek at right output
         let (right, _right_receipt) = join_queue.front().unwrap();
-        info!("Joining");
+        trace!("Joining");
         let ComposeOutputOperation::AGGREGATE {
             op_tail: left_op_tail,
             ..
@@ -364,9 +366,10 @@ pub async fn compose_derived_rollup_blocks(cli: Cli, composition_size: u64) -> a
         };
         // Push dangling workloads (odd block count) to next round
         if left_op_tail != right_op_head {
-            info!(
+            trace!(
                 "Skipping dangling workload: {} - {}",
-                left_op_tail.0, right_op_head.0
+                left_op_tail.0,
+                right_op_head.0
             );
             join_queue.push_back((left, left_receipt));
             continue;
@@ -380,7 +383,7 @@ pub async fn compose_derived_rollup_blocks(cli: Cli, composition_size: u64) -> a
             operation: ComposeInputOperation::JOIN { left, right },
             eth_chain_merkle_root: eth_chain_root,
         };
-        info!("Joining ...");
+        trace!("Joining ...");
         let join_compose_output = join_compose_input
             .clone()
             .process()
@@ -456,7 +459,7 @@ pub async fn compose_derived_rollup_blocks(cli: Cli, composition_size: u64) -> a
         info!("Preflight successful!");
     };
 
-    dbg!(&finish_compose_output);
+    trace!("Final composition output: {:?}", &finish_compose_output);
 
     Ok(())
 }

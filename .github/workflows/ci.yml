@@ -8,7 +8,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  RISC0_VERSION: 0.19.1
+  RISC0_VERSION: 0.20.0
   RISC0_TOOLCHAIN_VERSION: test-release-2
 
 concurrency:
@@ -24,8 +24,8 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
-    - uses: risc0/risc0/.github/actions/rustup@release-0.19
-    - uses: risc0/risc0/.github/actions/sccache@release-0.19
+    - uses: risc0/risc0/.github/actions/rustup@release-0.20
+    - uses: risc0/risc0/.github/actions/sccache@release-0.20
     - uses: risc0/cargo-install@v1
       with:
         crate: cargo-binstall
@@ -39,8 +39,8 @@ jobs:
     timeout-minutes: 30
     steps:
     - uses: actions/checkout@v4
-    - uses: risc0/risc0/.github/actions/rustup@release-0.19
-    - uses: risc0/risc0/.github/actions/sccache@release-0.19
+    - uses: risc0/risc0/.github/actions/rustup@release-0.20
+    - uses: risc0/risc0/.github/actions/sccache@release-0.20
     - uses: risc0/clippy-action@main
       with:
         reporter: 'github-pr-check'
@@ -53,5 +53,5 @@ jobs:
     timeout-minutes: 10
     steps:
     - uses: actions/checkout@v4
-    - uses: risc0/risc0/.github/actions/rustup@release-0.19
+    - uses: risc0/risc0/.github/actions/rustup@release-0.20
     - run: cargo fmt --all --check

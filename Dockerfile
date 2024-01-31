@@ -6,8 +6,8 @@ WORKDIR /opt/raiko
 COPY . .
 RUN apt-get update && \
     apt-get install -y \
-        cmake \
-        libclang-dev && \
+    cmake \
+    libclang-dev && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 RUN cargo build --release ${BUILD_FLAGS}
@@ -33,6 +33,8 @@ COPY --from=builder /opt/raiko/target/release/raiko-guest ./guests/sgx/
 COPY --from=builder /opt/raiko/target/release/raiko-host ./bin/
 COPY ./sgx-ra/src/*.so /usr/lib/
 
+ARG EDMM=0
+ENV EDMM=${EDMM}
 RUN cd ./guests/sgx && \
     gramine-manifest -Dlog_level=error -Darch_libdir=/lib/x86_64-linux-gnu/ raiko-guest.manifest.template raiko-guest.manifest
 

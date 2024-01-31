@@ -21,6 +21,7 @@ use crate::prover::{
 /// Starts the proverd json-rpc server.
 /// Note: the server may not immediately listening after returning the
 /// `JoinHandle`.
+#[allow(clippy::too_many_arguments)]
 pub fn serve(
     addr: &str,
     guest_path: &Path,
@@ -111,7 +112,7 @@ impl Handler {
         }
     }
 
-    async fn handle_request(self, req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
+    async fn handle_request(mut self, req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
         {
             // limits the request size
             const MAX_BODY_SIZE: u64 = 1 << 20;
@@ -217,7 +218,7 @@ impl Handler {
     }
 
     async fn handle_method(
-        &self,
+        &mut self,
         method: &str,
         params: &[serde_json::Value],
     ) -> Result<serde_json::Value, String> {
@@ -227,7 +228,7 @@ impl Handler {
                 let options = params.first().ok_or("expected struct ProofRequest")?;
                 let req: ProofRequest =
                     serde_json::from_value(options.to_owned()).map_err(|e| e.to_string())?;
-                execute(&self.cache, &self.ctx, &req)
+                execute(&self.cache, &mut self.ctx, &req)
                     .await
                     .and_then(|result| serde_json::to_value(result).map_err(Into::into))
                     .map_err(|e| e.to_string())

@@ -12,7 +12,7 @@ for feature in "${features[@]}"; do
         continue
     fi
 
-    tag=$2
+    tag=$3
 
     if [[ -z "$tag" ]]; then
         tag="latest"
@@ -22,6 +22,11 @@ for feature in "${features[@]}"; do
     if [[ "$feature" != "none" ]]; then
         tag="${tag}-${feature}"
         build_flags="--build-arg BUILD_FLAGS=--features=${feature}"
+    fi
+
+    sgx_flags=$2
+    if [[ -n "$sgx_flags" ]]; then
+        build_flags="${build_flags} --build-arg EDMM=${sgx_flags}"
     fi
 
     echo "Build and push $1:$tag..."

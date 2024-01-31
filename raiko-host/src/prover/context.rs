@@ -11,6 +11,8 @@ pub struct Context {
     pub l2_chain: String,
     pub sgx_context: SgxContext,
     pub max_caches: usize,
+    pub l1_cache_file: Option<PathBuf>,
+    pub l2_cache_file: Option<PathBuf>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -38,6 +40,8 @@ impl Context {
                 instance_id: sgx_instance_id,
             },
             max_caches,
+            l1_cache_file: None,
+            l2_cache_file: None,
         }
     }
 }

@@ -1,7 +1,7 @@
 use std::str;
 
 use serde_json::Value;
-use tokio::{fs, process::Command};
+use tokio::process::Command;
 use tracing::{debug, info};
 
 use crate::{
@@ -10,11 +10,11 @@ use crate::{
         consts::*,
         context::Context,
         request::{SgxRequest, SgxResponse},
-        utils::{cache_file_path, guest_executable_path},
+        utils::guest_executable_path,
     },
 };
 
-pub async fn execute_sgx(ctx: &Context, req: &SgxRequest) -> Result<SgxResponse, String> {
+pub async fn execute_sgx(ctx: &mut Context, req: &SgxRequest) -> Result<SgxResponse, String> {
     let guest_path = guest_executable_path(&ctx.guest_path, SGX_PARENT_DIR);
     debug!("Guest path: {:?}", guest_path);
     let mut cmd = {
@@ -31,13 +31,11 @@ pub async fn execute_sgx(ctx: &Context, req: &SgxRequest) -> Result<SgxResponse,
             .arg("one-shot");
         cmd
     };
-    let l1_cache_file = cache_file_path(&ctx.cache_path, req.block, true);
-    let l2_cache_file = cache_file_path(&ctx.cache_path, req.block, false);
     let output = cmd
         .arg("--blocks-data-file")
-        .arg(&l2_cache_file)
+        .arg(ctx.l2_cache_file.as_ref().unwrap())
         .arg("--l1-blocks-data-file")
-        .arg(&l1_cache_file)
+        .arg(ctx.l1_cache_file.as_ref().unwrap())
         .arg("--prover")
         .arg(req.prover.to_string())
         .arg("--graffiti")
@@ -51,10 +49,6 @@ pub async fn execute_sgx(ctx: &Context, req: &SgxRequest) -> Result<SgxResponse,
         .map_err(|e| e.to_string())?;
     info!("Sgx execution stderr: {:?}", str::from_utf8(&output.stderr));
     info!("Sgx execution stdout: {:?}", str::from_utf8(&output.stdout));
-    // clean cache file, avoid reorg error
-    for file in &[l1_cache_file, l2_cache_file] {
-        fs::remove_file(file).await.map_err(|e| e.to_string())?;
-    }
     if !output.status.success() {
         inc_sgx_error(req.block);
         return Err(output.status.to_string());

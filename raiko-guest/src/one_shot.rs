@@ -153,6 +153,7 @@ pub async fn one_shot(global_opts: GlobalOpts, args: OneShotArgs) -> Result<()> 
     proof.extend(new_instance);
     proof.extend(sig.to_bytes());
     let proof = hex::encode(proof);
+    save_attestation_user_report_data(new_instance)?;
     let quote = get_sgx_quote()?;
     let data = serde_json::json!({
         "proof": format!("0x{}", proof),
@@ -162,7 +163,6 @@ pub async fn one_shot(global_opts: GlobalOpts, args: OneShotArgs) -> Result<()> 
     });
     println!("{}", data);
 
-    save_attestation_user_report_data(new_instance)?;
     print_sgx_info()
 }
 

@@ -16,7 +16,7 @@ use std::collections::VecDeque;
 
 use anyhow::Context;
 use log::{info, trace};
-use risc0_zkvm::Assumption;
+use risc0_zkvm::{Assumption, Receipt};
 use zeth_guests::*;
 use zeth_lib::{
     builder::{BlockBuilderStrategy, OptimismStrategy},
@@ -42,7 +42,7 @@ use crate::{
     operations::{maybe_prove, verify_bonsai_receipt},
 };
 
-pub async fn derive_rollup_blocks(cli: Cli) -> anyhow::Result<()> {
+pub async fn derive_rollup_blocks(cli: Cli) -> anyhow::Result<Option<(String, Receipt)>> {
     info!("Fetching data ...");
     let core_args = cli.core_args().clone();
     let op_builder_provider_factory = ProviderFactory::new(
@@ -117,9 +117,7 @@ pub async fn derive_rollup_blocks(cli: Cli) -> anyhow::Result<()> {
         println!("Derived: {} {}", derived_block.0, derived_block.1);
     }
 
-    match &cli {
-        Cli::Build(..) => {}
-        Cli::Run(..) => {}
+    let final_result = match &cli {
         Cli::Prove(..) => {
             maybe_prove(
                 &cli,
@@ -128,26 +126,30 @@ pub async fn derive_rollup_blocks(cli: Cli) -> anyhow::Result<()> {
                 &derive_output,
                 (assumptions, bonsai_receipt_uuids),
             )
-            .await;
+            .await
         }
-        Cli::Verify(verify_args) => {
+        Cli::Verify(verify_args) => Some(
             verify_bonsai_receipt(
                 OP_DERIVE_ID.into(),
                 &derive_output,
                 verify_args.bonsai_receipt_uuid.clone(),
                 4,
             )
-            .await?;
-        }
+            .await?,
+        ),
         Cli::OpInfo(..) => {
             unreachable!()
         }
-    }
+        _ => None,
+    };
 
-    Ok(())
+    Ok(final_result)
 }
 
-pub async fn compose_derived_rollup_blocks(cli: Cli, composition_size: u64) -> anyhow::Result<()> {
+pub async fn compose_derived_rollup_blocks(
+    cli: Cli,
+    composition_size: u64,
+) -> anyhow::Result<Option<(String, Receipt)>> {
     let core_args = cli.core_args().clone();
     // OP Composition
     info!("Fetching data ...");
@@ -431,7 +433,7 @@ pub async fn compose_derived_rollup_blocks(cli: Cli, composition_size: u64) -> a
         .process()
         .expect("Finish composition failed.");
 
-    if let (
+    let final_result = if let (
         Some((prep_receipt_uuid, prep_receipt)),
         Some((aggregate_receipt_uuid, aggregate_receipt)),
     ) = (prep_compose_receipt, aggregate_receipt)
@@ -446,22 +448,25 @@ pub async fn compose_derived_rollup_blocks(cli: Cli, composition_size: u64) -> a
                 vec![prep_receipt_uuid, aggregate_receipt_uuid],
             ),
         )
-        .await;
+        .await
     } else if let Cli::Verify(verify_args) = cli {
-        verify_bonsai_receipt(
-            OP_COMPOSE_ID.into(),
-            &finish_compose_output,
-            verify_args.bonsai_receipt_uuid.clone(),
-            4,
+        Some(
+            verify_bonsai_receipt(
+                OP_COMPOSE_ID.into(),
+                &finish_compose_output,
+                verify_args.bonsai_receipt_uuid.clone(),
+                4,
+            )
+            .await?,
         )
-        .await?;
     } else {
         info!("Preflight successful!");
+        None
     };
 
     trace!("Final composition output: {:?}", &finish_compose_output);
 
-    Ok(())
+    Ok(final_result)
 }
 
 async fn build_op_blocks(

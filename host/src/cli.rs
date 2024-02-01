@@ -187,6 +187,9 @@ pub struct ProveArgs {
     #[clap(short, long, default_value_t = false)]
     /// Prove remotely using Bonsai.
     pub submit_to_bonsai: bool,
+    /// Convert the resulting STARK receipt into a Groth-16 SNARK using Bonsai
+    #[clap(short, long, default_value_t = false)]
+    pub snark: bool,
 }
 
 #[derive(clap::Args, Debug, Clone)]

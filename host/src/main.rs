@@ -17,9 +17,10 @@ extern crate core;
 use anyhow::Result;
 use clap::Parser;
 use log::info;
+use risc0_zkvm::sha::Digest;
 use zeth::{
     cli::Cli,
-    operations::{chains, info::op_info, rollups},
+    operations::{chains, info::op_info, rollups, stark2snark},
 };
 use zeth_guests::*;
 use zeth_lib::{
@@ -55,36 +56,66 @@ async fn main() -> Result<()> {
         return op_info(cli).await;
     }
 
+    // Prepare to snarkify resulting stark
+    let (should_snarkify, can_snarkify) = if let Cli::Prove(prove_args) = &cli {
+        (prove_args.snark, prove_args.submit_to_bonsai)
+    } else {
+        (false, false)
+    };
+
     // Execute other commands
     let core_args = cli.core_args();
 
-    match core_args.network {
+    let (image_id, stark) = match core_args.network {
         Network::Ethereum => {
             let rpc_url = core_args.eth_rpc_url.clone();
-            chains::build_chain_blocks::<EthereumStrategy>(
-                cli,
-                rpc_url,
-                ETH_MAINNET_CHAIN_SPEC.clone(),
-                ETH_BLOCK_ELF,
+            (
+                ETH_BLOCK_ID,
+                chains::build_chain_blocks::<EthereumStrategy>(
+                    cli,
+                    rpc_url,
+                    ETH_MAINNET_CHAIN_SPEC.clone(),
+                    ETH_BLOCK_ELF,
+                )
+                .await?,
             )
-            .await
         }
         Network::Optimism => {
             let rpc_url = core_args.op_rpc_url.clone();
-            chains::build_chain_blocks::<OptimismStrategy>(
-                cli,
-                rpc_url,
-                OP_MAINNET_CHAIN_SPEC.clone(),
-                OP_BLOCK_ELF,
+            (
+                OP_BLOCK_ID,
+                chains::build_chain_blocks::<OptimismStrategy>(
+                    cli,
+                    rpc_url,
+                    OP_MAINNET_CHAIN_SPEC.clone(),
+                    OP_BLOCK_ELF,
+                )
+                .await?,
             )
-            .await
         }
         Network::OptimismDerived => {
             if let Some(composition_size) = cli.composition() {
-                rollups::compose_derived_rollup_blocks(cli, composition_size).await
+                (
+                    OP_COMPOSE_ID,
+                    rollups::compose_derived_rollup_blocks(cli, composition_size).await?,
+                )
             } else {
-                rollups::derive_rollup_blocks(cli).await
+                (OP_DERIVE_ID, rollups::derive_rollup_blocks(cli).await?)
             }
         }
+    };
+
+    if should_snarkify {
+        let Some((stark_uuid, stark_receipt)) = stark else {
+            panic!("No STARK data to snarkify!");
+        };
+
+        if !can_snarkify {
+            panic!("Bonsai submission flag required to create a SNARK!");
+        }
+
+        stark2snark(Digest::from(image_id), stark_uuid, stark_receipt).await?;
     }
+
+    Ok(())
 }

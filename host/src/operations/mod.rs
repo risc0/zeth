@@ -20,14 +20,91 @@ use std::fmt::Debug;
 
 use log::{debug, error, info, warn};
 use risc0_zkvm::{
-    compute_image_id, default_prover, serde::to_vec, sha::Digest, Assumption, ExecutorEnv,
-    ExecutorImpl, FileSegmentRef, Receipt, Session,
+    compute_image_id, default_prover,
+    serde::to_vec,
+    sha::{Digest, Digestible},
+    Assumption, ExecutorEnv, ExecutorImpl, FileSegmentRef, Groth16Receipt, Groth16Seal,
+    InnerReceipt, Receipt, Session,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use tempfile::tempdir;
 use zeth_primitives::keccak::keccak;
 
 use crate::{cli::Cli, load_receipt, save_receipt};
+
+pub async fn stark2snark(
+    image_id: Digest,
+    stark_uuid: String,
+    stark_receipt: Receipt,
+) -> anyhow::Result<(String, Receipt)> {
+    // Label snark output as journal digest
+    let receipt_label = format!(
+        "{}-{}",
+        hex::encode(image_id),
+        hex::encode(keccak(stark_receipt.journal.bytes.digest()))
+    );
+    // Load cached receipt if found
+    if let Ok(Some(cached_data)) = load_receipt(&receipt_label) {
+        info!("Loaded locally cached receipt");
+        return Ok(cached_data);
+    }
+    // Otherwise compute on Bonsai
+    let stark_uuid = if stark_uuid.is_empty() {
+        upload_receipt(&stark_receipt).await?
+    } else {
+        stark_uuid
+    };
+
+    let claim = stark_receipt.get_claim()?;
+
+    let client = bonsai_sdk::alpha_async::get_client_from_env(risc0_zkvm::VERSION).await?;
+    let snark_uuid = client.create_snark(stark_uuid)?;
+
+    let snark_receipt = loop {
+        let res = snark_uuid.status(&client)?;
+
+        if res.status == "RUNNING" {
+            info!("Current status: {} - continue polling...", res.status,);
+            std::thread::sleep(std::time::Duration::from_secs(15));
+        } else if res.status == "SUCCEEDED" {
+            let snark = res
+                .output
+                .expect("Bonsai response is missing SnarkReceipt.")
+                .snark;
+            // Convert Bonsai SnarkReceipt to legacy receipt
+            let seal = Groth16Seal {
+                a: snark.a,
+                b: snark.b,
+                c: snark.c,
+            };
+
+            let receipt = Receipt::new(
+                InnerReceipt::Groth16(Groth16Receipt {
+                    seal: seal.to_vec(),
+                    claim,
+                }),
+                stark_receipt.journal.bytes,
+            );
+
+            // verify validity of snark receipt
+            receipt.verify(image_id)?;
+
+            break receipt;
+        } else {
+            panic!(
+                "Workflow exited: {} - | err: {}",
+                res.status,
+                res.error_msg.unwrap_or_default()
+            );
+        }
+    };
+
+    let snark_data = (snark_uuid.uuid, snark_receipt);
+
+    save_receipt(&receipt_label, &snark_data);
+
+    Ok(snark_data)
+}
 
 pub async fn verify_bonsai_receipt<O: Eq + Debug + DeserializeOwned>(
     image_id: Digest,

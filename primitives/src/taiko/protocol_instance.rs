@@ -1,10 +1,10 @@
-use alloy_primitives::{Address, B256, U256};
-use alloy_sol_types::{sol, SolEvent, SolValue, TopicList};
-use anyhow::{Context, Result};
-use ethers_core::types::{Log, H256};
+use alloc::vec::Vec;
+
+use alloy_primitives::{Address, B256};
+use alloy_sol_types::{sol, SolValue};
 use serde::{Deserialize, Serialize};
 
-use crate::{ethers::from_ethers_h256, keccak};
+use crate::keccak;
 
 sol! {
     #[derive(Debug, Default, Deserialize, Serialize)]
@@ -57,27 +57,6 @@ sol! {
     }
 
     function proveBlock(uint64 blockId, bytes calldata input) {}
-}
-
-pub fn filter_propose_block_event(
-    logs: &[Log],
-    block_id: U256,
-) -> Result<Option<(H256, BlockProposed)>> {
-    for log in logs {
-        if log.topics.len() != <<BlockProposed as SolEvent>::TopicList as TopicList>::COUNT {
-            continue;
-        }
-        if from_ethers_h256(log.topics[0]) != BlockProposed::SIGNATURE_HASH {
-            continue;
-        }
-        let topics = log.topics.iter().map(|topic| from_ethers_h256(*topic));
-        let result = BlockProposed::decode_log(topics, &log.data, false);
-        let block_proposed = result.with_context(|| "decode log failed")?;
-        if block_proposed.blockId == block_id {
-            return Ok(log.transaction_hash.map(|h| (h, block_proposed)));
-        }
-    }
-    Ok(None)
 }
 
 #[derive(Debug)]
@@ -134,14 +113,14 @@ mod tests {
         let input_data = hex::decode(&input[2..]).unwrap();
         let proveBlockCall { blockId, input } =
             proveBlockCall::abi_decode(&input_data, false).unwrap();
-        println!("blockId: {}", blockId);
+        // println!("blockId: {}", blockId);
         let (meta, trans, proof) =
             <(BlockMetadata, Transition, TierProof)>::abi_decode_params(&input, false).unwrap();
-        println!("meta: {:?}", meta);
+        // println!("meta: {:?}", meta);
         let meta_hash: B256 = keccak::keccak(meta.abi_encode()).into();
-        println!("meta_hash: {:?}", meta_hash);
-        println!("trans: {:?}", trans);
-        println!("proof: {:?}", proof.tier);
-        println!("proof: {:?}", hex::encode(proof.data));
+        // println!("meta_hash: {:?}", meta_hash);
+        // println!("trans: {:?}", trans);
+        // println!("proof: {:?}", proof.tier);
+        // println!("proof: {:?}", hex::encode(proof.data));
     }
 }

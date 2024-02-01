@@ -11,8 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#![cfg_attr(not(feature = "std"), no_std)]
 
+extern crate alloc;
 extern crate core;
+
+pub use alloc::{vec, vec::Vec};
 
 pub mod access_list;
 pub mod block;

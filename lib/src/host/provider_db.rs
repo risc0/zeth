@@ -26,10 +26,8 @@ use zeth_primitives::{
     Address, B256, U256,
 };
 
-use crate::{
-    host::provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
-    mem_db::{DbError, MemDb},
-};
+use super::provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery};
+use crate::mem_db::{DbError, MemDb};
 
 pub struct ProviderDb {
     pub provider: Box<dyn Provider>,

@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use alloc::vec::Vec;
 
 use anyhow::anyhow;
 use hashbrown::{hash_map::Entry, HashMap};
@@ -18,7 +19,7 @@ use revm::{
     primitives::{Account, AccountInfo, Bytecode},
     Database, DatabaseCommit,
 };
-use thiserror::Error as ThisError;
+use thiserror_no_std::Error as ThisError;
 use zeth_primitives::{Address, B256, U256};
 
 /// Error returned by the [MemDb].
@@ -36,6 +37,12 @@ pub enum DbError {
     /// Unspecified error.
     #[error(transparent)]
     Unspecified(#[from] anyhow::Error),
+}
+
+impl From<DbError> for anyhow::Error {
+    fn from(error: DbError) -> Self {
+        anyhow!(error)
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

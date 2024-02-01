@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use rlp::{Decodable, DecoderError, Rlp};
 
 pub fn rlp_decode_list<T>(bytes: &[u8]) -> Result<Vec<T>, DecoderError>

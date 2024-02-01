@@ -38,10 +38,7 @@ impl Cache {
     pub fn get<T: AsRef<CacheKey>>(&self, cache_key: T) -> Option<String> {
         let cache_key = cache_key.as_ref();
         let mut inner_cache = self.lru_cache.lock().unwrap();
-        match inner_cache.get(cache_key) {
-            Some(entry) => Some(entry.proof.clone()),
-            None => None,
-        }
+        inner_cache.get(cache_key).map(|entry| entry.proof.clone())
     }
 
     pub fn set(&self, cache_key: CacheKey, proof: String) {

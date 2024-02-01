@@ -1,9 +1,11 @@
 use std::fmt;
 
-#[derive(Debug)]
+use thiserror::Error as ThisError;
+
+#[derive(ThisError, Debug)]
 pub enum Error {
     Io(std::io::Error),
-    Anyhow(anyhow::Error),
+    Anyhow(#[from] anyhow::Error),
     Serde(serde_json::Error),
     JoinHandle(tokio::task::JoinError),
     String(String),
@@ -24,12 +26,6 @@ impl fmt::Display for Error {
 impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Self {
         Error::Io(e)
-    }
-}
-
-impl From<anyhow::Error> for Error {
-    fn from(e: anyhow::Error) -> Self {
-        Error::Anyhow(e)
     }
 }
 

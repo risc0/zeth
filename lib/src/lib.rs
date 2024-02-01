@@ -11,12 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#![feature(async_closure)]
+#![feature(path_file_prefix)]
+#![cfg_attr(target_os = "zkvm", no_std)]
+#![cfg_attr(not(feature = "std"), no_std)]
 
+extern crate alloc;
 extern crate core;
-
-#[cfg(not(target_os = "zkvm"))]
-pub mod host;
 
 pub mod block_builder;
 pub mod consts;
@@ -29,6 +29,10 @@ pub mod preparation;
 
 #[cfg(feature = "taiko")]
 pub mod taiko;
+
+#[cfg(feature = "std")]
+#[cfg(not(target_os = "zkvm"))]
+pub mod host;
 
 pub use zeth_primitives::transactions::ethereum::EthereumTxEssence;
 

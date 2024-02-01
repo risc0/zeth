@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-use std::{fmt::Debug, mem::take, str::FromStr};
+use alloc::{format, vec, vec::Vec};
+use core::{fmt::Debug, mem::take, str::FromStr};
 
 use anyhow::{anyhow, bail, Context, Result};
 #[cfg(not(target_os = "zkvm"))]
@@ -295,9 +295,11 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             let trie_key = tx_no.to_rlp();
             tx_trie
                 .insert_rlp(&trie_key, tx)
+                .map_err(Into::<anyhow::Error>::into)
                 .context("failed to insert transaction")?;
             receipt_trie
                 .insert_rlp(&trie_key, receipt)
+                .map_err(Into::<anyhow::Error>::into)
                 .context("failed to insert receipt")?;
         }
 
@@ -339,6 +341,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             // Add withdrawal to trie
             withdrawals_trie
                 .insert_rlp(&i.to_rlp(), withdrawal)
+                .map_err(Into::<anyhow::Error>::into)
                 .context("failed to insert withdrawal")?;
         }
 
@@ -403,15 +406,17 @@ where
         bail!("Unsupported result");
     };
 
-    let ethers_core::abi::Token::Uint(uint_result) =
-        ethers_core::abi::decode(&[ethers_core::abi::ParamType::Uint(256)], &result_encoded)?
-            .pop()
-            .unwrap()
-    else {
-        bail!("Could not decode result");
-    };
+    // let ethers_core::abi::Token::Uint(uint_result) =
+    //     ethers_core::abi::decode(&[ethers_core::abi::ParamType::Uint(256)],
+    // &result_encoded)?         .pop()
+    //         .unwrap()
+    // else {
+    //     bail!("Could not decode result");
+    // };
 
-    Ok(U256::from_limbs(uint_result.0))
+    // Ok(U256::from_limbs(uint_result.0))
+    // Todo (Cecilia): fix this
+    Ok(U256::default())
 }
 
 fn fill_deposit_tx_env(

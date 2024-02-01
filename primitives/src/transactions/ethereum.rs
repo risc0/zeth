@@ -12,10 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+extern crate alloc;
+extern crate core;
+
+pub use alloc::{
+    boxed::Box,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+pub use core::{
+    convert::From,
+    default::Default,
+    option::{Option, Option::*},
+    result::{Result, Result::*},
+};
+
 use alloy_primitives::{Address, Bytes, ChainId, TxNumber, B256, U256};
 use alloy_rlp::{Encodable, EMPTY_STRING_CODE};
 use alloy_rlp_derive::RlpEncodable;
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use bytes::BufMut;
 use k256::{
     ecdsa::{RecoveryId, Signature as K256Signature, VerifyingKey as K256VerifyingKey},
@@ -23,6 +40,7 @@ use k256::{
     PublicKey as K256PublicKey,
 };
 use serde::{Deserialize, Serialize};
+use thiserror_no_std::Error as ThisError;
 
 use crate::{
     access_list::AccessList,
@@ -445,6 +463,7 @@ impl TxEssence for EthereumTxEssence {
         let is_y_odd = self.is_y_odd(signature).context("v invalid")?;
         let signature =
             K256Signature::from_scalars(signature.r.to_be_bytes(), signature.s.to_be_bytes())
+                .map_err(|e| anyhow!(EcdsaError::from(e)))
                 .context("r, s invalid")?;
 
         let verify_key = K256VerifyingKey::recover_from_prehash(
@@ -452,6 +471,7 @@ impl TxEssence for EthereumTxEssence {
             &signature,
             RecoveryId::new(is_y_odd, false),
         )
+        .map_err(|e| anyhow!(EcdsaError::from(e)))
         .context("invalid signature")?;
 
         let public_key = K256PublicKey::from(&verify_key);
@@ -491,6 +511,10 @@ impl TxEssence for EthereumTxEssence {
         length
     }
 }
+
+#[derive(ThisError, Debug)]
+#[error(transparent)]
+struct EcdsaError(#[from] k256::ecdsa::Error);
 
 /// Joins two RLP-encoded lists into a single RLP-encoded list.
 ///

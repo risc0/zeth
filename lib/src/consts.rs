@@ -14,8 +14,11 @@
 
 //! Constants for the Ethereum protocol.
 
-use core::str::FromStr;
-use std::collections::BTreeMap;
+use alloc::{
+    collections::BTreeMap,
+    str::FromStr,
+    string::{String, ToString},
+};
 
 use anyhow::bail;
 use once_cell::sync::Lazy;
@@ -69,6 +72,7 @@ pub static ETH_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| {
     }
 });
 
+#[cfg(feature = "taiko")]
 macro_rules! taiko_chain_spec {
     ($a:ident, $b:ident ) => {
         pub static $a: Lazy<ChainSpec> = Lazy::new(|| {

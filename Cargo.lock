@@ -56,8 +56,6 @@ dependencies = [
  "alloy-sol-types",
  "const-hex",
  "itoa",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -69,7 +67,6 @@ dependencies = [
  "alloy-primitives",
  "alloy-sol-type-parser",
  "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -396,6 +393,15 @@ dependencies = [
  "futures",
  "pharos",
  "rustc_version 0.4.0",
+]
+
+[[package]]
+name = "atomic-polyfill"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8cf2bce30dfe09ef0bfaef228b9d414faaf7e563035494d7fe092dba54b300f4"
+dependencies = [
+ "critical-section",
 ]
 
 [[package]]
@@ -853,13 +859,14 @@ checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
 
 [[package]]
 name = "const-hex"
-version = "1.9.1"
+version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c37be52ef5e3b394db27a2341010685ad5103c72ac15ce2e9420a7e8f93f342c"
+checksum = "a5104de16b218eddf8e34ffe2f86f74bfa4e61e95a1b89732fccf6325efd0557"
 dependencies = [
  "cfg-if",
  "cpufeatures",
  "hex 0.4.3",
+ "proptest",
  "serde",
 ]
 
@@ -908,6 +915,12 @@ checksum = "b540bd8bc810d3885c6ea91e2018302f68baba2129ab3e88f32389ee9370880d"
 dependencies = [
  "cfg-if",
 ]
+
+[[package]]
+name = "critical-section"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7059fff8937831a9ae6f0fe4d658ffabf58f2ca96aa9dec1c889f936f705f216"
 
 [[package]]
 name = "crossbeam-channel"
@@ -2352,6 +2365,10 @@ name = "once_cell"
 version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd8b5dd2ae5ed71462c540258bedcb51965123ad7e7ccf4b9a8cafaa4a63576d"
+dependencies = [
+ "atomic-polyfill",
+ "critical-section",
+]
 
 [[package]]
 name = "open-fastrlp"
@@ -2512,9 +2529,9 @@ checksum = "9b2a4787296e9989611394c33f193f676704af1686e70b8f8033ab5ba9a35a94"
 
 [[package]]
 name = "pest"
-version = "2.7.5"
+version = "2.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae9cee2a55a544be8b89dc6848072af97a20f2422603c10865be2a42b580fff5"
+checksum = "1f200d8d83c44a45b21764d1916299752ca035d15ecd46faca3e9a2a2bf6ad06"
 dependencies = [
  "memchr",
  "thiserror",
@@ -2770,6 +2787,7 @@ dependencies = [
  "dirs",
  "ethers-core",
  "hex 0.4.3",
+ "raiko-host",
  "rand",
  "rand_core",
  "risc0-zkvm",
@@ -2787,6 +2805,8 @@ dependencies = [
 name = "raiko-host"
 version = "0.1.0"
 dependencies = [
+ "alloy-primitives",
+ "alloy-sol-types",
  "anyhow",
  "assert_cmd",
  "bincode",
@@ -2794,6 +2814,9 @@ dependencies = [
  "bytemuck",
  "clap 4.4.7",
  "ethers-core",
+ "ethers-providers",
+ "flate2",
+ "hashbrown 0.14.2",
  "hex 0.4.3",
  "hyper",
  "lazy_static",
@@ -2808,6 +2831,7 @@ dependencies = [
  "structopt",
  "structopt-toml",
  "tempfile",
+ "thiserror",
  "tokio",
  "tower",
  "tracing",
@@ -3239,9 +3263,9 @@ dependencies = [
 
 [[package]]
 name = "ruint"
-version = "1.10.1"
+version = "1.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95294d6e3a6192f3aabf91c38f56505a625aa495533442744185a36d75a790c4"
+checksum = "608a5726529f2f0ef81b8fde9873c4bb829d6b5b5ca6be4d97345ddf0749c825"
 dependencies = [
  "alloy-rlp",
  "ark-ff 0.3.0",
@@ -3249,6 +3273,7 @@ dependencies = [
  "bytes",
  "fastrlp",
  "num-bigint 0.4.4",
+ "num-traits",
  "parity-scale-codec",
  "primitive-types",
  "proptest",
@@ -4003,6 +4028,26 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.48",
+]
+
+[[package]]
+name = "thiserror-impl-no-std"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58e6318948b519ba6dc2b442a6d0b904ebfb8d411a3ad3e07843615a72249758"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "thiserror-no-std"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3ad459d94dd517257cc96add8a43190ee620011bb6e6cdc82dafd97dfafafea"
+dependencies = [
+ "thiserror-impl-no-std",
 ]
 
 [[package]]
@@ -4894,6 +4939,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "thiserror",
+ "thiserror-no-std",
  "tokio",
  "tracing",
  "zeth-primitives",
@@ -4922,5 +4968,5 @@ dependencies = [
  "serde",
  "serde_json",
  "sha3",
- "thiserror",
+ "thiserror-no-std",
 ]

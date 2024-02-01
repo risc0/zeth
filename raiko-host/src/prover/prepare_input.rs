@@ -4,8 +4,11 @@ use std::fmt::Debug;
 use zeth_lib::{
     block_builder::NetworkStrategyBundle,
     consts::{get_taiko_chain_spec, ETH_MAINNET_CHAIN_SPEC},
-    host::Init,
-    taiko::host::TaikoExtra,
+    host::{
+        provider::file_provider::cache_file_path,
+        taiko::{get_taiko_initial_data, TaikoExtra},
+        Init,
+    },
     EthereumTxEssence,
 };
 
@@ -44,7 +47,7 @@ where
             let l1_cache_path = ctx.l1_cache_file.as_ref().unwrap().to_owned();
             let l2_cache_path = ctx.l2_cache_file.as_ref().unwrap().to_owned();
             tokio::task::spawn_blocking(move || {
-                zeth_lib::taiko::host::get_taiko_initial_data::<N>(
+                get_taiko_initial_data::<N>(
                     Some(l1_cache_path.into_os_string().into_string().unwrap()),
                     l1_spec,
                     Some(l1_rpc),

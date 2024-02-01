@@ -2,6 +2,7 @@ use alloy_sol_types::{sol, SolCall};
 use anyhow::{anyhow, bail, Context, Result};
 use once_cell::sync::Lazy;
 
+use super::AbiEncodeError;
 use crate::{transactions::EthereumTransaction, uint, U256};
 
 static GX1: Lazy<U256> =
@@ -26,8 +27,9 @@ sol! {
 
 /// decode anchor arguments from anchor transaction
 pub fn decode_anchor_call_args(data: &[u8]) -> Result<anchorCall> {
-    let anchor_call =
-        anchorCall::abi_decode(data, false).with_context(|| "failed to decode anchor call")?;
+    let anchor_call = anchorCall::abi_decode(data, false)
+        .map_err(|e| anyhow!(AbiEncodeError::from(e)))
+        .with_context(|| "failed to decode anchor call")?;
     Ok(anchor_call)
 }
 
@@ -41,17 +43,17 @@ pub fn check_anchor_signature(anchor: &EthereumTransaction) -> Result<()> {
     let msg_hash: U256 = msg_hash.into();
     if sign.r == *GX2 {
         // when r == GX2 require s == 0 if k == 1
-        // alias: when r == GX2 require N == msg_hash + GX1_MUL_PRIVATEKEY
+        // alias: when r == GX2 require N == msg_hash + *GX1_MUL_PRIVATEKEY
         if *N != msg_hash + *GX1_MUL_PRIVATEKEY {
             bail!(
-                "r == GX2, but N != msg_hash + GX1_MUL_PRIVATEKEY, N: {}, msg_hash: {}, GX1_MUL_PRIVATEKEY: {}",
+                "r == GX2, but N != msg_hash + *GX1_MUL_PRIVATEKEY, N: {}, msg_hash: {}, *GX1_MUL_PRIVATEKEY: {}",
                 *N, msg_hash, *GX1_MUL_PRIVATEKEY
             );
         }
         return Ok(());
     }
     Err(anyhow!(
-        "r != GX1 && r != GX2, r: {}, GX1: {}, GX2: {}",
+        "r != *GX1 && r != GX2, r: {}, *GX1: {}, GX2: {}",
         sign.r,
         *GX1,
         *GX2

@@ -12,12 +12,9 @@ use secp256k1::KeyPair;
 use serde::Serialize;
 use zeth_lib::{
     consts::{get_taiko_chain_spec, ChainSpec, ETH_MAINNET_CHAIN_SPEC},
-    host::Init,
+    host::{taiko::TaikoExtra, Init},
     input::Input,
-    taiko::{
-        block_builder::{TaikoBlockBuilder, TaikoStrategyBundle},
-        host::TaikoExtra,
-    },
+    taiko::block_builder::{TaikoBlockBuilder, TaikoStrategyBundle},
     EthereumTxEssence,
 };
 use zeth_primitives::{taiko::EvidenceType, Address, B256};
@@ -71,7 +68,7 @@ fn save_bootstrap_details(
     bootstrap_details_file_path: &Path,
 ) -> Result<(), Error> {
     let bootstrap_details = BootstrapData {
-        public_key: format!("0x{}", key_pair.public_key().to_string()),
+        public_key: format!("0x{}", key_pair.public_key()),
         new_instance,
         quote,
     };
@@ -192,7 +189,7 @@ async fn get_data_to_sign(
     let input: Input<zeth_lib::EthereumTxEssence> = init.clone().into();
     let output = TaikoBlockBuilder::build_from(l2_chain_spec, input)
         .expect("Failed to build the resulting block");
-    let pi = zeth_lib::taiko::protocol_instance::assemble_protocol_instance(&extra, &output)?;
+    let pi = zeth_lib::host::taiko::assemble_protocol_instance(&extra, &output)?;
     let pi_hash = pi.hash(EvidenceType::Sgx { new_pubkey });
     Ok(pi_hash)
 }
@@ -207,7 +204,7 @@ async fn parse_to_init(
 ) -> Result<(Init<zeth_lib::EthereumTxEssence>, TaikoExtra), Error> {
     let l2_chain_spec = l2_chain_spec.clone();
     let (init, extra) = tokio::task::spawn_blocking(move || {
-        zeth_lib::taiko::host::get_taiko_initial_data::<TaikoStrategyBundle>(
+        zeth_lib::host::taiko::get_taiko_initial_data::<TaikoStrategyBundle>(
             Some(l1_blocks_path),
             ETH_MAINNET_CHAIN_SPEC.clone(),
             None,

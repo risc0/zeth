@@ -19,16 +19,17 @@ use zeth_primitives::{block::Header, trie::MptNode, B256};
 #[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 pub enum BlockBuildOutput {
     SUCCESS {
-        new_block_hash: B256,
-        new_block_head: Header,
-        new_block_state: MptNode,
+        hash: B256,
+        head: Header,
+        state: MptNode,
     },
     FAILURE {
-        bad_input_hash: B256,
+        state_input_hash: B256,
     },
 }
 
 impl BlockBuildOutput {
+    /// Returns true iff of type [`BlockBuildOutput::SUCCESS`]
     pub fn success(&self) -> bool {
         match self {
             BlockBuildOutput::SUCCESS { .. } => true,
@@ -36,10 +37,11 @@ impl BlockBuildOutput {
         }
     }
 
-    pub fn compress_state(&mut self) -> Option<MptNode> {
+    /// Replaces the `state` [`MptNode`] with its root hash
+    pub fn replace_state_with_hash(&mut self) -> Option<MptNode> {
         if let BlockBuildOutput::SUCCESS {
-            new_block_head,
-            new_block_state,
+            head: new_block_head,
+            state: new_block_state,
             ..
         } = self
         {
@@ -52,8 +54,9 @@ impl BlockBuildOutput {
         }
     }
 
-    pub fn with_state_compressed(mut self) -> Self {
-        self.compress_state();
+    /// Returns a new instance where `state` [`MptNode`] is replaced with its root hash
+    pub fn with_state_hashed(mut self) -> Self {
+        self.replace_state_with_hash();
         self
     }
 }

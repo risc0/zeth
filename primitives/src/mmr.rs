@@ -42,16 +42,14 @@ impl MerkleMountainRange {
     /// Appends a new leaf to the mountain range, bubbling up all the changes required to
     /// the ancestor tree roots. The optional `_sibling_map` parameter can be
     /// specified in order to record all visited siblings.
-    pub fn append_leaf(&mut self, mut value: Hash, mut _sibling_map: Option<&mut SiblingMap>) {
+    pub fn append_leaf(&mut self, mut value: Hash, mut sibling_map: Option<&mut SiblingMap>) {
         for node in self.0.iter_mut() {
             if node.is_none() {
                 node.replace(value);
                 return;
             } else {
                 let sibling = node.take().unwrap();
-                // We only need to log siblings outside the zkVM
-                #[cfg(not(target_os = "zkvm"))]
-                if let Some(sibling_map) = _sibling_map.as_mut() {
+                if let Some(sibling_map) = sibling_map.as_mut() {
                     sibling_map.insert(value, sibling);
                     sibling_map.insert(sibling, value);
                 }
@@ -64,13 +62,11 @@ impl MerkleMountainRange {
     /// Returns the root of the (unbalanced) Merkle tree that covers all the present range
     /// roots. The optional `_sibling_map` parameter can be specified in order to
     /// record all visited siblings.
-    pub fn root(&self, mut _sibling_map: Option<&mut SiblingMap>) -> Option<Hash> {
+    pub fn root(&self, mut sibling_map: Option<&mut SiblingMap>) -> Option<Hash> {
         let mut result: Option<Hash> = None;
         for root in self.0.iter().flatten() {
             if let Some(sibling) = result {
-                // We only need to log siblings outside the zkVM
-                #[cfg(not(target_os = "zkvm"))]
-                if let Some(sibling_map) = _sibling_map.as_mut() {
+                if let Some(sibling_map) = sibling_map.as_mut() {
                     sibling_map.insert(*root, sibling);
                     sibling_map.insert(sibling, *root);
                 }

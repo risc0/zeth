@@ -55,7 +55,7 @@ where
 
     let init_spec = chain_spec.clone();
     let preflight_result = tokio::task::spawn_blocking(move || {
-        N::run_preflight(init_spec, rpc_cache, rpc_url, core_args.block_number)
+        N::preflight_with_external_data(init_spec, rpc_cache, rpc_url, core_args.block_number)
     })
     .await?;
     let preflight_data = preflight_result.context("preflight failed")?;
@@ -72,9 +72,9 @@ where
 
     match &output {
         BlockBuildOutput::SUCCESS {
-            new_block_hash,
-            new_block_head,
-            new_block_state,
+            hash: new_block_hash,
+            head: new_block_head,
+            state: new_block_state,
         } => {
             info!("Verifying final state using provider data ...");
             preflight_data.verify_block(new_block_head, new_block_state)?;
@@ -86,7 +86,7 @@ where
         }
     }
 
-    let compressed_output = output.with_state_compressed();
+    let compressed_output = output.with_state_hashed();
     let result = match &cli {
         Cli::Build(..) => None,
         Cli::Run(run_args) => {

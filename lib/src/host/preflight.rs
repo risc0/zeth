@@ -29,7 +29,7 @@ use zeth_primitives::{
     ethers::{from_ethers_h160, from_ethers_h256, from_ethers_u256},
     keccak::keccak,
     transactions::{Transaction, TxEssence},
-    trie::{MptNode, MptNodeData, MptNodeReference, EMPTY_ROOT},
+    trie::{MptNode, MptNodeReference},
     withdrawal::Withdrawal,
     Address, B256, U256,
 };
@@ -42,17 +42,17 @@ use crate::{
         provider::{new_provider, BlockQuery},
         provider_db::ProviderDb,
     },
-    input::{BlockBuildInput, StorageEntry},
+    input::{BlockBuildInput, StateInput, StorageEntry},
     mem_db::MemDb,
 };
 
 /// The initial data required to build a block as returned by the [Preflight].
 #[derive(Debug, Clone)]
-pub struct BlockBuildPreflightData<E: TxEssence> {
+pub struct Data<E: TxEssence> {
     pub db: MemDb,
     pub parent_header: Header,
     pub parent_proofs: HashMap<Address, EIP1186ProofResponse>,
-    pub header: Header,
+    pub header: Option<Header>,
     pub transactions: Vec<Transaction<E>>,
     pub withdrawals: Vec<Withdrawal>,
     pub proofs: HashMap<Address, EIP1186ProofResponse>,
@@ -62,18 +62,18 @@ pub struct BlockBuildPreflightData<E: TxEssence> {
 pub trait Preflight<E: TxEssence> {
     /// Executes the complete block using the input and state from the RPC provider.
     /// It returns all the data required to build and validate the block.
-    fn run_preflight(
+    fn preflight_with_external_data(
         chain_spec: ChainSpec,
         cache_path: Option<PathBuf>,
         rpc_url: Option<String>,
         block_no: u64,
-    ) -> Result<BlockBuildPreflightData<E>>;
+    ) -> Result<Data<E>>;
 
-    fn preflight_input_with_provider_db(
+    fn preflight_with_local_data(
         chain_spec: ChainSpec,
         provider_db: ProviderDb,
         input: BlockBuildInput<E>,
-    ) -> Result<BlockBuildPreflightData<E>>;
+    ) -> Result<Data<E>>;
 }
 
 /// Implements the [Preflight] trait for all compatible [BlockBuilderStrategy]s.
@@ -82,12 +82,12 @@ where
     N::TxEssence: TryFrom<EthersTransaction>,
     <N::TxEssence as TryFrom<EthersTransaction>>::Error: Debug,
 {
-    fn run_preflight(
+    fn preflight_with_external_data(
         chain_spec: ChainSpec,
         cache_path: Option<PathBuf>,
         rpc_url: Option<String>,
         block_no: u64,
-    ) -> Result<BlockBuildPreflightData<N::TxEssence>> {
+    ) -> Result<Data<N::TxEssence>> {
         let mut provider = new_provider(cache_path, rpc_url)?;
 
         // Fetch the parent block
@@ -119,22 +119,22 @@ where
         let input = new_preflight_input(block.clone(), parent_header.clone())?;
 
         // Create the block builder, run the transactions and extract the DB
-        Self::preflight_input_with_provider_db(chain_spec, provider_db, input).map(
+        Self::preflight_with_local_data(chain_spec, provider_db, input).map(
             move |mut headerless_preflight_data| {
-                headerless_preflight_data.header = block.try_into().expect("invalid block");
+                headerless_preflight_data.header = Some(block.try_into().expect("invalid block"));
                 headerless_preflight_data
             },
         )
     }
 
-    fn preflight_input_with_provider_db(
+    fn preflight_with_local_data(
         chain_spec: ChainSpec,
         provider_db: ProviderDb,
         input: BlockBuildInput<N::TxEssence>,
-    ) -> Result<BlockBuildPreflightData<N::TxEssence>> {
-        let parent_header = input.parent_header.clone();
-        let transactions = input.transactions.clone();
-        let withdrawals = input.withdrawals.clone();
+    ) -> Result<Data<N::TxEssence>> {
+        let parent_header = input.state_input.parent_header.clone();
+        let transactions = input.state_input.transactions.clone();
+        let withdrawals = input.state_input.withdrawals.clone();
         // Create the block builder, run the transactions and extract the DB even if run fails
         let db_backup = Arc::new(Mutex::new(None));
         let builder =
@@ -164,11 +164,11 @@ where
         info!("Provider-backed execution is Done!");
 
         // Fetch the target block
-        Ok(BlockBuildPreflightData {
+        Ok(Data {
             db: provider_db.get_initial_db().clone(),
             parent_header,
             parent_proofs,
-            header: Default::default(),
+            header: None,
             transactions,
             withdrawals,
             proofs,
@@ -208,14 +208,16 @@ where
         .collect::<Result<Vec<_>, _>>()?;
 
     let input = BlockBuildInput {
-        parent_header,
-        beneficiary: from_ethers_h160(block.author.context("author missing")?),
-        gas_limit: from_ethers_u256(block.gas_limit),
-        timestamp: from_ethers_u256(block.timestamp),
-        extra_data: block.extra_data.0.into(),
-        mix_hash: from_ethers_h256(block.mix_hash.context("mix_hash missing")?),
-        transactions,
-        withdrawals,
+        state_input: StateInput {
+            parent_header,
+            beneficiary: from_ethers_h160(block.author.context("author missing")?),
+            gas_limit: from_ethers_u256(block.gas_limit),
+            timestamp: from_ethers_u256(block.timestamp),
+            extra_data: block.extra_data.0.into(),
+            mix_hash: from_ethers_h256(block.mix_hash.context("mix_hash missing")?),
+            transactions,
+            withdrawals,
+        },
         parent_state_trie: Default::default(),
         parent_storage: Default::default(),
         contracts: Default::default(),
@@ -224,12 +226,12 @@ where
     Ok(input)
 }
 
-/// Converts the [BlockBuildPreflightData] returned by the [Preflight] into
+/// Converts the [Data] returned by the [Preflight] into
 /// [BlockBuildInput] required by the [BlockBuilder].
-impl<E: TxEssence> TryFrom<BlockBuildPreflightData<E>> for BlockBuildInput<E> {
+impl<E: TxEssence> TryFrom<Data<E>> for BlockBuildInput<E> {
     type Error = anyhow::Error;
 
-    fn try_from(data: BlockBuildPreflightData<E>) -> Result<BlockBuildInput<E>> {
+    fn try_from(data: Data<E>) -> Result<BlockBuildInput<E>> {
         // collect the code from each account
         let mut contracts = HashSet::new();
         for account in data.db.accounts.values() {
@@ -256,15 +258,18 @@ impl<E: TxEssence> TryFrom<BlockBuildPreflightData<E>> for BlockBuildInput<E> {
         );
 
         // Create the block builder input
+        let header = data.header.as_ref().expect("Missing header data");
         let input = BlockBuildInput {
-            parent_header: data.parent_header,
-            beneficiary: data.header.beneficiary,
-            gas_limit: data.header.gas_limit,
-            timestamp: data.header.timestamp,
-            extra_data: data.header.extra_data.0.clone().into(),
-            mix_hash: data.header.mix_hash,
-            transactions: data.transactions,
-            withdrawals: data.withdrawals,
+            state_input: StateInput {
+                parent_header: data.parent_header,
+                beneficiary: header.beneficiary,
+                gas_limit: header.gas_limit,
+                timestamp: header.timestamp,
+                extra_data: header.extra_data.0.clone().into(),
+                mix_hash: header.mix_hash,
+                transactions: data.transactions,
+                withdrawals: data.withdrawals,
+            },
             parent_state_trie: state_trie,
             parent_storage: storage,
             contracts: contracts.into_iter().collect(),
@@ -281,7 +286,7 @@ fn proofs_to_tries(
 ) -> Result<(MptNode, HashMap<Address, StorageEntry>)> {
     // if no addresses are provided, return the trie only consisting of the state root
     if parent_proofs.is_empty() {
-        return Ok((node_from_digest(state_root), HashMap::new()));
+        return Ok((state_root.into(), HashMap::new()));
     }
 
     let mut storage: HashMap<Address, StorageEntry> = HashMap::with_capacity(parent_proofs.len());
@@ -312,8 +317,7 @@ fn proofs_to_tries(
         // if no slots are provided, return the trie only consisting of the storage root
         let storage_root = from_ethers_h256(proof.storage_hash);
         if proof.storage_proof.is_empty() {
-            let storage_root_node = node_from_digest(storage_root);
-            storage.insert(address, (storage_root_node, vec![]));
+            storage.insert(address, (storage_root.into(), vec![]));
             continue;
         }
 
@@ -374,12 +378,4 @@ fn add_orphaned_leafs(
     }
 
     Ok(())
-}
-
-/// Creates a new MPT node from a digest.
-fn node_from_digest(digest: B256) -> MptNode {
-    match digest {
-        EMPTY_ROOT | B256::ZERO => MptNode::default(),
-        _ => MptNodeData::Digest(digest).into(),
-    }
 }

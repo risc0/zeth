@@ -67,18 +67,38 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
         {
             use chrono::{TimeZone, Utc};
             let dt = Utc
-                .timestamp_opt(block_builder.input.timestamp.try_into().unwrap(), 0)
+                .timestamp_opt(
+                    block_builder
+                        .input
+                        .state_input
+                        .timestamp
+                        .try_into()
+                        .unwrap(),
+                    0,
+                )
                 .unwrap();
 
             trace!("Block no. {}", header.number);
             trace!("  EVM spec ID: {:?}", spec_id);
             trace!("  Timestamp: {}", dt);
-            trace!("  Transactions: {}", block_builder.input.transactions.len());
-            trace!("  Withdrawals: {}", block_builder.input.withdrawals.len());
-            trace!("  Fee Recipient: {:?}", block_builder.input.beneficiary);
-            trace!("  Gas limit: {}", block_builder.input.gas_limit);
+            trace!(
+                "  Transactions: {}",
+                block_builder.input.state_input.transactions.len()
+            );
+            trace!(
+                "  Withdrawals: {}",
+                block_builder.input.state_input.withdrawals.len()
+            );
+            trace!(
+                "  Fee Recipient: {:?}",
+                block_builder.input.state_input.beneficiary
+            );
+            trace!("  Gas limit: {}", block_builder.input.state_input.gas_limit);
             trace!("  Base fee per gas: {}", header.base_fee_per_gas);
-            trace!("  Extra data: {:?}", block_builder.input.extra_data);
+            trace!(
+                "  Extra data: {:?}",
+                block_builder.input.state_input.extra_data
+            );
         }
 
         // initialize the Evm
@@ -92,12 +112,12 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             .modify_block_env(|blk_env| {
                 // set the EVM block environment
                 blk_env.number = header.number.try_into().unwrap();
-                blk_env.coinbase = block_builder.input.beneficiary;
+                blk_env.coinbase = block_builder.input.state_input.beneficiary;
                 blk_env.timestamp = header.timestamp;
                 blk_env.difficulty = U256::ZERO;
                 blk_env.prevrandao = Some(header.mix_hash);
                 blk_env.basefee = header.base_fee_per_gas;
-                blk_env.gas_limit = block_builder.input.gas_limit;
+                blk_env.gas_limit = block_builder.input.state_input.gas_limit;
             })
             .with_db(block_builder.db.take().unwrap())
             .build();
@@ -110,7 +130,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
         // process all the transactions
         let mut tx_trie = MptNode::default();
         let mut receipt_trie = MptNode::default();
-        for (tx_no, tx) in take(&mut block_builder.input.transactions)
+        for (tx_no, tx) in take(&mut block_builder.input.state_input.transactions)
             .into_iter()
             .enumerate()
         {
@@ -129,7 +149,8 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             }
 
             // verify transaction gas
-            let block_available_gas = block_builder.input.gas_limit - cumulative_gas_used;
+            let block_available_gas =
+                block_builder.input.state_input.gas_limit - cumulative_gas_used;
             if block_available_gas < tx.essence.gas_limit() {
                 bail!("Error at transaction {}: gas exceeds block limit", tx_no);
             }
@@ -202,7 +223,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
 
         // process withdrawals unconditionally after any transactions
         let mut withdrawals_trie = MptNode::default();
-        for (i, withdrawal) in take(&mut block_builder.input.withdrawals)
+        for (i, withdrawal) in take(&mut block_builder.input.state_input.withdrawals)
             .into_iter()
             .enumerate()
         {

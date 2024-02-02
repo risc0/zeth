@@ -22,11 +22,11 @@ use zeth_lib::{
     builder::{BlockBuilder, BlockBuilderStrategy, EthereumStrategy},
     consts::ChainSpec,
     host::{
-        preflight::BlockBuildPreflightData,
+        preflight::Data,
         provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
         provider_db::ProviderDb,
     },
-    input::BlockBuildInput,
+    input::{BlockBuildInput, StateInput},
     mem_db::{AccountState, DbAccount, MemDb},
 };
 use zeth_primitives::{
@@ -331,17 +331,19 @@ pub fn create_input(
         .map(EthereumTransaction::from)
         .collect();
     let input = BlockBuildInput {
-        beneficiary: header.beneficiary,
-        gas_limit: header.gas_limit,
-        timestamp: header.timestamp,
-        extra_data: header.extra_data.clone(),
-        mix_hash: header.mix_hash,
-        transactions: transactions.clone(),
-        withdrawals: withdrawals.clone(),
+        state_input: StateInput {
+            beneficiary: header.beneficiary,
+            gas_limit: header.gas_limit,
+            timestamp: header.timestamp,
+            extra_data: header.extra_data.clone(),
+            mix_hash: header.mix_hash,
+            transactions: transactions.clone(),
+            withdrawals: withdrawals.clone(),
+            parent_header: parent_header.clone(),
+        },
         parent_state_trie: Default::default(),
         parent_storage: Default::default(),
         contracts: vec![],
-        parent_header: parent_header.clone(),
 
         ancestor_headers: vec![],
     };
@@ -359,11 +361,11 @@ pub fn create_input(
     let proofs = provider_db.get_latest_proofs().unwrap();
     let ancestor_headers = provider_db.get_ancestor_headers().unwrap();
 
-    let preflight_data = BlockBuildPreflightData {
+    let preflight_data = Data {
         db: provider_db.get_initial_db().clone(),
         parent_header,
         parent_proofs,
-        header,
+        header: Some(header),
         transactions,
         withdrawals,
         proofs,

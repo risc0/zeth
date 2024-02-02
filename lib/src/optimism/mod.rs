@@ -25,7 +25,6 @@ use zeth_primitives::{
     batch::Batch,
     block::Header,
     keccak::keccak,
-    rlp::Decodable,
     transactions::{
         ethereum::{EthereumTxEssence, TransactionKind},
         optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
@@ -42,7 +41,7 @@ use crate::{
 };
 use crate::{
     consts::{ONE, OP_MAINNET_CHAIN_SPEC},
-    input::BlockBuildInput,
+    input::{BlockBuildInput, StateInput},
     optimism::{
         batcher::{Batcher, BlockId, L2BlockInfo},
         batcher_db::BatcherDb,
@@ -306,7 +305,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     .0
                     .transactions
                     .iter()
-                    .map(|tx| Transaction::decode(&mut tx.as_ref()))
+                    .map(|tx| Transaction::decode_strict(&mut tx.as_ref()))
                     .filter_map(|tx| tx.ok())
                     // We always assume that chain id exists here
                     .map(
@@ -338,14 +337,16 @@ impl<D: BatcherDb> DeriveMachine<D> {
                 }
 
                 let new_op_head_input = BlockBuildInput {
-                    parent_header: self.op_head_block_header.clone(),
-                    beneficiary: self.op_batcher.config.sequencer_fee_vault,
-                    gas_limit: self.op_batcher.config.system_config.gas_limit,
-                    timestamp: U256::from(op_batch.0.timestamp),
-                    extra_data: Default::default(),
-                    mix_hash: l1_epoch_header_mix_hash,
-                    transactions: derived_transactions,
-                    withdrawals: vec![],
+                    state_input: StateInput {
+                        parent_header: self.op_head_block_header.clone(),
+                        beneficiary: self.op_batcher.config.sequencer_fee_vault,
+                        gas_limit: self.op_batcher.config.system_config.gas_limit,
+                        timestamp: U256::from(op_batch.0.timestamp),
+                        extra_data: Default::default(),
+                        mix_hash: l1_epoch_header_mix_hash,
+                        transactions: derived_transactions,
+                        withdrawals: vec![],
+                    },
                     // initializing these fields is not needed here
                     parent_state_trie: Default::default(),
                     parent_storage: Default::default(),
@@ -366,32 +367,22 @@ impl<D: BatcherDb> DeriveMachine<D> {
                             .create_provider(self.op_head_block_header.number)?,
                         self.op_head_block_header.number,
                     );
-                    let preflight_data = OptimismStrategy::preflight_input_with_provider_db(
+                    let preflight_data = OptimismStrategy::preflight_with_local_data(
                         OP_MAINNET_CHAIN_SPEC.clone(),
                         provider_db,
                         new_op_head_input.clone(),
                     )
                     .map(|mut headerless_preflight_data| {
-                        headerless_preflight_data.header = Header {
-                            beneficiary: new_op_head_input.beneficiary,
-                            gas_limit: new_op_head_input.gas_limit,
-                            timestamp: new_op_head_input.timestamp,
-                            extra_data: new_op_head_input.extra_data.clone(),
-                            mix_hash: new_op_head_input.mix_hash,
+                        let header = Header {
+                            beneficiary: new_op_head_input.state_input.beneficiary,
+                            gas_limit: new_op_head_input.state_input.gas_limit,
+                            timestamp: new_op_head_input.state_input.timestamp,
+                            extra_data: new_op_head_input.state_input.extra_data.clone(),
+                            mix_hash: new_op_head_input.state_input.mix_hash,
                             // unnecessary
-                            parent_hash: Default::default(),
-                            ommers_hash: Default::default(),
-                            state_root: Default::default(),
-                            transactions_root: Default::default(),
-                            receipts_root: Default::default(),
-                            logs_bloom: Default::default(),
-                            difficulty: Default::default(),
-                            number: 0,
-                            gas_used: Default::default(),
-                            nonce: Default::default(),
-                            base_fee_per_gas: Default::default(),
-                            withdrawals_root: None,
+                            ..Default::default()
                         };
+                        headerless_preflight_data.header = Some(header);
                         headerless_preflight_data
                     })?;
 
@@ -402,7 +393,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     }
 
                     OptimismStrategy::build_from(&OP_MAINNET_CHAIN_SPEC, executable_input)?
-                        .with_state_compressed()
+                        .with_state_hashed()
                 };
                 // guest: ask for receipt about provided block build output (compressed state trie
                 // expected)
@@ -422,8 +413,8 @@ impl<D: BatcherDb> DeriveMachine<D> {
 
                 match op_block_output {
                     BlockBuildOutput::SUCCESS {
-                        new_block_hash,
-                        new_block_head,
+                        hash: new_block_hash,
+                        head: new_block_head,
                         ..
                     } => {
                         // Verify that the built op block matches the payload attributes of the
@@ -489,9 +480,11 @@ impl<D: BatcherDb> DeriveMachine<D> {
                             break;
                         }
                     }
-                    BlockBuildOutput::FAILURE { bad_input_hash } => {
+                    BlockBuildOutput::FAILURE {
+                        state_input_hash: bad_input_hash,
+                    } => {
                         ensure!(
-                            new_op_head_input.partial_hash() == bad_input_hash,
+                            new_op_head_input.state_input.hash() == bad_input_hash,
                             "Invalid input partial hash"
                         );
                     }

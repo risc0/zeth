@@ -556,7 +556,7 @@ fn build_op_blocks(
     for input in op_block_inputs {
         let output = OptimismStrategy::build_from(&OP_MAINNET_CHAIN_SPEC, input.clone())
             .expect("Failed to build op block")
-            .with_state_compressed();
+            .with_state_hashed();
 
         if let Some(receipt) = maybe_prove(
             cli,

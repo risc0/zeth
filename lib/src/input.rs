@@ -32,6 +32,20 @@ pub type StorageEntry = (MptNode, Vec<U256>);
 /// External block input.
 #[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize, Serialize)]
 pub struct BlockBuildInput<E: TxEssence> {
+    /// Block and transaction data to execute
+    pub state_input: StateInput<E>,
+    /// State trie of the parent block.
+    pub parent_state_trie: MptNode,
+    /// Maps each address with its storage trie and the used storage slots.
+    pub parent_storage: HashMap<Address, StorageEntry>,
+    /// The code of all unique contracts.
+    pub contracts: Vec<Bytes>,
+    /// List of at most 256 previous block headers
+    pub ancestor_headers: Vec<Header>,
+}
+
+#[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize, Serialize)]
+pub struct StateInput<E: TxEssence> {
     /// Previous block header
     pub parent_header: Header,
     /// Address to which all priority fees in this block are transferred.
@@ -48,18 +62,10 @@ pub struct BlockBuildInput<E: TxEssence> {
     pub transactions: Vec<Transaction<E>>,
     /// List of stake withdrawals for execution
     pub withdrawals: Vec<Withdrawal>,
-    /// State trie of the parent block.
-    pub parent_state_trie: MptNode,
-    /// Maps each address with its storage trie and the used storage slots.
-    pub parent_storage: HashMap<Address, StorageEntry>,
-    /// The code of all unique contracts.
-    pub contracts: Vec<Bytes>,
-    /// List of at most 256 previous block headers
-    pub ancestor_headers: Vec<Header>,
 }
 
-impl<E: TxEssence> BlockBuildInput<E> {
-    pub fn partial_hash(&self) -> Hash {
+impl<E: TxEssence> StateInput<E> {
+    pub fn hash(&self) -> Hash {
         let mut hasher = Sha256::new();
 
         hasher.update(self.parent_header.to_rlp());
@@ -84,15 +90,17 @@ mod tests {
 
     #[test]
     fn input_serde_roundtrip() {
-        let input = BlockBuildInput::<EthereumTxEssence> {
-            parent_header: Default::default(),
-            beneficiary: Default::default(),
-            gas_limit: Default::default(),
-            timestamp: Default::default(),
-            extra_data: Default::default(),
-            mix_hash: Default::default(),
-            transactions: vec![],
-            withdrawals: vec![],
+        let input = BlockBuildInput {
+            state_input: StateInput::<EthereumTxEssence> {
+                parent_header: Default::default(),
+                beneficiary: Default::default(),
+                gas_limit: Default::default(),
+                timestamp: Default::default(),
+                extra_data: Default::default(),
+                mix_hash: Default::default(),
+                transactions: vec![],
+                withdrawals: vec![],
+            },
             parent_state_trie: Default::default(),
             parent_storage: Default::default(),
             contracts: vec![],

@@ -43,35 +43,39 @@ impl HeaderPrepStrategy for EthHeaderPrepStrategy {
         // Validate gas limit
         let diff = block_builder
             .input
+            .state_input
             .parent_header
             .gas_limit
-            .abs_diff(block_builder.input.gas_limit);
-        let limit = block_builder.input.parent_header.gas_limit / GAS_LIMIT_BOUND_DIVISOR;
+            .abs_diff(block_builder.input.state_input.gas_limit);
+        let limit =
+            block_builder.input.state_input.parent_header.gas_limit / GAS_LIMIT_BOUND_DIVISOR;
         if diff >= limit {
             bail!(
                 "Invalid gas limit: expected {} +- {}, got {}",
-                block_builder.input.parent_header.gas_limit,
+                block_builder.input.state_input.parent_header.gas_limit,
                 limit,
-                block_builder.input.gas_limit,
+                block_builder.input.state_input.gas_limit,
             );
         }
-        if block_builder.input.gas_limit < MIN_GAS_LIMIT {
+        if block_builder.input.state_input.gas_limit < MIN_GAS_LIMIT {
             bail!(
                 "Invalid gas limit: expected >= {}, got {}",
                 MIN_GAS_LIMIT,
-                block_builder.input.gas_limit,
+                block_builder.input.state_input.gas_limit,
             );
         }
         // Validate timestamp
-        if block_builder.input.timestamp <= block_builder.input.parent_header.timestamp {
+        if block_builder.input.state_input.timestamp
+            <= block_builder.input.state_input.parent_header.timestamp
+        {
             bail!(
                 "Invalid timestamp: expected > {}, got {}",
-                block_builder.input.parent_header.timestamp,
-                block_builder.input.timestamp,
+                block_builder.input.state_input.parent_header.timestamp,
+                block_builder.input.state_input.timestamp,
             );
         }
         // Validate extra data
-        let extra_data_bytes = block_builder.input.extra_data.len();
+        let extra_data_bytes = block_builder.input.state_input.extra_data.len();
         if extra_data_bytes > MAX_EXTRA_DATA_BYTES {
             bail!(
                 "Invalid extra data: expected <= {}, got {}",
@@ -82,23 +86,24 @@ impl HeaderPrepStrategy for EthHeaderPrepStrategy {
         // Derive header
         block_builder.header = Some(Header {
             // Initialize fields that we can compute from the parent
-            parent_hash: block_builder.input.parent_header.hash(),
+            parent_hash: block_builder.input.state_input.parent_header.hash(),
             number: block_builder
                 .input
+                .state_input
                 .parent_header
                 .number
                 .checked_add(1)
                 .context("Invalid block number: too large")?,
             base_fee_per_gas: derive_base_fee(
-                &block_builder.input.parent_header,
+                &block_builder.input.state_input.parent_header,
                 block_builder.chain_spec.gas_constants(),
             )?,
             // Initialize metadata from input
-            beneficiary: block_builder.input.beneficiary,
-            gas_limit: block_builder.input.gas_limit,
-            timestamp: block_builder.input.timestamp,
-            mix_hash: block_builder.input.mix_hash,
-            extra_data: block_builder.input.extra_data.clone(),
+            beneficiary: block_builder.input.state_input.beneficiary,
+            gas_limit: block_builder.input.state_input.gas_limit,
+            timestamp: block_builder.input.state_input.timestamp,
+            mix_hash: block_builder.input.state_input.mix_hash,
+            extra_data: block_builder.input.state_input.extra_data.clone(),
             // do not fill the remaining fields
             ..Default::default()
         });

@@ -91,7 +91,11 @@ fn executor(
         println!("Generated {} segments", session.segments.len());
 
         let build_output: BlockBuildOutput = session.journal.unwrap().decode().unwrap();
-        let BlockBuildOutput::SUCCESS { new_block_hash, .. } = build_output else {
+        let BlockBuildOutput::SUCCESS {
+            hash: new_block_hash,
+            ..
+        } = build_output
+        else {
             panic!("Block build failed!")
         };
         println!("Block hash (from executor): {}", new_block_hash);

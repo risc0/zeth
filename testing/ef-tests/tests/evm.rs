@@ -76,9 +76,9 @@ fn evm(
         let output = EthereumStrategy::build_from(&chain_spec, input).unwrap();
 
         let BlockBuildOutput::SUCCESS {
-            new_block_hash,
-            new_block_head,
-            new_block_state,
+            hash: new_block_hash,
+            head: new_block_head,
+            state: new_block_state,
         } = output
         else {
             panic!("Invalid block")

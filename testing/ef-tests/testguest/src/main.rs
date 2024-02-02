@@ -31,9 +31,9 @@ pub fn main() {
     let mut output = EthereumStrategy::build_from(&chain_spec, input)
         .expect("Failed to build the resulting block");
     // Abridge successful construction results
-    if let Some(trie_root) = output.compress_state() {
+    if let Some(replaced_state) = output.replace_state_with_hash() {
         // Leak memory, save cycles
-        core::mem::forget(trie_root);
+        core::mem::forget(replaced_state);
     }
     // Output the construction result
     env::commit(&output);

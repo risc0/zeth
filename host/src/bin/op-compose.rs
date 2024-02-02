@@ -41,7 +41,7 @@ use zeth_lib::{
 };
 use zeth_primitives::{
     block::Header,
-    tree::{MerkleMountainRange, MerkleProof},
+    mmr::{MerkleMountainRange, MerkleProof},
 };
 
 #[derive(Parser, Debug, Clone)]
@@ -118,7 +118,7 @@ async fn main() -> anyhow::Result<()> {
             let eth_tail = derive_machine
                 .derive_input
                 .db
-                .get_full_eth_block(derive_output.eth_tail.0)
+                .get_full_eth_block(derive_output.eth_tail.number)
                 .context("could not fetch eth tail")?
                 .block_header
                 .clone();
@@ -216,7 +216,7 @@ async fn main() -> anyhow::Result<()> {
     // Lift
     let mut join_queue = VecDeque::new();
     for (derive_output, derive_receipt) in lift_queue {
-        let eth_tail_hash = derive_output.eth_tail.1 .0;
+        let eth_tail_hash = derive_output.eth_tail.hash.0;
         let lift_compose_input = ComposeInput {
             derive_image_id: OP_DERIVE_ID,
             compose_image_id: OP_COMPOSE_ID,

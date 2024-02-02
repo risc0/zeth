@@ -113,10 +113,13 @@ async fn main() -> Result<()> {
     }
 
     info!("In-memory test complete");
-    println!("Eth tail: {} {}", output.eth_tail.0, output.eth_tail.1);
-    println!("Op Head: {} {}", output.op_head.0, output.op_head.1);
+    println!(
+        "Eth tail: {} {}",
+        output.eth_tail.number, output.eth_tail.hash
+    );
+    println!("Op Head: {} {}", output.op_head.number, output.op_head.hash);
     for derived_block in &output.derived_op_blocks {
-        println!("Derived: {} {}", derived_block.0, derived_block.1);
+        println!("Derived: {} {}", derived_block.number, derived_block.hash);
     }
 
     // Run in the executor (if requested)

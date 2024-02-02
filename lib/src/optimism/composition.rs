@@ -18,11 +18,11 @@ use risc0_zkvm::{guest::env, serde::to_vec, sha::Digest};
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
     block::Header,
-    tree::{MerkleMountainRange, MerkleProof},
-    BlockHash, BlockNumber,
+    mmr,
+    mmr::{MerkleMountainRange, MerkleProof},
 };
 
-use crate::optimism::DeriveOutput;
+use crate::optimism::{batcher::BlockId, DeriveOutput};
 
 /// Denotes a zkVM Image ID.
 type ImageId = [u32; 8];
@@ -32,7 +32,7 @@ pub struct ComposeInput {
     pub derive_image_id: ImageId,
     pub compose_image_id: ImageId,
     pub operation: ComposeInputOperation,
-    pub eth_chain_merkle_root: [u8; 32],
+    pub eth_chain_merkle_root: mmr::Hash,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -60,16 +60,18 @@ pub struct ComposeOutput {
     pub derive_image_id: ImageId,
     pub compose_image_id: ImageId,
     pub operation: ComposeOutputOperation,
-    pub eth_chain_tail_block: (BlockNumber, BlockHash),
-    pub eth_chain_merkle_root: [u8; 32],
+    pub eth_chain_tail_block: BlockId,
+    pub eth_chain_merkle_root: mmr::Hash,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Eq, PartialEq)]
 pub enum ComposeOutputOperation {
     PREP,
     AGGREGATE {
-        op_head: (BlockNumber, BlockHash),
-        op_tail: (BlockNumber, BlockHash),
+        op_head: BlockId,
+        op_tail: BlockId,
+        /// Whether the L1 block range has been validate as a correct Merkle commitment to
+        /// a continuous chain of L1 blocks.
         eth_chain_continuity_validated: bool,
     },
 }
@@ -119,7 +121,10 @@ impl ComposeInput {
                 // Insert chain of blocks into mountain range
                 for block in eth_blocks {
                     // Validate parent relationship
-                    if let Some((_, parent_hash)) = eth_tail {
+                    if let Some(BlockId {
+                        hash: parent_hash, ..
+                    }) = eth_tail
+                    {
                         assert_eq!(block.parent_hash, parent_hash);
                     }
                     // Derive block's keccak hash
@@ -127,7 +132,10 @@ impl ComposeInput {
                     // Insert hash into mountain range
                     mountain_range.append_leaf(block_hash.0, None);
                     // Mark block as new tail
-                    eth_tail.replace((block.number, block_hash));
+                    eth_tail.replace(BlockId {
+                        number: block.number,
+                        hash: block_hash,
+                    });
                 }
 
                 ComposeOutput {
@@ -153,7 +161,7 @@ impl ComposeInput {
                 // Verify inclusion of ethereum tail in Merkle root
                 assert!(
                     eth_tail_proof
-                        .verify(&self.eth_chain_merkle_root, &derive_output.eth_tail.1 .0),
+                        .verify(&self.eth_chain_merkle_root, &derive_output.eth_tail.hash.0),
                     "Invalid ethereum tail inclusion proof!"
                 );
                 // Create output
@@ -165,7 +173,7 @@ impl ComposeInput {
                         op_tail: *derive_output
                             .derived_op_blocks
                             .last()
-                            .unwrap_or(&derive_output.op_head),
+                            .expect("Expected at least one derived block to compose."),
                         eth_chain_continuity_validated: false,
                     },
                     eth_chain_tail_block: derive_output.eth_tail,

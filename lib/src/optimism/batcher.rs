@@ -16,6 +16,7 @@ use core::cmp::Ordering;
 use std::collections::{BTreeMap, VecDeque};
 
 use anyhow::{bail, ensure, Context, Result};
+use serde::{Deserialize, Serialize};
 use zeth_primitives::{
     batch::{Batch, BatchEssence},
     transactions::{
@@ -23,22 +24,22 @@ use zeth_primitives::{
         optimism::{OptimismTxEssence, OPTIMISM_DEPOSITED_TX_TYPE},
         Transaction,
     },
-    BlockHash, BlockNumber, B256, U256,
+    BlockHash, BlockNumber, U256,
 };
 
 use super::{
     batcher_channel::BatcherChannels, batcher_db::BlockInput, config::ChainConfig, deposits,
 };
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Default, Serialize, Deserialize, Ord, PartialOrd)]
 pub struct BlockId {
-    pub hash: B256,
+    pub hash: BlockHash,
     pub number: BlockNumber,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
 pub struct L2BlockInfo {
-    pub hash: B256,
+    pub hash: BlockHash,
     pub timestamp: u64,
     pub l1_origin: BlockId,
 }
@@ -46,7 +47,7 @@ pub struct L2BlockInfo {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Epoch {
     pub number: BlockNumber,
-    pub hash: B256,
+    pub hash: BlockHash,
     pub timestamp: u64,
     pub base_fee_per_gas: U256,
     pub deposits: Vec<Transaction<OptimismTxEssence>>,

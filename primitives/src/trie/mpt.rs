@@ -72,10 +72,10 @@ pub enum Error {
 }
 
 impl From<B256> for MptNode {
-    fn from(value: B256) -> Self {
-        MptNode {
-            data: MptNodeData::Digest(value),
-            cached_reference: RefCell::new(None),
+    fn from(digest: B256) -> Self {
+        match digest {
+            EMPTY_ROOT | B256::ZERO => MptNode::default(),
+            _ => MptNodeData::Digest(digest).into(),
         }
     }
 }

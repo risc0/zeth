@@ -16,14 +16,13 @@ use std::fmt::Debug;
 
 use alloy_primitives::{Address, Bytes, TxHash};
 use alloy_rlp::{Decodable, Encodable};
+use anyhow::ensure;
 use serde::{Deserialize, Serialize};
 
 use self::{
     optimism::{OptimismTxEssence, OPTIMISM_DEPOSITED_TX_TYPE},
     signature::TxSignature,
 };
-// #[cfg(not(target_os = "zkvm"))]
-// use crate::RlpBytes;
 use crate::{keccak::keccak, transactions::ethereum::EthereumTxEssence, U256};
 
 pub mod ethereum;
@@ -48,13 +47,16 @@ pub struct Transaction<E: TxEssence> {
     pub signature: TxSignature,
 }
 
-pub trait HeaderlessDecodable: Sized {
-    fn headerless_decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self>;
+/// Structs with this trait can be decoded from an RLP encoding containing additional
+/// signature information.
+pub trait SignedDecodable<S>: Sized {
+    /// Decodes an instance of this struct and of `S` from the input RLP buffer.
+    fn decode_signed(buf: &mut &[u8]) -> alloy_rlp::Result<(Self, S)>;
 }
 
 /// Represents the core details of a [Transaction], specifically the portion that gets
 /// signed.
-pub trait TxEssence: HeaderlessDecodable + Encodable + Clone {
+pub trait TxEssence: SignedDecodable<TxSignature> + Encodable + Clone {
     /// Returns the EIP-2718 transaction type or `0x00` for Legacy transactions.
     fn tx_type(&self) -> u8;
     /// Returns the gas limit set for the transaction.
@@ -134,20 +136,11 @@ impl<E: TxEssence> Encodable for Transaction<E> {
 
 impl<E: TxEssence + Debug> Decodable for Transaction<E> {
     fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
-        let essence = E::headerless_decode(buf)?;
-        let signature = if let (Ok(v), Ok(r), Ok(s)) =
-            (u64::decode(buf), U256::decode(buf), U256::decode(buf))
-        {
-            TxSignature { v, r, s }
-        } else {
-            TxSignature::default()
-        };
-
-        Ok(Self { essence, signature })
+        E::decode_signed(buf).map(|(essence, signature)| Self { essence, signature })
     }
 }
 
-impl<E: TxEssence> Transaction<E> {
+impl<E: TxEssence + Debug> Transaction<E> {
     /// Calculates the Keccak hash of the RLP-encoded transaction.
     ///
     /// This hash uniquely identifies the transaction on the Ethereum network.
@@ -164,6 +157,13 @@ impl<E: TxEssence> Transaction<E> {
     #[inline]
     pub fn recover_from(&self) -> anyhow::Result<Address> {
         self.essence.recover_from(&self.signature)
+    }
+
+    /// Fully consumes the provided input RLP buffer to decode a Transaction instance
+    pub fn decode_strict(buf: &mut &[u8]) -> anyhow::Result<Self> {
+        let result = Self::decode(buf)?;
+        ensure!(buf.is_empty());
+        Ok(result)
     }
 }
 

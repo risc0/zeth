@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use super::signature::TxSignature;
 use crate::transactions::{
     ethereum::{EthereumTxEssence, TransactionKind},
-    HeaderlessDecodable, TxEssence,
+    SignedDecodable, TxEssence,
 };
 
 /// The EIP-2718 transaction type for an Optimism deposited transaction.
@@ -50,21 +50,6 @@ pub struct TxEssenceOptimismDeposited {
     pub is_system_tx: bool,
     /// The transaction's payload, represented as a variable-length byte array.
     pub data: Bytes,
-}
-
-impl HeaderlessDecodable for TxEssenceOptimismDeposited {
-    fn headerless_decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
-        Ok(Self {
-            source_hash: B256::decode(buf)?,
-            from: Address::decode(buf)?,
-            to: TransactionKind::decode(buf)?,
-            mint: U256::decode(buf)?,
-            value: U256::decode(buf)?,
-            gas_limit: U256::decode(buf)?,
-            is_system_tx: bool::decode(buf)?,
-            data: Bytes::decode(buf)?,
-        })
-    }
 }
 
 /// Represents the core essence of an Optimism transaction, specifically the portion that
@@ -100,19 +85,18 @@ impl Encodable for OptimismTxEssence {
     }
 }
 
-impl HeaderlessDecodable for OptimismTxEssence {
-    fn headerless_decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
+impl SignedDecodable<TxSignature> for OptimismTxEssence {
+    fn decode_signed(buf: &mut &[u8]) -> alloy_rlp::Result<(Self, TxSignature)> {
         match buf.first().copied() {
             Some(0x7e) => {
                 buf.advance(1);
-                alloy_rlp::Header::decode(buf)?;
-                Ok(OptimismTxEssence::OptimismDeposited(
-                    TxEssenceOptimismDeposited::headerless_decode(buf)?,
+                Ok((
+                    OptimismTxEssence::OptimismDeposited(TxEssenceOptimismDeposited::decode(buf)?),
+                    TxSignature::default(),
                 ))
             }
-            Some(_) => Ok(OptimismTxEssence::Ethereum(
-                EthereumTxEssence::headerless_decode(buf)?,
-            )),
+            Some(_) => EthereumTxEssence::decode_signed(buf)
+                .map(|(e, s)| (OptimismTxEssence::Ethereum(e), s)),
             None => Err(alloy_rlp::Error::InputTooShort),
         }
     }
@@ -203,10 +187,9 @@ mod tests {
 
         let transaction = OptimismTransaction { essence, signature };
 
-        // verify that rlp encode/decode works
-        let recoded_transaction: Transaction<EthereumTxEssence> =
-            Transaction::decode(&mut transaction.to_rlp().as_ref()).unwrap();
-        assert_eq!(transaction.to_rlp(), recoded_transaction.to_rlp());
+        // verify the RLP roundtrip
+        let decoded = Transaction::decode(&mut transaction.to_rlp().as_ref()).unwrap();
+        assert_eq!(transaction, decoded);
 
         // verify that bincode serialization works
         let _: OptimismTransaction =

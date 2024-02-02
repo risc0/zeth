@@ -148,7 +148,8 @@ pub trait BlockBuilderStrategy {
         input: BlockBuildInput<Self::TxEssence>,
     ) -> Result<BlockBuildOutput> {
         // Database initialization failure does not mean the block is faulty
-        let input_hash = input.partial_hash();
+        // todo: compute only on build error
+        let input_hash = input.state_input.hash();
         let initialized = BlockBuilder::<MemDb, Self::TxEssence>::new(chain_spec, input, None)
             .initialize_database::<Self::DbInitStrategy>()?;
 
@@ -157,7 +158,7 @@ pub trait BlockBuilderStrategy {
             Ok(builder) => builder,
             Err(_) => {
                 return Ok(BlockBuildOutput::FAILURE {
-                    bad_input_hash: input_hash.into(),
+                    state_input_hash: input_hash.into(),
                 })
             }
         };
@@ -167,7 +168,7 @@ pub trait BlockBuilderStrategy {
             Ok(builder) => builder,
             Err(_) => {
                 return Ok(BlockBuildOutput::FAILURE {
-                    bad_input_hash: input_hash.into(),
+                    state_input_hash: input_hash.into(),
                 })
             }
         };
@@ -176,9 +177,9 @@ pub trait BlockBuilderStrategy {
         let (header, state) = executed.finalize::<Self::BlockFinalizeStrategy>()?;
 
         Ok(BlockBuildOutput::SUCCESS {
-            new_block_hash: header.hash(),
-            new_block_head: header,
-            new_block_state: state,
+            hash: header.hash(),
+            head: header,
+            state,
         })
     }
 }

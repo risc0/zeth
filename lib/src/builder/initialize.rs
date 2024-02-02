@@ -52,11 +52,11 @@ impl DbInitStrategy<MemDb> for MemDbInitStrategy {
     ) -> Result<BlockBuilder<MemDb, E>> {
         // Verify state trie root
         if block_builder.input.parent_state_trie.hash()
-            != block_builder.input.parent_header.state_root
+            != block_builder.input.state_input.parent_header.state_root
         {
             bail!(
                 "Invalid state trie: expected {}, got {}",
-                block_builder.input.parent_header.state_root,
+                block_builder.input.state_input.parent_header.state_root,
                 block_builder.input.parent_state_trie.hash()
             );
         }
@@ -126,10 +126,10 @@ impl DbInitStrategy<MemDb> for MemDbInitStrategy {
         let mut block_hashes =
             HashMap::with_capacity(block_builder.input.ancestor_headers.len() + 1);
         block_hashes.insert(
-            block_builder.input.parent_header.number,
-            block_builder.input.parent_header.hash(),
+            block_builder.input.state_input.parent_header.number,
+            block_builder.input.state_input.parent_header.hash(),
         );
-        let mut prev = &block_builder.input.parent_header;
+        let mut prev = &block_builder.input.state_input.parent_header;
         for current in &block_builder.input.ancestor_headers {
             let current_hash = current.hash();
             if prev.parent_hash != current_hash {
@@ -139,8 +139,9 @@ impl DbInitStrategy<MemDb> for MemDbInitStrategy {
                     prev.number
                 );
             }
-            if block_builder.input.parent_header.number < current.number
-                || block_builder.input.parent_header.number - current.number >= MAX_BLOCK_HASH_AGE
+            if block_builder.input.state_input.parent_header.number < current.number
+                || block_builder.input.state_input.parent_header.number - current.number
+                    >= MAX_BLOCK_HASH_AGE
             {
                 bail!(
                     "Invalid chain: {} is not one of the {} most recent blocks",

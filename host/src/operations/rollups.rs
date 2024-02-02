@@ -33,8 +33,8 @@ use zeth_lib::{
 };
 use zeth_primitives::{
     block::Header,
+    mmr::{MerkleMountainRange, MerkleProof},
     transactions::optimism::OptimismTxEssence,
-    tree::{MerkleMountainRange, MerkleProof},
 };
 
 use crate::{
@@ -107,14 +107,14 @@ pub async fn derive_rollup_blocks(cli: Cli) -> anyhow::Result<()> {
     info!("In-memory test complete");
     println!(
         "Eth tail: {} {}",
-        derive_output.eth_tail.0, derive_output.eth_tail.1
+        derive_output.eth_tail.number, derive_output.eth_tail.hash
     );
     println!(
         "Op Head: {} {}",
-        derive_output.op_head.0, derive_output.op_head.1
+        derive_output.op_head.number, derive_output.op_head.hash
     );
     for derived_block in &derive_output.derived_op_blocks {
-        println!("Derived: {} {}", derived_block.0, derived_block.1);
+        println!("Derived: {} {}", derived_block.number, derived_block.hash);
     }
 
     match &cli {
@@ -199,7 +199,7 @@ pub async fn compose_derived_rollup_blocks(cli: Cli, composition_size: u64) -> a
         let eth_tail = derive_machine
             .derive_input
             .db
-            .get_full_eth_block(derive_output.eth_tail.0)
+            .get_full_eth_block(derive_output.eth_tail.number)
             .context("could not fetch eth tail")?
             .block_header
             .clone();
@@ -308,7 +308,7 @@ pub async fn compose_derived_rollup_blocks(cli: Cli, composition_size: u64) -> a
     info!("Lifting {} proofs...", lift_queue.len());
     let mut join_queue = VecDeque::new();
     for (derive_output, derive_receipt) in lift_queue {
-        let eth_tail_hash = derive_output.eth_tail.1 .0;
+        let eth_tail_hash = derive_output.eth_tail.hash.0;
         trace!("Lifting ... {:?}", &derive_output);
         let lift_compose_input = ComposeInput {
             block_image_id: OP_BLOCK_ID,
@@ -368,8 +368,8 @@ pub async fn compose_derived_rollup_blocks(cli: Cli, composition_size: u64) -> a
         if left_op_tail != right_op_head {
             trace!(
                 "Skipping dangling workload: {} - {}",
-                left_op_tail.0,
-                right_op_head.0
+                left_op_tail.number,
+                right_op_head.number
             );
             join_queue.push_back((left, left_receipt));
             continue;
@@ -474,7 +474,7 @@ async fn build_op_blocks(
     for input in op_block_inputs {
         let output = OptimismStrategy::build_from(&OP_MAINNET_CHAIN_SPEC, input.clone())
             .expect("Failed to build op block")
-            .with_state_compressed();
+            .with_state_hashed();
 
         if let Some((bonsai_receipt_uuid, receipt)) =
             maybe_prove(cli, &input, OP_BLOCK_ELF, &output, Default::default()).await

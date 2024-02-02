@@ -14,6 +14,8 @@
 
 extern crate core;
 
+use std::env;
+
 use anyhow::Result;
 use clap::Parser;
 use log::info;
@@ -62,6 +64,11 @@ async fn main() -> Result<()> {
     } else {
         (false, false)
     };
+    // Don't let the local prover call Bonsai
+    if !can_snarkify {
+        env::remove_var("BONSAI_API_URL");
+        env::remove_var("BONSAI_API_KEY");
+    }
 
     // Execute other commands
     let core_args = cli.core_args();

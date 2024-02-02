@@ -37,6 +37,7 @@ pub async fn stark2snark(
     stark_uuid: String,
     stark_receipt: Receipt,
 ) -> anyhow::Result<(String, Receipt)> {
+    info!("Submitting SNARK workload");
     // Label snark output as journal digest
     let receipt_label = format!(
         "{}-{}",

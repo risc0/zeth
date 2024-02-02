@@ -28,7 +28,7 @@ use zeth_primitives::{
         Transaction, TxEssence,
     },
     trie::MptNode,
-    uint, Address, BlockHash, BlockNumber, FixedBytes, RlpBytes, B256, U256,
+    uint, Address, BlockHash, FixedBytes, RlpBytes, B256, U256,
 };
 
 use crate::{
@@ -85,11 +85,11 @@ pub struct DeriveInput<D> {
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DeriveOutput {
     /// Ethereum tail block.
-    pub eth_tail: (BlockNumber, BlockHash),
+    pub eth_tail: BlockId,
     /// Optimism head block.
-    pub op_head: (BlockNumber, BlockHash),
+    pub op_head: BlockId,
     /// Derived Optimism blocks.
-    pub derived_op_blocks: Vec<(BlockNumber, BlockHash)>,
+    pub derived_op_blocks: Vec<BlockId>,
 }
 
 /// Implementation of the actual derivation process.
@@ -344,7 +344,10 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     },
                 };
 
-                derived_op_blocks.push((new_op_head.number, new_op_head_hash));
+                derived_op_blocks.push(BlockId {
+                    number: new_op_head.number,
+                    hash: new_op_head_hash,
+                });
 
                 if self.op_block_no == target_block_no {
                     break;
@@ -353,11 +356,14 @@ impl<D: BatcherDb> DeriveMachine<D> {
         }
 
         Ok(DeriveOutput {
-            eth_tail: (
-                self.op_batcher.state.current_l1_block_number,
-                self.op_batcher.state.current_l1_block_hash,
-            ),
-            op_head: (self.derive_input.op_head_block_no, self.op_head_block_hash),
+            eth_tail: BlockId {
+                number: self.op_batcher.state.current_l1_block_number,
+                hash: self.op_batcher.state.current_l1_block_hash,
+            },
+            op_head: BlockId {
+                number: self.derive_input.op_head_block_no,
+                hash: self.op_head_block_hash,
+            },
             derived_op_blocks,
         })
     }

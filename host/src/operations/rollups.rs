@@ -28,7 +28,7 @@ use zeth_lib::{
 };
 use zeth_primitives::{
     block::Header,
-    tree::{MerkleMountainRange, MerkleProof},
+    mmr::{MerkleMountainRange, MerkleProof},
 };
 
 use crate::{
@@ -73,10 +73,13 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
     }
 
     info!("In-memory test complete");
-    println!("Eth tail: {} {}", output.eth_tail.0, output.eth_tail.1);
-    println!("Op Head: {} {}", output.op_head.0, output.op_head.1);
+    println!(
+        "Eth tail: {} {}",
+        output.eth_tail.number, output.eth_tail.hash
+    );
+    println!("Op Head: {} {}", output.op_head.number, output.op_head.hash);
     for derived_block in &output.derived_op_blocks {
-        println!("Derived: {} {}", derived_block.0, derived_block.1);
+        println!("Derived: {} {}", derived_block.number, derived_block.hash);
     }
 
     match &cli {
@@ -250,7 +253,7 @@ pub async fn compose_derived_rollup_blocks(
             let eth_tail = derive_machine
                 .derive_input
                 .db
-                .get_full_eth_block(derive_output.eth_tail.0)
+                .get_full_eth_block(derive_output.eth_tail.number)
                 .context("could not fetch eth tail")?
                 .block_header
                 .clone();
@@ -350,7 +353,7 @@ pub async fn compose_derived_rollup_blocks(
     // Lift
     let mut join_queue = VecDeque::new();
     for (derive_output, derive_receipt) in lift_queue {
-        let eth_tail_hash = derive_output.eth_tail.1 .0;
+        let eth_tail_hash = derive_output.eth_tail.hash.0;
         let lift_compose_input = ComposeInput {
             derive_image_id: OP_DERIVE_ID,
             compose_image_id: OP_COMPOSE_ID,

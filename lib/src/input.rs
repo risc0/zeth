@@ -17,8 +17,8 @@ use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
     block::Header,
+    mmr::Hash,
     transactions::{Transaction, TxEssence},
-    tree::Hash,
     trie::MptNode,
     withdrawal::Withdrawal,
     Address, Bytes, RlpBytes, B256, U256,

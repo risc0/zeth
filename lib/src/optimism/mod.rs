@@ -32,7 +32,7 @@ use zeth_primitives::{
         Transaction, TxEssence,
     },
     trie::MptNode,
-    uint, Address, BlockHash, BlockNumber, FixedBytes, RlpBytes, B256, U256,
+    uint, Address, FixedBytes, RlpBytes, B256, U256,
 };
 
 #[cfg(not(target_os = "zkvm"))]
@@ -101,11 +101,11 @@ pub struct DeriveInput<D> {
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DeriveOutput {
     /// Ethereum tail block.
-    pub eth_tail: (BlockNumber, BlockHash),
+    pub eth_tail: BlockId,
     /// Optimism head block.
-    pub op_head: (BlockNumber, BlockHash),
+    pub op_head: BlockId,
     /// Derived Optimism blocks.
-    pub derived_op_blocks: Vec<(BlockNumber, BlockHash)>,
+    pub derived_op_blocks: Vec<BlockId>,
     /// Image id of block builder guest
     pub block_image_id: ImageId,
 }
@@ -228,10 +228,10 @@ impl<D: BatcherDb> DeriveMachine<D> {
             self.derive_input.op_head_block_no + self.derive_input.op_derive_block_count;
 
         // Save starting op_head
-        let op_head = (
-            self.op_head_block_header.number,
-            self.op_head_block_header.hash(),
-        );
+        let op_head = BlockId {
+            number: self.op_head_block_header.number,
+            hash: self.op_head_block_header.hash(),
+        };
 
         let mut derived_op_blocks = Vec::new();
         let mut process_next_eth_block = false;
@@ -479,7 +479,10 @@ impl<D: BatcherDb> DeriveMachine<D> {
                             },
                         };
 
-                        derived_op_blocks.push((new_block_head.number, new_block_hash));
+                        derived_op_blocks.push(BlockId {
+                            number: new_block_head.number,
+                            hash: new_block_hash,
+                        });
                         self.op_head_block_header = new_block_head;
 
                         if self.op_head_block_header.number == target_block_no {
@@ -497,10 +500,10 @@ impl<D: BatcherDb> DeriveMachine<D> {
         }
 
         Ok(DeriveOutput {
-            eth_tail: (
-                self.op_batcher.state.current_l1_block_number,
-                self.op_batcher.state.current_l1_block_hash,
-            ),
+            eth_tail: BlockId {
+                number: self.op_batcher.state.current_l1_block_number,
+                hash: self.op_batcher.state.current_l1_block_hash,
+            },
             op_head,
             derived_op_blocks,
             block_image_id: self.derive_input.block_image_id,

@@ -188,7 +188,7 @@ mod tests {
         let transaction = OptimismTransaction { essence, signature };
 
         // verify the RLP roundtrip
-        let decoded = Transaction::decode(&mut transaction.to_rlp().as_ref()).unwrap();
+        let decoded = Transaction::decode_bytes(alloy_rlp::encode(&transaction)).unwrap();
         assert_eq!(transaction, decoded);
 
         // verify that bincode serialization works
@@ -231,10 +231,9 @@ mod tests {
             signature: TxSignature::default(),
         };
 
-        // verify that rlp encode/decode works
-        let recoded_transaction: Transaction<OptimismTxEssence> =
-            Transaction::decode(&mut transaction.to_rlp().as_ref()).unwrap();
-        assert_eq!(transaction.to_rlp(), recoded_transaction.to_rlp());
+        // verify the RLP roundtrip
+        let decoded = Transaction::decode_bytes(alloy_rlp::encode(&transaction)).unwrap();
+        assert_eq!(transaction, decoded);
 
         // verify that bincode serialization works
         let _: OptimismTransaction =

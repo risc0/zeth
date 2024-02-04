@@ -21,7 +21,7 @@ use zeth_primitives::{
     transactions::{Transaction, TxEssence},
     trie::MptNode,
     withdrawal::Withdrawal,
-    Address, Bytes, RlpBytes, B256, U256,
+    Address, Bytes, B256, U256,
 };
 
 /// Represents the state of an account's storage.
@@ -64,20 +64,10 @@ pub struct StateInput<E: TxEssence> {
     pub withdrawals: Vec<Withdrawal>,
 }
 
-impl<E: TxEssence> StateInput<E> {
+impl<E: TxEssence + Serialize> StateInput<E> {
     pub fn hash(&self) -> Hash {
         let mut hasher = Sha256::new();
-
-        hasher.update(self.parent_header.to_rlp());
-        hasher.update(self.beneficiary.0);
-        hasher.update(self.gas_limit.as_le_slice());
-        hasher.update(self.timestamp.as_le_slice());
-        hasher.update(self.extra_data.as_ref());
-        hasher.update(self.mix_hash.0);
-        // todo: use precalculated trie root hashes if available
-        hasher.update(self.transactions.to_rlp());
-        hasher.update(self.withdrawals.to_rlp());
-
+        hasher.update(bincode::serialize(&self).unwrap());
         hasher.finalize().into()
     }
 }

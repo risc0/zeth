@@ -17,13 +17,13 @@ use std::collections::HashMap;
 use anyhow::{ensure, Context, Result};
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
+    alloy_rlp,
     block::Header,
     receipt::Receipt,
     transactions::{
         ethereum::EthereumTxEssence, optimism::OptimismTxEssence, Transaction, TxEssence,
     },
     trie::MptNode,
-    RlpBytes,
 };
 
 use crate::optimism::{config::OPTIMISM_CHAIN_SPEC, deposits, system_config};
@@ -83,8 +83,7 @@ impl BatcherDb for MemDb {
             {
                 let mut tx_trie = MptNode::default();
                 for (tx_no, tx) in op_block.transactions.iter().enumerate() {
-                    let trie_key = tx_no.to_rlp();
-                    tx_trie.insert_rlp(&trie_key, tx)?;
+                    tx_trie.insert_rlp(&alloy_rlp::encode(tx_no), tx)?;
                 }
                 ensure!(
                     tx_trie.hash() == op_block.block_header.transactions_root,
@@ -113,8 +112,7 @@ impl BatcherDb for MemDb {
             {
                 let mut tx_trie = MptNode::default();
                 for (tx_no, tx) in eth_block.transactions.iter().enumerate() {
-                    let trie_key = tx_no.to_rlp();
-                    tx_trie.insert_rlp(&trie_key, tx)?;
+                    tx_trie.insert_rlp(&alloy_rlp::encode(tx_no), tx)?;
                 }
                 ensure!(
                     tx_trie.hash() == eth_block.block_header.transactions_root,
@@ -126,8 +124,7 @@ impl BatcherDb for MemDb {
             if eth_block.receipts.is_some() {
                 let mut receipt_trie = MptNode::default();
                 for (tx_no, receipt) in eth_block.receipts.as_ref().unwrap().iter().enumerate() {
-                    let trie_key = tx_no.to_rlp();
-                    receipt_trie.insert_rlp(&trie_key, receipt)?;
+                    receipt_trie.insert_rlp(&alloy_rlp::encode(tx_no), receipt)?;
                 }
                 ensure!(
                     receipt_trie.hash() == eth_block.block_header.receipts_root,

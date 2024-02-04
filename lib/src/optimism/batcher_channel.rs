@@ -21,8 +21,8 @@ use anyhow::{bail, ensure, Context, Result};
 use bytes::Buf;
 use libflate::zlib::Decoder;
 use zeth_primitives::{
+    alloy_rlp::Decodable,
     batch::Batch,
-    rlp::Decodable,
     transactions::{ethereum::EthereumTxEssence, Transaction, TxEssence},
     Address, BlockNumber,
 };

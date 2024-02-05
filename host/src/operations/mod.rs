@@ -18,67 +18,222 @@ pub mod rollups;
 
 use std::fmt::Debug;
 
-use log::{error, info};
+use log::{debug, error, info, warn};
 use risc0_zkvm::{
-    default_prover, serde::to_vec, Assumption, ExecutorEnv, ExecutorImpl, FileSegmentRef, Receipt,
-    Session,
+    compute_image_id, default_prover, serde::to_vec, sha::Digest, Assumption, ExecutorEnv,
+    ExecutorImpl, FileSegmentRef, Receipt, Session,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use tempfile::tempdir;
+use zeth_primitives::keccak::keccak;
 
-use crate::{cli::Cli, save_receipt};
+use crate::{cli::Cli, load_receipt, save_receipt};
 
-pub fn maybe_prove<I: Serialize, O: Eq + Debug + DeserializeOwned>(
+pub async fn verify_bonsai_receipt<O: Eq + Debug + DeserializeOwned>(
+    image_id: Digest,
+    expected_output: &O,
+    uuid: String,
+    max_retries: usize,
+) -> anyhow::Result<(String, Receipt)> {
+    info!("Tracking receipt uuid: {}", uuid);
+    let session = bonsai_sdk::alpha::SessionId { uuid };
+
+    loop {
+        let mut res = None;
+        for attempt in 1..=max_retries {
+            let client = bonsai_sdk::alpha_async::get_client_from_env(risc0_zkvm::VERSION).await?;
+
+            match session.status(&client) {
+                Ok(response) => {
+                    res = Some(response);
+                    break;
+                }
+                Err(err) => {
+                    if attempt == max_retries {
+                        anyhow::bail!(err);
+                    }
+                    warn!(
+                        "Attempt {}/{} for session status request: {:?}",
+                        attempt, max_retries, err
+                    );
+                    std::thread::sleep(std::time::Duration::from_secs(15));
+                    continue;
+                }
+            }
+        }
+
+        let res = res.unwrap();
+
+        if res.status == "RUNNING" {
+            info!(
+                "Current status: {} - state: {} - continue polling...",
+                res.status,
+                res.state.unwrap_or_default()
+            );
+            std::thread::sleep(std::time::Duration::from_secs(15));
+        } else if res.status == "SUCCEEDED" {
+            // Download the receipt, containing the output
+            let receipt_url = res
+                .receipt_url
+                .expect("API error, missing receipt on completed session");
+            let client = bonsai_sdk::alpha_async::get_client_from_env(risc0_zkvm::VERSION).await?;
+            let receipt_buf = client.download(&receipt_url)?;
+            let receipt: Receipt = bincode::deserialize(&receipt_buf)?;
+            receipt
+                .verify(image_id)
+                .expect("Receipt verification failed");
+            // verify output
+            let receipt_output: O = receipt.journal.decode().unwrap();
+            if expected_output == &receipt_output {
+                info!("Receipt validated!");
+            } else {
+                error!(
+                    "Output mismatch! Receipt: {:?}, expected: {:?}",
+                    receipt_output, expected_output,
+                );
+            }
+            return Ok((session.uuid, receipt));
+        } else {
+            panic!(
+                "Workflow exited: {} - | err: {}",
+                res.status,
+                res.error_msg.unwrap_or_default()
+            );
+        }
+    }
+}
+
+pub async fn maybe_prove<I: Serialize, O: Eq + Debug + Serialize + DeserializeOwned>(
     cli: &Cli,
     input: &I,
     elf: &[u8],
     expected_output: &O,
-    assumptions: Vec<Assumption>,
-    file_reference: &String,
-    receipt_index: Option<&mut usize>,
-) -> Option<Receipt> {
-    if let Cli::Prove(prove_args) = cli {
-        if prove_args.submit_to_bonsai {
-            unimplemented!()
-        }
-        // run prover
-        let receipt = prove(
-            prove_args.exec_args.local_exec,
-            to_vec(input).expect("Could not serialize composition prep input!"),
-            elf,
-            assumptions,
-            prove_args.exec_args.profile,
-            file_reference,
-        );
-        // verify output
-        let output_guest: O = receipt.journal.decode().unwrap();
-        if expected_output == &output_guest {
-            info!("Executor succeeded");
+    assumptions: (Vec<Assumption>, Vec<String>),
+) -> Option<(String, Receipt)> {
+    let Cli::Prove(prove_args) = cli else {
+        return None;
+    };
+
+    let (assumption_instances, assumption_uuids) = assumptions;
+    let encoded_input = to_vec(input).expect("Could not serialize proving input!");
+
+    let encoded_output =
+        to_vec(expected_output).expect("Could not serialize expected proving output!");
+    let computed_image_id = compute_image_id(elf).expect("Failed to compute elf image id!");
+
+    let receipt_label = format!(
+        "{}-{}",
+        hex::encode(computed_image_id),
+        hex::encode(keccak(bytemuck::cast_slice(&encoded_output)))
+    );
+
+    // get receipt
+    let (mut receipt_uuid, receipt, cached) =
+        if let Ok(Some(cached_data)) = load_receipt(&receipt_label) {
+            info!("Loaded locally cached receipt");
+            (cached_data.0, cached_data.1, true)
+        } else if prove_args.submit_to_bonsai {
+            // query bonsai service until it works
+            loop {
+                if let Ok(remote_proof) = prove_bonsai(
+                    encoded_input.clone(),
+                    elf,
+                    expected_output,
+                    assumption_uuids.clone(),
+                )
+                .await
+                {
+                    break (remote_proof.0, remote_proof.1, false);
+                }
+            }
         } else {
-            error!(
-                "Output mismatch! Executor: {:?}, expected: {:?}",
-                output_guest, expected_output,
-            );
-        }
-        // save receipt
-        save_receipt(file_reference, &receipt, receipt_index);
-        // return result
-        Some(receipt)
+            // run prover
+            (
+                Default::default(),
+                prove_locally(
+                    prove_args.exec_args.execution_po2,
+                    encoded_input,
+                    elf,
+                    assumption_instances,
+                    prove_args.exec_args.profile,
+                    &cli.execution_label(),
+                ),
+                false,
+            )
+        };
+
+    // verify output
+    let output_guest: O = receipt.journal.decode().unwrap();
+    if expected_output == &output_guest {
+        info!("Prover succeeded");
     } else {
-        None
+        error!(
+            "Output mismatch! Prover: {:?}, expected: {:?}",
+            output_guest, expected_output,
+        );
     }
+
+    // upload receipt to bonsai
+    if prove_args.submit_to_bonsai && receipt_uuid.is_empty() {
+        info!("Uploading cached receipt without UUID to Bonsai.");
+        receipt_uuid = upload_receipt(&receipt)
+            .await
+            .expect("Failed to upload cached receipt to Bonsai");
+    }
+
+    let result = (receipt_uuid, receipt);
+
+    // save receipt
+    if !cached {
+        save_receipt(&receipt_label, &result);
+    }
+
+    // return result
+    Some(result)
 }
 
-pub fn prove(
+pub async fn upload_receipt(receipt: &Receipt) -> anyhow::Result<String> {
+    let client = bonsai_sdk::alpha_async::get_client_from_env(risc0_zkvm::VERSION).await?;
+    Ok(client.upload_receipt(bincode::serialize(receipt)?)?)
+}
+
+pub async fn prove_bonsai<O: Eq + Debug + DeserializeOwned>(
+    encoded_input: Vec<u32>,
+    elf: &[u8],
+    expected_output: &O,
+    assumption_uuids: Vec<String>,
+) -> anyhow::Result<(String, Receipt)> {
+    info!("Proving on Bonsai");
+    // Compute the image_id, then upload the ELF with the image_id as its key.
+    let image_id = risc0_zkvm::compute_image_id(elf)?;
+    let encoded_image_id = hex::encode(image_id);
+    // Prepare input data
+    let input_data = bytemuck::cast_slice(&encoded_input).to_vec();
+
+    let client = bonsai_sdk::alpha_async::get_client_from_env(risc0_zkvm::VERSION).await?;
+    client.upload_img(&encoded_image_id, elf.to_vec())?;
+    // upload input
+    let input_id = client.upload_input(input_data.clone())?;
+
+    let session = client.create_session(
+        encoded_image_id.clone(),
+        input_id.clone(),
+        assumption_uuids.clone(),
+    )?;
+
+    verify_bonsai_receipt(image_id, expected_output, session.uuid.clone(), 8).await
+}
+
+pub fn prove_locally(
     segment_limit_po2: u32,
     encoded_input: Vec<u32>,
     elf: &[u8],
     assumptions: Vec<Assumption>,
     profile: bool,
-    file_reference: &String,
+    profile_reference: &String,
 ) -> Receipt {
-    info!("Proving with segment_limit_po2 = {:?}", segment_limit_po2);
-    info!(
+    debug!("Proving with segment_limit_po2 = {:?}", segment_limit_po2);
+    debug!(
         "Input size: {} words ( {} MB )",
         encoded_input.len(),
         encoded_input.len() * 4 / 1_000_000
@@ -94,7 +249,7 @@ pub fn prove(
 
     if profile {
         info!("Profiling enabled.");
-        env_builder.enable_profiler(format!("profile_{}.pb", file_reference));
+        env_builder.enable_profiler(format!("profile_{}.pb", profile_reference));
     }
 
     for assumption in assumptions {
@@ -111,15 +266,15 @@ pub fn execute<T: serde::Serialize + ?Sized, O: Eq + Debug + DeserializeOwned>(
     profile: bool,
     elf: &[u8],
     expected_output: &O,
-    file_reference: &String,
+    profile_reference: &String,
 ) -> Session {
-    info!(
+    debug!(
         "Running in executor with segment_limit_po2 = {:?}",
         segment_limit_po2
     );
 
     let input = to_vec(input).expect("Could not serialize input!");
-    info!(
+    debug!(
         "Input size: {} words ( {} MB )",
         input.len(),
         input.len() * 4 / 1_000_000
@@ -136,7 +291,7 @@ pub fn execute<T: serde::Serialize + ?Sized, O: Eq + Debug + DeserializeOwned>(
 
         if profile {
             info!("Profiling enabled.");
-            builder.enable_profiler(format!("profile_{}.pb", file_reference));
+            builder.enable_profiler(format!("profile_{}.pb", profile_reference));
         }
 
         let env = builder.build().unwrap();

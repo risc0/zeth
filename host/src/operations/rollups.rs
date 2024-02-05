@@ -12,14 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    borrow::BorrowMut,
-    collections::VecDeque,
-    sync::{Arc, Mutex},
-};
+use std::collections::VecDeque;
 
 use anyhow::Context;
-use log::info;
+use log::{info, trace};
 use risc0_zkvm::Assumption;
 use zeth_guests::*;
 use zeth_lib::{
@@ -41,9 +37,12 @@ use zeth_primitives::{
     transactions::optimism::OptimismTxEssence,
 };
 
-use crate::{cli::Cli, operations::maybe_prove};
+use crate::{
+    cli::Cli,
+    operations::{maybe_prove, verify_bonsai_receipt},
+};
 
-pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::Result<()> {
+pub async fn derive_rollup_blocks(cli: Cli) -> anyhow::Result<()> {
     info!("Fetching data ...");
     let core_args = cli.core_args().clone();
     let op_builder_provider_factory = ProviderFactory::new(
@@ -51,7 +50,6 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
         Network::Optimism,
         core_args.op_rpc_url.clone(),
     );
-    let receipt_index = Arc::new(Mutex::new(0usize));
 
     info!("Running preflight");
     let derive_input = DeriveInput {
@@ -71,7 +69,6 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
             DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input, Some(factory_clone))
                 .expect("Could not create derive machine");
         let mut op_block_inputs = vec![];
-
         let derive_output = derive_machine
             .derive(Some(&mut op_block_inputs))
             .expect("could not derive");
@@ -79,8 +76,8 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
     })
     .await?;
 
-    let (assumptions, op_block_outputs) =
-        build_op_blocks(&cli, file_reference, receipt_index.clone(), op_block_inputs);
+    let (assumptions, bonsai_receipt_uuids, op_block_outputs) =
+        build_op_blocks(&cli, op_block_inputs).await;
 
     let derive_input_mem = DeriveInput {
         db: derive_machine.derive_input.db.get_mem_db(),
@@ -120,129 +117,41 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
         println!("Derived: {} {}", derived_block.number, derived_block.hash);
     }
 
-    maybe_prove(
-        &cli,
-        &derive_input_mem,
-        OP_DERIVE_ELF,
-        &derive_output,
-        assumptions,
-        file_reference,
-        Some(receipt_index.lock().unwrap().borrow_mut()),
-    );
+    match &cli {
+        Cli::Build(..) => {}
+        Cli::Run(..) => {}
+        Cli::Prove(..) => {
+            maybe_prove(
+                &cli,
+                &derive_input_mem,
+                OP_DERIVE_ELF,
+                &derive_output,
+                (assumptions, bonsai_receipt_uuids),
+            )
+            .await;
+        }
+        Cli::Verify(verify_args) => {
+            verify_bonsai_receipt(
+                OP_DERIVE_ID.into(),
+                &derive_output,
+                verify_args.bonsai_receipt_uuid.clone(),
+                4,
+            )
+            .await?;
+        }
+        Cli::OpInfo(..) => {
+            unreachable!()
+        }
+    }
 
-    // let mut bonsai_session_uuid = args.verify_receipt_bonsai_uuid;
-
-    // Run in Bonsai (if requested)
-    // if bonsai_session_uuid.is_none() && args.submit_to_bonsai {
-    //     info!("Creating Bonsai client");
-    //     let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)
-    //         .expect("Could not create Bonsai client");
-    //
-    //     // create the memoryImg, upload it and return the imageId
-    //     info!("Uploading memory image");
-    //     let img_id = {
-    //         let program = Program::load_elf(OP_DERIVE_ELF, risc0_zkvm::GUEST_MAX_MEM as
-    // u32)             .expect("Could not load ELF");
-    //         let image = MemoryImage::new(&program, risc0_zkvm::PAGE_SIZE as u32)
-    //             .expect("Could not create memory image");
-    //         let image_id = hex::encode(image.compute_id());
-    //         let image = bincode::serialize(&image).expect("Failed to serialize memory
-    // img");
-    //
-    //         client
-    //             .upload_img(&image_id, image)
-    //             .expect("Could not upload ELF");
-    //         image_id
-    //     };
-    //
-    //     // Prepare input data and upload it.
-    //     info!("Uploading inputs");
-    //     let input_data = to_vec(&derive_input).unwrap();
-    //     let input_data = bytemuck::cast_slice(&input_data).to_vec();
-    //     let input_id = client
-    //         .upload_input(input_data)
-    //         .expect("Could not upload inputs");
-    //
-    //     // Start a session running the prover
-    //     info!("Starting session");
-    //     let session = client
-    //         .create_session(img_id, input_id)
-    //         .expect("Could not create Bonsai session");
-    //
-    //     println!("Bonsai session UUID: {}", session.uuid);
-    //     bonsai_session_uuid = Some(session.uuid)
-    // }
-
-    // Verify receipt from Bonsai (if requested)
-    // if let Some(session_uuid) = bonsai_session_uuid {
-    //     let client = bonsai_sdk::Client::from_env(risc0_zkvm::VERSION)
-    //         .expect("Could not create Bonsai client");
-    //     let session = bonsai_sdk::SessionId { uuid: session_uuid };
-    //
-    //     loop {
-    //         let res = session
-    //             .status(&client)
-    //             .expect("Could not fetch Bonsai status");
-    //         if res.status == "RUNNING" {
-    //             println!(
-    //                 "Current status: {} - state: {} - continue polling...",
-    //                 res.status,
-    //                 res.state.unwrap_or_default()
-    //             );
-    //             tokio::time::sleep(std::time::Duration::from_secs(15)).await;
-    //             continue;
-    //         }
-    //         if res.status == "SUCCEEDED" {
-    //             // Download the receipt, containing the output
-    //             let receipt_url = res
-    //                 .receipt_url
-    //                 .expect("API error, missing receipt on completed session");
-    //
-    //             let receipt_buf = client
-    //                 .download(&receipt_url)
-    //                 .expect("Could not download receipt");
-    //             let receipt: Receipt =
-    //                 bincode::deserialize(&receipt_buf).expect("Could not deserialize
-    // receipt");             receipt
-    //                 .verify(OP_DERIVE_ID)
-    //                 .expect("Receipt verification failed");
-    //
-    //             let bonsai_output: DeriveOutput = receipt.journal.decode().unwrap();
-    //
-    //             if output == bonsai_output {
-    //                 println!("Bonsai succeeded");
-    //             } else {
-    //                 error!(
-    //                     "Output mismatch! Bonsai: {:?}, expected: {:?}",
-    //                     bonsai_output, output,
-    //                 );
-    //             }
-    //         } else {
-    //             panic!(
-    //                 "Workflow exited: {} - | err: {}",
-    //                 res.status,
-    //                 res.error_msg.unwrap_or_default()
-    //             );
-    //         }
-    //
-    //         break;
-    //     }
-    //
-    //     info!("Bonsai request completed");
-    // }
     Ok(())
 }
 
-pub async fn compose_derived_rollup_blocks(
-    cli: Cli,
-    composition_size: u64,
-    file_reference: &String,
-) -> anyhow::Result<()> {
+pub async fn compose_derived_rollup_blocks(cli: Cli, composition_size: u64) -> anyhow::Result<()> {
     let core_args = cli.core_args().clone();
     // OP Composition
     info!("Fetching data ...");
     let mut lift_queue = Vec::new();
-    let receipt_index = Arc::new(Mutex::new(0usize));
     let mut complete_eth_chain: Vec<Header> = Vec::new();
     for op_block_index in (0..core_args.block_count).step_by(composition_size as usize) {
         let db = RpcDb::new(
@@ -308,8 +217,8 @@ pub async fn compose_derived_rollup_blocks(
         }
         eth_chain.push(eth_tail);
 
-        let (assumptions, op_block_outputs) =
-            build_op_blocks(&cli, file_reference, receipt_index.clone(), op_block_inputs);
+        let (assumptions, bonsai_receipt_uuids, op_block_outputs) =
+            build_op_blocks(&cli, op_block_inputs).await;
 
         let derive_input_mem = DeriveInput {
             db: derive_machine.derive_input.db.get_mem_db(),
@@ -341,10 +250,9 @@ pub async fn compose_derived_rollup_blocks(
             &derive_input_mem,
             OP_DERIVE_ELF,
             &derive_output,
-            assumptions,
-            file_reference,
-            Some(receipt_index.lock().unwrap().borrow_mut()),
-        );
+            (assumptions, bonsai_receipt_uuids),
+        )
+        .await;
 
         // Append derivation outputs to lift queue
         lift_queue.push((derive_output, receipt));
@@ -392,16 +300,16 @@ pub async fn compose_derived_rollup_blocks(
         &prep_compose_input,
         OP_COMPOSE_ELF,
         &prep_compose_output,
-        vec![],
-        file_reference,
-        Some(receipt_index.lock().unwrap().borrow_mut()),
-    );
+        Default::default(),
+    )
+    .await;
 
     // Lift
+    info!("Lifting {} proofs...", lift_queue.len());
     let mut join_queue = VecDeque::new();
     for (derive_output, derive_receipt) in lift_queue {
         let eth_tail_hash = derive_output.eth_tail.hash.0;
-        info!("Lifting ... {:?}", &derive_output);
+        trace!("Lifting ... {:?}", &derive_output);
         let lift_compose_input = ComposeInput {
             block_image_id: OP_BLOCK_ID,
             derive_image_id: OP_DERIVE_ID,
@@ -416,18 +324,17 @@ pub async fn compose_derived_rollup_blocks(
             .clone()
             .process()
             .expect("Lift composition failed.");
-        info!("Lifted ... {:?}", &lift_compose_output);
+        trace!("Lifted ... {:?}", &lift_compose_output);
 
-        let lift_compose_receipt = if let Some(receipt) = derive_receipt {
+        let lift_compose_receipt = if let Some((receipt_uuid, receipt)) = derive_receipt {
             maybe_prove(
                 &cli,
                 &lift_compose_input,
                 OP_COMPOSE_ELF,
                 &lift_compose_output,
-                vec![receipt.into()],
-                file_reference,
-                Some(receipt_index.lock().unwrap().borrow_mut()),
+                (vec![receipt.into()], vec![receipt_uuid]),
             )
+            .await
         } else {
             None
         };
@@ -436,12 +343,13 @@ pub async fn compose_derived_rollup_blocks(
     }
 
     // Join
+    info!("Composing {} proofs...", join_queue.len());
     while join_queue.len() > 1 {
         // Pop left output
         let (left, left_receipt) = join_queue.pop_front().unwrap();
         // Only peek at right output
         let (right, _right_receipt) = join_queue.front().unwrap();
-        info!("Joining");
+        trace!("Joining");
         let ComposeOutputOperation::AGGREGATE {
             op_tail: left_op_tail,
             ..
@@ -458,9 +366,10 @@ pub async fn compose_derived_rollup_blocks(
         };
         // Push dangling workloads (odd block count) to next round
         if left_op_tail != right_op_head {
-            info!(
+            trace!(
                 "Skipping dangling workload: {} - {}",
-                left_op_tail.number, right_op_head.number
+                left_op_tail.number,
+                right_op_head.number
             );
             join_queue.push_back((left, left_receipt));
             continue;
@@ -474,26 +383,31 @@ pub async fn compose_derived_rollup_blocks(
             operation: ComposeInputOperation::JOIN { left, right },
             eth_chain_merkle_root: eth_chain_root,
         };
-        info!("Joining ...");
+        trace!("Joining ...");
         let join_compose_output = join_compose_input
             .clone()
             .process()
             .expect("Join composition failed.");
 
-        let join_compose_receipt =
-            if let (Some(left_receipt), Some(right_receipt)) = (left_receipt, right_receipt) {
-                maybe_prove(
-                    &cli,
-                    &join_compose_input,
-                    OP_COMPOSE_ELF,
-                    &join_compose_output,
+        let join_compose_receipt = if let (
+            Some((left_receipt_uuid, left_receipt)),
+            Some((right_receipt_uuid, right_receipt)),
+        ) = (left_receipt, right_receipt)
+        {
+            maybe_prove(
+                &cli,
+                &join_compose_input,
+                OP_COMPOSE_ELF,
+                &join_compose_output,
+                (
                     vec![left_receipt.into(), right_receipt.into()],
-                    file_reference,
-                    Some(receipt_index.lock().unwrap().borrow_mut()),
-                )
-            } else {
-                None
-            };
+                    vec![left_receipt_uuid, right_receipt_uuid],
+                ),
+            )
+            .await
+        } else {
+            None
+        };
 
         // Send workload to next round
         join_queue.push_back((join_compose_output, join_compose_receipt));
@@ -517,59 +431,58 @@ pub async fn compose_derived_rollup_blocks(
         .process()
         .expect("Finish composition failed.");
 
-    let op_compose_receipt = if let (Some(prep_receipt), Some(aggregate_receipt)) =
-        (prep_compose_receipt, aggregate_receipt)
+    if let (
+        Some((prep_receipt_uuid, prep_receipt)),
+        Some((aggregate_receipt_uuid, aggregate_receipt)),
+    ) = (prep_compose_receipt, aggregate_receipt)
     {
         maybe_prove(
             &cli,
             &finish_compose_input,
             OP_COMPOSE_ELF,
             &finish_compose_output,
-            vec![prep_receipt.into(), aggregate_receipt.into()],
-            file_reference,
-            Some(receipt_index.lock().unwrap().borrow_mut()),
+            (
+                vec![prep_receipt.into(), aggregate_receipt.into()],
+                vec![prep_receipt_uuid, aggregate_receipt_uuid],
+            ),
         )
+        .await;
+    } else if let Cli::Verify(verify_args) = cli {
+        verify_bonsai_receipt(
+            OP_COMPOSE_ID.into(),
+            &finish_compose_output,
+            verify_args.bonsai_receipt_uuid.clone(),
+            4,
+        )
+        .await?;
     } else {
-        None
+        info!("Preflight successful!");
     };
 
-    dbg!(&finish_compose_output);
-
-    if let Some(final_receipt) = op_compose_receipt {
-        final_receipt
-            .verify(OP_COMPOSE_ID)
-            .expect("Failed to verify final receipt");
-        info!("Verified final receipt!");
-    }
+    trace!("Final composition output: {:?}", &finish_compose_output);
 
     Ok(())
 }
 
-fn build_op_blocks(
+async fn build_op_blocks(
     cli: &Cli,
-    file_reference: &String,
-    receipt_index: Arc<Mutex<usize>>,
     op_block_inputs: Vec<BlockBuildInput<OptimismTxEssence>>,
-) -> (Vec<Assumption>, Vec<BlockBuildOutput>) {
+) -> (Vec<Assumption>, Vec<String>, Vec<BlockBuildOutput>) {
     let mut assumptions: Vec<Assumption> = vec![];
+    let mut bonsai_uuids = vec![];
     let mut op_block_outputs = vec![];
     for input in op_block_inputs {
         let output = OptimismStrategy::build_from(&OP_MAINNET_CHAIN_SPEC, input.clone())
             .expect("Failed to build op block")
             .with_state_hashed();
 
-        if let Some(receipt) = maybe_prove(
-            cli,
-            &input,
-            OP_BLOCK_ELF,
-            &output,
-            vec![],
-            file_reference,
-            Some(receipt_index.lock().unwrap().borrow_mut()),
-        ) {
+        if let Some((bonsai_receipt_uuid, receipt)) =
+            maybe_prove(cli, &input, OP_BLOCK_ELF, &output, Default::default()).await
+        {
             assumptions.push(receipt.into());
+            bonsai_uuids.push(bonsai_receipt_uuid);
         }
         op_block_outputs.push(output);
     }
-    (assumptions, op_block_outputs)
+    (assumptions, bonsai_uuids, op_block_outputs)
 }

@@ -35,8 +35,8 @@ use zeth_primitives::{
 
 #[cfg(not(target_os = "zkvm"))]
 use crate::{
-    consts::OP_MAINNET_CHAIN_SPEC,
     builder::{BlockBuilderStrategy, OptimismStrategy},
+    consts::OP_MAINNET_CHAIN_SPEC,
     host::{preflight::Preflight, provider_db::ProviderDb, ProviderFactory},
 };
 use crate::{

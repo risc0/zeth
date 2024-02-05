@@ -21,6 +21,7 @@ ruint = { version = "1.10", default-features = false }
 serde = "1.0"
 tempfile = "3.6"
 tokio = { version = "1.23", features = ["full"] }
+tracing = { version = "0.1", features = ["log"] }
 zeth-guests = { path = "../guests" }
 zeth-lib = { path = "../lib" }
 zeth-primitives = { path = "../primitives" }
@@ -32,4 +33,10 @@ rstest = "0.18"
 [features]
 metal = [
     "risc0-zkvm/metal"
+]
+cuda = [
+    "risc0-zkvm/cuda"
+]
+disable-dev-mode = [
+    "risc0-zkvm/disable-dev-mode"
 ]

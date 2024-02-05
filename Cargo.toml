@@ -17,7 +17,7 @@ lto = true
 opt-level = 3
 
 [workspace.dependencies]
-bonsai-sdk = "0.5"
+bonsai-sdk = { version = "0.6.0", features = ["async"] }
 hashbrown = { version = "0.14.3", features = ["inline-more"] }
 risc0-build = { version = "0.20.0" }
 risc0-zkvm = { version = "0.20.0", default-features = false }

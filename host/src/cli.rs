@@ -51,6 +51,13 @@ impl Cli {
             _ => None,
         }
     }
+
+    pub fn execution_label(&self) -> String {
+        let sys_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap();
+        format!("{}_{}", sys_time.as_secs(), self.to_string())
+    }
 }
 
 impl ToString for Cli {
@@ -119,9 +126,9 @@ pub struct CoreArgs {
     /// URL of the Optimism RPC node.
     pub op_rpc_url: Option<String>,
 
-    #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "rpc_cache")]
+    #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "cache_rpc")]
     /// Use a local directory as a cache for RPC calls. Accepts a custom directory.
-    /// [default: host/testdata]
+    /// [default: cache_rpc]
     pub cache: Option<PathBuf>,
 
     #[clap(short, long, require_equals = true)]
@@ -135,9 +142,9 @@ pub struct CoreArgs {
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct ExecutorArgs {
-    #[clap(short, long, require_equals = true, default_value_t = 20)]
+    #[clap(short = 'x', long, require_equals = true, default_value_t = 20)]
     /// The maximum segment cycle count as a power of 2.
-    pub local_exec: u32,
+    pub execution_po2: u32,
 
     #[clap(short, long, default_value_t = false)]
     /// Whether to profile the zkVM execution
@@ -188,5 +195,5 @@ pub struct VerifyArgs {
     pub core_args: CoreArgs,
     #[clap(short, long, require_equals = true)]
     /// Verify the receipt from the provided Bonsai Session UUID.
-    pub receipt_bonsai_uuid: Option<String>,
+    pub bonsai_receipt_uuid: String,
 }

@@ -16,9 +16,10 @@ extern crate core;
 
 use anyhow::Result;
 use clap::Parser;
+use log::info;
 use zeth::{
     cli::Cli,
-    operations::{chains, info, rollups},
+    operations::{chains, info::op_info, rollups},
 };
 use zeth_guests::*;
 use zeth_lib::{
@@ -29,27 +30,39 @@ use zeth_lib::{
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
+    info!("Using the following image ids:");
+    info!(
+        "eth-block: {}",
+        hex::encode(bytemuck::cast_slice(&ETH_BLOCK_ID))
+    );
+    info!(
+        "op-block: {}",
+        hex::encode(bytemuck::cast_slice(&OP_BLOCK_ID))
+    );
+    info!(
+        "op-derive: {}",
+        hex::encode(bytemuck::cast_slice(&OP_DERIVE_ID))
+    );
+    info!(
+        "op-compose: {}",
+        hex::encode(bytemuck::cast_slice(&OP_COMPOSE_ID))
+    );
 
     let cli = Cli::parse();
 
     // Run simple debug info command
     if let Cli::OpInfo(..) = &cli {
-        return info::op_info(cli).await;
+        return op_info(cli).await;
     }
 
     // Execute other commands
     let core_args = cli.core_args();
-    let sys_time = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap();
-    let file_reference = format!("{}_{}", sys_time.as_secs(), cli.to_string());
 
     match core_args.network {
         Network::Ethereum => {
             let rpc_url = core_args.eth_rpc_url.clone();
             chains::build_chain_blocks::<EthereumStrategy>(
                 cli,
-                &file_reference,
                 rpc_url,
                 ETH_MAINNET_CHAIN_SPEC.clone(),
                 ETH_BLOCK_ELF,
@@ -60,7 +73,6 @@ async fn main() -> Result<()> {
             let rpc_url = core_args.op_rpc_url.clone();
             chains::build_chain_blocks::<OptimismStrategy>(
                 cli,
-                &file_reference,
                 rpc_url,
                 OP_MAINNET_CHAIN_SPEC.clone(),
                 OP_BLOCK_ELF,
@@ -69,9 +81,9 @@ async fn main() -> Result<()> {
         }
         Network::OptimismDerived => {
             if let Some(composition_size) = cli.composition() {
-                rollups::compose_derived_rollup_blocks(cli, composition_size, &file_reference).await
+                rollups::compose_derived_rollup_blocks(cli, composition_size).await
             } else {
-                rollups::derive_rollup_blocks(cli, &file_reference).await
+                rollups::derive_rollup_blocks(cli).await
             }
         }
     }

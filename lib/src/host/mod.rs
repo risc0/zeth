@@ -12,9 +12,48 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::path::{Path, PathBuf};
+
+use crate::{
+    consts::Network,
+    host::provider::{new_provider, Provider},
+};
+
 pub mod mpt;
 pub mod preflight;
 pub mod provider;
 pub mod provider_db;
 pub mod rpc_db;
 pub mod verify;
+
+pub fn cache_file_path(cache_path: &Path, network: &str, block_no: u64, ext: &str) -> PathBuf {
+    cache_path
+        .join(network)
+        .join(block_no.to_string())
+        .with_extension(ext)
+}
+
+#[derive(Clone)]
+pub struct ProviderFactory {
+    pub dir: Option<PathBuf>,
+    pub network: Network,
+    pub rpc_url: Option<String>,
+}
+
+impl ProviderFactory {
+    pub fn new(dir: Option<PathBuf>, network: Network, rpc_url: Option<String>) -> Self {
+        Self {
+            dir,
+            network,
+            rpc_url,
+        }
+    }
+
+    pub fn create_provider(&self, block_number: u64) -> anyhow::Result<Box<dyn Provider>> {
+        let rpc_cache = self
+            .dir
+            .as_ref()
+            .map(|dir| cache_file_path(dir, &self.network.to_string(), block_number, "json.gz"));
+        new_provider(rpc_cache, self.rpc_url.clone())
+    }
+}

@@ -26,10 +26,15 @@ pub fn main() {
     // Read the input previous block and transaction data
     let input = env::read();
     // Build the resulting block
-    let (header, state) = OptimismStrategy::build_from(&OP_MAINNET_CHAIN_SPEC, input)
+    let mut output = OptimismStrategy::build_from(&OP_MAINNET_CHAIN_SPEC, input)
         .expect("Failed to build the resulting block");
-    // Output the resulting block's hash to the journal
-    env::commit(&header.hash());
+    // Abridge successful construction results
+    if let Some(replaced_state) = output.replace_state_with_hash() {
+        // Leak memory, save cycles
+        core::mem::forget(replaced_state);
+    }
+    // Output the construction result
+    env::commit(&output);
     // Leak memory, save cycles
-    core::mem::forget((header, state));
+    core::mem::forget(output);
 }

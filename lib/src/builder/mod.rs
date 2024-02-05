@@ -181,6 +181,7 @@ pub trait BlockBuilderStrategy {
             hash: header.hash(),
             head: header,
             state,
+            state_input_hash: input_hash.into(),
         })
     }
 }

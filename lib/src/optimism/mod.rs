@@ -409,49 +409,17 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     output
                 };
 
+                // Ensure that the output came from the expected input
+                ensure!(
+                    new_op_head_input.state_input.hash() == op_block_output.state_input_hash(),
+                    "Invalid state input hash"
+                );
                 match op_block_output {
                     BlockBuildOutput::SUCCESS {
                         hash: new_block_hash,
                         head: new_block_head,
                         ..
                     } => {
-                        // Verify that the built op block matches the payload attributes of the
-                        // batch.
-                        ensure!(
-                            new_block_head.parent_hash == self.op_batcher.state.safe_head.hash,
-                            "Invalid op block parent hash"
-                        );
-                        ensure!(
-                            new_block_head.beneficiary
-                                == self.op_batcher.config.sequencer_fee_vault,
-                            "Invalid op block beneficiary"
-                        );
-                        ensure!(
-                            new_block_head.gas_limit
-                                == self.op_batcher.config.system_config.gas_limit,
-                            "Invalid op block gas limit"
-                        );
-                        ensure!(
-                            new_block_head.timestamp == U256::from(op_batch.0.timestamp),
-                            "Invalid op block timestamp"
-                        );
-                        ensure!(
-                            new_block_head.extra_data.is_empty(),
-                            "Invalid op block extra data"
-                        );
-                        ensure!(
-                            new_block_head.mix_hash == l1_epoch_header_mix_hash,
-                            "Invalid op block mix hash"
-                        );
-                        ensure!(
-                            tx_trie.hash() == new_block_head.transactions_root,
-                            "Invalid op block transactions"
-                        );
-                        ensure!(
-                            new_block_head.withdrawals_root.is_none(),
-                            "Invalid op block withdrawals"
-                        );
-
                         // obtain verified op block header
                         #[cfg(not(target_os = "zkvm"))]
                         log::info!(
@@ -479,15 +447,9 @@ impl<D: BatcherDb> DeriveMachine<D> {
                             break;
                         }
                     }
-                    BlockBuildOutput::FAILURE {
-                        state_input_hash: bad_input_hash,
-                    } => {
+                    BlockBuildOutput::FAILURE { .. } => {
                         #[cfg(not(target_os = "zkvm"))]
                         log::warn!("Failed to build block from batch");
-                        ensure!(
-                            new_op_head_input.state_input.hash() == bad_input_hash,
-                            "Invalid input partial hash"
-                        );
                     }
                 };
             }

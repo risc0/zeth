@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloy_rlp_derive::RlpEncodable;
 use ethers_core::k256::sha2::{Digest, Sha256};
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
@@ -44,7 +45,7 @@ pub struct BlockBuildInput<E: TxEssence> {
     pub ancestor_headers: Vec<Header>,
 }
 
-#[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize, Serialize, RlpEncodable)]
 pub struct StateInput<E: TxEssence> {
     /// Previous block header
     pub parent_header: Header,
@@ -67,7 +68,7 @@ pub struct StateInput<E: TxEssence> {
 impl<E: TxEssence + Serialize> StateInput<E> {
     pub fn hash(&self) -> Hash {
         let mut hasher = Sha256::new();
-        hasher.update(bincode::serialize(&self).unwrap());
+        hasher.update(&alloy_rlp::encode(self));
         hasher.finalize().into()
     }
 }

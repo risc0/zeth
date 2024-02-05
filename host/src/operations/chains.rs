@@ -75,6 +75,7 @@ where
             hash: new_block_hash,
             head: new_block_head,
             state: new_block_state,
+            ..
         } => {
             info!("Verifying final state using provider data ...");
             preflight_data.verify_block(new_block_head, new_block_state)?;

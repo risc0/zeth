@@ -22,6 +22,7 @@ pub enum BlockBuildOutput {
         hash: B256,
         head: Header,
         state: MptNode,
+        state_input_hash: B256,
     },
     FAILURE {
         state_input_hash: B256,
@@ -34,6 +35,17 @@ impl BlockBuildOutput {
         match self {
             BlockBuildOutput::SUCCESS { .. } => true,
             BlockBuildOutput::FAILURE { .. } => false,
+        }
+    }
+
+    pub fn state_input_hash(&self) -> &B256 {
+        match self {
+            BlockBuildOutput::SUCCESS {
+                state_input_hash, ..
+            }
+            | BlockBuildOutput::FAILURE {
+                state_input_hash, ..
+            } => state_input_hash,
         }
     }
 

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloy_rlp_derive::RlpEncodable;
 use ethers_core::k256::sha2::{Digest, Sha256};
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
@@ -21,7 +22,7 @@ use zeth_primitives::{
     transactions::{Transaction, TxEssence},
     trie::MptNode,
     withdrawal::Withdrawal,
-    Address, Bytes, RlpBytes, B256, U256,
+    Address, Bytes, B256, U256,
 };
 
 /// Represents the state of an account's storage.
@@ -44,7 +45,7 @@ pub struct BlockBuildInput<E: TxEssence> {
     pub ancestor_headers: Vec<Header>,
 }
 
-#[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize, Serialize, RlpEncodable)]
 pub struct StateInput<E: TxEssence> {
     /// Previous block header
     pub parent_header: Header,
@@ -64,20 +65,10 @@ pub struct StateInput<E: TxEssence> {
     pub withdrawals: Vec<Withdrawal>,
 }
 
-impl<E: TxEssence> StateInput<E> {
+impl<E: TxEssence + Serialize> StateInput<E> {
     pub fn hash(&self) -> Hash {
         let mut hasher = Sha256::new();
-
-        hasher.update(self.parent_header.to_rlp());
-        hasher.update(self.beneficiary.0);
-        hasher.update(self.gas_limit.as_le_slice());
-        hasher.update(self.timestamp.as_le_slice());
-        hasher.update(self.extra_data.as_ref());
-        hasher.update(self.mix_hash.0);
-        // todo: use precalculated trie root hashes if available
-        hasher.update(self.transactions.to_rlp());
-        hasher.update(self.withdrawals.to_rlp());
-
+        hasher.update(&alloy_rlp::encode(self));
         hasher.finalize().into()
     }
 }

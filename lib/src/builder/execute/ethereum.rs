@@ -24,13 +24,14 @@ use revm::{
 };
 use ruint::aliases::U256;
 use zeth_primitives::{
+    alloy_rlp,
     receipt::Receipt,
     transactions::{
         ethereum::{EthereumTxEssence, TransactionKind},
         TxEssence,
     },
     trie::MptNode,
-    Bloom, RlpBytes,
+    Bloom,
 };
 
 use super::TxExecStrategy;
@@ -56,10 +57,9 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
         // Compute the spec id
         let spec_id = block_builder.chain_spec.spec_id(header.number);
         if !SpecId::enabled(spec_id, MIN_SPEC_ID) {
-            bail!(
+            panic!(
                 "Invalid protocol version: expected >= {:?}, got {:?}",
-                MIN_SPEC_ID,
-                spec_id,
+                MIN_SPEC_ID, spec_id,
             )
         }
 
@@ -159,7 +159,9 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             fill_eth_tx_env(&mut evm.env().tx, &tx.essence, tx_from);
             let ResultAndState { result, state } = evm
                 .transact()
-                .map_err(|evm_err| anyhow!("Error at transaction {}: {:?}", tx_no, evm_err))?;
+                .map_err(|evm_err| anyhow!("Error at transaction {}: {:?}", tx_no, evm_err))
+                // todo: change unrecoverable panic to host-side recoverable `Result`
+                .expect("Block construction failure.");
 
             let gas_used = result.gas_used().try_into().unwrap();
             cumulative_gas_used = cumulative_gas_used.checked_add(gas_used).unwrap();
@@ -179,13 +181,15 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             logs_bloom.accrue_bloom(&receipt.payload.logs_bloom);
 
             // Add receipt and tx to tries
-            let trie_key = tx_no.to_rlp();
+            let trie_key = alloy_rlp::encode(tx_no);
             tx_trie
                 .insert_rlp(&trie_key, tx)
-                .context("failed to insert transaction")?;
+                // todo: change unrecoverable panic to host-side recoverable `Result`
+                .expect("failed to insert transaction");
             receipt_trie
                 .insert_rlp(&trie_key, receipt)
-                .context("failed to insert receipt")?;
+                // todo: change unrecoverable panic to host-side recoverable `Result`
+                .expect("failed to insert receipt");
 
             // update account states
             #[cfg(not(target_os = "zkvm"))]
@@ -239,11 +243,14 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
                 trace!("  Value: {}", amount_wei);
             }
             // Credit withdrawal amount
-            increase_account_balance(&mut evm.context.evm.db, withdrawal.address, amount_wei)?;
+            increase_account_balance(&mut evm.context.evm.db, withdrawal.address, amount_wei)
+                // todo: change unrecoverable panic to host-side recoverable `Result`
+                .expect("Failed to increase account balance.");
             // Add withdrawal to trie
             withdrawals_trie
-                .insert_rlp(&i.to_rlp(), withdrawal)
-                .context("failed to insert withdrawal")?;
+                .insert_rlp(&alloy_rlp::encode(i), withdrawal)
+                // todo: change unrecoverable panic to host-side recoverable `Result`
+                .expect("failed to insert withdrawal");
         }
 
         // Update result header with computed values

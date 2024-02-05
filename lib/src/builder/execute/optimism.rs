@@ -25,6 +25,7 @@ use revm::{
 };
 use ruint::aliases::U256;
 use zeth_primitives::{
+    alloy_rlp,
     receipt::Receipt,
     transactions::{
         ethereum::{EthereumTxEssence, TransactionKind},
@@ -32,7 +33,7 @@ use zeth_primitives::{
         TxEssence,
     },
     trie::MptNode,
-    Bloom, Bytes, RlpBytes,
+    Bloom, Bytes,
 };
 
 use super::{ethereum, TxExecStrategy};
@@ -58,10 +59,9 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
         // Compute the spec id
         let spec_id = block_builder.chain_spec.spec_id(header.number);
         if !SpecId::enabled(spec_id, MIN_SPEC_ID) {
-            bail!(
+            panic!(
                 "Invalid protocol version: expected >= {:?}, got {:?}",
-                MIN_SPEC_ID,
-                spec_id,
+                MIN_SPEC_ID, spec_id,
             )
         }
         let chain_id = block_builder.chain_spec.chain_id();
@@ -167,14 +167,16 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                     fill_deposit_tx_env(&mut evm.env().tx, deposit, tx_from);
                 }
                 OptimismTxEssence::Ethereum(essence) => {
-                    fill_eth_tx_env(&mut evm.env().tx, tx.to_rlp(), essence, tx_from);
+                    fill_eth_tx_env(&mut evm.env().tx, alloy_rlp::encode(&tx), essence, tx_from);
                 }
             };
 
             // process the transaction
             let ResultAndState { result, state } = evm
                 .transact()
-                .map_err(|evm_err| anyhow!("Error at transaction {}: {:?}", tx_no, evm_err))?;
+                .map_err(|evm_err| anyhow!("Error at transaction {}: {:?}", tx_no, evm_err))
+                // todo: change unrecoverable panic to host-side recoverable `Result`
+                .expect("Block construction failure.");
 
             let gas_used = result.gas_used().try_into().unwrap();
             cumulative_gas_used = cumulative_gas_used.checked_add(gas_used).unwrap();
@@ -226,13 +228,15 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             logs_bloom.accrue_bloom(&receipt.payload.logs_bloom);
 
             // Add receipt and tx to tries
-            let trie_key = tx_no.to_rlp();
+            let trie_key = alloy_rlp::encode(tx_no);
             tx_trie
                 .insert_rlp(&trie_key, tx)
-                .context("failed to insert transaction")?;
+                // todo: change unrecoverable panic to host-side recoverable `Result`
+                .expect("failed to insert transaction");
             receipt_trie
                 .insert_rlp(&trie_key, receipt)
-                .context("failed to insert receipt")?;
+                // todo: change unrecoverable panic to host-side recoverable `Result`
+                .expect("failed to insert receipt");
         }
 
         // Update result header with computed values

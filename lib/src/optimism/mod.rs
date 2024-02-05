@@ -16,17 +16,16 @@ use core::iter::once;
 
 use alloy_sol_types::{sol, SolInterface};
 use anyhow::{bail, ensure, Context, Result};
-#[cfg(not(target_os = "zkvm"))]
-use log::{debug, info};
 #[cfg(target_os = "zkvm")]
 use risc0_zkvm::{guest::env, serde::to_vec, sha::Digest};
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
+    alloy_rlp,
     batch::Batch,
     block::Header,
     keccak::keccak,
     transactions::{
-        ethereum::{EthereumTxEssence, TransactionKind},
+        ethereum::TransactionKind,
         optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
         Transaction, TxEssence,
     },
@@ -36,11 +35,12 @@ use zeth_primitives::{
 
 #[cfg(not(target_os = "zkvm"))]
 use crate::{
+    consts::OP_MAINNET_CHAIN_SPEC,
     builder::{BlockBuilderStrategy, OptimismStrategy},
     host::{preflight::Preflight, provider_db::ProviderDb, ProviderFactory},
 };
 use crate::{
-    consts::{ONE, OP_MAINNET_CHAIN_SPEC},
+    consts::ONE,
     input::{BlockBuildInput, StateInput},
     optimism::{
         batcher::{Batcher, BlockId, L2BlockInfo},
@@ -140,9 +140,10 @@ impl<D: BatcherDb> DeriveMachine<D> {
         let op_head_block_hash = op_head.block_header.hash();
 
         #[cfg(not(target_os = "zkvm"))]
-        debug!(
+        log::debug!(
             "Fetched Op head (block no {}) {}",
-            derive_input.op_head_block_no, op_head_block_hash
+            derive_input.op_head_block_no,
+            op_head_block_hash
         );
 
         // the first transaction in a block MUST be a L1 attributes deposited transaction
@@ -176,9 +177,10 @@ impl<D: BatcherDb> DeriveMachine<D> {
             "Ethereum head block hash mismatch"
         );
         #[cfg(not(target_os = "zkvm"))]
-        debug!(
+        log::debug!(
             "Fetched Eth head (block no {}) {}",
-            eth_block_no, set_l1_block_values.hash
+            eth_block_no,
+            set_l1_block_values.hash
         );
 
         let op_batcher = {
@@ -267,7 +269,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                 // Process the batch
 
                 #[cfg(not(target_os = "zkvm"))]
-                debug!(
+                log::debug!(
                     "Read batch for Op block {}: timestamp={}, epoch={}, tx count={}, parent hash={:?}",
                     self.op_head_block_header.number + 1,
                     op_batch.0.timestamp,
@@ -306,26 +308,16 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     .0
                     .transactions
                     .iter()
-                    .map(|tx| Transaction::decode_strict(&mut tx.as_ref()))
-                    .filter_map(|tx| {
-                        #[cfg(not(target_os = "zkvm"))]
-                        if let Err(err) = &tx {
-                            log::warn!("Failed to decode transaction: {:?}", err);
-                        }
-                        tx.ok()
-                    })
-                    // We always assume that chain id exists here
-                    .map(
-                        |mut tx: Transaction<OptimismTxEssence>| match &mut tx.essence {
-                            OptimismTxEssence::Ethereum(EthereumTxEssence::Legacy(essence)) => {
-                                if essence.chain_id.is_none() {
-                                    essence.chain_id = Some(OP_MAINNET_CHAIN_SPEC.chain_id())
-                                }
-                                tx
+                    .filter_map(|raw_tx| {
+                        match Transaction::<OptimismTxEssence>::decode_bytes(raw_tx) {
+                            Ok(tx) => Some(tx),
+                            Err(_err) => {
+                                #[cfg(not(target_os = "zkvm"))]
+                                log::warn!("Skipping undecodable transaction: {:#}", _err);
+                                None
                             }
-                            _ => tx,
-                        },
-                    )
+                        }
+                    })
                     .collect();
 
                 let derived_transactions: Vec<_> = once(l1_attributes_tx)
@@ -334,13 +326,12 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     .collect();
                 let derived_transactions_rlp = derived_transactions
                     .iter()
-                    .map(|tx| tx.to_rlp())
+                    .map(alloy_rlp::encode)
                     .enumerate();
 
                 let mut tx_trie = MptNode::default();
                 for (tx_no, tx) in derived_transactions_rlp {
-                    let trie_key = tx_no.to_rlp();
-                    tx_trie.insert(&trie_key, tx)?;
+                    tx_trie.insert(&alloy_rlp::encode(tx_no), tx)?;
                 }
 
                 let new_op_head_input = BlockBuildInput {
@@ -418,54 +409,23 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     output
                 };
 
+                // Ensure that the output came from the expected input
+                ensure!(
+                    new_op_head_input.state_input.hash() == op_block_output.state_input_hash(),
+                    "Invalid state input hash"
+                );
                 match op_block_output {
                     BlockBuildOutput::SUCCESS {
                         hash: new_block_hash,
                         head: new_block_head,
                         ..
                     } => {
-                        // Verify that the built op block matches the payload attributes of the
-                        // batch.
-                        ensure!(
-                            new_block_head.parent_hash == self.op_batcher.state.safe_head.hash,
-                            "Invalid op block parent hash"
-                        );
-                        ensure!(
-                            new_block_head.beneficiary
-                                == self.op_batcher.config.sequencer_fee_vault,
-                            "Invalid op block beneficiary"
-                        );
-                        ensure!(
-                            new_block_head.gas_limit
-                                == self.op_batcher.config.system_config.gas_limit,
-                            "Invalid op block gas limit"
-                        );
-                        ensure!(
-                            new_block_head.timestamp == U256::from(op_batch.0.timestamp),
-                            "Invalid op block timestamp"
-                        );
-                        ensure!(
-                            new_block_head.extra_data.is_empty(),
-                            "Invalid op block extra data"
-                        );
-                        ensure!(
-                            new_block_head.mix_hash == l1_epoch_header_mix_hash,
-                            "Invalid op block mix hash"
-                        );
-                        ensure!(
-                            tx_trie.hash() == new_block_head.transactions_root,
-                            "Invalid op block transactions"
-                        );
-                        ensure!(
-                            new_block_head.withdrawals_root.is_none(),
-                            "Invalid op block withdrawals"
-                        );
-
                         // obtain verified op block header
                         #[cfg(not(target_os = "zkvm"))]
-                        info!(
+                        log::info!(
                             "Derived Op block {} w/ hash {}",
-                            new_block_head.number, new_block_hash
+                            new_block_head.number,
+                            new_block_hash
                         );
 
                         self.op_batcher.state.safe_head = L2BlockInfo {
@@ -487,15 +447,9 @@ impl<D: BatcherDb> DeriveMachine<D> {
                             break;
                         }
                     }
-                    BlockBuildOutput::FAILURE {
-                        state_input_hash: bad_input_hash,
-                    } => {
+                    BlockBuildOutput::FAILURE { .. } => {
                         #[cfg(not(target_os = "zkvm"))]
                         log::warn!("Failed to build block from batch");
-                        ensure!(
-                            new_op_head_input.state_input.hash() == bad_input_hash,
-                            "Invalid input partial hash"
-                        );
                     }
                 };
             }

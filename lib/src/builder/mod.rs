@@ -148,13 +148,15 @@ pub trait BlockBuilderStrategy {
         chain_spec: &ChainSpec,
         input: BlockBuildInput<Self::TxEssence>,
     ) -> Result<BlockBuildOutput> {
-        // Database initialization failure does not mean the block is faulty
-        // todo: compute only on build error
+        // todo: compute `input_hash` only on build error
         let input_hash = input.state_input.hash();
-        let initialized = BlockBuilder::<MemDb, Self::TxEssence>::new(chain_spec, input, None)
-            .initialize_database::<Self::DbInitStrategy>()?;
 
-        // Header validation errors mean a faulty block
+        let builder = BlockBuilder::<MemDb, Self::TxEssence>::new(chain_spec, input, None);
+
+        // Database initialization errors do not indicate a faulty block
+        let initialized = builder.initialize_database::<Self::DbInitStrategy>()?;
+
+        // Recoverable header validation errors mean a faulty block
         let prepared = match initialized.prepare_header::<Self::HeaderPrepStrategy>() {
             Ok(builder) => builder,
             Err(_) => {
@@ -164,7 +166,7 @@ pub trait BlockBuilderStrategy {
             }
         };
 
-        // Transaction execution errors mean a faulty block
+        // Recoverable transaction execution errors mean a faulty block
         let executed = match prepared.execute_transactions::<Self::TxExecStrategy>() {
             Ok(builder) => builder,
             Err(_) => {
@@ -174,7 +176,7 @@ pub trait BlockBuilderStrategy {
             }
         };
 
-        // Finalization does not indicate a faulty block
+        // Finalization errors do not indicate a faulty block
         let (header, state) = executed.finalize::<Self::BlockFinalizeStrategy>()?;
 
         Ok(BlockBuildOutput::SUCCESS {

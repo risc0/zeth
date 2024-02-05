@@ -97,7 +97,7 @@ impl HeaderPrepStrategy for EthHeaderPrepStrategy {
             base_fee_per_gas: derive_base_fee(
                 &block_builder.input.state_input.parent_header,
                 block_builder.chain_spec.gas_constants(),
-            )?,
+            ),
             // Initialize metadata from input
             beneficiary: block_builder.input.state_input.beneficiary,
             gas_limit: block_builder.input.state_input.gas_limit,
@@ -112,11 +112,11 @@ impl HeaderPrepStrategy for EthHeaderPrepStrategy {
 }
 
 /// Base fee for next block. [EIP-1559](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1559.md) spec
-fn derive_base_fee(parent: &Header, eip_1559_constants: &Eip1559Constants) -> Result<U256> {
+fn derive_base_fee(parent: &Header, eip_1559_constants: &Eip1559Constants) -> U256 {
     let parent_gas_target = parent.gas_limit / eip_1559_constants.elasticity_multiplier;
 
     match parent.gas_used.cmp(&parent_gas_target) {
-        std::cmp::Ordering::Equal => Ok(parent.base_fee_per_gas),
+        std::cmp::Ordering::Equal => parent.base_fee_per_gas,
 
         std::cmp::Ordering::Greater => {
             let gas_used_delta = parent.gas_used - parent_gas_target;
@@ -129,7 +129,7 @@ fn derive_base_fee(parent: &Header, eip_1559_constants: &Eip1559Constants) -> Re
                 .min(
                     parent.base_fee_per_gas / eip_1559_constants.base_fee_max_increase_denominator,
                 );
-            Ok(parent.base_fee_per_gas + base_fee_delta)
+            parent.base_fee_per_gas + base_fee_delta
         }
 
         std::cmp::Ordering::Less => {
@@ -140,7 +140,7 @@ fn derive_base_fee(parent: &Header, eip_1559_constants: &Eip1559Constants) -> Re
                 .min(
                     parent.base_fee_per_gas / eip_1559_constants.base_fee_max_decrease_denominator,
                 );
-            Ok(parent.base_fee_per_gas - base_fee_delta)
+            parent.base_fee_per_gas - base_fee_delta
         }
     }
 }

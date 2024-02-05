@@ -23,10 +23,10 @@ risc0_zkvm::guest::entry!(main);
 
 pub fn main() {
     let derive_input: DeriveInput<MemDb> = env::read();
-    let mut derive_machine = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input)
+    let mut derive_machine = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input, None)
         .expect("Could not create derive machine");
     let output = derive_machine
-        .derive()
+        .derive(None)
         .expect("Failed to process derivation input");
     env::commit(&output);
 }

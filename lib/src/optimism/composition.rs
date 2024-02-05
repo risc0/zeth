@@ -25,10 +25,11 @@ use zeth_primitives::{
 use crate::optimism::{batcher::BlockId, DeriveOutput};
 
 /// Denotes a zkVM Image ID.
-type ImageId = [u32; 8];
+pub type ImageId = [u32; 8];
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ComposeInput {
+    pub block_image_id: ImageId,
     pub derive_image_id: ImageId,
     pub compose_image_id: ImageId,
     pub operation: ComposeInputOperation,
@@ -57,6 +58,7 @@ pub enum ComposeInputOperation {
 
 #[derive(Debug, Clone, Deserialize, Serialize, Eq, PartialEq)]
 pub struct ComposeOutput {
+    pub block_image_id: ImageId,
     pub derive_image_id: ImageId,
     pub compose_image_id: ImageId,
     pub operation: ComposeOutputOperation,
@@ -95,6 +97,7 @@ impl ComposeInput {
                                 .expect("Failed to validate prior aggregation");
                         }
                         // Validate context
+                        assert_eq!(self.block_image_id, prior_output.block_image_id);
                         assert_eq!(self.derive_image_id, prior_output.derive_image_id);
                         assert_eq!(self.compose_image_id, prior_output.compose_image_id);
                         assert_eq!(
@@ -139,6 +142,7 @@ impl ComposeInput {
                 }
 
                 ComposeOutput {
+                    block_image_id: self.block_image_id,
                     derive_image_id: self.derive_image_id,
                     compose_image_id: self.compose_image_id,
                     operation: ComposeOutputOperation::PREP,
@@ -158,6 +162,8 @@ impl ComposeInput {
                     env::verify(Digest::from(self.derive_image_id), &derive_journal)
                         .expect("Failed to lift derivation receipt");
                 }
+                // Verify usage of same block builder image id
+                assert_eq!(self.block_image_id, derive_output.block_image_id);
                 // Verify inclusion of ethereum tail in Merkle root
                 assert!(
                     eth_tail_proof
@@ -166,6 +172,7 @@ impl ComposeInput {
                 );
                 // Create output
                 ComposeOutput {
+                    block_image_id: self.block_image_id,
                     derive_image_id: self.derive_image_id,
                     compose_image_id: self.compose_image_id,
                     operation: ComposeOutputOperation::AGGREGATE {
@@ -197,6 +204,9 @@ impl ComposeInput {
                         .expect("Failed to verify right composition receipt");
                 }
                 // Validate context
+                // block_image_id equality
+                assert_eq!(self.block_image_id, left_compose_output.block_image_id);
+                assert_eq!(self.block_image_id, right_compose_output.block_image_id);
                 // derive_image_id equality
                 assert_eq!(self.derive_image_id, left_compose_output.derive_image_id);
                 assert_eq!(self.derive_image_id, right_compose_output.derive_image_id);
@@ -233,6 +243,7 @@ impl ComposeInput {
                 assert_eq!(&left_op_tail, &right_op_head);
 
                 ComposeOutput {
+                    block_image_id: self.block_image_id,
                     derive_image_id: self.derive_image_id,
                     compose_image_id: self.compose_image_id,
                     operation: ComposeOutputOperation::AGGREGATE {
@@ -266,6 +277,9 @@ impl ComposeInput {
                         .expect("Failed to validate aggregate receipt");
                 }
                 // Validate context
+                // block_image_id equality
+                assert_eq!(self.block_image_id, prep.block_image_id);
+                assert_eq!(self.block_image_id, aggregate.block_image_id);
                 // derive_image_id equality
                 assert_eq!(self.derive_image_id, prep.derive_image_id);
                 assert_eq!(self.derive_image_id, aggregate.derive_image_id);
@@ -287,6 +301,7 @@ impl ComposeInput {
                 };
                 // Output new aggregate with validated chain root
                 ComposeOutput {
+                    block_image_id: self.block_image_id,
                     derive_image_id: self.derive_image_id,
                     compose_image_id: self.compose_image_id,
                     operation: ComposeOutputOperation::AGGREGATE {

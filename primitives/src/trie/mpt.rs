@@ -28,7 +28,7 @@ use rlp::{Decodable, DecoderError, Prototype, Rlp};
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
-use crate::{keccak::keccak, trie::EMPTY_ROOT, RlpBytes};
+use crate::{keccak::keccak, trie::EMPTY_ROOT};
 
 /// Represents the root node of a sparse Merkle Patricia Trie.
 ///
@@ -69,6 +69,15 @@ pub enum Error {
     /// errors.
     #[error("RLP error")]
     LegacyRlp(#[from] DecoderError),
+}
+
+impl From<B256> for MptNode {
+    fn from(digest: B256) -> Self {
+        match digest {
+            EMPTY_ROOT | B256::ZERO => MptNode::default(),
+            _ => MptNodeData::Digest(digest).into(),
+        }
+    }
 }
 
 /// Represents the various types of data that can be stored within a node in the sparse
@@ -564,7 +573,7 @@ impl MptNode {
     /// This method inserts a value that's been encoded using RLP into the trie.
     #[inline]
     pub fn insert_rlp(&mut self, key: &[u8], value: impl Encodable) -> Result<bool, Error> {
-        self.insert_internal(&to_nibs(key), value.to_rlp())
+        self.insert_internal(&to_nibs(key), alloy_rlp::encode(value))
     }
 
     fn insert_internal(&mut self, key_nibs: &[u8], value: Vec<u8>) -> Result<bool, Error> {
@@ -843,7 +852,7 @@ mod tests {
             let node: MptNode =
                 MptNodeData::Leaf(k.as_bytes().to_vec(), v.as_bytes().to_vec()).into();
             assert!(
-                matches!(node.reference(),MptNodeReference::Bytes(bytes) if bytes == node.to_rlp().to_vec())
+                matches!(node.reference(),MptNodeReference::Bytes(bytes) if bytes == alloy_rlp::encode(&node))
             );
         }
     }
@@ -958,7 +967,7 @@ mod tests {
         **node = MptNodeData::Digest(node.hash()).into();
         assert!(node.is_digest());
 
-        let trie = MptNode::decode(trie.to_rlp()).unwrap();
+        let trie = MptNode::decode(alloy_rlp::encode(&trie)).unwrap();
         assert_eq!(trie.hash(), exp_hash);
 
         // lookups should fail
@@ -1007,7 +1016,7 @@ mod tests {
         assert!(!trie.insert(vals[0].0.as_bytes(), b"new".to_vec()).unwrap());
 
         // try RLP roundtrip
-        let decoded = MptNode::decode(trie.to_rlp()).unwrap();
+        let decoded = MptNode::decode(alloy_rlp::encode(&trie)).unwrap();
         assert_eq!(trie.hash(), decoded.hash());
     }
 
@@ -1057,33 +1066,33 @@ mod tests {
         // insert
         let mut trie = MptNode::default();
         for i in 0..N {
-            assert!(trie.insert_rlp(&i.to_rlp(), i).unwrap());
+            assert!(trie.insert_rlp(&alloy_rlp::encode(i), i).unwrap());
 
             // check hash against trie build in reverse
             let mut reference = MptNode::default();
             for j in (0..=i).rev() {
-                reference.insert_rlp(&j.to_rlp(), j).unwrap();
+                reference.insert_rlp(&alloy_rlp::encode(j), j).unwrap();
             }
             assert_eq!(trie.hash(), reference.hash());
 
             // try RLP roundtrip
-            let decoded = MptNode::decode(trie.to_rlp()).unwrap();
+            let decoded = MptNode::decode(alloy_rlp::encode(&trie)).unwrap();
             assert_eq!(trie.hash(), decoded.hash());
         }
 
         // get
         for i in 0..N {
-            assert_eq!(trie.get_rlp(&i.to_rlp()).unwrap(), Some(i));
-            assert!(trie.get(&(i + N).to_rlp()).unwrap().is_none());
+            assert_eq!(trie.get_rlp(&alloy_rlp::encode(i)).unwrap(), Some(i));
+            assert!(trie.get(&alloy_rlp::encode(i + N)).unwrap().is_none());
         }
 
         // delete
         for i in 0..N {
-            assert!(trie.delete(&i.to_rlp()).unwrap());
+            assert!(trie.delete(&alloy_rlp::encode(i)).unwrap());
 
             let mut reference = MptNode::default();
             for j in ((i + 1)..N).rev() {
-                reference.insert_rlp(&j.to_rlp(), j).unwrap();
+                reference.insert_rlp(&alloy_rlp::encode(j), j).unwrap();
             }
             assert_eq!(trie.hash(), reference.hash());
         }

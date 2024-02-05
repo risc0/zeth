@@ -1,8 +1,10 @@
 .DS_Store
 target/
 tmp/
-rpc_cache/
+cache_rpc/
+cache_zkp/
 log.txt
 *.pb
-rpc_cache.json
+*.zkp
+cache_rpc.json
 .idea

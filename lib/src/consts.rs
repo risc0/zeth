@@ -160,13 +160,15 @@ impl ChainSpec {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Network {
     /// The Ethereum Mainnet
     #[default]
     Ethereum,
     /// The Optimism Mainnet
     Optimism,
+    /// The Optimism Mainnet as derived from the Ethereum Mainnet
+    OptimismDerived,
 }
 
 impl FromStr for Network {
@@ -176,6 +178,7 @@ impl FromStr for Network {
         match s.to_lowercase().as_str() {
             "ethereum" => Ok(Network::Ethereum),
             "optimism" => Ok(Network::Optimism),
+            "optimism-derived" => Ok(Network::OptimismDerived),
             _ => bail!("Unknown network"),
         }
     }
@@ -186,6 +189,7 @@ impl ToString for Network {
         match self {
             Network::Ethereum => String::from("ethereum"),
             Network::Optimism => String::from("optimism"),
+            Network::OptimismDerived => String::from("optimism-derived"),
         }
     }
 }

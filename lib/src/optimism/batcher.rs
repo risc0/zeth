@@ -204,7 +204,7 @@ impl Batcher {
         while let Some(batches) = self.batcher_channel.read_batches() {
             batches.into_iter().for_each(|batch| {
                 #[cfg(not(target_os = "zkvm"))]
-                log::debug!(
+                log::trace!(
                     "received batch: timestamp={}, parent_hash={}, epoch={}",
                     batch.essence.timestamp,
                     batch.essence.parent_hash,
@@ -316,7 +316,7 @@ impl Batcher {
         match batch.essence.timestamp.cmp(&next_timestamp) {
             Ordering::Greater => {
                 #[cfg(not(target_os = "zkvm"))]
-                log::debug!(
+                log::trace!(
                     "Future batch: {} = batch.timestamp > next_timestamp = {}",
                     &batch.essence.timestamp,
                     &next_timestamp
@@ -325,7 +325,7 @@ impl Batcher {
             }
             Ordering::Less => {
                 #[cfg(not(target_os = "zkvm"))]
-                log::debug!(
+                log::trace!(
                     "Batch too old: {} = batch.timestamp < next_timestamp = {}",
                     &batch.essence.timestamp,
                     &next_timestamp
@@ -339,7 +339,7 @@ impl Batcher {
         // "batch.parent_hash != safe_l2_head.hash -> drop"
         if batch.essence.parent_hash != safe_l2_head.hash {
             #[cfg(not(target_os = "zkvm"))]
-            log::debug!(
+            log::warn!(
                 "Incorrect parent hash: {} != {}",
                 batch.essence.parent_hash,
                 safe_l2_head.hash
@@ -351,7 +351,7 @@ impl Batcher {
         // "batch.epoch_num + sequence_window_size < inclusion_block_number -> drop"
         if batch.essence.epoch_num + self.config.seq_window_size < batch.inclusion_block_number {
             #[cfg(not(target_os = "zkvm"))]
-            log::debug!(
+            log::warn!(
                 "Batch is not timely: {} + {} < {}",
                 batch.essence.epoch_num,
                 self.config.seq_window_size,
@@ -364,7 +364,7 @@ impl Batcher {
         // "batch.epoch_num < epoch.number -> drop"
         if batch.essence.epoch_num < epoch.number {
             #[cfg(not(target_os = "zkvm"))]
-            log::debug!(
+            log::warn!(
                 "Batch epoch number is too low: {} < {}",
                 batch.essence.epoch_num,
                 epoch.number
@@ -389,7 +389,7 @@ impl Batcher {
             // From the spec:
             // "batch.epoch_num > epoch.number+1 -> drop"
             #[cfg(not(target_os = "zkvm"))]
-            log::debug!(
+            log::warn!(
                 "Batch epoch number is too large: {} > {}",
                 batch.essence.epoch_num,
                 epoch.number + 1
@@ -401,7 +401,7 @@ impl Batcher {
         // "batch.epoch_hash != batch_origin.hash -> drop"
         if batch.essence.epoch_hash != batch_origin.hash {
             #[cfg(not(target_os = "zkvm"))]
-            log::debug!(
+            log::warn!(
                 "Epoch hash mismatch: {} != {}",
                 batch.essence.epoch_hash,
                 batch_origin.hash
@@ -413,7 +413,7 @@ impl Batcher {
         // "batch.timestamp < batch_origin.time -> drop"
         if batch.essence.timestamp < batch_origin.timestamp {
             #[cfg(not(target_os = "zkvm"))]
-            log::debug!(
+            log::warn!(
                 "Batch violates timestamp rule: {} < {}",
                 batch.essence.timestamp,
                 batch_origin.timestamp
@@ -437,7 +437,7 @@ impl Batcher {
             // "len(batch.transactions) > 0: -> drop"
             if !batch.essence.transactions.is_empty() {
                 #[cfg(not(target_os = "zkvm"))]
-                log::debug!("Sequencer drift detected for non-empty batch; drop.");
+                log::warn!("Sequencer drift detected for non-empty batch; drop.");
                 return BatchStatus::Drop;
             }
 
@@ -451,7 +451,7 @@ impl Batcher {
                     // "If batch.timestamp >= next_epoch.time -> drop"
                     if batch.essence.timestamp >= next_epoch.timestamp {
                         #[cfg(not(target_os = "zkvm"))]
-                        log::debug!("Sequencer drift detected; drop; batch timestamp is too far into the future. {} >= {}", batch.essence.timestamp, next_epoch.timestamp);
+                        log::warn!("Sequencer drift detected; drop; batch timestamp is too far into the future. {} >= {}", batch.essence.timestamp, next_epoch.timestamp);
                         return BatchStatus::Drop;
                     }
                 } else {
@@ -472,7 +472,7 @@ impl Batcher {
         for tx in &batch.essence.transactions {
             if matches!(tx.first(), None | Some(&OPTIMISM_DEPOSITED_TX_TYPE)) {
                 #[cfg(not(target_os = "zkvm"))]
-                log::debug!("Batch contains empty or invalid transaction");
+                log::warn!("Batch contains empty or invalid transaction");
                 return BatchStatus::Drop;
             }
         }

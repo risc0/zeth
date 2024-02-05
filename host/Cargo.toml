@@ -15,9 +15,7 @@ env_logger = "0.10"
 ethers-core = { version = "2.0", features = ["optimism"] }
 hex = "0.4.3"
 log = "0.4"
-revm = { workspace = true }
 risc0-zkvm = { workspace = true, features = ["prove"] }
-ruint = { version = "1.10", default-features = false }
 serde = "1.0"
 tempfile = "3.6"
 tokio = { version = "1.23", features = ["full"] }
@@ -31,12 +29,6 @@ assert_cmd = "2.0"
 rstest = "0.18"
 
 [features]
-metal = [
-    "risc0-zkvm/metal"
-]
-cuda = [
-    "risc0-zkvm/cuda"
-]
-disable-dev-mode = [
-    "risc0-zkvm/disable-dev-mode"
-]
+metal = ["risc0-zkvm/metal"]
+cuda = ["risc0-zkvm/cuda"]
+disable-dev-mode = ["risc0-zkvm/disable-dev-mode"]

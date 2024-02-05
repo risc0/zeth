@@ -72,6 +72,7 @@ fn evm(
             block.withdrawals.unwrap_or_default(),
             post_state,
         );
+        let input_state_input_hash = input.state_input.hash();
 
         let output = EthereumStrategy::build_from(&chain_spec, input).unwrap();
 
@@ -79,6 +80,7 @@ fn evm(
             hash: new_block_hash,
             head: new_block_head,
             state: new_block_state,
+            state_input_hash,
         } = output
         else {
             panic!("Invalid block")
@@ -104,5 +106,6 @@ fn evm(
         // the headers should match
         assert_eq!(new_block_head, expected_header);
         assert_eq!(new_block_hash, expected_header.hash());
+        assert_eq!(input_state_input_hash, state_input_hash);
     }
 }

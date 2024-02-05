@@ -1347,6 +1347,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "env_filter"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a009aa4810eb158359dda09d0c87378e4bbb89b5a801f016885a4707ba24f7ea"
+dependencies = [
+ "log",
+ "regex",
+]
+
+[[package]]
 name = "env_logger"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1357,6 +1367,19 @@ dependencies = [
  "log",
  "regex",
  "termcolor",
+]
+
+[[package]]
+name = "env_logger"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05e7cf40684ae96ade6232ed84582f40ce0a66efcd43a5117aef610534f8e0b8"
+dependencies = [
+ "anstream",
+ "anstyle",
+ "env_filter",
+ "humantime",
+ "log",
 ]
 
 [[package]]
@@ -4989,14 +5012,12 @@ dependencies = [
  "bonsai-sdk",
  "bytemuck",
  "clap",
- "env_logger",
+ "env_logger 0.10.2",
  "ethers-core",
  "hex",
  "log",
- "revm",
  "risc0-zkvm",
  "rstest",
- "ruint",
  "serde",
  "tempfile",
  "tokio",
@@ -5017,7 +5038,6 @@ dependencies = [
 name = "zeth-lib"
 version = "0.1.0"
 dependencies = [
- "alloy-primitives",
  "alloy-rlp",
  "alloy-rlp-derive",
  "alloy-sol-types",
@@ -5072,7 +5092,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "diff",
- "env_logger",
+ "env_logger 0.11.1",
  "ethers-core",
  "hashbrown 0.14.3",
  "log",

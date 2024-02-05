@@ -24,13 +24,14 @@ use revm::{
 };
 use ruint::aliases::U256;
 use zeth_primitives::{
+    alloy_rlp,
     receipt::Receipt,
     transactions::{
         ethereum::{EthereumTxEssence, TransactionKind},
         TxEssence,
     },
     trie::MptNode,
-    Bloom, RlpBytes,
+    Bloom,
 };
 
 use super::TxExecStrategy;
@@ -179,7 +180,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             logs_bloom.accrue_bloom(&receipt.payload.logs_bloom);
 
             // Add receipt and tx to tries
-            let trie_key = tx_no.to_rlp();
+            let trie_key = alloy_rlp::encode(tx_no);
             tx_trie
                 .insert_rlp(&trie_key, tx)
                 .context("failed to insert transaction")?;
@@ -242,7 +243,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             increase_account_balance(&mut evm.context.evm.db, withdrawal.address, amount_wei)?;
             // Add withdrawal to trie
             withdrawals_trie
-                .insert_rlp(&i.to_rlp(), withdrawal)
+                .insert_rlp(&alloy_rlp::encode(i), withdrawal)
                 .context("failed to insert withdrawal")?;
         }
 

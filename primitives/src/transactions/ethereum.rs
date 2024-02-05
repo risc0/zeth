@@ -76,9 +76,15 @@ struct TxEssenceLegacyTxSignature {
 impl SignedDecodable<TxSignature> for TxEssenceLegacy {
     fn decode_signed(buf: &mut &[u8]) -> alloy_rlp::Result<(Self, TxSignature)> {
         let signed_essence = TxEssenceLegacyTxSignature::decode(buf)?;
+        let signature = TxSignature {
+            v: signed_essence.v,
+            r: signed_essence.r,
+            s: signed_essence.s,
+        };
         Ok((
             Self {
-                chain_id: None,
+                // with EIP-155, the chain_id is derived from the signature
+                chain_id: signature.chain_id(),
                 nonce: signed_essence.nonce,
                 gas_price: signed_essence.gas_price,
                 gas_limit: signed_essence.gas_limit,
@@ -86,11 +92,7 @@ impl SignedDecodable<TxSignature> for TxEssenceLegacy {
                 value: signed_essence.value,
                 data: signed_essence.data,
             },
-            TxSignature {
-                v: signed_essence.v,
-                r: signed_essence.r,
-                s: signed_essence.s,
-            },
+            signature,
         ))
     }
 }
@@ -654,7 +656,7 @@ mod tests {
         let transaction = EthereumTransaction { essence, signature };
 
         // verify the RLP roundtrip
-        let decoded = Transaction::decode(&mut transaction.to_rlp().as_ref()).unwrap();
+        let decoded = Transaction::decode_bytes(alloy_rlp::encode(&transaction)).unwrap();
         assert_eq!(transaction, decoded);
 
         // verify that bincode serialization works
@@ -696,10 +698,9 @@ mod tests {
         .unwrap();
         let transaction = EthereumTransaction { essence, signature };
 
-        // verify that rlp encode/decode works
-        let recoded_transaction: Transaction<EthereumTxEssence> =
-            Transaction::decode(&mut transaction.to_rlp().as_ref()).unwrap();
-        assert_eq!(transaction.to_rlp(), recoded_transaction.to_rlp());
+        // verify the RLP roundtrip
+        let decoded = Transaction::decode_bytes(alloy_rlp::encode(&transaction)).unwrap();
+        assert_eq!(transaction, decoded);
 
         // verify that bincode serialization works
         let _: EthereumTransaction =
@@ -777,9 +778,8 @@ mod tests {
         .unwrap();
         let transaction = EthereumTransaction { essence, signature };
 
-        // verify that rlp encode/decode works
         // verify the RLP roundtrip
-        let decoded = Transaction::decode(&mut transaction.to_rlp().as_ref()).unwrap();
+        let decoded = Transaction::decode_bytes(alloy_rlp::encode(&transaction)).unwrap();
         assert_eq!(transaction, decoded);
 
         // verify that bincode serialization works
@@ -824,7 +824,7 @@ mod tests {
         let transaction = EthereumTransaction { essence, signature };
 
         // verify the RLP roundtrip
-        let decoded = Transaction::decode(&mut transaction.to_rlp().as_ref()).unwrap();
+        let decoded = Transaction::decode_bytes(alloy_rlp::encode(&transaction)).unwrap();
         assert_eq!(transaction, decoded);
 
         // verify that bincode serialization works

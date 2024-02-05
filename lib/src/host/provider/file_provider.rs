@@ -19,7 +19,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use ethers_core::types::{
     Block, Bytes, EIP1186ProofResponse, Transaction, TransactionReceipt, H256, U256,
 };
@@ -85,7 +85,8 @@ impl FileProvider {
     pub fn save_to_file(&self, file_path: &Path) -> Result<()> {
         if self.dirty {
             let mut encoder = flate2::write::GzEncoder::new(
-                File::create(file_path)?,
+                File::create(file_path)
+                    .with_context(|| format!("Failed to create '{}'", file_path.display()))?,
                 flate2::Compression::best(),
             );
             encoder.write_all(&serde_json::to_vec(self)?)?;

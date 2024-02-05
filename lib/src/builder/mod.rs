@@ -17,6 +17,7 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 use revm::{Database, DatabaseCommit};
+use serde::Serialize;
 use zeth_primitives::{
     block::Header,
     transactions::{ethereum::EthereumTxEssence, optimism::OptimismTxEssence, TxEssence},
@@ -135,7 +136,7 @@ where
 
 /// A bundle of strategies for building a block using [BlockBuilder].
 pub trait BlockBuilderStrategy {
-    type TxEssence: TxEssence;
+    type TxEssence: TxEssence + Serialize;
 
     type DbInitStrategy: DbInitStrategy<MemDb>;
     type HeaderPrepStrategy: HeaderPrepStrategy;

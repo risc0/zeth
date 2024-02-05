@@ -23,7 +23,7 @@ use ethers_core::types::{
     Block as EthersBlock, EIP1186ProofResponse, Transaction as EthersTransaction,
 };
 use hashbrown::{HashMap, HashSet};
-use log::info;
+use log::{debug, info};
 use zeth_primitives::{
     block::Header,
     ethers::{from_ethers_h160, from_ethers_h256, from_ethers_u256},
@@ -95,7 +95,7 @@ where
             block_no: block_no - 1,
         })?;
 
-        info!(
+        debug!(
             "Initial block: {:?} ({:?})",
             parent_block.number.unwrap(),
             parent_block.hash.unwrap()
@@ -105,12 +105,12 @@ where
         // Fetch the target block
         let block = provider.get_full_block(&BlockQuery { block_no })?;
 
-        info!(
+        debug!(
             "Final block number: {:?} ({:?})",
             block.number.unwrap(),
             block.hash.unwrap()
         );
-        info!("Transaction count: {:?}", block.transactions.len());
+        debug!("Transaction count: {:?}", block.transactions.len());
 
         // Create the provider DB
         let provider_db = ProviderDb::new(provider, parent_header.number);
@@ -248,11 +248,11 @@ impl<E: TxEssence> TryFrom<Data<E>> for BlockBuildInput<E> {
             data.proofs,
         )?;
 
-        info!(
+        debug!(
             "The partial state trie consists of {} nodes",
             state_trie.size()
         );
-        info!(
+        debug!(
             "The partial storage tries consist of {} nodes",
             storage.values().map(|(n, _)| n.size()).sum::<usize>()
         );

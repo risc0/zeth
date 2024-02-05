@@ -12,13 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    collections::VecDeque,
-    sync::{Arc, Mutex},
-};
+use std::collections::VecDeque;
 
 use anyhow::Context;
-use log::info;
+use log::{info, trace};
 use risc0_zkvm::Assumption;
 use zeth_guests::*;
 use zeth_lib::{
@@ -45,7 +42,7 @@ use crate::{
     operations::{maybe_prove, verify_bonsai_receipt},
 };
 
-pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::Result<()> {
+pub async fn derive_rollup_blocks(cli: Cli) -> anyhow::Result<()> {
     info!("Fetching data ...");
     let core_args = cli.core_args().clone();
     let op_builder_provider_factory = ProviderFactory::new(
@@ -53,7 +50,6 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
         Network::Optimism,
         core_args.op_rpc_url.clone(),
     );
-    let receipt_index = Arc::new(Mutex::new(0usize));
 
     info!("Running preflight");
     let derive_input = DeriveInput {
@@ -81,7 +77,7 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
     .await?;
 
     let (assumptions, bonsai_receipt_uuids, op_block_outputs) =
-        build_op_blocks(&cli, file_reference, receipt_index.clone(), op_block_inputs).await;
+        build_op_blocks(&cli, op_block_inputs).await;
 
     let derive_input_mem = DeriveInput {
         db: derive_machine.derive_input.db.get_mem_db(),
@@ -131,8 +127,6 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
                 OP_DERIVE_ELF,
                 &derive_output,
                 (assumptions, bonsai_receipt_uuids),
-                file_reference,
-                Some(receipt_index.clone()),
             )
             .await;
         }
@@ -153,16 +147,11 @@ pub async fn derive_rollup_blocks(cli: Cli, file_reference: &String) -> anyhow::
     Ok(())
 }
 
-pub async fn compose_derived_rollup_blocks(
-    cli: Cli,
-    composition_size: u64,
-    file_reference: &String,
-) -> anyhow::Result<()> {
+pub async fn compose_derived_rollup_blocks(cli: Cli, composition_size: u64) -> anyhow::Result<()> {
     let core_args = cli.core_args().clone();
     // OP Composition
     info!("Fetching data ...");
     let mut lift_queue = Vec::new();
-    let receipt_index = Arc::new(Mutex::new(0usize));
     let mut complete_eth_chain: Vec<Header> = Vec::new();
     for op_block_index in (0..core_args.block_count).step_by(composition_size as usize) {
         let db = RpcDb::new(
@@ -229,7 +218,7 @@ pub async fn compose_derived_rollup_blocks(
         eth_chain.push(eth_tail);
 
         let (assumptions, bonsai_receipt_uuids, op_block_outputs) =
-            build_op_blocks(&cli, file_reference, receipt_index.clone(), op_block_inputs).await;
+            build_op_blocks(&cli, op_block_inputs).await;
 
         let derive_input_mem = DeriveInput {
             db: derive_machine.derive_input.db.get_mem_db(),
@@ -262,8 +251,6 @@ pub async fn compose_derived_rollup_blocks(
             OP_DERIVE_ELF,
             &derive_output,
             (assumptions, bonsai_receipt_uuids),
-            file_reference,
-            Some(receipt_index.clone()),
         )
         .await;
 
@@ -314,16 +301,15 @@ pub async fn compose_derived_rollup_blocks(
         OP_COMPOSE_ELF,
         &prep_compose_output,
         Default::default(),
-        file_reference,
-        Some(receipt_index.clone()),
     )
     .await;
 
     // Lift
+    info!("Lifting {} proofs...", lift_queue.len());
     let mut join_queue = VecDeque::new();
     for (derive_output, derive_receipt) in lift_queue {
         let eth_tail_hash = derive_output.eth_tail.hash.0;
-        info!("Lifting ... {:?}", &derive_output);
+        trace!("Lifting ... {:?}", &derive_output);
         let lift_compose_input = ComposeInput {
             block_image_id: OP_BLOCK_ID,
             derive_image_id: OP_DERIVE_ID,
@@ -338,7 +324,7 @@ pub async fn compose_derived_rollup_blocks(
             .clone()
             .process()
             .expect("Lift composition failed.");
-        info!("Lifted ... {:?}", &lift_compose_output);
+        trace!("Lifted ... {:?}", &lift_compose_output);
 
         let lift_compose_receipt = if let Some((receipt_uuid, receipt)) = derive_receipt {
             maybe_prove(
@@ -347,8 +333,6 @@ pub async fn compose_derived_rollup_blocks(
                 OP_COMPOSE_ELF,
                 &lift_compose_output,
                 (vec![receipt.into()], vec![receipt_uuid]),
-                file_reference,
-                Some(receipt_index.clone()),
             )
             .await
         } else {
@@ -359,12 +343,13 @@ pub async fn compose_derived_rollup_blocks(
     }
 
     // Join
+    info!("Composing {} proofs...", join_queue.len());
     while join_queue.len() > 1 {
         // Pop left output
         let (left, left_receipt) = join_queue.pop_front().unwrap();
         // Only peek at right output
         let (right, _right_receipt) = join_queue.front().unwrap();
-        info!("Joining");
+        trace!("Joining");
         let ComposeOutputOperation::AGGREGATE {
             op_tail: left_op_tail,
             ..
@@ -381,9 +366,10 @@ pub async fn compose_derived_rollup_blocks(
         };
         // Push dangling workloads (odd block count) to next round
         if left_op_tail != right_op_head {
-            info!(
+            trace!(
                 "Skipping dangling workload: {} - {}",
-                left_op_tail.number, right_op_head.number
+                left_op_tail.number,
+                right_op_head.number
             );
             join_queue.push_back((left, left_receipt));
             continue;
@@ -397,7 +383,7 @@ pub async fn compose_derived_rollup_blocks(
             operation: ComposeInputOperation::JOIN { left, right },
             eth_chain_merkle_root: eth_chain_root,
         };
-        info!("Joining ...");
+        trace!("Joining ...");
         let join_compose_output = join_compose_input
             .clone()
             .process()
@@ -417,8 +403,6 @@ pub async fn compose_derived_rollup_blocks(
                     vec![left_receipt.into(), right_receipt.into()],
                     vec![left_receipt_uuid, right_receipt_uuid],
                 ),
-                file_reference,
-                Some(receipt_index.clone()),
             )
             .await
         } else {
@@ -461,8 +445,6 @@ pub async fn compose_derived_rollup_blocks(
                 vec![prep_receipt.into(), aggregate_receipt.into()],
                 vec![prep_receipt_uuid, aggregate_receipt_uuid],
             ),
-            file_reference,
-            Some(receipt_index.clone()),
         )
         .await;
     } else if let Cli::Verify(verify_args) = cli {
@@ -477,15 +459,13 @@ pub async fn compose_derived_rollup_blocks(
         info!("Preflight successful!");
     };
 
-    dbg!(&finish_compose_output);
+    trace!("Final composition output: {:?}", &finish_compose_output);
 
     Ok(())
 }
 
 async fn build_op_blocks(
     cli: &Cli,
-    file_reference: &String,
-    receipt_index: Arc<Mutex<usize>>,
     op_block_inputs: Vec<BlockBuildInput<OptimismTxEssence>>,
 ) -> (Vec<Assumption>, Vec<String>, Vec<BlockBuildOutput>) {
     let mut assumptions: Vec<Assumption> = vec![];
@@ -496,16 +476,8 @@ async fn build_op_blocks(
             .expect("Failed to build op block")
             .with_state_hashed();
 
-        if let Some((bonsai_receipt_uuid, receipt)) = maybe_prove(
-            cli,
-            &input,
-            OP_BLOCK_ELF,
-            &output,
-            Default::default(),
-            file_reference,
-            Some(receipt_index.clone()),
-        )
-        .await
+        if let Some((bonsai_receipt_uuid, receipt)) =
+            maybe_prove(cli, &input, OP_BLOCK_ELF, &output, Default::default()).await
         {
             assumptions.push(receipt.into());
             bonsai_uuids.push(bonsai_receipt_uuid);

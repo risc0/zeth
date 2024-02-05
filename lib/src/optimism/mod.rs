@@ -17,7 +17,7 @@ use core::iter::once;
 use alloy_sol_types::{sol, SolInterface};
 use anyhow::{bail, ensure, Context, Result};
 #[cfg(not(target_os = "zkvm"))]
-use log::info;
+use log::{debug, info};
 #[cfg(target_os = "zkvm")]
 use risc0_zkvm::{guest::env, serde::to_vec, sha::Digest};
 use serde::{Deserialize, Serialize};
@@ -140,7 +140,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
         let op_head_block_hash = op_head.block_header.hash();
 
         #[cfg(not(target_os = "zkvm"))]
-        info!(
+        debug!(
             "Fetched Op head (block no {}) {}",
             derive_input.op_head_block_no, op_head_block_hash
         );
@@ -176,7 +176,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
             "Ethereum head block hash mismatch"
         );
         #[cfg(not(target_os = "zkvm"))]
-        info!(
+        debug!(
             "Fetched Eth head (block no {}) {}",
             eth_block_no, set_l1_block_values.hash
         );
@@ -241,9 +241,10 @@ impl<D: BatcherDb> DeriveMachine<D> {
 
         while self.op_head_block_header.number < target_block_no {
             #[cfg(not(target_os = "zkvm"))]
-            info!(
+            log::trace!(
                 "op_block_no = {}, eth_block_no = {}",
-                self.op_head_block_header.number, self.op_batcher.state.current_l1_block_number
+                self.op_head_block_header.number,
+                self.op_batcher.state.current_l1_block_number
             );
 
             // Process next Eth block. We do this on every iteration, except the first iteration.
@@ -266,7 +267,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                 // Process the batch
 
                 #[cfg(not(target_os = "zkvm"))]
-                info!(
+                debug!(
                     "Read batch for Op block {}: timestamp={}, epoch={}, tx count={}, parent hash={:?}",
                     self.op_head_block_header.number + 1,
                     op_batch.0.timestamp,
@@ -306,7 +307,13 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     .transactions
                     .iter()
                     .map(|tx| Transaction::decode_strict(&mut tx.as_ref()))
-                    .filter_map(|tx| tx.ok())
+                    .filter_map(|tx| {
+                        #[cfg(not(target_os = "zkvm"))]
+                        if let Err(err) = &tx {
+                            log::warn!("Failed to decode transaction: {:?}", err);
+                        }
+                        tx.ok()
+                    })
                     // We always assume that chain id exists here
                     .map(
                         |mut tx: Transaction<OptimismTxEssence>| match &mut tx.essence {
@@ -483,6 +490,8 @@ impl<D: BatcherDb> DeriveMachine<D> {
                     BlockBuildOutput::FAILURE {
                         state_input_hash: bad_input_hash,
                     } => {
+                        #[cfg(not(target_os = "zkvm"))]
+                        log::warn!("Failed to build block from batch");
                         ensure!(
                             new_op_head_input.state_input.hash() == bad_input_hash,
                             "Invalid input partial hash"

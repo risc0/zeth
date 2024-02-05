@@ -74,7 +74,7 @@ impl BatcherChannels {
             }
 
             #[cfg(not(target_os = "zkvm"))]
-            log::debug!("received batcher tx: {}", tx.hash());
+            log::trace!("received batcher tx: {}", tx.hash());
 
             // From the spec:
             // "If any one frame fails to parse, the all frames in the transaction are rejected."
@@ -93,7 +93,7 @@ impl BatcherChannels {
             // load received frames into the channel bank
             for frame in frames {
                 #[cfg(not(target_os = "zkvm"))]
-                log::debug!(
+                log::trace!(
                     "received frame: channel_id={}, frame_number={}, is_last={}",
                     frame.channel_id,
                     frame.number,
@@ -117,7 +117,7 @@ impl BatcherChannels {
             while matches!(self.channels.front(), Some(channel) if channel.is_ready()) {
                 let channel = self.channels.pop_front().unwrap();
                 #[cfg(not(target_os = "zkvm"))]
-                log::debug!("received channel: {}", channel.id);
+                log::trace!("received channel: {}", channel.id);
 
                 self.batches.push_back(channel.read_batches(block_number));
             }

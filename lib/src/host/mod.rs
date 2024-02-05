@@ -17,3 +17,4 @@ pub mod preflight;
 pub mod provider;
 pub mod provider_db;
 pub mod verify;
+pub mod taiko;

@@ -70,45 +70,6 @@ pub static ETH_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| {
     }
 });
 
-#[cfg(feature = "taiko")]
-macro_rules! taiko_chain_spec {
-    ($a:ident, $b:ident ) => {
-        pub static $a: Lazy<ChainSpec> = Lazy::new(|| {
-            use zeth_primitives::taiko::$b::*;
-            ChainSpec {
-                chain_id: CHAIN_ID,
-                hard_forks: BTreeMap::from([
-                    (SpecId::SHANGHAI, ForkCondition::Block(0)),
-                    (SpecId::CANCUN, ForkCondition::TBD),
-                ]),
-                eip_1559_constants: Eip1559Constants {
-                    base_fee_change_denominator: uint!(8_U256),
-                    base_fee_max_increase_denominator: uint!(8_U256),
-                    base_fee_max_decrease_denominator: uint!(8_U256),
-                    elasticity_multiplier: uint!(2_U256),
-                },
-                l1_contract: Some(*L1_CONTRACT),
-                l1_signal_service: Some(*L1_SIGNAL_SERVICE),
-                l2_contract: Some(*L2_CONTRACT),
-                l2_signal_service: Some(*L2_SIGNAL_SERVICE),
-            }
-        });
-    };
-}
-
-taiko_chain_spec!(TAIKO_TESTNET_CHAIN_SPEC, testnet);
-taiko_chain_spec!(TAIKO_INTERNAL_DEVNET_A_CHAIN_SPEC, internal_devnet_a);
-taiko_chain_spec!(TAIKO_INTERNAL_DEVNET_B_CHAIN_SPEC, internal_devnet_b);
-
-pub fn get_taiko_chain_spec(chain: &str) -> ChainSpec {
-    match chain {
-        "testnet" => TAIKO_TESTNET_CHAIN_SPEC.clone(),
-        "internal_devnet_a" => TAIKO_INTERNAL_DEVNET_A_CHAIN_SPEC.clone(),
-        "internal_devnet_b" => TAIKO_INTERNAL_DEVNET_B_CHAIN_SPEC.clone(),
-        _ => panic!("unknown chain"),
-    }
-}
-
 /// The Optimism mainnet specification.
 pub static OP_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
     chain_id: 10,
@@ -130,6 +91,49 @@ pub static OP_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
     l2_contract: None,
     l2_signal_service: None,
 });
+
+#[cfg(feature = "taiko")]
+pub mod taiko {
+    use super::*;
+    macro_rules! taiko_chain_spec {
+        ($a:ident, $b:ident ) => {
+            pub static $a: Lazy<ChainSpec> = Lazy::new(|| {
+                use zeth_primitives::taiko::$b::*;
+                ChainSpec {
+                    chain_id: CHAIN_ID,
+                    hard_forks: BTreeMap::from([
+                        (SpecId::SHANGHAI, ForkCondition::Block(0)),
+                        (SpecId::CANCUN, ForkCondition::TBD),
+                    ]),
+                    eip_1559_constants: Eip1559Constants {
+                        base_fee_change_denominator: uint!(8_U256),
+                        base_fee_max_increase_denominator: uint!(8_U256),
+                        base_fee_max_decrease_denominator: uint!(8_U256),
+                        elasticity_multiplier: uint!(2_U256),
+                    },
+                    l1_contract: Some(*L1_CONTRACT),
+                    l1_signal_service: Some(*L1_SIGNAL_SERVICE),
+                    l2_contract: Some(*L2_CONTRACT),
+                    l2_signal_service: Some(*L2_SIGNAL_SERVICE),
+                }
+            });
+        };
+    }
+    taiko_chain_spec!(TAIKO_TESTNET_CHAIN_SPEC, testnet);
+    taiko_chain_spec!(TAIKO_INTERNAL_DEVNET_A_CHAIN_SPEC, internal_devnet_a);
+    taiko_chain_spec!(TAIKO_INTERNAL_DEVNET_B_CHAIN_SPEC, internal_devnet_b);
+
+    pub fn get_taiko_chain_spec(chain: &str) -> ChainSpec {
+        match chain {
+            "testnet" => TAIKO_TESTNET_CHAIN_SPEC.clone(),
+            "internal_devnet_a" => TAIKO_INTERNAL_DEVNET_A_CHAIN_SPEC.clone(),
+            "internal_devnet_b" => TAIKO_INTERNAL_DEVNET_B_CHAIN_SPEC.clone(),
+            _ => panic!("unknown chain"),
+        }
+    }
+}
+
+
 
 /// The condition at which a fork is activated.
 #[derive(Debug, Clone, Serialize, Deserialize)]

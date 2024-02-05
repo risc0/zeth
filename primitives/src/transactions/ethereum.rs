@@ -476,6 +476,10 @@ impl TxEssence for EthereumTxEssence {
     }
 }
 
+#[derive(ThisError, Debug)]
+#[error(transparent)]
+struct EcdsaError(#[from] k256::ecdsa::Error);
+
 #[cfg(test)]
 mod tests {
     use alloy_primitives::{address, b256};

@@ -12,25 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #![feature(path_file_prefix)]
-#![cfg_attr(target_os = "zkvm", no_std)]
-#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(any(not(feature = "std"), target_os = "zkvm"), no_std)]
 
 extern crate alloc;
 extern crate core;
 
-pub mod block_builder;
+pub mod builder;
 pub mod consts;
 pub mod input;
 pub mod mem_db;
-pub mod preparation;
+
+#[cfg(feature = "optimism")]
+pub mod optimism;
 
 #[cfg(feature = "taiko")]
 pub mod taiko;
 
-#[cfg(feature = "std")]
-#[cfg(not(target_os = "zkvm"))]
+#[cfg(any(feature = "std", not(target_os = "zkvm")))]
 pub mod host;
 
+#[cfg(feature = "optimism")]
 mod utils;
 
 pub use zeth_primitives::transactions::{ethereum::EthereumTxEssence, optimism::OptimismTxEssence};

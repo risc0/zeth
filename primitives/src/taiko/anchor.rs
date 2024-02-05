@@ -26,7 +26,7 @@ sol! {
 }
 
 /// decode anchor arguments from anchor transaction
-pub fn decode_anchor_call_args(data: &[u8]) -> Result<anchorCall> {
+pub fn decode_anchor_call(data: &[u8]) -> Result<anchorCall> {
     let anchor_call = anchorCall::abi_decode(data, false)
         .map_err(|e| anyhow!(AbiEncodeError::from(e)))
         .with_context(|| "failed to decode anchor call")?;

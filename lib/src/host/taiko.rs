@@ -12,7 +12,7 @@ use zeth_primitives::{
     keccak,
     taiko::{
         deposits_hash, string_to_bytes32, BlockMetadata, EthDeposit, ProtocolInstance, Transition,
-        ANCHOR_GAS_LIMIT, *,
+        ANCHOR_GAS_LIMIT, GOLDEN_TOUCH_ACCOUNT,
     },
     transactions::EthereumTransaction,
     withdrawal::Withdrawal,
@@ -72,7 +72,7 @@ pub fn get_taiko_initial_data<N: NetworkStrategyBundle<TxEssence = EthereumTxEss
         l1SignalRoot: anchor_l1_signal_root,
         l1Height: l1_block_no,
         parentGasUsed: l2_parent_gas_used,
-    } = decode_anchor_call_args(&l2_fini_block.transactions[0].input)?;
+    } = decode_anchor_call(&l2_fini_block.transactions[0].input)?;
 
     let (mut l1_provider, _l1_init_block, l1_fini_block, l1_signal_root, _l1_input) = fetch_data(
         "L1",
@@ -99,7 +99,7 @@ pub fn get_taiko_initial_data<N: NetworkStrategyBundle<TxEssence = EthereumTxEss
     let proposeBlockCall {
         params: _,
         txList: l2_tx_list,
-    } = decode_propose_block_call_args(&propose_tx.input)?;
+    } = decode_propose_block(&propose_tx.input)?;
 
     // 1. check l2 parent gas used
     if l2_init_block.gas_used != U256::from(l2_parent_gas_used) {
@@ -141,7 +141,7 @@ pub fn get_taiko_initial_data<N: NetworkStrategyBundle<TxEssence = EthereumTxEss
     };
 
     // rebuild transaction list by tx_list from l1 contract
-    rebuild_and_precheck_block(&l2_chain_spec, &mut l2_fini_block, &extra)?;
+    decode_and_precheck_block(&l2_chain_spec, &mut l2_fini_block, &extra)?;
 
     // execute transactions and get states
     let init = execute_data::<N>(
@@ -154,8 +154,8 @@ pub fn get_taiko_initial_data<N: NetworkStrategyBundle<TxEssence = EthereumTxEss
     Ok((init, extra))
 }
 
-// rebuild the block with anchor transaction and txlist from l1 contract, then precheck it
-pub fn rebuild_and_precheck_block(
+// decode the block with anchor transaction and txlist from l1 contract, then precheck it
+pub fn decode_and_precheck_block(
     l2_chain_spec: &ChainSpec,
     l2_fini: &mut Block<EthersTransaction>,
     extra: &TaikoExtra,

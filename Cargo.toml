@@ -23,10 +23,6 @@ lto = true
 [profile.release.build-override]
 opt-level = 3
 
-[patch.crates-io]
-# use optimized risc0 circuit
-revm = { git = "https://github.com/johntaiko/revm", branch = "feat/taiko" }
-revm-primitives = { git = "https://github.com/johntaiko/revm", branch = "feat/taiko" }
 
 
 [workspace.dependencies]
@@ -34,8 +30,8 @@ bonsai-sdk = "0.5"
 hashbrown = { version = "0.14", features = ["inline-more"] }
 risc0-build = "0.19"
 risc0-zkvm = { version = "0.19", default-features = false }
-revm-primitives = { git = "https://github.com/bluealloy/revm.git", rev = "6cd0bfc96da64513affe01c1964dd80beeb8c620", default_features = false }
-revm = { git = "https://github.com/bluealloy/revm.git", rev = "6cd0bfc96da64513affe01c1964dd80beeb8c620", default-features = false, features = [
+revm-primitives = { git = "https://github.com/bluealloy/revm.git", branch = "main", default_features = false }
+revm = { git = "https://github.com/bluealloy/revm.git", branch = "main", default-features = false, features = [
     "std",
     "serde",
     "optimism",

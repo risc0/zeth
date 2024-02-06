@@ -42,7 +42,7 @@ use crate::{
     operations::{maybe_prove, verify_bonsai_receipt},
 };
 
-pub async fn derive_rollup_blocks(cli: Cli) -> anyhow::Result<Option<(String, Receipt)>> {
+pub async fn derive_rollup_blocks(cli: &Cli) -> anyhow::Result<Option<(String, Receipt)>> {
     info!("Fetching data ...");
     let core_args = cli.core_args().clone();
     let op_builder_provider_factory = ProviderFactory::new(
@@ -77,7 +77,7 @@ pub async fn derive_rollup_blocks(cli: Cli) -> anyhow::Result<Option<(String, Re
     .await?;
 
     let (assumptions, bonsai_receipt_uuids, op_block_outputs) =
-        build_op_blocks(&cli, op_block_inputs).await;
+        build_op_blocks(cli, op_block_inputs).await;
 
     let derive_input_mem = DeriveInput {
         db: derive_machine.derive_input.db.get_mem_db(),
@@ -117,10 +117,10 @@ pub async fn derive_rollup_blocks(cli: Cli) -> anyhow::Result<Option<(String, Re
         println!("Derived: {} {}", derived_block.number, derived_block.hash);
     }
 
-    let final_result = match &cli {
+    let final_result = match cli {
         Cli::Prove(..) => {
             maybe_prove(
-                &cli,
+                cli,
                 &derive_input_mem,
                 OP_DERIVE_ELF,
                 &derive_output,
@@ -147,7 +147,7 @@ pub async fn derive_rollup_blocks(cli: Cli) -> anyhow::Result<Option<(String, Re
 }
 
 pub async fn compose_derived_rollup_blocks(
-    cli: Cli,
+    cli: &Cli,
     composition_size: u64,
 ) -> anyhow::Result<Option<(String, Receipt)>> {
     let core_args = cli.core_args().clone();
@@ -220,7 +220,7 @@ pub async fn compose_derived_rollup_blocks(
         eth_chain.push(eth_tail);
 
         let (assumptions, bonsai_receipt_uuids, op_block_outputs) =
-            build_op_blocks(&cli, op_block_inputs).await;
+            build_op_blocks(cli, op_block_inputs).await;
 
         let derive_input_mem = DeriveInput {
             db: derive_machine.derive_input.db.get_mem_db(),
@@ -248,7 +248,7 @@ pub async fn compose_derived_rollup_blocks(
         }
 
         let receipt = maybe_prove(
-            &cli,
+            cli,
             &derive_input_mem,
             OP_DERIVE_ELF,
             &derive_output,
@@ -298,7 +298,7 @@ pub async fn compose_derived_rollup_blocks(
         .expect("Prep composition failed.");
 
     let prep_compose_receipt = maybe_prove(
-        &cli,
+        cli,
         &prep_compose_input,
         OP_COMPOSE_ELF,
         &prep_compose_output,
@@ -330,7 +330,7 @@ pub async fn compose_derived_rollup_blocks(
 
         let lift_compose_receipt = if let Some((receipt_uuid, receipt)) = derive_receipt {
             maybe_prove(
-                &cli,
+                cli,
                 &lift_compose_input,
                 OP_COMPOSE_ELF,
                 &lift_compose_output,
@@ -397,7 +397,7 @@ pub async fn compose_derived_rollup_blocks(
         ) = (left_receipt, right_receipt)
         {
             maybe_prove(
-                &cli,
+                cli,
                 &join_compose_input,
                 OP_COMPOSE_ELF,
                 &join_compose_output,
@@ -439,7 +439,7 @@ pub async fn compose_derived_rollup_blocks(
     ) = (prep_compose_receipt, aggregate_receipt)
     {
         maybe_prove(
-            &cli,
+            cli,
             &finish_compose_input,
             OP_COMPOSE_ELF,
             &finish_compose_output,

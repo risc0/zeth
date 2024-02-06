@@ -15,16 +15,17 @@
 pub mod chains;
 pub mod info;
 pub mod rollups;
+pub mod snarks;
 
 use std::fmt::Debug;
 
+use bonsai_sdk::alpha::responses::SnarkReceipt;
 use log::{debug, error, info, warn};
 use risc0_zkvm::{
     compute_image_id, default_prover,
     serde::to_vec,
     sha::{Digest, Digestible},
-    Assumption, ExecutorEnv, ExecutorImpl, FileSegmentRef, Groth16Receipt, Groth16Seal,
-    InnerReceipt, Receipt, Session,
+    Assumption, ExecutorEnv, ExecutorImpl, FileSegmentRef, Receipt, Session,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use tempfile::tempdir;
@@ -36,12 +37,12 @@ pub async fn stark2snark(
     image_id: Digest,
     stark_uuid: String,
     stark_receipt: Receipt,
-) -> anyhow::Result<(String, Receipt)> {
+) -> anyhow::Result<(String, SnarkReceipt)> {
     info!("Submitting SNARK workload");
     // Label snark output as journal digest
     let receipt_label = format!(
         "{}-{}",
-        hex::encode(image_id),
+        hex::encode_upper(image_id),
         hex::encode(keccak(stark_receipt.journal.bytes.digest()))
     );
     // Load cached receipt if found
@@ -56,8 +57,6 @@ pub async fn stark2snark(
         stark_uuid
     };
 
-    let claim = stark_receipt.get_claim()?;
-
     let client = bonsai_sdk::alpha_async::get_client_from_env(risc0_zkvm::VERSION).await?;
     let snark_uuid = client.create_snark(stark_uuid)?;
 
@@ -68,29 +67,9 @@ pub async fn stark2snark(
             info!("Current status: {} - continue polling...", res.status,);
             std::thread::sleep(std::time::Duration::from_secs(15));
         } else if res.status == "SUCCEEDED" {
-            let snark = res
+            break res
                 .output
-                .expect("Bonsai response is missing SnarkReceipt.")
-                .snark;
-            // Convert Bonsai SnarkReceipt to legacy receipt
-            let seal = Groth16Seal {
-                a: snark.a,
-                b: snark.b,
-                c: snark.c,
-            };
-
-            let receipt = Receipt::new(
-                InnerReceipt::Groth16(Groth16Receipt {
-                    seal: seal.to_vec(),
-                    claim,
-                }),
-                stark_receipt.journal.bytes,
-            );
-
-            // verify validity of snark receipt
-            receipt.verify(image_id)?;
-
-            break receipt;
+                .expect("Bonsai response is missing SnarkReceipt.");
         } else {
             panic!(
                 "Workflow exited: {} - | err: {}",
@@ -98,6 +77,21 @@ pub async fn stark2snark(
                 res.error_msg.unwrap_or_default()
             );
         }
+    };
+
+    let stark_psd = stark_receipt.get_claim()?.post.digest();
+    let snark_psd = Digest::try_from(snark_receipt.post_state_digest.as_slice())?;
+
+    if stark_psd != snark_psd {
+        error!("SNARK/STARK Post State Digest mismatch!");
+        error!("STARK: {}", hex::encode(stark_psd));
+        error!("SNARK: {}", hex::encode(snark_psd));
+    }
+
+    if snark_receipt.journal != stark_receipt.journal.bytes {
+        error!("SNARK/STARK Receipt Journal mismatch!");
+        error!("STARK: {}", hex::encode(&stark_receipt.journal.bytes));
+        error!("SNARK: {}", hex::encode(&snark_receipt.journal));
     };
 
     let snark_data = (snark_uuid.uuid, snark_receipt);

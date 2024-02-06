@@ -33,7 +33,7 @@ use crate::{
 };
 
 pub async fn build_chain_blocks<N: BlockBuilderStrategy>(
-    cli: Cli,
+    cli: &Cli,
     rpc_url: Option<String>,
     chain_spec: ChainSpec,
     guest_elf: &[u8],
@@ -88,7 +88,7 @@ where
     }
 
     let compressed_output = output.with_state_hashed();
-    let result = match &cli {
+    let result = match cli {
         Cli::Build(..) => None,
         Cli::Run(run_args) => {
             execute(
@@ -103,7 +103,7 @@ where
         }
         Cli::Prove(..) => {
             maybe_prove(
-                &cli,
+                cli,
                 &input,
                 guest_elf,
                 &compressed_output,

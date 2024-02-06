@@ -22,7 +22,7 @@ use log::info;
 use risc0_zkvm::sha::Digest;
 use zeth::{
     cli::Cli,
-    operations::{chains, info::op_info, rollups, stark2snark},
+    operations::{chains, info::op_info, rollups, snarks::verify_groth16_snark, stark2snark},
 };
 use zeth_guests::*;
 use zeth_lib::{
@@ -58,14 +58,8 @@ async fn main() -> Result<()> {
         return op_info(cli).await;
     }
 
-    // Prepare to snarkify resulting stark
-    let (should_snarkify, can_snarkify) = if let Cli::Prove(prove_args) = &cli {
-        (prove_args.snark, prove_args.submit_to_bonsai)
-    } else {
-        (false, false)
-    };
-    // Don't let the local prover call Bonsai
-    if !can_snarkify {
+    // Prevent internal prover from calling Bonsai on its own
+    if !cli.submit_to_bonsai() {
         env::remove_var("BONSAI_API_URL");
         env::remove_var("BONSAI_API_KEY");
     }
@@ -79,7 +73,7 @@ async fn main() -> Result<()> {
             (
                 ETH_BLOCK_ID,
                 chains::build_chain_blocks::<EthereumStrategy>(
-                    cli,
+                    &cli,
                     rpc_url,
                     ETH_MAINNET_CHAIN_SPEC.clone(),
                     ETH_BLOCK_ELF,
@@ -92,7 +86,7 @@ async fn main() -> Result<()> {
             (
                 OP_BLOCK_ID,
                 chains::build_chain_blocks::<OptimismStrategy>(
-                    cli,
+                    &cli,
                     rpc_url,
                     OP_MAINNET_CHAIN_SPEC.clone(),
                     OP_BLOCK_ELF,
@@ -104,24 +98,30 @@ async fn main() -> Result<()> {
             if let Some(composition_size) = cli.composition() {
                 (
                     OP_COMPOSE_ID,
-                    rollups::compose_derived_rollup_blocks(cli, composition_size).await?,
+                    rollups::compose_derived_rollup_blocks(&cli, composition_size).await?,
                 )
             } else {
-                (OP_DERIVE_ID, rollups::derive_rollup_blocks(cli).await?)
+                (OP_DERIVE_ID, rollups::derive_rollup_blocks(&cli).await?)
             }
         }
     };
 
-    if should_snarkify {
+    // Create/verify Groth16 SNARK
+    if cli.snark() {
         let Some((stark_uuid, stark_receipt)) = stark else {
             panic!("No STARK data to snarkify!");
         };
 
-        if !can_snarkify {
+        if !cli.submit_to_bonsai() {
             panic!("Bonsai submission flag required to create a SNARK!");
         }
 
-        stark2snark(Digest::from(image_id), stark_uuid, stark_receipt).await?;
+        let image_id = Digest::from(image_id);
+        let (snark_uuid, snark_receipt) = stark2snark(image_id, stark_uuid, stark_receipt).await?;
+
+        info!("Validating SNARK uuid: {}", snark_uuid);
+
+        verify_groth16_snark(&cli, image_id, snark_receipt).await?;
     }
 
     Ok(())

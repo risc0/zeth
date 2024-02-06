@@ -49,7 +49,7 @@ impl BlockBuildOutput {
         }
     }
 
-    /// Replaces the `state` [`MptNode`] with its root hash
+    /// Replaces the `state` [`MptNode`] with its root hash, returning the original state.
     pub fn replace_state_with_hash(&mut self) -> Option<MptNode> {
         if let BlockBuildOutput::SUCCESS {
             head: new_block_head,

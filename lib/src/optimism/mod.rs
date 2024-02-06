@@ -366,7 +366,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                         self.op_head_block_header.number,
                     );
                     let preflight_data = OptimismStrategy::preflight_with_local_data(
-                        OP_MAINNET_CHAIN_SPEC.clone(),
+                        &OP_MAINNET_CHAIN_SPEC,
                         provider_db,
                         new_op_head_input.clone(),
                     )

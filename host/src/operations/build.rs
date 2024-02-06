@@ -32,30 +32,35 @@ use crate::{
     operations::{execute, maybe_prove, verify_bonsai_receipt},
 };
 
-pub async fn build_chain_blocks<N: BlockBuilderStrategy>(
+/// Build a single block using the specified strategy.
+pub async fn build_block<N: BlockBuilderStrategy>(
     cli: Cli,
     rpc_url: Option<String>,
-    chain_spec: ChainSpec,
+    chain_spec: &ChainSpec,
     guest_elf: &[u8],
 ) -> anyhow::Result<()>
 where
     N::TxEssence: 'static + Send + TryFrom<EthersTransaction> + Serialize + Deserialize<'static>,
     <N::TxEssence as TryFrom<EthersTransaction>>::Error: Debug,
 {
-    let core_args = cli.core_args().clone();
+    let build_args = cli.build_args().clone();
+    if build_args.block_count > 1 {
+        warn!("Building multiple blocks is not supported. Only the first block will be built.");
+    }
+
     // Fetch all of the initial data
-    let rpc_cache = core_args.cache.as_ref().map(|dir| {
+    let rpc_cache = build_args.cache.as_ref().map(|dir| {
         cache_file_path(
             dir,
-            &core_args.network.to_string(),
-            core_args.block_number,
+            &build_args.network.to_string(),
+            build_args.block_number,
             "json.gz",
         )
     });
 
     let init_spec = chain_spec.clone();
     let preflight_result = tokio::task::spawn_blocking(move || {
-        N::preflight_with_external_data(init_spec, rpc_cache, rpc_url, core_args.block_number)
+        N::preflight_with_external_data(&init_spec, rpc_cache, rpc_url, build_args.block_number)
     })
     .await?;
     let preflight_data = preflight_result.context("preflight failed")?;
@@ -68,19 +73,16 @@ where
 
     // Verify that the transactions run correctly
     info!("Running from memory ...");
-    let output = N::build_from(&chain_spec, input.clone()).context("Error while building block")?;
+    let output = N::build_from(chain_spec, input.clone()).context("Error while building block")?;
 
     match &output {
         BlockBuildOutput::SUCCESS {
-            hash: new_block_hash,
-            head: new_block_head,
-            state: new_block_state,
-            ..
+            hash, head, state, ..
         } => {
             info!("Verifying final state using provider data ...");
-            preflight_data.verify_block(new_block_head, new_block_state)?;
+            preflight_data.verify_block(head, state)?;
 
-            info!("Final block hash derived successfully. {}", new_block_hash);
+            info!("Final block hash derived successfully. {}", hash);
         }
         BlockBuildOutput::FAILURE { .. } => {
             warn!("Proving bad block construction!")
@@ -93,11 +95,11 @@ where
         Cli::Run(run_args) => {
             execute(
                 &input,
-                run_args.exec_args.execution_po2,
-                run_args.exec_args.profile,
+                run_args.execution_po2,
+                run_args.profile,
                 guest_elf,
                 &compressed_output,
-                &cli.execution_label(),
+                &cli.execution_tag(),
             );
         }
         Cli::Prove(..) => {
@@ -118,9 +120,6 @@ where
                 4,
             )
             .await?;
-        }
-        Cli::OpInfo(..) => {
-            unreachable!()
         }
     }
 

@@ -15,9 +15,8 @@
 //! Constants for the Ethereum protocol.
 extern crate alloc;
 
-use std::{collections::BTreeMap, str::FromStr};
+use std::collections::BTreeMap;
 
-use anyhow::bail;
 use once_cell::sync::Lazy;
 use revm::primitives::SpecId;
 use serde::{Deserialize, Serialize};
@@ -157,40 +156,6 @@ impl ChainSpec {
     /// Returns the Eip1559 constants
     pub fn gas_constants(&self) -> &Eip1559Constants {
         &self.eip_1559_constants
-    }
-}
-
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Serialize, Deserialize)]
-pub enum Network {
-    /// The Ethereum Mainnet
-    #[default]
-    Ethereum,
-    /// The Optimism Mainnet
-    Optimism,
-    /// The Optimism Mainnet as derived from the Ethereum Mainnet
-    OptimismDerived,
-}
-
-impl FromStr for Network {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "ethereum" => Ok(Network::Ethereum),
-            "optimism" => Ok(Network::Optimism),
-            "optimism-derived" => Ok(Network::OptimismDerived),
-            _ => bail!("Unknown network"),
-        }
-    }
-}
-
-impl ToString for Network {
-    fn to_string(&self) -> String {
-        match self {
-            Network::Ethereum => String::from("ethereum"),
-            Network::Optimism => String::from("optimism"),
-            Network::OptimismDerived => String::from("optimism-derived"),
-        }
     }
 }
 

@@ -20,7 +20,7 @@ use risc0_zkvm::Assumption;
 use zeth_guests::*;
 use zeth_lib::{
     builder::{BlockBuilderStrategy, OptimismStrategy},
-    consts::{Network, OP_MAINNET_CHAIN_SPEC},
+    consts::OP_MAINNET_CHAIN_SPEC,
     host::{rpc_db::RpcDb, ProviderFactory},
     input::BlockBuildInput,
     optimism::{
@@ -38,28 +38,28 @@ use zeth_primitives::{
 };
 
 use crate::{
-    cli::Cli,
+    cli::{Cli, Network},
     operations::{maybe_prove, verify_bonsai_receipt},
 };
 
 pub async fn derive_rollup_blocks(cli: Cli) -> anyhow::Result<()> {
     info!("Fetching data ...");
-    let core_args = cli.core_args().clone();
+    let build_args = cli.build_args();
     let op_builder_provider_factory = ProviderFactory::new(
-        core_args.cache.clone(),
-        Network::Optimism,
-        core_args.op_rpc_url.clone(),
+        build_args.cache.clone(),
+        Network::Optimism.to_string(),
+        build_args.op_rpc_url.clone(),
     );
 
     info!("Running preflight");
     let derive_input = DeriveInput {
         db: RpcDb::new(
-            core_args.eth_rpc_url.clone(),
-            core_args.op_rpc_url.clone(),
-            core_args.cache.clone(),
+            build_args.eth_rpc_url.clone(),
+            build_args.op_rpc_url.clone(),
+            build_args.cache.clone(),
         ),
-        op_head_block_no: core_args.block_number,
-        op_derive_block_count: core_args.block_count,
+        op_head_block_no: build_args.block_number,
+        op_derive_block_count: build_args.block_count,
         op_block_outputs: vec![],
         block_image_id: OP_BLOCK_ID,
     };
@@ -81,8 +81,8 @@ pub async fn derive_rollup_blocks(cli: Cli) -> anyhow::Result<()> {
 
     let derive_input_mem = DeriveInput {
         db: derive_machine.derive_input.db.get_mem_db(),
-        op_head_block_no: core_args.block_number,
-        op_derive_block_count: core_args.block_count,
+        op_head_block_no: build_args.block_number,
+        op_derive_block_count: build_args.block_count,
         op_block_outputs,
         block_image_id: OP_BLOCK_ID,
     };
@@ -139,35 +139,32 @@ pub async fn derive_rollup_blocks(cli: Cli) -> anyhow::Result<()> {
             )
             .await?;
         }
-        Cli::OpInfo(..) => {
-            unreachable!()
-        }
     }
 
     Ok(())
 }
 
 pub async fn compose_derived_rollup_blocks(cli: Cli, composition_size: u64) -> anyhow::Result<()> {
-    let core_args = cli.core_args().clone();
+    let build_args = cli.build_args();
     // OP Composition
     info!("Fetching data ...");
     let mut lift_queue = Vec::new();
     let mut complete_eth_chain: Vec<Header> = Vec::new();
-    for op_block_index in (0..core_args.block_count).step_by(composition_size as usize) {
+    for op_block_index in (0..build_args.block_count).step_by(composition_size as usize) {
         let db = RpcDb::new(
-            core_args.eth_rpc_url.clone(),
-            core_args.op_rpc_url.clone(),
-            core_args.cache.clone(),
+            build_args.eth_rpc_url.clone(),
+            build_args.op_rpc_url.clone(),
+            build_args.cache.clone(),
         );
         let op_builder_provider_factory = ProviderFactory::new(
-            core_args.cache.clone(),
-            Network::Optimism,
-            core_args.op_rpc_url.clone(),
+            build_args.cache.clone(),
+            Network::Optimism.to_string(),
+            build_args.op_rpc_url.clone(),
         );
 
         let derive_input = DeriveInput {
             db,
-            op_head_block_no: core_args.block_number + op_block_index,
+            op_head_block_no: build_args.block_number + op_block_index,
             op_derive_block_count: composition_size,
             op_block_outputs: vec![],
             block_image_id: OP_BLOCK_ID,
@@ -222,7 +219,7 @@ pub async fn compose_derived_rollup_blocks(cli: Cli, composition_size: u64) -> a
 
         let derive_input_mem = DeriveInput {
             db: derive_machine.derive_input.db.get_mem_db(),
-            op_head_block_no: core_args.block_number + op_block_index,
+            op_head_block_no: build_args.block_number + op_block_index,
             op_derive_block_count: composition_size,
             op_block_outputs,
             block_image_id: OP_BLOCK_ID,

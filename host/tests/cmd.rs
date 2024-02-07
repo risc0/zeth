@@ -23,8 +23,8 @@ fn file_prefix(path: &Path) -> &str {
 }
 
 #[rstest]
-fn zeth_ethereum(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
-    let block_no = file_prefix(&path);
+fn build_ethereum(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
+    let block_number = file_prefix(&path);
 
     Command::cargo_bin("zeth")
         .unwrap()
@@ -32,15 +32,15 @@ fn zeth_ethereum(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
             "build",
             "--network=ethereum",
             "--cache=testdata",
-            &format!("--block-number={}", block_no),
+            &format!("--block-number={}", block_number),
         ])
         .assert()
         .success();
 }
 
 #[rstest]
-fn zeth_optimism(#[files("testdata/optimism/*.json.gz")] path: PathBuf) {
-    let block_no = file_prefix(&path);
+fn build_optimism(#[files("testdata/optimism/*.json.gz")] path: PathBuf) {
+    let block_number = file_prefix(&path);
 
     Command::cargo_bin("zeth")
         .unwrap()
@@ -48,7 +48,7 @@ fn zeth_optimism(#[files("testdata/optimism/*.json.gz")] path: PathBuf) {
             "build",
             "--network=optimism",
             "--cache=testdata",
-            &format!("--block-number={}", block_no),
+            &format!("--block-number={}", block_number),
         ])
         .assert()
         .success();
@@ -56,15 +56,29 @@ fn zeth_optimism(#[files("testdata/optimism/*.json.gz")] path: PathBuf) {
 
 #[rstest]
 #[case(109279674, 6)]
-fn derive_optimism(#[case] op_block_no: u64, #[case] op_blocks: u64) {
+fn build_optimism_derived(#[case] block_number: u64, #[case] block_count: u64) {
     Command::cargo_bin("zeth")
         .unwrap()
         .args([
             "build",
-            "--network=optimism-derived",
-            "--cache=testdata/derivation",
-            &format!("--block-number={}", op_block_no),
-            &format!("--block-count={}", op_blocks),
+            "--network=optimism",
+            "--cache=testdata",
+            &format!("--block-number={}", block_number),
+            &format!("--block-count={}", block_count),
+        ])
+        .assert()
+        .success();
+
+    // test composition
+    Command::cargo_bin("zeth")
+        .unwrap()
+        .args([
+            "build",
+            "--network=optimism",
+            "--cache=testdata",
+            &format!("--block-number={}", block_number),
+            &format!("--block-count={}", block_count),
+            "--composition=1",
         ])
         .assert()
         .success();

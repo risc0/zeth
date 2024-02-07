@@ -89,7 +89,7 @@ pub struct DeriveInput<D> {
     /// Block number of the L2 head.
     pub op_head_block_no: u64,
     /// Block count for the operation.
-    pub op_derive_block_count: u64,
+    pub op_derive_block_count: u32,
     /// Block building data for execution
     pub op_block_outputs: Vec<BlockBuildOutput>,
     /// Image id of block builder guest
@@ -226,7 +226,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
             "Op head block number mismatch!"
         );
         let target_block_no =
-            self.derive_input.op_head_block_no + self.derive_input.op_derive_block_count;
+            self.derive_input.op_head_block_no + self.derive_input.op_derive_block_count as u64;
 
         // Save starting op_head
         let op_head = BlockId {

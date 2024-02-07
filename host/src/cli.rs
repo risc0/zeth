@@ -110,14 +110,14 @@ pub struct BuildArgs {
 
     #[clap(short = 'n', long, require_equals = true, default_value_t = 1)]
     /// Number of blocks to derive (optimism-derived network only)
-    pub block_count: u64,
+    pub block_count: u32,
 
     #[clap(short='m', long, require_equals = true, num_args = 0..=1, default_missing_value = "1")]
     /// Derive the Optimism blocks using proof composition (optimism-derived network
     /// only); the value specifies the the number of blocks to process per derivation call
     ///
     /// [default when the flag is present: 1]
-    pub composition: Option<u64>,
+    pub composition: Option<u32>,
 }
 
 impl Tag for BuildArgs {

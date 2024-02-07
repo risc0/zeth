@@ -144,7 +144,7 @@ pub async fn derive_rollup_blocks(cli: Cli) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn compose_derived_rollup_blocks(cli: Cli, composition_size: u64) -> anyhow::Result<()> {
+pub async fn compose_derived_rollup_blocks(cli: Cli, composition_size: u32) -> anyhow::Result<()> {
     let build_args = cli.build_args();
     // OP Composition
     info!("Fetching data ...");
@@ -164,7 +164,7 @@ pub async fn compose_derived_rollup_blocks(cli: Cli, composition_size: u64) -> a
 
         let derive_input = DeriveInput {
             db,
-            op_head_block_no: build_args.block_number + op_block_index,
+            op_head_block_no: build_args.block_number + op_block_index as u64,
             op_derive_block_count: composition_size,
             op_block_outputs: vec![],
             block_image_id: OP_BLOCK_ID,
@@ -219,7 +219,7 @@ pub async fn compose_derived_rollup_blocks(cli: Cli, composition_size: u64) -> a
 
         let derive_input_mem = DeriveInput {
             db: derive_machine.derive_input.db.get_mem_db(),
-            op_head_block_no: build_args.block_number + op_block_index,
+            op_head_block_no: build_args.block_number + op_block_index as u64,
             op_derive_block_count: composition_size,
             op_block_outputs,
             block_image_id: OP_BLOCK_ID,

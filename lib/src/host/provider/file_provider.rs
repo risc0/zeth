@@ -24,34 +24,60 @@ use ethers_core::types::{
     Block, Bytes, EIP1186ProofResponse, Transaction, TransactionReceipt, H256, U256,
 };
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 
 use super::{AccountQuery, BlockQuery, MutProvider, ProofQuery, Provider, StorageQuery};
 
-#[serde_as]
 #[derive(Clone, Deserialize, Serialize)]
 pub struct FileProvider {
     #[serde(skip)]
     file_path: PathBuf,
     #[serde(skip)]
     dirty: bool,
-    #[serde_as(as = "Vec<(_, _)>")]
+    #[serde(with = "ordered_map")]
     full_blocks: HashMap<BlockQuery, Block<Transaction>>,
-    #[serde_as(as = "Vec<(_, _)>")]
+    #[serde(with = "ordered_map")]
     partial_blocks: HashMap<BlockQuery, Block<H256>>,
     #[serde(default)]
-    #[serde_as(as = "Vec<(_, _)>")]
+    #[serde(with = "ordered_map")]
     receipts: HashMap<BlockQuery, Vec<TransactionReceipt>>,
-    #[serde_as(as = "Vec<(_, _)>")]
+    #[serde(with = "ordered_map")]
     proofs: HashMap<ProofQuery, EIP1186ProofResponse>,
-    #[serde_as(as = "Vec<(_, _)>")]
+    #[serde(with = "ordered_map")]
     transaction_count: HashMap<AccountQuery, U256>,
-    #[serde_as(as = "Vec<(_, _)>")]
+    #[serde(with = "ordered_map")]
     balance: HashMap<AccountQuery, U256>,
-    #[serde_as(as = "Vec<(_, _)>")]
+    #[serde(with = "ordered_map")]
     code: HashMap<AccountQuery, Bytes>,
-    #[serde_as(as = "Vec<(_, _)>")]
+    #[serde(with = "ordered_map")]
     storage: HashMap<StorageQuery, H256>,
+}
+
+/// A serde helper to serialize a HashMap into a vector sorted by key
+mod ordered_map {
+    use std::{collections::HashMap, hash::Hash};
+
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S, K, V>(map: &HashMap<K, V>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        K: Ord + Serialize,
+        V: Serialize,
+    {
+        let mut vec: Vec<(_, _)> = map.iter().collect();
+        vec.sort_unstable_by_key(|&(k, _)| k);
+        vec.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D, K, V>(deserializer: D) -> Result<HashMap<K, V>, D::Error>
+    where
+        D: Deserializer<'de>,
+        K: Eq + Hash + Deserialize<'de>,
+        V: Deserialize<'de>,
+    {
+        let vec = Vec::<(_, _)>::deserialize(deserializer)?;
+        Ok(vec.into_iter().collect())
+    }
 }
 
 impl FileProvider {

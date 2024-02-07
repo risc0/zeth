@@ -61,8 +61,8 @@ fn build_optimism_derived(#[case] block_number: u64, #[case] block_count: u64) {
         .unwrap()
         .args([
             "build",
-            "--network=optimism",
-            "--cache=testdata",
+            "--network=optimism-derived",
+            "--cache=testdata/derivation",
             &format!("--block-number={}", block_number),
             &format!("--block-count={}", block_count),
         ])
@@ -74,8 +74,8 @@ fn build_optimism_derived(#[case] block_number: u64, #[case] block_count: u64) {
         .unwrap()
         .args([
             "build",
-            "--network=optimism",
-            "--cache=testdata",
+            "--network=optimism-derived",
+            "--cache=testdata/derivation",
             &format!("--block-number={}", block_number),
             &format!("--block-count={}", block_count),
             "--composition=1",

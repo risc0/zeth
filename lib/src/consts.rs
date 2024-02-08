@@ -67,9 +67,9 @@ pub static OP_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
     chain_id: 10,
     max_spec_id: SpecId::CANYON,
     hard_forks: BTreeMap::from([
-        (SpecId::BEDROCK, ForkCondition::Block(105235063)),
+        (SpecId::BEDROCK, ForkCondition::Timestamp(1679079600)),
         // Regolith is activated from day 1 of Bedrock on mainnet
-        (SpecId::REGOLITH, ForkCondition::Block(105235063)),
+        (SpecId::REGOLITH, ForkCondition::Timestamp(1679079600)),
         // Canyon is activated 2024-01-11 at 17:00:01 UTC
         (SpecId::CANYON, ForkCondition::Timestamp(1704992401)),
         // Delta is activated 2024-02-22 at 17:00:01 UTC

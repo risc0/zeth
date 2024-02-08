@@ -61,7 +61,7 @@ impl ChainConfig {
                 l1_fee_scalar: uint!(684000_U256),
                 unsafe_block_signer: address!("AAAA45d9549EDA09E70937013520214382Ffc4A2"),
             },
-            spec_id: SpecId::REGOLITH,
+            spec_id: SpecId::FRONTIER,
             l1_attributes_depositor: address!("deaddeaddeaddeaddeaddeaddeaddeaddead0001"),
             l1_attributes_contract: address!("4200000000000000000000000000000000000015"),
             sequencer_fee_vault: address!("4200000000000000000000000000000000000011"),
@@ -81,7 +81,7 @@ impl ChainConfig {
         // since L1 is used, we can only rely on the timestamp, fallback to Regolith
         let spec_id = OP_MAINNET_CHAIN_SPEC
             .active_fork(u64::MAX, timestamp)
-            .unwrap_or(SpecId::REGOLITH);
+            .expect("no active fork");
         self.spec_id = spec_id;
     }
 }

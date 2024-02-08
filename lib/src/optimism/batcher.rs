@@ -171,15 +171,19 @@ impl Batcher {
             "Eth block has invalid parent hash"
         );
 
-        // Update the system config. From the spec:
-        // "Upon traversal of the L1 block, the system configuration copy used by the L1 retrieval
-        //  stage is updated, such that the batch-sender authentication is always accurate to the
-        //  exact L1 block that is read by the stage"
         if eth_block.receipts.is_some() {
+            // Update the system config. From the spec:
+            // "Upon traversal of the L1 block, the system configuration copy used by the L1
+            //  retrieval stage is updated, such that the batch-sender authentication is always
+            //  accurate to the exact L1 block that is read by the stage"
             self.config
                 .system_config
                 .update(&self.config.system_config_contract, eth_block)
                 .context("failed to update system config")?;
+
+            // update the specification from L1 and not from L2
+            let header = &eth_block.block_header;
+            self.config.update_spec_id(&header.timestamp);
         }
 
         // Enqueue epoch

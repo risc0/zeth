@@ -20,6 +20,7 @@ use std::{
 use anyhow::{bail, ensure, Context, Result};
 use bytes::Buf;
 use libflate::zlib::Decoder;
+use revm::primitives::SpecId;
 use zeth_primitives::{
     alloy_rlp::Decodable,
     batch::Batch,
@@ -33,6 +34,7 @@ use crate::utils::MultiReader;
 pub const MAX_RLP_BYTES_PER_CHANNEL: u64 = 10_000_000;
 
 pub struct BatcherChannels {
+    spec_id: SpecId,
     batch_inbox: Address,
     max_channel_bank_size: u64,
     channel_timeout: u64,
@@ -43,6 +45,7 @@ pub struct BatcherChannels {
 impl BatcherChannels {
     pub fn new(config: &ChainConfig) -> Self {
         Self {
+            spec_id: config.spec_id.unwrap(),
             batch_inbox: config.batch_inbox,
             max_channel_bank_size: config.max_channel_bank_size,
             channel_timeout: config.channel_timeout,
@@ -113,13 +116,31 @@ impl BatcherChannels {
                 log::debug!("timed-out channel: {}", _channel.id);
             }
 
-            // read all ready channels from the front of the queue
-            while matches!(self.channels.front(), Some(channel) if channel.is_ready()) {
-                let channel = self.channels.pop_front().unwrap();
-                #[cfg(not(target_os = "zkvm"))]
-                log::trace!("received channel: {}", channel.id);
+            if self.spec_id >= SpecId::CANYON {
+                // From the spec:
+                // "After the Canyon network upgrade, the entire channel bank is scanned in FIFO
+                //  order and the first ready (i.e. not timed-out) channel will be returned."
+                self.channels.retain(|channel| {
+                    if channel.is_ready() {
+                        #[cfg(not(target_os = "zkvm"))]
+                        log::trace!("channel is ready: {}", channel.id);
+                        self.batches.push_back(channel.read_batches(block_number));
+                        false
+                    } else {
+                        true
+                    }
+                });
+            } else {
+                // From the spec:
+                // "Prior to the Canyon network upgrade, once the first opened channel, if any, is
+                //  not timed-out and is ready, then it is read and removed from the channel-bank."
+                while matches!(self.channels.front(), Some(channel) if channel.is_ready()) {
+                    let channel = self.channels.pop_front().unwrap();
+                    #[cfg(not(target_os = "zkvm"))]
+                    log::trace!("received channel: {}", channel.id);
 
-                self.batches.push_back(channel.read_batches(block_number));
+                    self.batches.push_back(channel.read_batches(block_number));
+                }
             }
         }
 

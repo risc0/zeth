@@ -16,11 +16,11 @@ use core::{fmt::Debug, mem::take};
 
 use anyhow::{anyhow, bail, Context, Result};
 #[cfg(not(target_os = "zkvm"))]
-use log::{info, trace};
+use log::trace;
 use revm::{
     interpreter::Host,
     optimism,
-    primitives::{Address, ResultAndState, SpecId, TransactTo, TxEnv},
+    primitives::{Address, ResultAndState, TransactTo, TxEnv},
     Database, DatabaseCommit, Evm,
 };
 use ruint::aliases::U256;
@@ -39,11 +39,6 @@ use zeth_primitives::{
 use super::{ethereum, TxExecStrategy};
 use crate::{builder::BlockBuilder, consts, guest_mem_forget};
 
-/// Minimum supported protocol version: Bedrock (Block no. 105235063).
-const MIN_SPEC_ID: SpecId = SpecId::BEDROCK;
-/// Highest supported protocol version: Regolith
-const MAX_SPEC_ID: SpecId = SpecId::REGOLITH;
-
 pub struct OpTxExecStrategy {}
 
 impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
@@ -54,24 +49,11 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
         D: Database + DatabaseCommit,
         <D as Database>::Error: Debug,
     {
+        let spec_id = block_builder.spec_id.expect("Spec ID is not initialized");
         let header = block_builder
             .header
             .as_mut()
             .expect("Header is not initialized");
-        // Compute the spec id
-        let spec_id = block_builder.chain_spec.spec_id(header);
-        if !SpecId::enabled(spec_id, MIN_SPEC_ID) {
-            panic!(
-                "Invalid protocol version: expected >= {:?}, got {:?}",
-                MIN_SPEC_ID, spec_id,
-            )
-        }
-        if spec_id > MAX_SPEC_ID {
-            panic!(
-                "Invalid protocol version: expected <= {:?}, got {:?}",
-                MAX_SPEC_ID, spec_id,
-            )
-        }
 
         #[cfg(not(target_os = "zkvm"))]
         {
@@ -88,10 +70,10 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                 )
                 .unwrap();
 
-            info!("Block no. {}", header.number);
-            info!("  EVM spec ID: {:?}", spec_id);
-            info!("  Timestamp: {}", dt);
-            info!(
+            trace!("Block no. {}", header.number);
+            trace!("  EVM spec ID: {:?}", spec_id);
+            trace!("  Timestamp: {}", dt);
+            trace!(
                 "  Transactions: {}",
                 block_builder.input.state_input.transactions.len()
             );

@@ -37,11 +37,6 @@ use zeth_primitives::{
 use super::TxExecStrategy;
 use crate::{builder::BlockBuilder, consts, guest_mem_forget};
 
-/// Minimum supported protocol version: Paris (Block no. 15537394).
-const MIN_SPEC_ID: SpecId = SpecId::MERGE;
-/// Highest supported protocol version: Shanghai
-const MAX_SPEC_ID: SpecId = SpecId::SHANGHAI;
-
 pub struct EthTxExecStrategy {}
 
 impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
@@ -52,24 +47,11 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
         D: Database + DatabaseCommit,
         <D as Database>::Error: Debug,
     {
+        let spec_id = block_builder.spec_id.expect("Spec ID is not initialized");
         let header = block_builder
             .header
             .as_mut()
             .expect("Header is not initialized");
-        // Compute the spec id
-        let spec_id = block_builder.chain_spec.spec_id(header);
-        if !SpecId::enabled(spec_id, MIN_SPEC_ID) {
-            panic!(
-                "Invalid protocol version: expected >= {:?}, got {:?}",
-                MIN_SPEC_ID, spec_id,
-            )
-        }
-        if spec_id > MAX_SPEC_ID {
-            panic!(
-                "Invalid protocol version: expected <= {:?}, got {:?}",
-                MAX_SPEC_ID, spec_id,
-            )
-        }
 
         #[cfg(not(target_os = "zkvm"))]
         {

@@ -65,9 +65,8 @@ impl HeaderPrepStrategy for EthHeaderPrepStrategy {
             );
         }
         // Validate timestamp
-        if block_builder.input.state_input.timestamp
-            <= block_builder.input.state_input.parent_header.timestamp
-        {
+        let timestamp = block_builder.input.state_input.timestamp;
+        if timestamp <= block_builder.input.state_input.parent_header.timestamp {
             bail!(
                 "Invalid timestamp: expected > {}, got {}",
                 block_builder.input.state_input.parent_header.timestamp,
@@ -83,6 +82,18 @@ impl HeaderPrepStrategy for EthHeaderPrepStrategy {
                 extra_data_bytes,
             )
         }
+        // Validate number
+        let parent_number = block_builder.input.state_input.parent_header.number;
+        let number = parent_number
+            .checked_add(1)
+            .context("Invalid number: too large")?;
+
+        // Derive fork version
+        let spec_id = block_builder
+            .chain_spec
+            .active_fork(number, &timestamp)
+            .unwrap_or_else(|err| panic!("Invalid version: {:#}", err));
+        block_builder.spec_id = Some(spec_id);
         // Derive header
         block_builder.header = Some(Header {
             // Initialize fields that we can compute from the parent
@@ -96,12 +107,12 @@ impl HeaderPrepStrategy for EthHeaderPrepStrategy {
                 .context("Invalid block number: too large")?,
             base_fee_per_gas: derive_base_fee(
                 &block_builder.input.state_input.parent_header,
-                block_builder.chain_spec.gas_constants(),
+                block_builder.chain_spec.gas_constants(spec_id).unwrap(),
             ),
             // Initialize metadata from input
             beneficiary: block_builder.input.state_input.beneficiary,
             gas_limit: block_builder.input.state_input.gas_limit,
-            timestamp: block_builder.input.state_input.timestamp,
+            timestamp,
             mix_hash: block_builder.input.state_input.mix_hash,
             extra_data: block_builder.input.state_input.extra_data.clone(),
             // do not fill the remaining fields

@@ -26,7 +26,7 @@ pub struct ChainConfig {
     /// The initial system config value
     pub system_config: SystemConfig,
     // The spec id
-    pub spec_id: Option<SpecId>,
+    pub spec_id: SpecId,
     /// The L1 attributes depositor address
     pub l1_attributes_depositor: Address,
     /// The L1 attributes contract
@@ -61,7 +61,7 @@ impl ChainConfig {
                 l1_fee_scalar: uint!(684000_U256),
                 unsafe_block_signer: address!("AAAA45d9549EDA09E70937013520214382Ffc4A2"),
             },
-            spec_id: None,
+            spec_id: SpecId::REGOLITH,
             l1_attributes_depositor: address!("deaddeaddeaddeaddeaddeaddeaddeaddead0001"),
             l1_attributes_contract: address!("4200000000000000000000000000000000000015"),
             sequencer_fee_vault: address!("4200000000000000000000000000000000000011"),
@@ -78,11 +78,11 @@ impl ChainConfig {
 
     /// Updates the spec id based on the given L1 timestamp.
     pub fn update_spec_id(&mut self, timestamp: &U256) {
-        // since L1 is used, we can only rely on the timestamp
+        // since L1 is used, we can only rely on the timestamp, fallback to Regolith
         let spec_id = OP_MAINNET_CHAIN_SPEC
             .active_fork(u64::MAX, timestamp)
-            .unwrap();
-        self.spec_id = Some(spec_id);
+            .unwrap_or(SpecId::REGOLITH);
+        self.spec_id = spec_id;
     }
 }
 

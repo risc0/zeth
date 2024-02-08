@@ -294,6 +294,8 @@ impl TryFrom<EthersReceipt> for Receipt {
                         }
                     })
                     .collect(),
+                deposit_nonce: receipt.deposit_nonce,
+                deposit_nonce_version: receipt.deposit_nonce.map(|_| 1),
             },
         })
     }

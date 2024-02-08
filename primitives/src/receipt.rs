@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloy_primitives::{Address, Bloom, BloomInput, Bytes, B256, U256};
+use alloy_primitives::{Address, Bloom, BloomInput, Bytes, TxNumber, B256, U256};
 use alloy_rlp::Encodable;
 use alloy_rlp_derive::RlpEncodable;
 use serde::{Deserialize, Serialize};
@@ -30,6 +30,7 @@ pub struct Log {
 
 /// Payload of a [Receipt].
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, RlpEncodable)]
+#[rlp(trailing)]
 pub struct ReceiptPayload {
     /// Indicates whether the transaction was executed successfully.
     pub success: bool,
@@ -39,6 +40,11 @@ pub struct ReceiptPayload {
     pub logs_bloom: Bloom,
     /// Logs generated during the execution of the transaction.
     pub logs: Vec<Log>,
+
+    #[serde(default)]
+    pub deposit_nonce: Option<TxNumber>,
+    #[serde(default)]
+    pub deposit_nonce_version: Option<u32>,
 }
 
 /// Receipt containing result of transaction execution.
@@ -98,6 +104,8 @@ impl Receipt {
                 cumulative_gas_used,
                 logs_bloom,
                 logs,
+                deposit_nonce: None,
+                deposit_nonce_version: None,
             },
         }
     }

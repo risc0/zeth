@@ -65,7 +65,7 @@ pub const ETH_MAINNET_EIP1559_CONSTANTS: Eip1559Constants = Eip1559Constants {
 /// The Optimism mainnet specification.
 pub static OP_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
     chain_id: 10,
-    max_spec_id: SpecId::REGOLITH,
+    max_spec_id: SpecId::CANYON,
     hard_forks: BTreeMap::from([
         (SpecId::BEDROCK, ForkCondition::Block(105235063)),
         // Regolith is activated from day 1 of Bedrock on mainnet

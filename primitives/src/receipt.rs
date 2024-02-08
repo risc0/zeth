@@ -17,6 +17,9 @@ use alloy_rlp::Encodable;
 use alloy_rlp_derive::RlpEncodable;
 use serde::{Deserialize, Serialize};
 
+/// Version of the deposit nonce field in the receipt.
+pub const OPTIMISM_DEPOSIT_NONCE_VERSION: u32 = 1;
+
 /// Represents an Ethereum log entry.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, RlpEncodable)]
 pub struct Log {
@@ -40,9 +43,10 @@ pub struct ReceiptPayload {
     pub logs_bloom: Bloom,
     /// Logs generated during the execution of the transaction.
     pub logs: Vec<Log>,
-
+    /// Nonce of the Optimism deposit transaction persisted during execution.
     #[serde(default)]
     pub deposit_nonce: Option<TxNumber>,
+    /// Version of the deposit nonce field in the receipt.
     #[serde(default)]
     pub deposit_nonce_version: Option<u32>,
 }
@@ -86,8 +90,6 @@ impl Encodable for Receipt {
 
 impl Receipt {
     /// Constructs a new [Receipt].
-    ///
-    /// This function also computes the `logs_bloom` based on the provided logs.
     pub fn new(tx_type: u8, success: bool, cumulative_gas_used: U256, logs: Vec<Log>) -> Receipt {
         let mut logs_bloom = Bloom::default();
         for log in &logs {
@@ -108,6 +110,12 @@ impl Receipt {
                 deposit_nonce_version: None,
             },
         }
+    }
+    /// Adds a deposit nonce to the receipt.
+    pub fn with_deposit_nonce(mut self, deposit_nonce: TxNumber) -> Self {
+        self.payload.deposit_nonce = Some(deposit_nonce);
+        self.payload.deposit_nonce_version = Some(OPTIMISM_DEPOSIT_NONCE_VERSION);
+        self
     }
 }
 

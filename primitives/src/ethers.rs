@@ -29,7 +29,7 @@ use ethers_core::types::{
 use crate::{
     access_list::{AccessList, AccessListItem},
     block::Header,
-    receipt::{Log, Receipt, ReceiptPayload},
+    receipt::{Log, Receipt, ReceiptPayload, OPTIMISM_DEPOSIT_NONCE_VERSION},
     transactions::{
         ethereum::{
             EthereumTxEssence, TransactionKind, TxEssenceEip1559, TxEssenceEip2930, TxEssenceLegacy,
@@ -295,7 +295,9 @@ impl TryFrom<EthersReceipt> for Receipt {
                     })
                     .collect(),
                 deposit_nonce: receipt.deposit_nonce,
-                deposit_nonce_version: receipt.deposit_nonce.map(|_| 1),
+                deposit_nonce_version: receipt
+                    .deposit_nonce
+                    .map(|_| OPTIMISM_DEPOSIT_NONCE_VERSION),
             },
         })
     }

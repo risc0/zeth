@@ -20,7 +20,7 @@ use log::trace;
 use revm::{
     interpreter::Host,
     optimism,
-    primitives::{Address, ResultAndState, TransactTo, TxEnv},
+    primitives::{Address, ResultAndState, SpecId, TransactTo, TxEnv},
     Database, DatabaseCommit, Evm,
 };
 use ruint::aliases::U256;
@@ -32,7 +32,7 @@ use zeth_primitives::{
         optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
         TxEssence,
     },
-    trie::MptNode,
+    trie::{MptNode, EMPTY_ROOT},
     Bloom, Bytes,
 };
 
@@ -144,6 +144,15 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                 bail!("Error at transaction {}: gas exceeds block limit", tx_no);
             }
 
+            // cache account nonce if the transaction is a deposit, starting with Canyon
+            let deposit_nonce = (spec_id >= SpecId::CANYON
+                && matches!(tx.essence, OptimismTxEssence::OptimismDeposited(_)))
+            .then(|| {
+                let db = &mut evm.context.evm.db;
+                let account = db.basic(tx_from).expect("Depositor account not found");
+                account.unwrap_or_default().nonce
+            });
+
             match &tx.essence {
                 OptimismTxEssence::OptimismDeposited(deposit) => {
                     #[cfg(not(target_os = "zkvm"))]
@@ -175,12 +184,15 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             trace!("  Ok: {:?}", result);
 
             // create the receipt from the EVM result
-            let receipt = Receipt::new(
+            let mut receipt = Receipt::new(
                 tx.essence.tx_type(),
                 result.is_success(),
                 cumulative_gas_used,
                 result.logs().into_iter().map(|log| log.into()).collect(),
             );
+            if let Some(nonce) = deposit_nonce {
+                receipt = receipt.with_deposit_nonce(nonce);
+            }
 
             // update account states
             #[cfg(not(target_os = "zkvm"))]
@@ -234,7 +246,11 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
         header.receipts_root = receipt_trie.hash();
         header.logs_bloom = logs_bloom;
         header.gas_used = cumulative_gas_used;
-        header.withdrawals_root = None;
+        header.withdrawals_root = if spec_id < SpecId::CANYON {
+            None
+        } else {
+            Some(EMPTY_ROOT)
+        };
 
         // Leak memory, save cycles
         guest_mem_forget([tx_trie, receipt_trie]);

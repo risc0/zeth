@@ -16,7 +16,7 @@ use core::{fmt::Debug, mem::take};
 
 use anyhow::{anyhow, bail, Context, Result};
 #[cfg(not(target_os = "zkvm"))]
-use log::{debug, trace};
+use log::{info, trace};
 use revm::{
     interpreter::Host,
     optimism,
@@ -41,6 +41,8 @@ use crate::{builder::BlockBuilder, consts, guest_mem_forget};
 
 /// Minimum supported protocol version: Bedrock (Block no. 105235063).
 const MIN_SPEC_ID: SpecId = SpecId::BEDROCK;
+/// Highest supported protocol version: Regolith
+const MAX_SPEC_ID: SpecId = SpecId::REGOLITH;
 
 pub struct OpTxExecStrategy {}
 
@@ -57,14 +59,19 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             .as_mut()
             .expect("Header is not initialized");
         // Compute the spec id
-        let spec_id = block_builder.chain_spec.spec_id(header.number);
+        let spec_id = block_builder.chain_spec.spec_id(header);
         if !SpecId::enabled(spec_id, MIN_SPEC_ID) {
             panic!(
                 "Invalid protocol version: expected >= {:?}, got {:?}",
                 MIN_SPEC_ID, spec_id,
             )
         }
-        let chain_id = block_builder.chain_spec.chain_id();
+        if spec_id > MAX_SPEC_ID {
+            panic!(
+                "Invalid protocol version: expected <= {:?}, got {:?}",
+                MAX_SPEC_ID, spec_id,
+            )
+        }
 
         #[cfg(not(target_os = "zkvm"))]
         {
@@ -81,10 +88,10 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                 )
                 .unwrap();
 
-            debug!("Block no. {}", header.number);
-            debug!("  EVM spec ID: {:?}", spec_id);
-            debug!("  Timestamp: {}", dt);
-            trace!(
+            info!("Block no. {}", header.number);
+            info!("  EVM spec ID: {:?}", spec_id);
+            info!("  Timestamp: {}", dt);
+            info!(
                 "  Transactions: {}",
                 block_builder.input.state_input.transactions.len()
             );
@@ -100,6 +107,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             );
         }
 
+        let chain_id = block_builder.chain_spec.chain_id();
         let mut evm = Evm::builder()
             .spec_id(spec_id)
             .modify_cfg_env(|cfg_env| {

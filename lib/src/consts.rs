@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 use once_cell::sync::Lazy;
 use revm::primitives::SpecId;
 use serde::{Deserialize, Serialize};
-use zeth_primitives::{uint, BlockNumber, ChainId, U256};
+use zeth_primitives::{block::Header, uint, BlockNumber, ChainId, U256};
 
 /// U256 representation of 0.
 pub const ZERO: U256 = U256::ZERO;
@@ -70,6 +70,10 @@ pub static OP_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
         (SpecId::BEDROCK, ForkCondition::Block(105235063)),
         // Regolith is activated from day 1 of Bedrock on mainnet
         (SpecId::REGOLITH, ForkCondition::Block(105235063)),
+        // Canyon is activated 2024-01-11 at 17:00:01 UTC
+        (SpecId::CANYON, ForkCondition::Timestamp(1704992401)),
+        // Delta is activated 2024-02-22 at 17:00:01 UTC
+        (SpecId::LATEST, ForkCondition::Timestamp(1708560000)),
     ]),
     eip_1559_constants: Eip1559Constants {
         base_fee_change_denominator: uint!(50_U256),
@@ -80,19 +84,23 @@ pub static OP_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
 });
 
 /// The condition at which a fork is activated.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub enum ForkCondition {
     /// The fork is activated with a certain block.
     Block(BlockNumber),
-    /// The fork is not yet active.
+    /// The fork is activated with a specific timestamp.
+    Timestamp(u64),
+    /// The fork is never activated
+    #[default]
     TBD,
 }
 
 impl ForkCondition {
     /// Returns whether the condition has been met.
-    pub fn active(&self, block_number: BlockNumber) -> bool {
+    pub fn active(&self, block_number: BlockNumber, timestamp: u64) -> bool {
         match self {
             ForkCondition::Block(block) => *block <= block_number,
+            ForkCondition::Timestamp(ts) => *ts <= timestamp,
             ForkCondition::TBD => false,
         }
     }
@@ -144,10 +152,12 @@ impl ChainSpec {
     pub fn chain_id(&self) -> ChainId {
         self.chain_id
     }
-    /// Returns the revm specification ID for `block_number`.
-    pub fn spec_id(&self, block_number: BlockNumber) -> SpecId {
+    /// Returns the [SpecId] for a given block header.
+    pub fn spec_id(&self, header: &Header) -> SpecId {
+        let block_number = header.number;
+        let timestamp: u64 = header.timestamp.saturating_to();
         for (spec_id, fork) in self.hard_forks.iter().rev() {
-            if fork.active(block_number) {
+            if fork.active(block_number, timestamp) {
                 return *spec_id;
             }
         }
@@ -165,9 +175,25 @@ mod tests {
 
     #[test]
     fn revm_spec_id() {
-        assert!(ETH_MAINNET_CHAIN_SPEC.spec_id(15537393) < SpecId::MERGE);
-        assert_eq!(ETH_MAINNET_CHAIN_SPEC.spec_id(15537394), SpecId::MERGE);
-        assert_eq!(ETH_MAINNET_CHAIN_SPEC.spec_id(17034869), SpecId::MERGE);
-        assert_eq!(ETH_MAINNET_CHAIN_SPEC.spec_id(17034870), SpecId::SHANGHAI);
+        fn header(number: BlockNumber) -> Header {
+            Header {
+                number,
+                ..Default::default()
+            }
+        }
+
+        assert!(ETH_MAINNET_CHAIN_SPEC.spec_id(&header(15537393)) < SpecId::MERGE);
+        assert_eq!(
+            ETH_MAINNET_CHAIN_SPEC.spec_id(&header(15537394)),
+            SpecId::MERGE
+        );
+        assert_eq!(
+            ETH_MAINNET_CHAIN_SPEC.spec_id(&header(17034869)),
+            SpecId::MERGE
+        );
+        assert_eq!(
+            ETH_MAINNET_CHAIN_SPEC.spec_id(&header(17034870)),
+            SpecId::SHANGHAI
+        );
     }
 }

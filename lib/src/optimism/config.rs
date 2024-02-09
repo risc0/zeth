@@ -12,21 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use revm::primitives::SpecId;
 use ruint::uint;
-use serde::{Deserialize, Serialize};
-use zeth_primitives::{address, Address, U256};
+use zeth_primitives::{address, Address};
 
 use super::system_config::SystemConfig;
-use crate::consts::OP_MAINNET_CHAIN_SPEC;
+use crate::consts::{ChainSpec, OP_MAINNET_CHAIN_SPEC};
 
-/// A Chain Configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// A Chain derivation configuration
+#[derive(Debug)]
 pub struct ChainConfig {
     /// The initial system config value
     pub system_config: SystemConfig,
-    // The spec id
-    pub spec_id: SpecId,
+    // The chain specification
+    pub chain_spec: &'static ChainSpec,
     /// The L1 attributes depositor address
     pub l1_attributes_depositor: Address,
     /// The L1 attributes contract
@@ -52,7 +50,8 @@ pub struct ChainConfig {
 }
 
 impl ChainConfig {
-    pub const fn new() -> Self {
+    /// Creates the OP mainnet chain configuration.
+    pub fn optimism() -> Self {
         Self {
             system_config: SystemConfig {
                 batch_sender: address!("6887246668a3b87f54deb3b94ba47a6f63f32985"),
@@ -61,7 +60,7 @@ impl ChainConfig {
                 l1_fee_scalar: uint!(684000_U256),
                 unsafe_block_signer: address!("AAAA45d9549EDA09E70937013520214382Ffc4A2"),
             },
-            spec_id: SpecId::FRONTIER,
+            chain_spec: &OP_MAINNET_CHAIN_SPEC,
             l1_attributes_depositor: address!("deaddeaddeaddeaddeaddeaddeaddeaddead0001"),
             l1_attributes_contract: address!("4200000000000000000000000000000000000015"),
             sequencer_fee_vault: address!("4200000000000000000000000000000000000011"),
@@ -75,15 +74,4 @@ impl ChainConfig {
             blocktime: 2,
         }
     }
-
-    /// Updates the spec id based on the given L1 timestamp.
-    pub fn update_spec_id(&mut self, timestamp: &U256) {
-        // since L1 is used, we can only rely on the timestamp, fallback to Regolith
-        let spec_id = OP_MAINNET_CHAIN_SPEC
-            .active_fork(u64::MAX, timestamp)
-            .expect("no active fork");
-        self.spec_id = spec_id;
-    }
 }
-
-pub const OPTIMISM_CHAIN_SPEC: ChainConfig = ChainConfig::new();

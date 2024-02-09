@@ -18,13 +18,15 @@ use anyhow::Context;
 use zeth_primitives::{
     block::Header,
     transactions::{ethereum::EthereumTxEssence, optimism::OptimismTxEssence},
+    Address,
 };
 
 use crate::{
     host::provider::{new_provider, BlockQuery},
     optimism::{
         batcher_db::{BatcherDb, BlockInput, MemDb},
-        config::OPTIMISM_CHAIN_SPEC,
+        config::ChainConfig,
+        deposits, system_config,
     },
 };
 
@@ -48,6 +50,8 @@ fn op_cache_path(cache: &Option<PathBuf>, block_no: u64) -> Option<PathBuf> {
 }
 
 pub struct RpcDb {
+    deposit_contract: Address,
+    system_config_contract: Address,
     eth_rpc_url: Option<String>,
     op_rpc_url: Option<String>,
     cache: Option<PathBuf>,
@@ -56,11 +60,14 @@ pub struct RpcDb {
 
 impl RpcDb {
     pub fn new(
+        config: &ChainConfig,
         eth_rpc_url: Option<String>,
         op_rpc_url: Option<String>,
         cache: Option<PathBuf>,
     ) -> Self {
         RpcDb {
+            deposit_contract: config.deposit_contract,
+            system_config_contract: config.system_config_contract,
             eth_rpc_url,
             op_rpc_url,
             cache,
@@ -74,7 +81,7 @@ impl RpcDb {
 }
 
 impl BatcherDb for RpcDb {
-    fn validate(&self) -> anyhow::Result<()> {
+    fn validate(&self, _: &ChainConfig) -> anyhow::Result<()> {
         Ok(())
     }
 
@@ -130,14 +137,10 @@ impl BatcherDb for RpcDb {
             let ethers_block = provider.get_full_block(&query)?;
             let block_header: Header = ethers_block.clone().try_into().unwrap();
             // include receipts when needed
-            let can_contain_deposits = crate::optimism::deposits::can_contain(
-                &OPTIMISM_CHAIN_SPEC.deposit_contract,
-                &block_header.logs_bloom,
-            );
-            let can_contain_config = crate::optimism::system_config::can_contain(
-                &OPTIMISM_CHAIN_SPEC.system_config_contract,
-                &block_header.logs_bloom,
-            );
+            let can_contain_deposits =
+                deposits::can_contain(&self.deposit_contract, &block_header.logs_bloom);
+            let can_contain_config =
+                system_config::can_contain(&self.system_config_contract, &block_header.logs_bloom);
             let receipts = if can_contain_config || can_contain_deposits {
                 let receipts = provider.get_block_receipts(&query)?;
                 Some(

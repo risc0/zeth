@@ -43,9 +43,9 @@ pub struct BatcherChannels {
 }
 
 impl BatcherChannels {
-    pub fn new(config: &ChainConfig) -> Self {
+    pub fn new(config: &ChainConfig, spec_id: SpecId) -> Self {
         Self {
-            spec_id: config.spec_id,
+            spec_id,
             batch_inbox: config.batch_inbox,
             max_channel_bank_size: config.max_channel_bank_size,
             channel_timeout: config.channel_timeout,

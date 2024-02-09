@@ -49,7 +49,7 @@ pub static ETH_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
     hard_forks: BTreeMap::from([
         (SpecId::MERGE, ForkCondition::Block(15537394)),
         (SpecId::SHANGHAI, ForkCondition::Timestamp(1681338455)),
-        (SpecId::CANCUN, ForkCondition::TBD),
+        (SpecId::CANCUN, ForkCondition::Timestamp(1710338135)),
     ]),
     gas_constants: BTreeMap::from([(SpecId::LONDON, ETH_MAINNET_EIP1559_CONSTANTS)]),
 });

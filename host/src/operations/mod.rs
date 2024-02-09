@@ -17,12 +17,13 @@ pub mod rollups;
 
 use std::fmt::Debug;
 
+use anyhow::Result;
 use log::{debug, error, info, warn};
 use risc0_zkvm::{
-    compute_image_id, default_prover, serde::to_vec, sha::Digest, Assumption, ExecutorEnv,
-    ExecutorImpl, FileSegmentRef, Receipt, Session,
+    compute_image_id, serde::to_vec, sha::Digest, Assumption, ExecutorEnv, ExecutorImpl,
+    FileSegmentRef, Receipt, Segment, SegmentRef,
 };
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tempfile::tempdir;
 use zeth_primitives::keccak::keccak;
 
@@ -33,7 +34,7 @@ pub async fn verify_bonsai_receipt<O: Eq + Debug + DeserializeOwned>(
     expected_output: &O,
     uuid: String,
     max_retries: usize,
-) -> anyhow::Result<(String, Receipt)> {
+) -> Result<(String, Receipt)> {
     info!("Tracking receipt uuid: {}", uuid);
     let session = bonsai_sdk::alpha::SessionId { uuid };
 
@@ -223,6 +224,8 @@ pub async fn prove_bonsai<O: Eq + Debug + DeserializeOwned>(
     verify_bonsai_receipt(image_id, expected_output, session.uuid.clone(), 8).await
 }
 
+/// Prove the given ELF locally with the given input and assumptions. The segments are
+/// stored in a temporary directory, to allow for proofs larger than the available memory.
 pub fn prove_locally(
     segment_limit_po2: u32,
     encoded_input: Vec<u32>,
@@ -239,34 +242,55 @@ pub fn prove_locally(
     );
 
     info!("Running the prover...");
-    let mut env_builder = ExecutorEnv::builder();
+    let session = {
+        let mut env_builder = ExecutorEnv::builder();
+        env_builder
+            .session_limit(None)
+            .segment_limit_po2(segment_limit_po2)
+            .write_slice(&encoded_input);
 
-    env_builder
-        .session_limit(None)
-        .segment_limit_po2(segment_limit_po2)
-        .write_slice(&encoded_input);
+        if profile {
+            info!("Profiling enabled.");
+            env_builder.enable_profiler(format!("profile_{}.pb", profile_reference));
+        }
 
-    if profile {
-        info!("Profiling enabled.");
-        env_builder.enable_profiler(format!("profile_{}.pb", profile_reference));
-    }
+        for assumption in assumptions {
+            env_builder.add_assumption(assumption);
+        }
 
-    for assumption in assumptions {
-        env_builder.add_assumption(assumption);
-    }
+        let env = env_builder.build().unwrap();
+        let mut exec = ExecutorImpl::from_elf(env, elf).unwrap();
 
-    let prover = default_prover();
-    prover.prove(env_builder.build().unwrap(), elf).unwrap()
+        let segment_dir = tempdir().unwrap();
+
+        exec.run_with_callback(|segment| {
+            Ok(Box::new(FileSegmentRef::new(&segment, segment_dir.path())?))
+        })
+        .unwrap()
+    };
+    session.prove().unwrap()
 }
 
-pub fn execute<T: serde::Serialize + ?Sized, O: Eq + Debug + DeserializeOwned>(
+const NULL_SEGMENT_REF: NullSegmentRef = NullSegmentRef {};
+#[derive(Serialize, Deserialize)]
+struct NullSegmentRef {}
+
+#[typetag::serde]
+impl SegmentRef for NullSegmentRef {
+    fn resolve(&self) -> Result<Segment> {
+        unimplemented!()
+    }
+}
+
+/// Execute the guest code with the given input and verify the output.
+pub fn execute<T: Serialize, O: Eq + Debug + DeserializeOwned>(
     input: &T,
     segment_limit_po2: u32,
     profile: bool,
     elf: &[u8],
     expected_output: &O,
     profile_reference: &String,
-) -> Session {
+) {
     debug!(
         "Running in executor with segment_limit_po2 = {:?}",
         segment_limit_po2
@@ -280,31 +304,31 @@ pub fn execute<T: serde::Serialize + ?Sized, O: Eq + Debug + DeserializeOwned>(
     );
 
     info!("Running the executor...");
-    let start_time = std::time::Instant::now();
     let session = {
-        let mut builder = ExecutorEnv::builder();
-        builder
+        let mut env_builder = ExecutorEnv::builder();
+        env_builder
             .session_limit(None)
             .segment_limit_po2(segment_limit_po2)
             .write_slice(&input);
 
         if profile {
             info!("Profiling enabled.");
-            builder.enable_profiler(format!("profile_{}.pb", profile_reference));
+            env_builder.enable_profiler(format!("profile_{}.pb", profile_reference));
         }
 
-        let env = builder.build().unwrap();
+        let env = env_builder.build().unwrap();
         let mut exec = ExecutorImpl::from_elf(env, elf).unwrap();
 
-        let segment_dir = tempdir().unwrap();
-
-        exec.run_with_callback(|segment| {
-            Ok(Box::new(FileSegmentRef::new(&segment, segment_dir.path())?))
-        })
-        .unwrap()
+        exec.run_with_callback(|_| Ok(Box::new(NULL_SEGMENT_REF)))
+            .unwrap()
     };
+    println!(
+        "Executor ran in (roughly) {} cycles",
+        session.segments.len() * (1 << segment_limit_po2)
+    );
     // verify output
-    let output_guest: O = session.journal.clone().unwrap().decode().unwrap();
+    let journal = session.journal.unwrap();
+    let output_guest: O = journal.decode().expect("Could not decode journal");
     if expected_output == &output_guest {
         info!("Executor succeeded");
     } else {
@@ -313,16 +337,4 @@ pub fn execute<T: serde::Serialize + ?Sized, O: Eq + Debug + DeserializeOwned>(
             output_guest, expected_output,
         );
     }
-    // report performance
-    println!(
-        "Generated {:?} segments; elapsed time: {:?}",
-        session.segments.len(),
-        start_time.elapsed()
-    );
-    println!(
-        "Executor ran in (roughly) {} cycles",
-        session.segments.len() * (1 << segment_limit_po2)
-    );
-    // return result
-    session
 }

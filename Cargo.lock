@@ -4873,6 +4873,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "typetag",
  "zeth-guests",
  "zeth-lib",
  "zeth-primitives",

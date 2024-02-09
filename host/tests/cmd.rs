@@ -15,6 +15,7 @@
 use std::path::{Path, PathBuf};
 
 use assert_cmd::Command;
+use predicates::prelude::*;
 use rstest::rstest;
 
 fn file_prefix(path: &Path) -> &str {
@@ -28,6 +29,7 @@ fn build_ethereum(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
 
     Command::cargo_bin("zeth")
         .unwrap()
+        .env("RUST_LOG", "info")
         .args([
             "build",
             "--network=ethereum",
@@ -35,7 +37,8 @@ fn build_ethereum(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
             &format!("--block-number={}", block_number),
         ])
         .assert()
-        .success();
+        .success()
+        .stderr(predicate::str::contains(" WARN ").not());
 }
 
 #[rstest]
@@ -44,6 +47,7 @@ fn build_optimism(#[files("testdata/optimism/*.json.gz")] path: PathBuf) {
 
     Command::cargo_bin("zeth")
         .unwrap()
+        .env("RUST_LOG", "info")
         .args([
             "build",
             "--network=optimism",
@@ -51,7 +55,8 @@ fn build_optimism(#[files("testdata/optimism/*.json.gz")] path: PathBuf) {
             &format!("--block-number={}", block_number),
         ])
         .assert()
-        .success();
+        .success()
+        .stderr(predicate::str::contains(" WARN ").not());
 }
 
 #[rstest]
@@ -59,6 +64,7 @@ fn build_optimism(#[files("testdata/optimism/*.json.gz")] path: PathBuf) {
 fn build_optimism_derived(#[case] block_number: u64, #[case] block_count: u64) {
     Command::cargo_bin("zeth")
         .unwrap()
+        .env("RUST_LOG", "info")
         .args([
             "build",
             "--network=optimism-derived",
@@ -67,11 +73,13 @@ fn build_optimism_derived(#[case] block_number: u64, #[case] block_count: u64) {
             &format!("--block-count={}", block_count),
         ])
         .assert()
-        .success();
+        .success()
+        .stderr(predicate::str::contains(" WARN ").not());
 
     // test composition
     Command::cargo_bin("zeth")
         .unwrap()
+        .env("RUST_LOG", "info")
         .args([
             "build",
             "--network=optimism-derived",
@@ -81,5 +89,6 @@ fn build_optimism_derived(#[case] block_number: u64, #[case] block_count: u64) {
             "--composition=1",
         ])
         .assert()
-        .success();
+        .success()
+        .stderr(predicate::str::contains(" WARN ").not());
 }

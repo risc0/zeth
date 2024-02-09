@@ -16,7 +16,7 @@ bincode = "1.3.3"
 bonsai-sdk = { workspace = true }
 bytemuck = "1.13"
 clap = { version = "4.0", features = ["derive"] }
-env_logger = "0.10"
+env_logger = "0.11"
 ethers-contract = { version = "2.0", features = ["optimism"] }
 ethers-core = { version = "2.0", features = ["optimism"] }
 ethers-providers = { version = "2.0", features = ["optimism"] }
@@ -37,5 +37,5 @@ rstest = "0.18"
 
 [features]
 metal = ["risc0-zkvm/metal"]
-cuda = ["risc0-zkvm/cuda"]
+# cuda = ["risc0-zkvm/cuda"]
 disable-dev-mode = ["risc0-zkvm/disable-dev-mode"]

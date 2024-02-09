@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod chains;
-pub mod info;
+pub mod build;
 pub mod rollups;
 pub mod snarks;
 
@@ -223,12 +222,12 @@ pub async fn maybe_prove<I: Serialize, O: Eq + Debug + Serialize + DeserializeOw
             (
                 Default::default(),
                 prove_locally(
-                    prove_args.exec_args.execution_po2,
+                    prove_args.run_args.execution_po2,
                     encoded_input,
                     elf,
                     assumption_instances,
-                    prove_args.exec_args.profile,
-                    &cli.execution_label(),
+                    prove_args.run_args.profile,
+                    &cli.execution_tag(),
                 ),
                 false,
             )

@@ -14,10 +14,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::{
-    consts::Network,
-    host::provider::{new_provider, Provider},
-};
+use crate::host::provider::{new_provider, Provider};
 
 pub mod mpt;
 pub mod preflight;
@@ -36,12 +33,12 @@ pub fn cache_file_path(cache_path: &Path, network: &str, block_no: u64, ext: &st
 #[derive(Clone)]
 pub struct ProviderFactory {
     pub dir: Option<PathBuf>,
-    pub network: Network,
+    pub network: String,
     pub rpc_url: Option<String>,
 }
 
 impl ProviderFactory {
-    pub fn new(dir: Option<PathBuf>, network: Network, rpc_url: Option<String>) -> Self {
+    pub fn new(dir: Option<PathBuf>, network: String, rpc_url: Option<String>) -> Self {
         Self {
             dir,
             network,
@@ -53,7 +50,7 @@ impl ProviderFactory {
         let rpc_cache = self
             .dir
             .as_ref()
-            .map(|dir| cache_file_path(dir, &self.network.to_string(), block_number, "json.gz"));
+            .map(|dir| cache_file_path(dir, &self.network, block_number, "json.gz"));
         new_provider(rpc_cache, self.rpc_url.clone())
     }
 }

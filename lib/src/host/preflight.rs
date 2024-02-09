@@ -63,14 +63,14 @@ pub trait Preflight<E: TxEssence> {
     /// Executes the complete block using the input and state from the RPC provider.
     /// It returns all the data required to build and validate the block.
     fn preflight_with_external_data(
-        chain_spec: ChainSpec,
+        chain_spec: &ChainSpec,
         cache_path: Option<PathBuf>,
         rpc_url: Option<String>,
         block_no: u64,
     ) -> Result<Data<E>>;
 
     fn preflight_with_local_data(
-        chain_spec: ChainSpec,
+        chain_spec: &ChainSpec,
         provider_db: ProviderDb,
         input: BlockBuildInput<E>,
     ) -> Result<Data<E>>;
@@ -83,7 +83,7 @@ where
     <N::TxEssence as TryFrom<EthersTransaction>>::Error: Debug,
 {
     fn preflight_with_external_data(
-        chain_spec: ChainSpec,
+        chain_spec: &ChainSpec,
         cache_path: Option<PathBuf>,
         rpc_url: Option<String>,
         block_no: u64,
@@ -128,7 +128,7 @@ where
     }
 
     fn preflight_with_local_data(
-        chain_spec: ChainSpec,
+        chain_spec: &ChainSpec,
         provider_db: ProviderDb,
         input: BlockBuildInput<N::TxEssence>,
     ) -> Result<Data<N::TxEssence>> {
@@ -138,7 +138,7 @@ where
         // Create the block builder, run the transactions and extract the DB even if run fails
         let db_backup = Arc::new(Mutex::new(None));
         let builder =
-            BlockBuilder::new(&chain_spec, input, Some(db_backup.clone())).with_db(provider_db);
+            BlockBuilder::new(chain_spec, input, Some(db_backup.clone())).with_db(provider_db);
         let mut provider_db = match builder.prepare_header::<N::HeaderPrepStrategy>() {
             Ok(builder) => match builder.execute_transactions::<N::TxExecStrategy>() {
                 Ok(builder) => builder.take_db().unwrap(),

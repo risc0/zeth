@@ -12,51 +12,47 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::fmt;
 use std::path::PathBuf;
 
-use zeth_lib::consts::Network;
+use clap::ValueEnum;
 
-#[derive(clap::Parser, Debug, Clone)] // requires `derive` feature
+#[derive(clap::Parser, Debug, Clone)]
 #[command(name = "zeth")]
 #[command(bin_name = "zeth")]
 #[command(author, version, about, long_about = None)]
 pub enum Cli {
-    /// Build blocks natively outside the zkVM
+    /// Build blocks only on the host
     Build(BuildArgs),
-    /// Run the block creation process inside the executor
+    /// Run the block building inside the executor
     Run(RunArgs),
-    /// Provably create blocks inside the zkVM
+    /// Provably build blocks inside the zkVM
     Prove(ProveArgs),
-    /// Verify a block creation receipt
+    /// Verify a block building receipt
     Verify(VerifyArgs),
-    /// Output debug information about an optimism block
-    OpInfo(CoreArgs),
 }
 
 impl Cli {
-    pub fn core_args(&self) -> &CoreArgs {
+    pub fn build_args(&self) -> &BuildArgs {
         match &self {
-            Cli::Build(build_args) => &build_args.core_args,
-            Cli::Run(run_args) => &run_args.core_args,
-            Cli::Prove(prove_args) => &prove_args.core_args,
-            Cli::Verify(verify_args) => &verify_args.core_args,
-            Cli::OpInfo(core_args) => core_args,
+            Cli::Build(build_args) => build_args,
+            Cli::Run(run_args) => &run_args.build_args,
+            Cli::Prove(prove_args) => &prove_args.run_args.build_args,
+            Cli::Verify(..) => unimplemented!(),
         }
     }
 
-    pub fn composition(&self) -> Option<u64> {
-        match &self {
-            Cli::Build(build_args) => build_args.composition_args.composition,
-            Cli::Prove(prove_args) => prove_args.composition_args.composition,
-            _ => None,
-        }
-    }
-
-    pub fn execution_label(&self) -> String {
-        let sys_time = std::time::SystemTime::now()
+    /// Generate a unique tag for the command execution
+    pub fn execution_tag(&self) -> String {
+        let time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap();
-        format!("{}_{}", sys_time.as_secs(), self.to_string())
+        match &self {
+            Cli::Build(args) => format!("{}_build_{}", time.as_secs(), args.tag()),
+            Cli::Run(args) => format!("{}_run_{}", time.as_secs(), args.tag()),
+            Cli::Prove(args) => format!("{}_prove_{}", time.as_secs(), args.tag()),
+            Cli::Verify(..) => unimplemented!(),
+        }
     }
 
     pub fn submit_to_bonsai(&self) -> bool {
@@ -81,7 +77,7 @@ impl Cli {
         } else {
             None
         };
-        verifier_rpc_url.or(self.core_args().eth_rpc_url.clone())
+        verifier_rpc_url.or(self.build_args().eth_rpc_url.clone())
     }
 
     pub fn verifier_contract(&self) -> Option<String> {
@@ -93,90 +89,89 @@ impl Cli {
     }
 }
 
-impl ToString for Cli {
-    fn to_string(&self) -> String {
-        match self {
-            Cli::Build(BuildArgs {
-                core_args,
-                composition_args,
-            }) => format!(
-                "build_{}_{}_{}_{}",
-                core_args.network.to_string(),
-                core_args.block_number,
-                core_args.block_count,
-                composition_args.composition.unwrap_or(0)
-            ),
-            Cli::Run(RunArgs { core_args, .. }) => format!(
-                "run_{}_{}_{}",
-                core_args.network.to_string(),
-                core_args.block_number,
-                core_args.block_count,
-            ),
-            Cli::Prove(ProveArgs {
-                core_args,
-                composition_args,
-                ..
-            }) => format!(
-                "prove_{}_{}_{}_{}",
-                core_args.network.to_string(),
-                core_args.block_number,
-                core_args.block_count,
-                composition_args.composition.unwrap_or(0)
-            ),
-            Cli::Verify(VerifyArgs { core_args, .. }) => format!(
-                "verify_{}_{}_{}",
-                core_args.network.to_string(),
-                core_args.block_number,
-                core_args.block_count
-            ),
-            Cli::OpInfo(core_args) => format!(
-                "opinfo_{}_{}_{}",
-                core_args.network.to_string(),
-                core_args.block_number,
-                core_args.block_count
-            ),
-        }
+#[derive(Debug, Clone, clap::ValueEnum)]
+pub enum Network {
+    /// Ethereum Mainnet
+    Ethereum,
+    /// Optimism Mainnet
+    Optimism,
+    /// Optimism Mainnet as derived from the Ethereum Mainnet
+    OptimismDerived,
+}
+
+impl fmt::Display for Network {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // use the name of the clap::ValueEnum
+        let val = self.to_possible_value().unwrap();
+        write!(f, "{}", val.get_name())
     }
 }
 
+trait Tag {
+    fn tag(&self) -> String;
+}
+
 #[derive(clap::Args, Debug, Clone)]
-pub struct CoreArgs {
+pub struct BuildArgs {
     #[clap(
         short = 'w',
         long,
         require_equals = true,
         value_enum,
-        default_value = "ethereum"
+        default_value_t = Network::Ethereum
     )]
-    /// Network name (ethereum/optimism/optimism-derived).
+    /// Network name
     pub network: Network,
 
     #[clap(short, long, require_equals = true)]
-    /// URL of the Ethereum RPC node.
+    /// URL of the Ethereum RPC node
     pub eth_rpc_url: Option<String>,
 
     #[clap(short, long, require_equals = true)]
-    /// URL of the Optimism RPC node.
+    /// URL of the Optimism RPC node
     pub op_rpc_url: Option<String>,
 
-    #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "cache_rpc")]
-    /// Use a local directory as a cache for RPC calls. Accepts a custom directory.
-    /// [default: cache_rpc]
+    #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "host/testdata")]
+    /// Cache RPC calls locally; the value specifies the cache directory
+    ///
+    /// [default when the flag is present: host/testdata]
     pub cache: Option<PathBuf>,
 
     #[clap(short, long, require_equals = true)]
-    /// Block number to begin from
+    /// Start block number
     pub block_number: u64,
 
     #[clap(short = 'n', long, require_equals = true, default_value_t = 1)]
-    /// Number of blocks to provably derive.
-    pub block_count: u64,
+    /// Number of blocks to derive (optimism-derived network only)
+    pub block_count: u32,
+
+    #[clap(short='m', long, require_equals = true, num_args = 0..=1, default_missing_value = "1")]
+    /// Derive the Optimism blocks using proof composition (optimism-derived network
+    /// only); the value specifies the the number of blocks to process per derivation call
+    ///
+    /// [default when the flag is present: 1]
+    pub composition: Option<u32>,
+}
+
+impl Tag for BuildArgs {
+    fn tag(&self) -> String {
+        format!(
+            "{}_{}_{}_{}",
+            self.network,
+            self.block_number,
+            self.block_count,
+            self.composition.unwrap_or_default()
+        )
+    }
 }
 
 #[derive(clap::Args, Debug, Clone)]
-pub struct ExecutorArgs {
+pub struct RunArgs {
+    #[clap(flatten)]
+    pub build_args: BuildArgs,
+
     #[clap(short = 'x', long, require_equals = true, default_value_t = 20)]
-    /// The maximum segment cycle count as a power of 2.
+    /// The maximum cycle count of a segment as a power of 2
     pub execution_po2: u32,
 
     #[clap(short, long, default_value_t = false)]
@@ -184,42 +179,21 @@ pub struct ExecutorArgs {
     pub profile: bool,
 }
 
-#[derive(clap::Args, Debug, Clone)]
-pub struct CompositionArgs {
-    #[clap(short='m', long, require_equals = true, num_args = 0..=1, default_missing_value = "1")]
-    /// Compose separate block derivation proofs together. Accepts a custom number of
-    /// blocks to process per derivation call. (optimism-derived network only)
-    /// [default: 1]
-    pub composition: Option<u64>,
-}
-
-#[derive(clap::Args, Debug, Clone)]
-pub struct BuildArgs {
-    #[clap(flatten)]
-    pub core_args: CoreArgs,
-    #[clap(flatten)]
-    pub composition_args: CompositionArgs,
-}
-
-#[derive(clap::Args, Debug, Clone)]
-pub struct RunArgs {
-    #[clap(flatten)]
-    pub core_args: CoreArgs,
-    #[clap(flatten)]
-    pub exec_args: ExecutorArgs,
+impl Tag for RunArgs {
+    fn tag(&self) -> String {
+        self.build_args.tag()
+    }
 }
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct ProveArgs {
     #[clap(flatten)]
-    pub core_args: CoreArgs,
-    #[clap(flatten)]
-    pub exec_args: ExecutorArgs,
-    #[clap(flatten)]
-    pub composition_args: CompositionArgs,
+    pub run_args: RunArgs,
+
     #[clap(short, long, default_value_t = false)]
-    /// Prove remotely using Bonsai.
+    /// Prove remotely using Bonsai
     pub submit_to_bonsai: bool,
+
     #[clap(flatten)]
     pub snark_args: SnarkArgs,
 }
@@ -229,20 +203,26 @@ pub struct SnarkArgs {
     /// Convert the resulting STARK receipt into a Groth-16 SNARK using Bonsai
     #[clap(short, long, default_value_t = false)]
     pub snark: bool,
+
     #[clap(short, long, require_equals = true)]
     /// URL of the Ethereum RPC node for SNARK verification.
     pub verifier_rpc_url: Option<String>,
+
     #[clap(short, long, require_equals = true)]
     /// Address of the RiscZeroGroth16Verifier contract. Requires `eth_rpc_url` or
     /// `verifier_rpc_url` to be set.
     pub verifier_contract: Option<String>,
 }
 
+impl Tag for ProveArgs {
+    fn tag(&self) -> String {
+        self.run_args.tag()
+    }
+}
+
 #[derive(clap::Args, Debug, Clone)]
 pub struct VerifyArgs {
-    #[clap(flatten)]
-    pub core_args: CoreArgs,
     #[clap(short, long, require_equals = true)]
-    /// Verify the receipt from the provided Bonsai Session UUID.
+    /// Verify the receipt from the provided Bonsai Session UUID
     pub bonsai_receipt_uuid: String,
 }

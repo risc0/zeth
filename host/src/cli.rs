@@ -98,10 +98,10 @@ pub struct BuildArgs {
     /// URL of the Optimism RPC node
     pub op_rpc_url: Option<String>,
 
-    #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "host/testdata")]
+    #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "cache_rpc")]
     /// Cache RPC calls locally; the value specifies the cache directory
     ///
-    /// [default when the flag is present: host/testdata]
+    /// [default when the flag is present: cache_rpc]
     pub cache: Option<PathBuf>,
 
     #[clap(short, long, require_equals = true)]

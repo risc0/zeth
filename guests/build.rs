@@ -1,4 +1,4 @@
-// Copyright 2023 RISC Zero, Inc.
+// Copyright 2024 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(not(feature = "debug-guest-build"))]
+#[cfg(not(any(feature = "debug-guest-build", debug_assertions)))]
 fn main() {
     let cwd = std::env::current_dir().unwrap();
     let root_dir = cwd.parent().map(|d| d.to_path_buf());
@@ -34,7 +34,7 @@ fn main() {
     risc0_build::embed_methods_with_options(build_opts);
 }
 
-#[cfg(feature = "debug-guest-build")]
+#[cfg(any(feature = "debug-guest-build", debug_assertions))]
 fn main() {
     risc0_build::embed_methods()
 }

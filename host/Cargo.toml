@@ -33,6 +33,7 @@ zeth-primitives = { path = "../primitives" }
 
 [dev-dependencies]
 assert_cmd = "2.0"
+predicates = "3.0"
 rstest = "0.18"
 
 [features]

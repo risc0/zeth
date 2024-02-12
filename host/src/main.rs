@@ -14,8 +14,6 @@
 
 extern crate core;
 
-use std::env;
-
 use anyhow::Result;
 use clap::Parser;
 use log::info;
@@ -40,12 +38,6 @@ async fn main() -> Result<()> {
     info!("  op-block: {}", Digest::from(OP_BLOCK_ID));
     info!("  op-derive: {}", Digest::from(OP_DERIVE_ID));
     info!("  op-compose: {}", Digest::from(OP_COMPOSE_ID));
-
-    // Prevent internal prover from calling Bonsai on its own
-    if !cli.submit_to_bonsai() {
-        env::remove_var("BONSAI_API_URL");
-        env::remove_var("BONSAI_API_KEY");
-    }
 
     // execute the command
     let build_args = cli.build_args();

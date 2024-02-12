@@ -28,28 +28,58 @@ use crate::optimism::{batcher::BlockId, DeriveOutput};
 pub type ImageId = [u32; 8];
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+/// The input given to the composition predicate
 pub struct ComposeInput {
+    /// The image id used for op block building/transaction execution
     pub block_image_id: ImageId,
+    /// The image id used for op block derivation
     pub derive_image_id: ImageId,
+    /// The image id of the composition guest itself
     pub compose_image_id: ImageId,
+    /// The “operation” which this invocation of the guest should perform
+    /// (prep/lift/join/finish)
     pub operation: ComposeInputOperation,
+    /// The Merkle-tree root of the Ethereum blockchain using which all derivation should
+    /// be performed.
     pub eth_chain_merkle_root: mmr::Hash,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum ComposeInputOperation {
+    /// Takes a chain of ethereum blocks and inserts them into a Merkle-tree,
+    /// resulting in a composition statement about an eth_chain_root value.
+    /// This operation can also be performed incrementally when given a Merkle
+    /// mountain range (and corresponding proof) as input if the ethereum chain
+    /// is too large for one session.
     PREP {
         eth_blocks: Vec<Header>,
         prior_prep: Option<(ComposeOutput, MerkleMountainRange)>,
     },
+    /// Lifting converts a block derivation proof into an equivalent proof, only after
+    /// verifying that the last ethereum block read during derivation belongs to the
+    /// continuous chain committed to under eth_chain_root. This is done using a
+    /// merkle inclusion proof.
     LIFT {
         derivation: DeriveOutput,
         eth_tail_proof: MerkleProof,
     },
+    /// Where the stitching logic happens. Joining can only succeed if:
+    /// 1. The optimism “tail” of the left proof is equal to the optimism “head” of the
+    ///    right proof (i.e. the optimism blocks in the right proof’s chain start off
+    ///    where the left proof chain ends).
+    /// 2. The ethereum blocks used for derivation in both proofs are on the same chain.
+    ///    (security)
+    /// The first condition is checked during the join operation, while the second
+    /// condition is already validated during the pre-requisite “lift” operation using the
+    /// eth_chain_root.
     JOIN {
         left: ComposeOutput,
         right: ComposeOutput,
     },
+    /// Finalization takes as input a composition “preparation” proof about the merkle
+    /// root eth_chain_root, asserting its commitment to a continuous chain of
+    /// ethereum blocks, and a composition “aggregation” proof about the derivation of
+    /// a series of op-blocks from the ethereum blocks under eth_chain_root.
     FINISH {
         prep: ComposeOutput,
         aggregate: ComposeOutput,

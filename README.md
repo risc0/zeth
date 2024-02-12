@@ -68,6 +68,13 @@ cargo build -F metal --release
 ```console
 cargo build -F cuda --release
 ```
+
+#### docker (recommended)
+
+If you wish to use the `--release` profile when building Zeth,
+check out https://docs.docker.com/engine/install/ for a guide on how to install docker, which is required for reproducible builds of the zkVM binaries in Zeth.
+
+
 #### Execution:
 
 Run the built binary (instead of using `cargo run`) using:

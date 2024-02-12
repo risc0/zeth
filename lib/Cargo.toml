@@ -14,7 +14,7 @@ hashbrown = { workspace = true }
 libflate = "2.0.0"
 once_cell = "1.18"
 revm = { workspace = true }
-risc0-zkvm = { version = "0.20.0", default-features = false, features = [
+risc0-zkvm = { version = "0.20.1", default-features = false, features = [
     'std',
 ] }
 ruint = { version = "1.10", default-features = false }

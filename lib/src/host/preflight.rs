@@ -66,6 +66,7 @@ pub trait Preflight<E: TxEssence> {
     ) -> Result<Data<E>>;
 }
 
+#[cfg(not(feature = "taiko"))]
 /// Implements the [Preflight] trait for all compatible [BlockBuilderStrategy]s.
 impl<N: BlockBuilderStrategy> Preflight<N::TxEssence> for N
 where
@@ -146,7 +147,8 @@ where
     }
 }
 
-fn new_preflight_input<E>(
+///
+pub fn new_preflight_input<E>(
     block: EthersBlock<EthersTransaction>,
     parent_header: Header,
 ) -> Result<Input<E>>

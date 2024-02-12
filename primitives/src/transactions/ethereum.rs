@@ -351,7 +351,7 @@ impl EthereumTxEssence {
     ///
     /// This method calculates the Keccak hash of the data that needs to be signed
     /// for the transaction, ensuring the integrity and authenticity of the transaction.
-    pub(crate) fn signing_hash(&self) -> B256 {
+    pub fn signing_hash(&self) -> B256 {
         keccak(self.signing_data()).into()
     }
 

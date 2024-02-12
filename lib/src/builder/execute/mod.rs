@@ -21,7 +21,10 @@ use zeth_primitives::transactions::TxEssence;
 use super::BlockBuilder;
 
 pub(super) mod ethereum;
+#[cfg(feature = "optimism")]
 pub(super) mod optimism;
+#[cfg(feature = "taiko")]
+pub(super) mod taiko;
 
 pub trait TxExecStrategy<E: TxEssence> {
     fn execute_transactions<D>(block_builder: BlockBuilder<D, E>) -> Result<BlockBuilder<D, E>>

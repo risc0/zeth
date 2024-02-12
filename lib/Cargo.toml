@@ -9,8 +9,9 @@ alloy-sol-types = { version = "0.6", default-features = false, optional = true }
 bytes = "1.5"
 ethers-core = { version = "2.0", features = ["optimism"] }
 hashbrown = { workspace = true }
+libflate = "2.0.0"
 once_cell = { version = "1.18", default-features = false }
-revm = { workspace = true }
+revm = { workspace = true, default-features = false }
 ruint = { version = "1.10", default-features = false }
 serde = { version = "1.0", default-features = false, features = ["alloc"] }
 thiserror-no-std = "2.0.2"
@@ -37,14 +38,5 @@ serde_with = "3.1"
 
 [features]
 std = []
-taiko = [
-    "zeth-primitives/taiko", 
-    "revm/taiko",
-    "dep:alloy-sol-types",
-    "dep:hex",
-    "dep:rlp",
-    "dep:tracing"
-    ]
-optimism = ["std"]
-pos = []
-server = []
+taiko = ["revm/taiko", "dep:rlp"]
+optimism = ["std", "revm/optimism"]

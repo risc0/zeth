@@ -70,7 +70,31 @@ pub static ETH_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| {
     }
 });
 
+/// The Taiko mainnet specification.
+#[cfg(feature = "taiko")]
+pub static TKO_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| {
+    ChainSpec {
+        chain_id: 1,
+        hard_forks: BTreeMap::from([
+            (SpecId::SHANGHAI, ForkCondition::Block(0)),
+            (SpecId::SHANGHAI /*change*/, ForkCondition::Block(0)),
+            // previous versions not supported
+            (SpecId::CANCUN, ForkCondition::TBD),
+        ]),
+        eip_1559_constants: Eip1559Constants {
+            base_fee_change_denominator: uint!(8_U256),
+            base_fee_max_increase_denominator: uint!(8_U256),
+            base_fee_max_decrease_denominator: uint!(8_U256),
+            elasticity_multiplier: uint!(2_U256),
+        },
+    }
+});
+
+#[cfg(feature = "taiko")]
+pub use crate::taiko::consts::testnet::*;
+
 /// The Optimism mainnet specification.
+#[cfg(feature = "optimism")]
 pub static OP_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
     chain_id: 10,
     hard_forks: BTreeMap::from([
@@ -178,13 +202,9 @@ impl Default for Eip1559Constants {
 /// Specification of a specific chain.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ChainSpec {
-    chain_id: ChainId,
-    hard_forks: BTreeMap<SpecId, ForkCondition>,
-    eip_1559_constants: Eip1559Constants,
-    pub l1_contract: Option<Address>,
-    pub l1_signal_service: Option<Address>,
-    pub l2_contract: Option<Address>,
-    pub l2_signal_service: Option<Address>,
+    pub chain_id: ChainId,
+    pub hard_forks: BTreeMap<SpecId, ForkCondition>,
+    pub eip_1559_constants: Eip1559Constants,
 }
 
 impl ChainSpec {

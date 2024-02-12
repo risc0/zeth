@@ -22,10 +22,6 @@ pub mod access_list;
 pub mod block;
 pub mod keccak;
 pub mod receipt;
-#[cfg(feature = "taiko")]
-pub mod taiko;
-#[cfg(feature = "taiko")]
-pub use taiko::*;
 pub mod transactions;
 pub mod trie;
 pub mod withdrawal;
@@ -33,6 +29,7 @@ pub mod withdrawal;
 #[cfg(feature = "ethers")]
 pub mod ethers;
 
+pub mod batch;
 pub mod batch;
 #[cfg(feature = "revm")]
 pub mod revm;

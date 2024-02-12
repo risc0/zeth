@@ -18,11 +18,13 @@ use std::{
     fs::File,
     io::{Read, Write},
     path::{Path, PathBuf},
+    path::{Path, PathBuf},
 };
 
 use anyhow::{anyhow, Result};
-use ethers_core::types::{
-    Block, Bytes, EIP1186ProofResponse, Transaction, TransactionReceipt, H256, U256,
+use ethers_core::{
+    abi::Hash,
+    types::{Block, Bytes, EIP1186ProofResponse, Log, Transaction, TransactionReceipt, H256, U256},
 };
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -30,9 +32,11 @@ use serde_with::serde_as;
 use zeth_primitives::taiko::BlockProposed;
 
 use super::{AccountQuery, BlockQuery, MutProvider, ProofQuery, Provider, StorageQuery};
+#[cfg(feature = "taiko")]
+use super::{LogsQuery, TxQuery};
 
 #[serde_as]
-#[derive(Deserialize, Serialize)]
+#[derive(Default, Deserialize, Serialize)]
 pub struct FileProvider {
     #[serde(skip)]
     file_path: PathBuf,
@@ -55,8 +59,13 @@ pub struct FileProvider {
     code: HashMap<AccountQuery, Bytes>,
     #[serde_as(as = "Vec<(_, _)>")]
     storage: HashMap<StorageQuery, H256>,
+
     #[cfg(feature = "taiko")]
-    propose: Option<(Transaction, BlockProposed)>,
+    #[serde_as(as = "Vec<(_, _)>")]
+    logs: HashMap<LogsQuery, Vec<Log>>,
+    #[cfg(feature = "taiko")]
+    #[serde_as(as = "Vec<(_, _)>")]
+    transactions: HashMap<TxQuery, Transaction>,
 }
 
 impl FileProvider {
@@ -73,7 +82,9 @@ impl FileProvider {
             code: HashMap::new(),
             storage: HashMap::new(),
             #[cfg(feature = "taiko")]
-            propose: Default::default(),
+            logs: HashMap::new(),
+            #[cfg(feature = "taiko")]
+            transactions: HashMap::new(),
         }
     }
 
@@ -129,6 +140,13 @@ impl Provider for FileProvider {
         }
     }
 
+    fn get_block_receipts(&mut self, query: &BlockQuery) -> Result<Vec<TransactionReceipt>> {
+        match self.receipts.get(query) {
+            Some(val) => Ok(val.clone()),
+            None => Err(anyhow!("No data for {:?}", query)),
+        }
+    }
+
     fn get_proof(&mut self, query: &ProofQuery) -> Result<EIP1186ProofResponse> {
         match self.proofs.get(query) {
             Some(val) => Ok(val.clone()),
@@ -165,19 +183,18 @@ impl Provider for FileProvider {
     }
 
     #[cfg(feature = "taiko")]
-    fn get_propose(&mut self, query: &super::ProposeQuery) -> Result<(Transaction, BlockProposed)> {
-        match self.propose {
-            Some(ref val) => Ok(val.clone()),
+    fn get_logs(&mut self, query: &LogsQuery) -> Result<Vec<Log>> {
+        match self.logs.get(query) {
+            Some(val) => Ok(val.clone()),
             None => Err(anyhow!("No data for {:?}", query)),
         }
     }
 
     #[cfg(feature = "taiko")]
-    fn batch_get_partial_blocks(&mut self, _: &BlockQuery) -> Result<Vec<Block<H256>>> {
-        if self.partial_blocks.is_empty() {
-            Err(anyhow!("No data for partial blocks"))
-        } else {
-            Ok(self.partial_blocks.values().cloned().collect())
+    fn get_transaction(&mut self, query: &TxQuery) -> Result<Transaction> {
+        match self.transactions.get(query) {
+            Some(val) => Ok(val.clone()),
+            None => Err(anyhow!("No data for {:?}", query)),
         }
     }
 }
@@ -190,6 +207,11 @@ impl MutProvider for FileProvider {
 
     fn insert_partial_block(&mut self, query: BlockQuery, val: Block<H256>) {
         self.partial_blocks.insert(query, val);
+        self.dirty = true;
+    }
+
+    fn insert_block_receipts(&mut self, query: BlockQuery, val: Vec<TransactionReceipt>) {
+        self.receipts.insert(query, val);
         self.dirty = true;
     }
 
@@ -224,8 +246,14 @@ impl MutProvider for FileProvider {
     }
 
     #[cfg(feature = "taiko")]
-    fn insert_propose(&mut self, _query: super::ProposeQuery, val: (Transaction, BlockProposed)) {
-        self.propose = Some(val);
+    fn insert_logs(&mut self, query: LogsQuery, val: Vec<Log>) {
+        self.logs.insert(query, val);
+        self.dirty = true;
+    }
+
+    #[cfg(feature = "taiko")]
+    fn insert_transaction(&mut self, query: super::TxQuery, val: Transaction) {
+        self.transactions.insert(query, val);
         self.dirty = true;
     }
 }

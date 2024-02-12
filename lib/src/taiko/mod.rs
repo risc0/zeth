@@ -1,21 +1,39 @@
+use std::path::PathBuf;
 
-use alloc::vec::Vec;
-
-use alloy_primitives::{Address, B256};
-use alloy_sol_types::{sol, SolValue};
+use alloy_primitives::{Address, Bytes, B256};
+use alloy_sol_types::{sol, SolCall};
+use anyhow::{bail, ensure, Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
-use zeth_primitives::keccak;
+use thiserror::Error as ThisError;
+use zeth_primitives::{ethers::{from_ethers_h160, from_ethers_h256}, transactions::{ethereum::EthereumTxEssence, TxEssence}, withdrawal::Withdrawal};
+use ethers_core::types::{Block, Transaction, H160, H256, U256, U64};
+use ethers_core::types::{Transaction as EthersTransaction};
+use crate::host::preflight::Preflight;
+use crate::{builder::{TaikoStrategy, TkoTxExecStrategy}, consts::ChainSpec, host::provider::{new_cached_rpc_provider, new_file_provider, new_provider, new_rpc_provider, BlockQuery, ProofQuery, Provider, TxQuery}, 
+input::Input, taiko::consts::{check_anchor_signature, ANCHOR_GAS_LIMIT, GOLDEN_TOUCH_ACCOUNT}};
 
-pub mod block_builder;
-#[cfg(not(target_os = "zkvm"))]
-pub mod execute;
-pub mod prepare;
-pub mod utils;
+use self::provider::TaikoProvider;
 
-pub enum Layer {
-    L1,
-    L2,
+pub mod protocol_instance;
+pub mod consts;
+pub mod provider;
+
+sol! {
+    function anchor(
+        bytes32 l1Hash,
+        bytes32 l1SignalRoot,
+        uint64 l1Height,
+        uint32 parentGasUsed
+    )
+        external
+    {}
 }
+
+#[inline]
+pub fn decode_anchor(bytes: &[u8]) -> Result<anchorCall> {
+    anchorCall::abi_decode(bytes, true)
+        .context("Invalid anchor call")
+} 
 
 sol! {
     #[derive(Debug, Default, Deserialize, Serialize)]
@@ -67,71 +85,145 @@ sol! {
         bytes data;
     }
 
+    function proposeBlock(bytes calldata params, bytes calldata txList) {}
+
     function proveBlock(uint64 blockId, bytes calldata input) {}
 }
 
-#[derive(Debug)]
-pub enum EvidenceType {
-    Sgx {
-        new_pubkey: Address, // the evidence signature public key
-    },
-    PseZk,
-}
 
 #[derive(Debug)]
-pub struct ProtocolInstance {
-    pub transition: Transition,
-    pub block_metadata: BlockMetadata,
+pub struct TaikoSystemInfo {
+    pub l1_hash: B256,
+    pub l1_height: u64,
+    pub l2_tx_list: Vec<u8>,
     pub prover: Address,
+    pub graffiti: B256,
+    pub l1_signal_root: B256,
+    pub l2_signal_root: B256,
+    pub l2_withdrawals: Vec<Withdrawal>,
+    pub block_proposed: BlockProposed,
+    pub l1_next_block: Block<EthersTransaction>,
+    pub l2_block: Block<EthersTransaction>,
 }
 
-impl ProtocolInstance {
-    pub fn meta_hash(&self) -> B256 {
-        keccak::keccak(self.block_metadata.abi_encode()).into()
-    }
+impl TaikoSystemInfo {
+    pub fn new(
+        tp: &mut TaikoProvider,
+        l2_block_no: u64,
+        prover: Address,
+        graffiti: B256,
+    ) -> Result<Self> {
 
-    // keccak256(abi.encode(tran, newInstance, prover, metaHash))
-    pub fn hash(&self, evidence_type: EvidenceType) -> B256 {
-        match evidence_type {
-            EvidenceType::Sgx { new_pubkey } => keccak::keccak(
-                (
-                    self.transition.clone(),
-                    new_pubkey,
-                    self.prover,
-                    self.meta_hash(),
-                )
-                    .abi_encode(),
-            )
-            .into(),
-            EvidenceType::PseZk => todo!(),
+        let l2_block = tp.get_l2_full_block(l2_block_no)?;
+        let l2_parent_block = tp.get_l2_full_block(l2_block_no - 1)?;
+
+        let (anchor_tx, anchor_call) = tp.get_anchor(&l2_block)?;
+        
+        let l1_block_no = anchor_call.l1Height;
+        let l1_block = tp.get_l1_full_block(l1_block_no)?;
+        let l1_next_block = tp.get_l1_full_block(l1_block_no + 1 )?;
+
+        let (proposal_call, proposal_event) = tp.get_proposal(l1_block_no, l2_block_no)?;
+
+        // 0. check anchor Tx
+        tp.check_anchor_tx(&anchor_tx, &l2_block);
+
+        // 1. check l2 parent gas used
+        ensure!(l2_parent_block.gas_used == ethers_core::types::U256::from(anchor_call.parentGasUsed), "parentGasUsed mismatch");
+        
+        // 2. check l1 signal root
+        let mut l1_signal_root;
+        if let Some(l1_signal_service) = tp.l1_signal_service {
+            let proof = tp.l1_provider.get_proof(&ProofQuery {
+                block_no: l1_block_no,
+                address: l1_signal_service.into_array().into(),
+                indices: Default::default(),
+            })?;
+            l1_signal_root = from_ethers_h256(proof.storage_hash);
+            ensure!(l1_signal_root == anchor_call.l1SignalRoot, "l1SignalRoot mismatch");
+        } else {
+            bail!("l1_signal_service not set");
         }
+        
+        // 3. check l1 block hash
+        ensure!(l1_block.hash.unwrap() == ethers_core::types::H256::from(anchor_call.l1Hash.0), "l1Hash mismatch");
+
+        let proof = tp.l2_provider.get_proof(&ProofQuery {
+            block_no: l2_block_no,
+            address: tp.l2_signal_service.expect("l2_signal_service not set").into_array().into(),
+            indices: Default::default(),
+        })?;
+        let l2_signal_root = from_ethers_h256(proof.storage_hash);
+
+        tp.l1_provider.save()?;
+        tp.l2_provider.save()?;
+
+        let sys_info = TaikoSystemInfo {
+            l1_hash: anchor_call.l1Hash,
+            l1_height: anchor_call.l1Height,
+            l2_tx_list: proposal_call.txList,
+            prover,
+            graffiti,
+            l1_signal_root,
+            l2_signal_root,
+            l2_withdrawals: l2_block
+                .withdrawals
+                .clone()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|w| w.try_into().unwrap())
+                .collect(),
+            block_proposed: proposal_event,
+            l1_next_block,
+            l2_block,
+        };
+
+        Ok(sys_info)
     }
 }
 
-pub fn deposits_hash(deposits: &[EthDeposit]) -> B256 {
-    keccak::keccak(deposits.abi_encode()).into()
+#[derive(Debug, Clone)]
+pub struct HostArgs {
+    l1_cache: Option<PathBuf>, 
+    l1_rpc: Option<String>, 
+    l2_cache: Option<PathBuf>, 
+    l2_rpc: Option<String>,
+    prover: Address,
 }
 
-#[cfg(test)]
-mod tests {
-    use alloy_sol_types::SolCall;
+async fn init_taiko(
+    args: HostArgs,
+    l2_chain_spec: ChainSpec,
+    l2_block_no: u64,
+    graffiti: B256,
+) -> Result<(Input<EthereumTxEssence>, TaikoSystemInfo)> {
+    let mut tp = TaikoProvider::new(
+        args.l1_cache.clone(),
+        args.l1_rpc.clone(),
+        args.l2_cache.clone(),
+        args.l2_rpc.clone(),
+    )?
+    .with_prover(args.prover)
+    .with_l2_spec(l2_chain_spec.clone())
+    .with_contracts(|| {
+        use crate::taiko::consts::testnet::*;
+        (*L1_CONTRACT, *L2_CONTRACT, *L1_SIGNAL_SERVICE, *L2_SIGNAL_SERVICE)
+    });
+    
+    let sys_info = TaikoSystemInfo::new(&mut tp, l2_block_no, args.prover, graffiti)?;
+    tp.save()?;
 
-    use super::*;
-    #[test]
-    fn test_prove_block_call() {
-        let input = "0x10d008bd000000000000000000000000000000000000000000000000000000000000299e0000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000034057a97bd6f6930af5ca9e7caf48e663588755b690e9de0f82486416960135939559b91a6700c8af9442fe68f4339066d1d7858263c6be97ebcaca787ef70b1a7f8be37f1ab1fe1209f525f7cbced8a86ed49d1813849896c99835628f8eea703b302e31382e302d64657600000000000000000000000000000000000000000000569e75fc77c1a856f6daaf9e69d8a9566ca34aa47f9133711ce065a571af0cfd000000000000000000000000e1e210594771824dad216568b91c9cb4ceed361c000000000000000000000000000000000000000000000000000000000000299e0000000000000000000000000000000000000000000000000000000000e4e1c00000000000000000000000000000000000000000000000000000000065a63e6400000000000000000000000000000000000000000000000000000000000b6785000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000056220000000000000000000000000000000000000000000000000000000000000064000000000000000000000000000000000000000000000000000000000000000012d5f89f4195325e38f76ac324b08c34ab0c5c9ec430fc00dd967aa44b0bd05c11a7c619d13210437142d7adae4025ee65581228d0a8ed7a0df022634b2f1feadb23b17eaa3a5d3a7cfede2fa7d1653ac512117963c9fbe5f2df6a9dd555041ff20f4e661443b23d0c39ddbbb2725002cd2f7d5edb84d1c1eed9d8c71ddeba300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000028000000000000000000000000000000000000000000000000000000000000000c800000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000059000000000041035896fb7ccbed43b0fd70a82758535f3aa70e317bc173b815f18c416274d39cdd4918013cb12ccffc959700b8ae824b4a421d462c6fa19e28bdc64d6f753d978e0e76c33ce84aadfa19b68163c99dc62a631b00000000000000";
+    let preflight_result = tokio::task::spawn_blocking(move || {
+        TaikoStrategy::run_preflight(l2_chain_spec, args.l2_cache, args.l2_rpc, l2_block_no)
+    })
+    .await?;
+    let preflight_data = preflight_result.context("preflight failed")?;
 
-        let input_data = hex::decode(&input[2..]).unwrap();
-        let proveBlockCall { blockId, input } =
-            proveBlockCall::abi_decode(&input_data, false).unwrap();
-        // println!("blockId: {}", blockId);
-        let (meta, trans, proof) =
-            <(BlockMetadata, Transition, TierProof)>::abi_decode_params(&input, false).unwrap();
-        // println!("meta: {:?}", meta);
-        let meta_hash: B256 = keccak::keccak(meta.abi_encode()).into();
-        // println!("meta_hash: {:?}", meta_hash);
-        // println!("trans: {:?}", trans);
-        // println!("proof: {:?}", proof.tier);
-        // println!("proof: {:?}", hex::encode(proof.data));
-    }
+    // Create the guest input from [Init]
+    let input: Input<EthereumTxEssence> = preflight_data
+        .clone()
+        .try_into()
+        .context("invalid preflight data")?;
+
+    Ok((input, sys_info))
 }

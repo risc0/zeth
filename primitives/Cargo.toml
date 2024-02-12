@@ -34,11 +34,7 @@ serde_json = { version = "1.0", default-features = false }
 
 [features]
 std = []
+taiko = ["revm-primitives/taiko"]
+optimism = ["revm-primitives/optimism"]
 ethers = ["dep:ethers-core"]
 revm = ["dep:revm-primitives"]
-taiko = [
-  "revm-primitives/taiko",
-  "dep:alloy-sol-types",
-  "dep:alloy-dyn-abi",
-  "dep:once_cell",
-] 

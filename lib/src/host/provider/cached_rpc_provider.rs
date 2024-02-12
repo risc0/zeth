@@ -15,16 +15,18 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
+#[cfg(feature = "taiko")]
+use ethers_core::types::Log;
 use ethers_core::types::{
     Block, Bytes, EIP1186ProofResponse, Transaction, TransactionReceipt, H256, U256,
 };
-#[cfg(feature = "taiko")]
-use zeth_primitives::taiko::BlockProposed;
 
 use super::{
     file_provider::FileProvider, rpc_provider::RpcProvider, AccountQuery, BlockQuery, MutProvider,
     ProofQuery, Provider, StorageQuery,
 };
+#[cfg(feature = "taiko")]
+use crate::host::provider::{LogsQuery, TxQuery};
 
 pub struct CachedRpcProvider {
     cache: FileProvider,
@@ -145,34 +147,41 @@ impl Provider for CachedRpcProvider {
     }
 
     #[cfg(feature = "taiko")]
-    fn get_propose(&mut self, query: &super::ProposeQuery) -> Result<(Transaction, BlockProposed)> {
-        let cache_out = self.cache.get_propose(query);
+    fn get_logs(&mut self, query: &LogsQuery) -> Result<Vec<Log>> {
+        let cache_out = self.cache.get_logs(query);
         if cache_out.is_ok() {
             return cache_out;
         }
 
-        let out = self.rpc.get_propose(query)?;
-        self.cache.insert_propose(query.clone(), out.clone());
+        let out = self.rpc.get_logs(query)?;
+        self.cache.insert_logs(query.clone(), out.clone());
 
         Ok(out)
     }
 
     #[cfg(feature = "taiko")]
-    fn batch_get_partial_blocks(&mut self, query: &BlockQuery) -> Result<Vec<Block<H256>>> {
-        let cache_out = self.cache.batch_get_partial_blocks(query);
+    fn get_transaction(&mut self, query: &super::TxQuery) -> Result<Transaction> {
+        let mut cache_out = self.cache.get_transaction(query);
         if cache_out.is_ok() {
             return cache_out;
         }
 
-        let out = self.rpc.batch_get_partial_blocks(query)?;
-        for block in out.iter() {
-            self.cache.insert_partial_block(
-                BlockQuery {
-                    block_no: block.number.unwrap().as_u64(),
-                },
-                block.clone(),
-            );
+        // Search cached block for target Tx
+        if let Some(block_no) = query.block_no {
+            if let Ok(block) = self
+            .cache
+            .get_full_block(&BlockQuery { block_no: block_no }) {
+                for tx in block.transactions {
+                    if tx.hash == query.tx_hash {
+                        return Ok(tx.clone())
+                    }
+                }
+            }
         }
+
+        let out = self.rpc.get_transaction(query)?;
+        self.cache.insert_transaction(query.clone(), out.clone());
+
         Ok(out)
     }
 }

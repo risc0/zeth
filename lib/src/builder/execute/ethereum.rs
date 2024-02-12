@@ -19,6 +19,7 @@ use anyhow::{anyhow, bail, Context};
 use log::debug;
 use revm::{
     interpreter::Host,
+    interpreter::Host,
     primitives::{Account, Address, ResultAndState, SpecId, TransactTo, TxEnv},
     Database, DatabaseCommit, Evm,
 };
@@ -33,6 +34,11 @@ use zeth_primitives::{
     Bloom, RlpBytes,
 };
 
+use super::TxExecStrategy;
+use crate::{builder::BlockBuilder, consts, guest_mem_forget};
+
+/// Minimum supported protocol version: Paris (Block no. 15537394).
+const MIN_SPEC_ID: SpecId = SpecId::MERGE;
 use super::TxExecStrategy;
 use crate::{builder::BlockBuilder, consts, guest_mem_forget};
 

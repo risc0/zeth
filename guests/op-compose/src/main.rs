@@ -23,7 +23,9 @@ pub fn main() {
     // read composition input
     let compose_input: ComposeInput = env::read();
     // process input
-    let compose_output = compose_input.process().expect("Failed to process composition.");
+    let compose_output = compose_input
+        .process()
+        .expect("Failed to process composition.");
     // output statement about larger segment
     env::commit(&compose_output);
 }

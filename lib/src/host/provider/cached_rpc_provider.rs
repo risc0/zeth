@@ -1,4 +1,4 @@
-// Copyright 2023 RISC Zero, Inc.
+// Copyright 2024 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 
 use std::path::PathBuf;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use ethers_core::types::{
     Block, Bytes, EIP1186ProofResponse, Transaction, TransactionReceipt, H256, U256,
 };
@@ -31,11 +31,8 @@ pub struct CachedRpcProvider {
 
 impl CachedRpcProvider {
     pub fn new(cache_path: PathBuf, rpc_url: String) -> Result<Self> {
-        let cache = match FileProvider::from_file(&cache_path) {
-            Ok(provider) => provider,
-            Err(_) => FileProvider::empty(cache_path),
-        };
-        let rpc = RpcProvider::new(rpc_url)?;
+        let cache = FileProvider::new(cache_path).context("failed to init cache")?;
+        let rpc = RpcProvider::new(rpc_url).context("failed to init RPC")?;
 
         Ok(CachedRpcProvider { cache, rpc })
     }

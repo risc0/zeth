@@ -15,13 +15,12 @@
 use std::{fs, path::Path};
 
 use risc0_zkvm::is_dev_mode;
-use serde::de::DeserializeOwned;
 use tracing::debug;
 
 pub mod cli;
 pub mod operations;
 
-pub fn load_receipt<T: DeserializeOwned>(
+pub fn load_receipt<T: serde::de::DeserializeOwned>(
     file_name: &String,
 ) -> anyhow::Result<Option<(String, T)>> {
     if is_dev_mode() {

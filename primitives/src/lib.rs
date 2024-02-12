@@ -1,4 +1,4 @@
-// Copyright 2023 RISC Zero, Inc.
+// Copyright 2024 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,27 +26,31 @@ pub mod withdrawal;
 pub mod ethers;
 
 pub mod batch;
+pub mod mmr;
 #[cfg(feature = "revm")]
 pub mod revm;
 
 pub use alloy_primitives::*;
-pub use alloy_rlp as rlp;
+pub use alloy_rlp;
 
-pub trait RlpBytes {
-    /// Returns the RLP-encoding.
-    fn to_rlp(&self) -> Vec<u8>;
+pub trait RlpBytes: Sized {
+    /// Decodes the blob into the appropriate type.
+    /// The input must contain exactly one value and no trailing data.
+    fn decode_bytes(bytes: impl AsRef<[u8]>) -> Result<Self, alloy_rlp::Error>;
 }
 
 impl<T> RlpBytes for T
 where
-    T: rlp::Encodable,
+    T: alloy_rlp::Decodable,
 {
     #[inline]
-    fn to_rlp(&self) -> Vec<u8> {
-        let rlp_length = self.length();
-        let mut out = Vec::with_capacity(rlp_length);
-        self.encode(&mut out);
-        debug_assert_eq!(out.len(), rlp_length);
-        out
+    fn decode_bytes(bytes: impl AsRef<[u8]>) -> Result<Self, alloy_rlp::Error> {
+        let mut buf = bytes.as_ref();
+        let this = T::decode(&mut buf)?;
+        if buf.is_empty() {
+            Ok(this)
+        } else {
+            Err(alloy_rlp::Error::Custom("Trailing data"))
+        }
     }
 }

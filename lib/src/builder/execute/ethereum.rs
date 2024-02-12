@@ -16,7 +16,7 @@ use core::{fmt::Debug, mem::take};
 
 use anyhow::{anyhow, bail, Context};
 #[cfg(not(target_os = "zkvm"))]
-use log::debug;
+use log::{debug, trace};
 use revm::{
     interpreter::Host,
     primitives::{Account, Address, ResultAndState, SpecId, TransactTo, TxEnv},
@@ -24,13 +24,14 @@ use revm::{
 };
 use ruint::aliases::U256;
 use zeth_primitives::{
+    alloy_rlp,
     receipt::Receipt,
     transactions::{
         ethereum::{EthereumTxEssence, TransactionKind},
         TxEssence,
     },
     trie::MptNode,
-    Bloom, RlpBytes,
+    Bloom,
 };
 
 use super::TxExecStrategy;
@@ -56,30 +57,48 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
         // Compute the spec id
         let spec_id = block_builder.chain_spec.spec_id(header.number);
         if !SpecId::enabled(spec_id, MIN_SPEC_ID) {
-            bail!(
+            panic!(
                 "Invalid protocol version: expected >= {:?}, got {:?}",
-                MIN_SPEC_ID,
-                spec_id,
+                MIN_SPEC_ID, spec_id,
             )
         }
 
         #[cfg(not(target_os = "zkvm"))]
         {
             use chrono::{TimeZone, Utc};
-            use log::info;
             let dt = Utc
-                .timestamp_opt(block_builder.input.timestamp.try_into().unwrap(), 0)
+                .timestamp_opt(
+                    block_builder
+                        .input
+                        .state_input
+                        .timestamp
+                        .try_into()
+                        .unwrap(),
+                    0,
+                )
                 .unwrap();
 
-            info!("Block no. {}", header.number);
-            info!("  EVM spec ID: {:?}", spec_id);
-            info!("  Timestamp: {}", dt);
-            info!("  Transactions: {}", block_builder.input.transactions.len());
-            info!("  Withdrawals: {}", block_builder.input.withdrawals.len());
-            info!("  Fee Recipient: {:?}", block_builder.input.beneficiary);
-            info!("  Gas limit: {}", block_builder.input.gas_limit);
-            info!("  Base fee per gas: {}", header.base_fee_per_gas);
-            info!("  Extra data: {:?}", block_builder.input.extra_data);
+            debug!("Block no. {}", header.number);
+            debug!("  EVM spec ID: {:?}", spec_id);
+            debug!("  Timestamp: {}", dt);
+            trace!(
+                "  Transactions: {}",
+                block_builder.input.state_input.transactions.len()
+            );
+            trace!(
+                "  Withdrawals: {}",
+                block_builder.input.state_input.withdrawals.len()
+            );
+            trace!(
+                "  Fee Recipient: {:?}",
+                block_builder.input.state_input.beneficiary
+            );
+            trace!("  Gas limit: {}", block_builder.input.state_input.gas_limit);
+            trace!("  Base fee per gas: {}", header.base_fee_per_gas);
+            trace!(
+                "  Extra data: {:?}",
+                block_builder.input.state_input.extra_data
+            );
         }
 
         // initialize the Evm
@@ -93,12 +112,12 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             .modify_block_env(|blk_env| {
                 // set the EVM block environment
                 blk_env.number = header.number.try_into().unwrap();
-                blk_env.coinbase = block_builder.input.beneficiary;
+                blk_env.coinbase = block_builder.input.state_input.beneficiary;
                 blk_env.timestamp = header.timestamp;
                 blk_env.difficulty = U256::ZERO;
                 blk_env.prevrandao = Some(header.mix_hash);
                 blk_env.basefee = header.base_fee_per_gas;
-                blk_env.gas_limit = block_builder.input.gas_limit;
+                blk_env.gas_limit = block_builder.input.state_input.gas_limit;
             })
             .with_db(block_builder.db.take().unwrap())
             .build();
@@ -111,7 +130,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
         // process all the transactions
         let mut tx_trie = MptNode::default();
         let mut receipt_trie = MptNode::default();
-        for (tx_no, tx) in take(&mut block_builder.input.transactions)
+        for (tx_no, tx) in take(&mut block_builder.input.state_input.transactions)
             .into_iter()
             .enumerate()
         {
@@ -123,14 +142,15 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             #[cfg(not(target_os = "zkvm"))]
             {
                 let tx_hash = tx.hash();
-                debug!("Tx no. {} (hash: {})", tx_no, tx_hash);
-                debug!("  Type: {}", tx.essence.tx_type());
-                debug!("  Fr: {:?}", tx_from);
-                debug!("  To: {:?}", tx.essence.to().unwrap_or_default());
+                trace!("Tx no. {} (hash: {})", tx_no, tx_hash);
+                trace!("  Type: {}", tx.essence.tx_type());
+                trace!("  Fr: {:?}", tx_from);
+                trace!("  To: {:?}", tx.essence.to().unwrap_or_default());
             }
 
             // verify transaction gas
-            let block_available_gas = block_builder.input.gas_limit - cumulative_gas_used;
+            let block_available_gas =
+                block_builder.input.state_input.gas_limit - cumulative_gas_used;
             if block_available_gas < tx.essence.gas_limit() {
                 bail!("Error at transaction {}: gas exceeds block limit", tx_no);
             }
@@ -139,13 +159,15 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             fill_eth_tx_env(&mut evm.env().tx, &tx.essence, tx_from);
             let ResultAndState { result, state } = evm
                 .transact()
-                .map_err(|evm_err| anyhow!("Error at transaction {}: {:?}", tx_no, evm_err))?;
+                .map_err(|evm_err| anyhow!("Error at transaction {}: {:?}", tx_no, evm_err))
+                // todo: change unrecoverable panic to host-side recoverable `Result`
+                .expect("Block construction failure.");
 
             let gas_used = result.gas_used().try_into().unwrap();
             cumulative_gas_used = cumulative_gas_used.checked_add(gas_used).unwrap();
 
             #[cfg(not(target_os = "zkvm"))]
-            debug!("  Ok: {:?}", result);
+            trace!("  Ok: {:?}", result);
 
             // create the receipt from the EVM result
             let receipt = Receipt::new(
@@ -159,20 +181,22 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             logs_bloom.accrue_bloom(&receipt.payload.logs_bloom);
 
             // Add receipt and tx to tries
-            let trie_key = tx_no.to_rlp();
+            let trie_key = alloy_rlp::encode(tx_no);
             tx_trie
                 .insert_rlp(&trie_key, tx)
-                .context("failed to insert transaction")?;
+                // todo: change unrecoverable panic to host-side recoverable `Result`
+                .expect("failed to insert transaction");
             receipt_trie
                 .insert_rlp(&trie_key, receipt)
-                .context("failed to insert receipt")?;
+                // todo: change unrecoverable panic to host-side recoverable `Result`
+                .expect("failed to insert receipt");
 
             // update account states
             #[cfg(not(target_os = "zkvm"))]
             for (address, account) in &state {
                 if account.is_touched() {
                     // log account
-                    debug!(
+                    trace!(
                         "  State {:?} (is_selfdestructed={}, is_loaded_as_not_existing={}, is_created={}, is_empty={})",
                         address,
                         account.is_selfdestructed(),
@@ -181,17 +205,18 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
                         account.is_empty(),
                     );
                     // log balance changes
-                    debug!(
+                    trace!(
                         "     After balance: {} (Nonce: {})",
-                        account.info.balance, account.info.nonce
+                        account.info.balance,
+                        account.info.nonce
                     );
 
                     // log state changes
                     for (addr, slot) in &account.storage {
                         if slot.is_changed() {
-                            debug!("    Storage address: {:?}", addr);
-                            debug!("      Before: {:?}", slot.original_value());
-                            debug!("       After: {:?}", slot.present_value());
+                            trace!("    Storage address: {:?}", addr);
+                            trace!("      Before: {:?}", slot.original_value());
+                            trace!("       After: {:?}", slot.present_value());
                         }
                     }
                 }
@@ -202,7 +227,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
 
         // process withdrawals unconditionally after any transactions
         let mut withdrawals_trie = MptNode::default();
-        for (i, withdrawal) in take(&mut block_builder.input.withdrawals)
+        for (i, withdrawal) in take(&mut block_builder.input.state_input.withdrawals)
             .into_iter()
             .enumerate()
         {
@@ -213,16 +238,19 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
 
             #[cfg(not(target_os = "zkvm"))]
             {
-                debug!("Withdrawal no. {}", withdrawal.index);
-                debug!("  Recipient: {:?}", withdrawal.address);
-                debug!("  Value: {}", amount_wei);
+                trace!("Withdrawal no. {}", withdrawal.index);
+                trace!("  Recipient: {:?}", withdrawal.address);
+                trace!("  Value: {}", amount_wei);
             }
             // Credit withdrawal amount
-            increase_account_balance(&mut evm.context.evm.db, withdrawal.address, amount_wei)?;
+            increase_account_balance(&mut evm.context.evm.db, withdrawal.address, amount_wei)
+                // todo: change unrecoverable panic to host-side recoverable `Result`
+                .expect("Failed to increase account balance.");
             // Add withdrawal to trie
             withdrawals_trie
-                .insert_rlp(&i.to_rlp(), withdrawal)
-                .context("failed to insert withdrawal")?;
+                .insert_rlp(&alloy_rlp::encode(i), withdrawal)
+                // todo: change unrecoverable panic to host-side recoverable `Result`
+                .expect("failed to insert withdrawal");
         }
 
         // Update result header with computed values

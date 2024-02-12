@@ -21,8 +21,8 @@ use anyhow::{bail, ensure, Context, Result};
 use bytes::Buf;
 use libflate::zlib::Decoder;
 use zeth_primitives::{
+    alloy_rlp::Decodable,
     batch::Batch,
-    rlp::Decodable,
     transactions::{ethereum::EthereumTxEssence, Transaction, TxEssence},
     Address, BlockNumber,
 };
@@ -74,7 +74,7 @@ impl BatcherChannels {
             }
 
             #[cfg(not(target_os = "zkvm"))]
-            log::debug!("received batcher tx: {}", tx.hash());
+            log::trace!("received batcher tx: {}", tx.hash());
 
             // From the spec:
             // "If any one frame fails to parse, the all frames in the transaction are rejected."
@@ -93,7 +93,7 @@ impl BatcherChannels {
             // load received frames into the channel bank
             for frame in frames {
                 #[cfg(not(target_os = "zkvm"))]
-                log::debug!(
+                log::trace!(
                     "received frame: channel_id={}, frame_number={}, is_last={}",
                     frame.channel_id,
                     frame.number,
@@ -117,7 +117,7 @@ impl BatcherChannels {
             while matches!(self.channels.front(), Some(channel) if channel.is_ready()) {
                 let channel = self.channels.pop_front().unwrap();
                 #[cfg(not(target_os = "zkvm"))]
-                log::debug!("received channel: {}", channel.id);
+                log::trace!("received channel: {}", channel.id);
 
                 self.batches.push_back(channel.read_batches(block_number));
             }
@@ -573,10 +573,10 @@ mod tests {
                 let mut channel = new_channel();
                 channel.add_frame(frame_a).unwrap();
                 assert_eq!(channel.size, 209);
-                assert_eq!(channel.is_ready(), false);
+                assert!(!channel.is_ready());
                 channel.add_frame(frame_b).unwrap();
                 assert_eq!(channel.size, 420);
-                assert_eq!(channel.is_ready(), true);
+                assert!(channel.is_ready());
                 assert_eq!(channel.decompress().unwrap(), b"Hello World!");
             }
         }

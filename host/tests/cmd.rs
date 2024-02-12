@@ -1,4 +1,4 @@
-// Copyright 2023 RISC Zero, Inc.
+// Copyright 2024 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,56 +12,83 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use assert_cmd::Command;
+use predicates::prelude::*;
 use rstest::rstest;
 
-#[rstest]
-fn zeth_ethereum(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
-    let block_no = file_prefix(&path);
-
-    Command::cargo_bin("zeth")
-        .unwrap()
-        .args([
-            "--network=ethereum",
-            "--cache=testdata",
-            &format!("--block-no={}", block_no),
-        ])
-        .assert()
-        .success();
+fn file_prefix(path: &Path) -> &str {
+    let file_name = path.file_name().unwrap().to_str().unwrap();
+    file_name.split('.').next().unwrap()
 }
 
 #[rstest]
-fn zeth_optimism(#[files("testdata/optimism/*.json.gz")] path: PathBuf) {
-    let block_no = file_prefix(&path);
+fn build_ethereum(#[files("testdata/ethereum/*.json.gz")] path: PathBuf) {
+    let block_number = file_prefix(&path);
 
     Command::cargo_bin("zeth")
         .unwrap()
+        .env("RUST_LOG", "info")
         .args([
-            "--network=optimism",
+            "build",
+            "--network=ethereum",
             "--cache=testdata",
-            &format!("--block-no={}", block_no),
+            &format!("--block-number={}", block_number),
         ])
         .assert()
-        .success();
+        .success()
+        .stderr(predicate::str::contains(" WARN ").not());
+}
+
+#[rstest]
+fn build_optimism(#[files("testdata/optimism/*.json.gz")] path: PathBuf) {
+    let block_number = file_prefix(&path);
+
+    Command::cargo_bin("zeth")
+        .unwrap()
+        .env("RUST_LOG", "info")
+        .args([
+            "build",
+            "--network=optimism",
+            "--cache=testdata",
+            &format!("--block-number={}", block_number),
+        ])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(" WARN ").not());
 }
 
 #[rstest]
 #[case(109279674, 6)]
-fn derive_optimism(#[case] op_block_no: u64, #[case] op_blocks: u64) {
-    Command::cargo_bin("op-derive")
+fn build_optimism_derived(#[case] block_number: u64, #[case] block_count: u64) {
+    Command::cargo_bin("zeth")
         .unwrap()
+        .env("RUST_LOG", "info")
         .args([
+            "build",
+            "--network=optimism-derived",
             "--cache=testdata/derivation",
-            &format!("--op-block-no={}", op_block_no),
-            &format!("--op-blocks={}", op_blocks),
+            &format!("--block-number={}", block_number),
+            &format!("--block-count={}", block_count),
         ])
         .assert()
-        .success();
-}
+        .success()
+        .stderr(predicate::str::contains(" WARN ").not());
 
-fn file_prefix(path: &PathBuf) -> &str {
-    let file_name = path.file_name().unwrap().to_str().unwrap();
-    file_name.split('.').next().unwrap()
+    // test composition
+    Command::cargo_bin("zeth")
+        .unwrap()
+        .env("RUST_LOG", "info")
+        .args([
+            "build",
+            "--network=optimism-derived",
+            "--cache=testdata/derivation",
+            &format!("--block-number={}", block_number),
+            &format!("--block-count={}", block_count),
+            "--composition=1",
+        ])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(" WARN ").not());
 }

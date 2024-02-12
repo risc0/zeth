@@ -1,4 +1,4 @@
-// Copyright 2023 RISC Zero, Inc.
+// Copyright 2024 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,6 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(not(any(feature = "debug-guest-build", debug_assertions)))]
 fn main() {
-    risc0_build::embed_methods();
+    let cwd = std::env::current_dir().unwrap();
+    let root_dir = cwd.parent().map(|d| d.to_path_buf());
+    let build_opts = std::collections::HashMap::from_iter(
+        ["eth-block", "op-block", "op-derive", "op-compose"]
+            .into_iter()
+            .map(|guest_pkg| {
+                (
+                    guest_pkg,
+                    risc0_build::GuestOptions {
+                        features: vec![],
+                        use_docker: Some(risc0_build::DockerOptions {
+                            root_dir: root_dir.clone(),
+                        }),
+                    },
+                )
+            }),
+    );
+    risc0_build::embed_methods_with_options(build_opts);
+}
+
+#[cfg(any(feature = "debug-guest-build", debug_assertions))]
+fn main() {
+    risc0_build::embed_methods()
 }

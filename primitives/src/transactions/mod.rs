@@ -1,4 +1,4 @@
-// Copyright 2023 RISC Zero, Inc.
+// Copyright 2024 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
+
 use alloy_primitives::{Address, Bytes, TxHash};
-use alloy_rlp::Encodable;
+use alloy_rlp::{Decodable, Encodable};
 use serde::{Deserialize, Serialize};
 
 use self::{
@@ -44,9 +46,16 @@ pub struct Transaction<E: TxEssence> {
     pub signature: TxSignature,
 }
 
+/// Structs with this trait can be decoded from an RLP encoding containing additional
+/// signature information.
+pub trait SignedDecodable<S>: Sized {
+    /// Decodes an instance of this struct and of `S` from the input RLP buffer.
+    fn decode_signed(buf: &mut &[u8]) -> alloy_rlp::Result<(Self, S)>;
+}
+
 /// Represents the core details of a [Transaction], specifically the portion that gets
 /// signed.
-pub trait TxEssence: Encodable + Clone {
+pub trait TxEssence: SignedDecodable<TxSignature> + Encodable + Clone {
     /// Returns the EIP-2718 transaction type or `0x00` for Legacy transactions.
     fn tx_type(&self) -> u8;
     /// Returns the gas limit set for the transaction.
@@ -65,13 +74,11 @@ pub trait TxEssence: Encodable + Clone {
     /// and subsequently their Ethereum address. If the recovery is unsuccessful, an
     /// error is returned.
     fn recover_from(&self, signature: &TxSignature) -> anyhow::Result<Address>;
-    /// Returns the length of the RLP-encoding payload in bytes.
-    ///
-    /// This method calculates the combined length of all the individual fields
-    /// of the transaction when they are RLP-encoded.
-    fn payload_length(&self) -> usize;
     /// Returns a reference to the transaction's call data
     fn data(&self) -> &Bytes;
+
+    /// Returns the length of the RLP-encoding payload in bytes.
+    fn payload_length(&self) -> usize;
 }
 
 /// Provides RLP encoding functionality for [Transaction].
@@ -124,7 +131,13 @@ impl<E: TxEssence> Encodable for Transaction<E> {
     }
 }
 
-impl<E: TxEssence> Transaction<E> {
+impl<E: TxEssence + Debug> Decodable for Transaction<E> {
+    fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
+        E::decode_signed(buf).map(|(essence, signature)| Self { essence, signature })
+    }
+}
+
+impl<E: TxEssence + Debug> Transaction<E> {
     /// Calculates the Keccak hash of the RLP-encoded transaction.
     ///
     /// This hash uniquely identifies the transaction on the Ethereum network.
@@ -184,7 +197,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
-    use crate::transactions::EthereumTransaction;
+    use crate::{transactions::EthereumTransaction, RlpBytes};
 
     #[test]
     fn rlp_length() {
@@ -207,6 +220,10 @@ mod tests {
           }
         });
         let transaction: EthereumTransaction = serde_json::from_value(tx).unwrap();
+
+        // verify the RLP roundtrip
+        let decoded = Transaction::decode_bytes(alloy_rlp::encode(&transaction)).unwrap();
+        assert_eq!(transaction, decoded);
 
         let encoded = alloy_rlp::encode(&transaction.essence);
         assert_eq!(encoded.len(), transaction.essence.length());

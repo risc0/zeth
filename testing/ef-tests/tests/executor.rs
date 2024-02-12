@@ -1,4 +1,4 @@
-// Copyright 2023 RISC Zero, Inc.
+// Copyright 2024 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,8 @@ use std::path::PathBuf;
 use risc0_zkvm::{ExecutorEnv, ExecutorImpl, FileSegmentRef};
 use rstest::rstest;
 use tempfile::tempdir;
-use zeth_primitives::{block::Header, BlockHash};
+use zeth_lib::output::BlockBuildOutput;
+use zeth_primitives::block::Header;
 use zeth_testeth::{
     create_input,
     ethtests::{read_eth_test, EthTestCase},
@@ -89,8 +90,15 @@ fn executor(
             .unwrap();
         println!("Generated {} segments", session.segments.len());
 
-        let found_hash: BlockHash = session.journal.decode().unwrap();
-        println!("Block hash (from executor): {}", found_hash);
-        assert_eq!(found_hash, expected_header.hash());
+        let build_output: BlockBuildOutput = session.journal.unwrap().decode().unwrap();
+        let BlockBuildOutput::SUCCESS {
+            hash: new_block_hash,
+            ..
+        } = build_output
+        else {
+            panic!("Block build failed!")
+        };
+        println!("Block hash (from executor): {}", new_block_hash);
+        assert_eq!(new_block_hash, expected_header.hash());
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2023 RISC Zero, Inc.
+// Copyright 2024 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ pub mod consts;
 pub mod input;
 pub mod mem_db;
 pub mod optimism;
+pub mod output;
 
 mod utils;
 

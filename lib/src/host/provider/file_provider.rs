@@ -1,4 +1,4 @@
-// Copyright 2023 RISC Zero, Inc.
+// Copyright 2024 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,22 +14,23 @@
 
 use std::{
     collections::HashMap,
-    fs::File,
-    io::{Read, Write},
-    path::{Path, PathBuf},
+    fs::{self, File},
+    io,
+    path::PathBuf,
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use ethers_core::types::{
     Block, Bytes, EIP1186ProofResponse, Transaction, TransactionReceipt, H256, U256,
 };
+use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 use super::{AccountQuery, BlockQuery, MutProvider, ProofQuery, Provider, StorageQuery};
 
 #[serde_as]
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Default, Deserialize, Serialize)]
 pub struct FileProvider {
     #[serde(skip)]
     file_path: PathBuf,
@@ -55,50 +56,48 @@ pub struct FileProvider {
 }
 
 impl FileProvider {
-    pub fn empty(file_path: PathBuf) -> Self {
-        FileProvider {
-            file_path,
-            dirty: false,
-            full_blocks: HashMap::new(),
-            partial_blocks: HashMap::new(),
-            receipts: HashMap::new(),
-            proofs: HashMap::new(),
-            transaction_count: HashMap::new(),
-            balance: HashMap::new(),
-            code: HashMap::new(),
-            storage: HashMap::new(),
+    /// Creates a new [FileProvider]. If the file exists, it will be read and
+    /// deserialized. Otherwise, a new file will be created when saved.
+    pub fn new(file_path: PathBuf) -> Result<Self> {
+        match FileProvider::read(file_path.clone()) {
+            Ok(provider) => Ok(provider),
+            Err(err) => match err.downcast_ref::<io::Error>() {
+                Some(io_err) if io_err.kind() == io::ErrorKind::NotFound => {
+                    // create the file and directory if it doesn't exist
+                    if let Some(parent) = file_path.parent() {
+                        fs::create_dir_all(parent)?;
+                    }
+                    Ok(FileProvider {
+                        file_path,
+                        ..Default::default()
+                    })
+                }
+                _ => Err(err),
+            },
         }
     }
 
-    pub fn from_file(file_path: &PathBuf) -> Result<Self> {
-        let mut buf = vec![];
-        let mut decoder = flate2::read::GzDecoder::new(File::open(file_path)?);
-        decoder.read_to_end(&mut buf)?;
-
-        let mut out: Self = serde_json::from_slice(&buf[..])?;
-
-        out.file_path = file_path.clone();
+    fn read(file_path: PathBuf) -> Result<Self> {
+        let f = File::open(&file_path)?;
+        let mut out: Self = serde_json::from_reader(GzDecoder::new(f))?;
+        out.file_path = file_path;
         out.dirty = false;
+
         Ok(out)
-    }
-
-    pub fn save_to_file(&self, file_path: &Path) -> Result<()> {
-        if self.dirty {
-            let mut encoder = flate2::write::GzEncoder::new(
-                File::create(file_path)?,
-                flate2::Compression::best(),
-            );
-            encoder.write_all(&serde_json::to_vec(self)?)?;
-            encoder.finish()?;
-        }
-
-        Ok(())
     }
 }
 
 impl Provider for FileProvider {
     fn save(&self) -> Result<()> {
-        self.save_to_file(&self.file_path)
+        if self.dirty {
+            let f = File::create(&self.file_path)
+                .with_context(|| format!("Failed to create '{}'", self.file_path.display()))?;
+            let mut encoder = GzEncoder::new(f, Compression::best());
+            serde_json::to_writer(&mut encoder, &self)?;
+            encoder.finish()?;
+        }
+
+        Ok(())
     }
 
     fn get_full_block(&mut self, query: &BlockQuery) -> Result<Block<Transaction>> {

@@ -1,4 +1,4 @@
-// Copyright 2023 RISC Zero, Inc.
+// Copyright 2024 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloy_rlp_derive::RlpEncodable;
+use ethers_core::k256::sha2::{Digest, Sha256};
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
     block::Header,
+    mmr::Hash,
     transactions::{Transaction, TxEssence},
     trie::MptNode,
     withdrawal::Withdrawal,
@@ -28,8 +31,22 @@ use zeth_primitives::{
 pub type StorageEntry = (MptNode, Vec<U256>);
 
 /// External block input.
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
-pub struct Input<E: TxEssence> {
+#[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize, Serialize)]
+pub struct BlockBuildInput<E: TxEssence> {
+    /// Block and transaction data to execute
+    pub state_input: StateInput<E>,
+    /// State trie of the parent block.
+    pub parent_state_trie: MptNode,
+    /// Maps each address with its storage trie and the used storage slots.
+    pub parent_storage: HashMap<Address, StorageEntry>,
+    /// The code of all unique contracts.
+    pub contracts: Vec<Bytes>,
+    /// List of at most 256 previous block headers
+    pub ancestor_headers: Vec<Header>,
+}
+
+#[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize, Serialize, RlpEncodable)]
+pub struct StateInput<E: TxEssence> {
     /// Previous block header
     pub parent_header: Header,
     /// Address to which all priority fees in this block are transferred.
@@ -46,14 +63,14 @@ pub struct Input<E: TxEssence> {
     pub transactions: Vec<Transaction<E>>,
     /// List of stake withdrawals for execution
     pub withdrawals: Vec<Withdrawal>,
-    /// State trie of the parent block.
-    pub parent_state_trie: MptNode,
-    /// Maps each address with its storage trie and the used storage slots.
-    pub parent_storage: HashMap<Address, StorageEntry>,
-    /// The code of all unique contracts.
-    pub contracts: Vec<Bytes>,
-    /// List of at most 256 previous block headers
-    pub ancestor_headers: Vec<Header>,
+}
+
+impl<E: TxEssence + Serialize> StateInput<E> {
+    pub fn hash(&self) -> Hash {
+        let mut hasher = Sha256::new();
+        hasher.update(&alloy_rlp::encode(self));
+        hasher.finalize().into()
+    }
 }
 
 #[cfg(test)]
@@ -64,21 +81,23 @@ mod tests {
 
     #[test]
     fn input_serde_roundtrip() {
-        let input = Input::<EthereumTxEssence> {
-            parent_header: Default::default(),
-            beneficiary: Default::default(),
-            gas_limit: Default::default(),
-            timestamp: Default::default(),
-            extra_data: Default::default(),
-            mix_hash: Default::default(),
-            transactions: vec![],
-            withdrawals: vec![],
+        let input = BlockBuildInput {
+            state_input: StateInput::<EthereumTxEssence> {
+                parent_header: Default::default(),
+                beneficiary: Default::default(),
+                gas_limit: Default::default(),
+                timestamp: Default::default(),
+                extra_data: Default::default(),
+                mix_hash: Default::default(),
+                transactions: vec![],
+                withdrawals: vec![],
+            },
             parent_state_trie: Default::default(),
             parent_storage: Default::default(),
             contracts: vec![],
             ancestor_headers: vec![],
         };
-        let _: Input<EthereumTxEssence> =
+        let _: BlockBuildInput<EthereumTxEssence> =
             bincode::deserialize(&bincode::serialize(&input).unwrap()).unwrap();
     }
 }

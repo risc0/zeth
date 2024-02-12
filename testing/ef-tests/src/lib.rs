@@ -1,4 +1,4 @@
-// Copyright 2023 RISC Zero, Inc.
+// Copyright 2024 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,11 +26,12 @@ use zeth_lib::{
         provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
         provider_db::ProviderDb,
     },
-    input::Input,
+    input::{BlockBuildInput, StateInput},
     mem_db::{AccountState, DbAccount, MemDb},
 };
 use zeth_primitives::{
     access_list::{AccessList, AccessListItem},
+    alloy_rlp,
     block::Header,
     ethers::from_ethers_h160,
     keccak::keccak,
@@ -43,7 +44,7 @@ use zeth_primitives::{
     },
     trie::{self, MptNode, MptNodeData, StateAccount},
     withdrawal::Withdrawal,
-    Address, Bloom, Bytes, RlpBytes, StorageKey, B256, B64, U256, U64,
+    Address, Bloom, Bytes, StorageKey, B256, B64, U256, U64,
 };
 
 use crate::ethers::TestProvider;
@@ -96,8 +97,8 @@ impl From<DbAccount> for TestAccount {
         TestAccount {
             balance: account.info.balance,
             nonce: U64::from(account.info.nonce),
-            code: account.info.code.unwrap().bytecode.into(),
-            storage: account.storage.into_iter().map(|(k, v)| (k, v)).collect(),
+            code: account.info.code.unwrap().bytecode,
+            storage: account.storage.into_iter().collect(),
         }
     }
 }
@@ -278,7 +279,7 @@ pub fn mpt_proof(root: &MptNode, key: impl AsRef<[u8]>) -> Result<Vec<Vec<u8>>, 
 
 fn proof_internal(node: &MptNode, key_nibs: &[u8]) -> Result<Vec<Vec<u8>>, anyhow::Error> {
     if key_nibs.is_empty() {
-        return Ok(vec![node.to_rlp()]);
+        return Ok(vec![alloy_rlp::encode(node)]);
     }
 
     let mut path: Vec<Vec<u8>> = match node.as_data() {
@@ -299,7 +300,7 @@ fn proof_internal(node: &MptNode, key_nibs: &[u8]) -> Result<Vec<Vec<u8>>, anyho
         }
         MptNodeData::Digest(_) => bail!("Cannot descend pointer!"),
     };
-    path.push(node.to_rlp());
+    path.push(alloy_rlp::encode(node));
 
     Ok(path)
 }
@@ -315,7 +316,7 @@ pub fn create_input(
     transactions: Vec<TestTransaction>,
     withdrawals: Vec<Withdrawal>,
     state: TestState,
-) -> Input<EthereumTxEssence> {
+) -> BlockBuildInput<EthereumTxEssence> {
     // create the provider DB
     let provider_db = ProviderDb::new(
         Box::new(TestProvider {
@@ -330,24 +331,26 @@ pub fn create_input(
         .into_iter()
         .map(EthereumTransaction::from)
         .collect();
-    let input = Input {
-        beneficiary: header.beneficiary,
-        gas_limit: header.gas_limit,
-        timestamp: header.timestamp,
-        extra_data: header.extra_data.clone(),
-        mix_hash: header.mix_hash,
-        transactions: transactions.clone(),
-        withdrawals: withdrawals.clone(),
+    let input = BlockBuildInput {
+        state_input: StateInput {
+            beneficiary: header.beneficiary,
+            gas_limit: header.gas_limit,
+            timestamp: header.timestamp,
+            extra_data: header.extra_data.clone(),
+            mix_hash: header.mix_hash,
+            transactions: transactions.clone(),
+            withdrawals: withdrawals.clone(),
+            parent_header: parent_header.clone(),
+        },
         parent_state_trie: Default::default(),
         parent_storage: Default::default(),
         contracts: vec![],
-        parent_header: parent_header.clone(),
 
         ancestor_headers: vec![],
     };
 
     // create and run the block builder once to create the initial DB
-    let mut builder = BlockBuilder::new(&chain_spec, input)
+    let mut builder = BlockBuilder::new(chain_spec, input, None)
         .with_db(provider_db)
         .prepare_header::<<EthereumStrategy as BlockBuilderStrategy>::HeaderPrepStrategy>()
         .unwrap()
@@ -363,7 +366,7 @@ pub fn create_input(
         db: provider_db.get_initial_db().clone(),
         parent_header,
         parent_proofs,
-        header,
+        header: Some(header),
         transactions,
         withdrawals,
         proofs,

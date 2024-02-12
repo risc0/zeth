@@ -1,4 +1,4 @@
-// Copyright 2023 RISC Zero, Inc.
+// Copyright 2024 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ pub fn read_eth_test(path: PathBuf) -> Vec<EthTestCase> {
     root.as_object_mut()
         .unwrap()
         .into_iter()
-        .map(|(name, test)| {
+        .filter_map(|(name, test)| {
             println!("test '{}'", name);
             let json: TestJson = serde_json::from_value(test.take()).unwrap();
 
@@ -56,6 +56,5 @@ pub fn read_eth_test(path: PathBuf) -> Vec<EthTestCase> {
                 chain_spec,
             })
         })
-        .flatten()
         .collect()
 }

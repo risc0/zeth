@@ -7,4 +7,10 @@ edition = "2021"
 risc0-build = { workspace = true }
 
 [package.metadata.risc0]
-methods = ["eth-block", "op-block", "op-derive"]
+methods = ["eth-block", "op-block", "op-derive", "op-compose"]
+
+[features]
+debug-guest-build = []
+default = [
+    "risc0-build/docker"
+]

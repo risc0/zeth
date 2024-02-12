@@ -4,6 +4,7 @@
         "./Cargo.toml",
         "./guests/eth-block/Cargo.toml",
         "./guests/op-block/Cargo.toml",
+        "./guests/op-compose/Cargo.toml",
         "./guests/op-derive/Cargo.toml",
         "./testing/ef-tests/testguest/Cargo.toml"
     ]

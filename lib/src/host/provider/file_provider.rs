@@ -28,7 +28,6 @@ use serde::{Deserialize, Serialize};
 
 use super::{AccountQuery, BlockQuery, MutProvider, ProofQuery, Provider, StorageQuery};
 
-
 #[derive(Clone, Default, Deserialize, Serialize)]
 pub struct FileProvider {
     #[serde(skip)]

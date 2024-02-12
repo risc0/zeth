@@ -16,7 +16,7 @@ use core::{fmt::Debug, mem::take};
 
 use anyhow::{anyhow, bail, Context};
 #[cfg(not(target_os = "zkvm"))]
-use log::trace;
+use log::{debug, trace};
 use revm::{
     interpreter::Host,
     primitives::{Account, Address, ResultAndState, SpecId, TransactTo, TxEnv},
@@ -78,9 +78,9 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
                 )
                 .unwrap();
 
-            trace!("Block no. {}", header.number);
-            trace!("  EVM spec ID: {:?}", spec_id);
-            trace!("  Timestamp: {}", dt);
+            debug!("Block no. {}", header.number);
+            debug!("  EVM spec ID: {:?}", spec_id);
+            debug!("  Timestamp: {}", dt);
             trace!(
                 "  Transactions: {}",
                 block_builder.input.state_input.transactions.len()

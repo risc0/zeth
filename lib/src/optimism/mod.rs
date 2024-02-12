@@ -303,22 +303,25 @@ impl<D: BatcherDb> DeriveMachine<D> {
                 // The first transaction MUST be a L1 attributes deposited transaction,
                 // followed by an array of zero-or-more user-deposited transactions.
                 let l1_attributes_tx = self.derive_l1_attributes_deposited_tx(&op_batch);
-                // TODO: revise that skipping undecodable transactions is part of spec
-                let decoded_batch_transactions: Vec<_> = op_batch
-                    .0
-                    .transactions
-                    .iter()
-                    .filter_map(|raw_tx| {
-                        match Transaction::<OptimismTxEssence>::decode_bytes(raw_tx) {
-                            Ok(tx) => Some(tx),
-                            Err(_err) => {
-                                #[cfg(not(target_os = "zkvm"))]
-                                log::warn!("Skipping undecodable transaction: {:#}", _err);
-                                None
-                            }
+
+                let mut decoded_batch_transactions = vec![];
+                let mut decoding_error = false;
+                for raw_tx in &op_batch.0.transactions {
+                    match Transaction::<OptimismTxEssence>::decode_bytes(raw_tx) {
+                        Ok(tx) => {
+                            decoded_batch_transactions.push(tx);
                         }
-                    })
-                    .collect();
+                        Err(_err) => {
+                            #[cfg(not(target_os = "zkvm"))]
+                            log::warn!("Skipping undecodable transaction: {:#}", _err);
+                            decoding_error = true;
+                            break;
+                        }
+                    }
+                }
+                if decoding_error {
+                    continue;
+                }
 
                 let derived_transactions: Vec<_> = once(l1_attributes_tx)
                     .chain(deposits)

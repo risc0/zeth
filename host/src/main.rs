@@ -20,7 +20,7 @@ use log::info;
 use risc0_zkvm::sha::Digest;
 use zeth::{
     cli::{Cli, Network},
-    operations::{build, rollups},
+    operations::{build, rollups, snarks::verify_groth16_snark, stark2snark},
 };
 use zeth_guests::*;
 use zeth_lib::{
@@ -41,33 +41,62 @@ async fn main() -> Result<()> {
 
     // execute the command
     let build_args = cli.build_args();
-    match build_args.network {
+    let (image_id, stark) = match build_args.network {
         Network::Ethereum => {
             let rpc_url = build_args.eth_rpc_url.clone();
-            build::build_block::<EthereumStrategy>(
-                cli,
-                rpc_url,
-                &ETH_MAINNET_CHAIN_SPEC,
-                ETH_BLOCK_ELF,
+            (
+                ETH_BLOCK_ID,
+                build::build_block::<EthereumStrategy>(
+                    &cli,
+                    rpc_url,
+                    &ETH_MAINNET_CHAIN_SPEC,
+                    ETH_BLOCK_ELF,
+                )
+                .await?,
             )
-            .await
         }
         Network::Optimism => {
             let rpc_url = build_args.op_rpc_url.clone();
-            build::build_block::<OptimismStrategy>(
-                cli,
-                rpc_url,
-                &OP_MAINNET_CHAIN_SPEC,
-                OP_BLOCK_ELF,
+            (
+                OP_BLOCK_ID,
+                build::build_block::<OptimismStrategy>(
+                    &cli,
+                    rpc_url,
+                    &OP_MAINNET_CHAIN_SPEC,
+                    OP_BLOCK_ELF,
+                )
+                .await?,
             )
-            .await
         }
         Network::OptimismDerived => {
             if let Some(composition_size) = build_args.composition {
-                rollups::compose_derived_rollup_blocks(cli, composition_size).await
+                (
+                    OP_COMPOSE_ID,
+                    rollups::compose_derived_rollup_blocks(&cli, composition_size).await?,
+                )
             } else {
-                rollups::derive_rollup_blocks(cli).await
+                (OP_DERIVE_ID, rollups::derive_rollup_blocks(&cli).await?)
             }
         }
+    };
+
+    // Create/verify Groth16 SNARK
+    if cli.snark() {
+        let Some((stark_uuid, stark_receipt)) = stark else {
+            panic!("No STARK data to snarkify!");
+        };
+
+        if !cli.submit_to_bonsai() {
+            panic!("Bonsai submission flag required to create a SNARK!");
+        }
+
+        let image_id = Digest::from(image_id);
+        let (snark_uuid, snark_receipt) = stark2snark(image_id, stark_uuid, stark_receipt).await?;
+
+        info!("Validating SNARK uuid: {}", snark_uuid);
+
+        verify_groth16_snark(&cli, image_id, snark_receipt).await?;
     }
+
+    Ok(())
 }

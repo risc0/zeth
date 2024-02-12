@@ -16,6 +16,7 @@ use std::fmt::Debug;
 
 use alloy_primitives::{Address, Bytes, TxHash};
 use alloy_rlp::{Decodable, Encodable};
+use anyhow::ensure;
 use serde::{Deserialize, Serialize};
 
 use self::{
@@ -154,6 +155,13 @@ impl<E: TxEssence + Debug> Transaction<E> {
     #[inline]
     pub fn recover_from(&self) -> anyhow::Result<Address> {
         self.essence.recover_from(&self.signature)
+    }
+
+    /// Fully consumes the provided input RLP buffer to decode a Transaction instance
+    pub fn decode_strict(buf: &mut &[u8]) -> anyhow::Result<Self> {
+        let result = Self::decode(buf)?;
+        ensure!(buf.is_empty());
+        Ok(result)
     }
 }
 

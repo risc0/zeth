@@ -16,7 +16,8 @@ use std::{
     collections::HashMap,
     fs::{self, File},
     io,
-    path::PathBuf,
+    io::Write,
+    path::{Path, PathBuf},
 };
 
 use anyhow::{anyhow, Context, Result};
@@ -84,6 +85,20 @@ impl FileProvider {
         out.dirty = false;
 
         Ok(out)
+    }
+
+    pub fn save_to_file(&self, file_path: &Path) -> Result<()> {
+        if self.dirty {
+            let mut encoder = flate2::write::GzEncoder::new(
+                File::create(file_path)
+                    .with_context(|| format!("Failed to create '{}'", file_path.display()))?,
+                flate2::Compression::best(),
+            );
+            encoder.write_all(&serde_json::to_vec(self)?)?;
+            encoder.finish()?;
+        }
+
+        Ok(())
     }
 }
 

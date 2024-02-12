@@ -17,7 +17,7 @@ use std::fmt::Debug;
 use anyhow::Context;
 use ethers_core::types::Transaction as EthersTransaction;
 use log::{info, warn};
-use risc0_zkvm::compute_image_id;
+use risc0_zkvm::{compute_image_id, Receipt};
 use serde::{Deserialize, Serialize};
 use zeth_lib::{
     builder::BlockBuilderStrategy,
@@ -34,11 +34,11 @@ use crate::{
 
 /// Build a single block using the specified strategy.
 pub async fn build_block<N: BlockBuilderStrategy>(
-    cli: Cli,
+    cli: &Cli,
     rpc_url: Option<String>,
     chain_spec: &ChainSpec,
     guest_elf: &[u8],
-) -> anyhow::Result<()>
+) -> anyhow::Result<Option<(String, Receipt)>>
 where
     N::TxEssence: 'static + Send + TryFrom<EthersTransaction> + Serialize + Deserialize<'static>,
     <N::TxEssence as TryFrom<EthersTransaction>>::Error: Debug,
@@ -90,8 +90,8 @@ where
     }
 
     let compressed_output = output.with_state_hashed();
-    match &cli {
-        Cli::Build(..) => {}
+    let result = match cli {
+        Cli::Build(..) => None,
         Cli::Run(run_args) => {
             execute(
                 &input,
@@ -101,27 +101,28 @@ where
                 &compressed_output,
                 &cli.execution_tag(),
             );
+            None
         }
         Cli::Prove(..) => {
             maybe_prove(
-                &cli,
+                cli,
                 &input,
                 guest_elf,
                 &compressed_output,
                 Default::default(),
             )
-            .await;
+            .await
         }
-        Cli::Verify(verify_args) => {
+        Cli::Verify(verify_args) => Some(
             verify_bonsai_receipt(
                 compute_image_id(guest_elf)?,
                 &compressed_output,
                 verify_args.bonsai_receipt_uuid.clone(),
                 4,
             )
-            .await?;
-        }
-    }
+            .await?,
+        ),
+    };
 
-    Ok(())
+    Ok(result)
 }

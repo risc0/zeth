@@ -14,13 +14,15 @@
 
 use std::{fs, path::Path};
 
-use risc0_zkvm::{is_dev_mode, Receipt};
+use risc0_zkvm::is_dev_mode;
 use tracing::debug;
 
 pub mod cli;
 pub mod operations;
 
-pub fn load_receipt(file_name: &String) -> anyhow::Result<Option<(String, Receipt)>> {
+pub fn load_receipt<T: serde::de::DeserializeOwned>(
+    file_name: &String,
+) -> anyhow::Result<Option<(String, T)>> {
     if is_dev_mode() {
         // Nothing to load
         return Ok(None);
@@ -38,7 +40,7 @@ pub fn load_receipt(file_name: &String) -> anyhow::Result<Option<(String, Receip
     Ok(Some(bincode::deserialize(&receipt_serialized)?))
 }
 
-pub fn save_receipt(receipt_label: &String, receipt_data: &(String, Receipt)) {
+pub fn save_receipt<T: serde::Serialize>(receipt_label: &String, receipt_data: &(String, T)) {
     if !is_dev_mode() {
         fs::write(
             zkp_cache_path(receipt_label),

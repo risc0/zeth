@@ -6,5 +6,4 @@ cache_zkp/
 log.txt
 *.pb
 *.zkp
-cache_rpc.json
 .idea

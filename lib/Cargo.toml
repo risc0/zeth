@@ -14,9 +14,7 @@ hashbrown = { workspace = true }
 libflate = "2.0.0"
 once_cell = "1.18"
 revm = { workspace = true }
-risc0-zkvm = { version = "0.20.1", default-features = false, features = [
-    'std',
-] }
+risc0-zkvm = { version = "0.20.1", default-features = false, features = ['std'] }
 ruint = { version = "1.10", default-features = false }
 serde = "1.0"
 thiserror = "1.0"
@@ -28,7 +26,6 @@ ethers-providers = { version = "2.0", features = ["optimism"] }
 flate2 = "1.0.26"
 log = "0.4"
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
-serde_with = "3.0"
 tokio = { version = "1.23", features = ["full"] }
 zeth-primitives = { path = "../primitives", features = ["revm", "ethers"] }
 

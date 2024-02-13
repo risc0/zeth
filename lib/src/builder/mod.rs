@@ -148,7 +148,6 @@ pub trait BlockBuilderStrategy {
         chain_spec: &ChainSpec,
         input: BlockBuildInput<Self::TxEssence>,
     ) -> Result<BlockBuildOutput> {
-        // todo: compute `input_hash` only on build error
         let input_hash = input.state_input.hash();
 
         let builder = BlockBuilder::<MemDb, Self::TxEssence>::new(chain_spec, input, None);

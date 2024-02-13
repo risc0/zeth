@@ -54,6 +54,39 @@ impl Cli {
             Cli::Verify(..) => unimplemented!(),
         }
     }
+
+    pub fn submit_to_bonsai(&self) -> bool {
+        if let Cli::Prove(prove_args) = self {
+            prove_args.submit_to_bonsai
+        } else {
+            false
+        }
+    }
+
+    pub fn snark(&self) -> bool {
+        if let Cli::Prove(prove_args) = self {
+            prove_args.snark_args.snark
+        } else {
+            false
+        }
+    }
+
+    pub fn verifier_or_eth_rpc_url(&self) -> Option<String> {
+        let verifier_rpc_url = if let Cli::Prove(prove_args) = self {
+            prove_args.snark_args.verifier_rpc_url.clone()
+        } else {
+            None
+        };
+        verifier_rpc_url.or(self.build_args().eth_rpc_url.clone())
+    }
+
+    pub fn verifier_contract(&self) -> Option<String> {
+        if let Cli::Prove(prove_args) = self {
+            prove_args.snark_args.verifier_contract.clone()
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Clone, clap::ValueEnum)]
@@ -160,6 +193,25 @@ pub struct ProveArgs {
     #[clap(short, long, default_value_t = false)]
     /// Prove remotely using Bonsai
     pub submit_to_bonsai: bool,
+
+    #[clap(flatten)]
+    pub snark_args: SnarkArgs,
+}
+
+#[derive(clap::Args, Debug, Clone)]
+pub struct SnarkArgs {
+    /// Convert the resulting STARK receipt into a Groth-16 SNARK using Bonsai
+    #[clap(short, long, default_value_t = false)]
+    pub snark: bool,
+
+    #[clap(short, long, require_equals = true)]
+    /// URL of the Ethereum RPC node for SNARK verification.
+    pub verifier_rpc_url: Option<String>,
+
+    #[clap(short, long, require_equals = true)]
+    /// Address of the RiscZeroGroth16Verifier contract. Requires `eth_rpc_url` or
+    /// `verifier_rpc_url` to be set.
+    pub verifier_contract: Option<String>,
 }
 
 impl Tag for ProveArgs {

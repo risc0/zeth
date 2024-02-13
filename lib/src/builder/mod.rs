@@ -16,7 +16,7 @@
 use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
-use revm::{Database, DatabaseCommit};
+use revm::{primitives::SpecId, Database, DatabaseCommit};
 use serde::Serialize;
 use zeth_primitives::{
     block::Header,
@@ -53,6 +53,7 @@ pub struct BlockBuilder<'a, D, E: TxEssence> {
     pub(crate) chain_spec: &'a ChainSpec,
     pub(crate) input: BlockBuildInput<E>,
     pub(crate) db: Option<D>,
+    pub(crate) spec_id: Option<SpecId>,
     pub(crate) header: Option<Header>,
     pub db_drop_destination: Option<DatabaseRescue<D>>,
 }
@@ -86,6 +87,7 @@ where
         BlockBuilder {
             chain_spec,
             db: None,
+            spec_id: None,
             header: None,
             input,
             db_drop_destination: db_backup,

@@ -1,4 +1,4 @@
-// Copyright 2023 RISC Zero, Inc.
+// Copyright 2024 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,16 +13,18 @@
 // limitations under the License.
 
 use ruint::uint;
-use serde::{Deserialize, Serialize};
 use zeth_primitives::{address, Address};
 
 use super::system_config::SystemConfig;
+use crate::consts::{ChainSpec, OP_MAINNET_CHAIN_SPEC};
 
-/// A Chain Configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// A Chain derivation configuration
+#[derive(Debug)]
 pub struct ChainConfig {
     /// The initial system config value
     pub system_config: SystemConfig,
+    // The chain specification
+    pub chain_spec: &'static ChainSpec,
     /// The L1 attributes depositor address
     pub l1_attributes_depositor: Address,
     /// The L1 attributes contract
@@ -48,7 +50,8 @@ pub struct ChainConfig {
 }
 
 impl ChainConfig {
-    pub const fn optimism() -> Self {
+    /// Creates the OP mainnet chain configuration.
+    pub fn optimism() -> Self {
         Self {
             system_config: SystemConfig {
                 batch_sender: address!("6887246668a3b87f54deb3b94ba47a6f63f32985"),
@@ -57,6 +60,7 @@ impl ChainConfig {
                 l1_fee_scalar: uint!(684000_U256),
                 unsafe_block_signer: address!("AAAA45d9549EDA09E70937013520214382Ffc4A2"),
             },
+            chain_spec: &OP_MAINNET_CHAIN_SPEC,
             l1_attributes_depositor: address!("deaddeaddeaddeaddeaddeaddeaddeaddead0001"),
             l1_attributes_contract: address!("4200000000000000000000000000000000000015"),
             sequencer_fee_vault: address!("4200000000000000000000000000000000000011"),
@@ -71,5 +75,3 @@ impl ChainConfig {
         }
     }
 }
-
-pub const OPTIMISM_CHAIN_SPEC: ChainConfig = ChainConfig::optimism();

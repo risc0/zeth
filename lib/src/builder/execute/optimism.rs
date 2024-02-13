@@ -16,7 +16,7 @@ use core::{fmt::Debug, mem::take};
 
 use anyhow::{anyhow, bail, Context, Result};
 #[cfg(not(target_os = "zkvm"))]
-use log::{debug, trace};
+use log::trace;
 use revm::{
     interpreter::Host,
     primitives::{Address, ResultAndState, SpecId, TransactTo, TxEnv},
@@ -31,15 +31,12 @@ use zeth_primitives::{
         optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
         TxEssence,
     },
-    trie::MptNode,
+    trie::{MptNode, EMPTY_ROOT},
     Bloom, Bytes,
 };
 
 use super::{ethereum, TxExecStrategy};
 use crate::{builder::BlockBuilder, consts, guest_mem_forget};
-
-/// Minimum supported protocol version: Bedrock (Block no. 105235063).
-const MIN_SPEC_ID: SpecId = SpecId::BEDROCK;
 
 pub struct OpTxExecStrategy {}
 
@@ -51,19 +48,11 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
         D: Database + DatabaseCommit,
         <D as Database>::Error: Debug,
     {
+        let spec_id = block_builder.spec_id.expect("Spec ID is not initialized");
         let header = block_builder
             .header
             .as_mut()
             .expect("Header is not initialized");
-        // Compute the spec id
-        let spec_id = block_builder.chain_spec.spec_id(header.number);
-        if !SpecId::enabled(spec_id, MIN_SPEC_ID) {
-            panic!(
-                "Invalid protocol version: expected >= {:?}, got {:?}",
-                MIN_SPEC_ID, spec_id,
-            )
-        }
-        let chain_id = block_builder.chain_spec.chain_id();
 
         #[cfg(not(target_os = "zkvm"))]
         {
@@ -80,9 +69,9 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                 )
                 .unwrap();
 
-            debug!("Block no. {}", header.number);
-            debug!("  EVM spec ID: {:?}", spec_id);
-            debug!("  Timestamp: {}", dt);
+            trace!("Block no. {}", header.number);
+            trace!("  EVM spec ID: {:?}", spec_id);
+            trace!("  Timestamp: {}", dt);
             trace!(
                 "  Transactions: {}",
                 block_builder.input.state_input.transactions.len()
@@ -99,6 +88,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             );
         }
 
+        let chain_id = block_builder.chain_spec.chain_id();
         let mut evm = Evm::builder()
             .with_db(block_builder.db.take().unwrap())
             .optimism()
@@ -152,6 +142,15 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                 bail!("Error at transaction {}: gas exceeds block limit", tx_no);
             }
 
+            // cache account nonce if the transaction is a deposit, starting with Canyon
+            let deposit_nonce = (spec_id >= SpecId::CANYON
+                && matches!(tx.essence, OptimismTxEssence::OptimismDeposited(_)))
+            .then(|| {
+                let db = &mut evm.context.evm.db;
+                let account = db.basic(tx_from).expect("Depositor account not found");
+                account.unwrap_or_default().nonce
+            });
+
             match &tx.essence {
                 OptimismTxEssence::OptimismDeposited(deposit) => {
                     #[cfg(not(target_os = "zkvm"))]
@@ -188,12 +187,15 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             trace!("  Ok: {:?}", result);
 
             // create the receipt from the EVM result
-            let receipt = Receipt::new(
+            let mut receipt = Receipt::new(
                 tx.essence.tx_type(),
                 result.is_success(),
                 cumulative_gas_used,
                 result.logs().into_iter().map(|log| log.into()).collect(),
             );
+            if let Some(nonce) = deposit_nonce {
+                receipt = receipt.with_deposit_nonce(nonce);
+            }
 
             // update account states
             #[cfg(not(target_os = "zkvm"))]
@@ -247,7 +249,11 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
         header.receipts_root = receipt_trie.hash();
         header.logs_bloom = logs_bloom;
         header.gas_used = cumulative_gas_used;
-        header.withdrawals_root = None;
+        header.withdrawals_root = if spec_id < SpecId::CANYON {
+            None
+        } else {
+            Some(EMPTY_ROOT)
+        };
 
         // Leak memory, save cycles
         guest_mem_forget([tx_trie, receipt_trie]);

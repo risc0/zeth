@@ -26,7 +26,7 @@ use zeth_lib::{
     optimism::{
         batcher_db::BatcherDb,
         composition::{ComposeInput, ComposeInputOperation, ComposeOutputOperation},
-        config::OPTIMISM_CHAIN_SPEC,
+        config::ChainConfig,
         DeriveInput, DeriveMachine,
     },
     output::BlockBuildOutput,
@@ -52,8 +52,10 @@ pub async fn derive_rollup_blocks(cli: &Cli) -> anyhow::Result<Option<(String, R
     );
 
     info!("Running preflight");
+    let config = ChainConfig::optimism();
     let derive_input = DeriveInput {
         db: RpcDb::new(
+            &config,
             build_args.eth_rpc_url.clone(),
             build_args.op_rpc_url.clone(),
             build_args.cache.clone(),
@@ -65,9 +67,8 @@ pub async fn derive_rollup_blocks(cli: &Cli) -> anyhow::Result<Option<(String, R
     };
     let factory_clone = op_builder_provider_factory.clone();
     let (op_block_inputs, derive_machine, derive_output) = tokio::task::spawn_blocking(move || {
-        let mut derive_machine =
-            DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input, Some(factory_clone))
-                .expect("Could not create derive machine");
+        let mut derive_machine = DeriveMachine::new(config, derive_input, Some(factory_clone))
+            .expect("Could not create derive machine");
         let mut op_block_inputs = vec![];
         let derive_output = derive_machine
             .derive(Some(&mut op_block_inputs))
@@ -92,13 +93,13 @@ pub async fn derive_rollup_blocks(cli: &Cli) -> anyhow::Result<Option<(String, R
         let input_clone = derive_input_mem.clone();
         let output_mem = tokio::task::spawn_blocking(move || {
             DeriveMachine::new(
-                &OPTIMISM_CHAIN_SPEC,
+                ChainConfig::optimism(),
                 input_clone,
                 Some(op_builder_provider_factory),
             )
             .expect("Could not create derive machine")
             .derive(None)
-            .unwrap()
+            .expect("could not derive")
         })
         .await?;
         assert_eq!(derive_output, output_mem);
@@ -153,7 +154,9 @@ pub async fn compose_derived_rollup_blocks(
     let mut lift_queue = Vec::new();
     let mut complete_eth_chain: Vec<Header> = Vec::new();
     for op_block_index in (0..build_args.block_count).step_by(composition_size as usize) {
+        let config = ChainConfig::optimism();
         let db = RpcDb::new(
+            &config,
             build_args.eth_rpc_url.clone(),
             build_args.op_rpc_url.clone(),
             build_args.cache.clone(),
@@ -173,7 +176,7 @@ pub async fn compose_derived_rollup_blocks(
         };
         let factory_clone = op_builder_provider_factory.clone();
         let mut derive_machine = tokio::task::spawn_blocking(move || {
-            DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input, Some(factory_clone))
+            DeriveMachine::new(config, derive_input, Some(factory_clone))
                 .expect("Could not create derive machine")
         })
         .await?;
@@ -232,7 +235,7 @@ pub async fn compose_derived_rollup_blocks(
             let input_clone = derive_input_mem.clone();
             let output_mem = tokio::task::spawn_blocking(move || {
                 DeriveMachine::new(
-                    &OPTIMISM_CHAIN_SPEC,
+                    ChainConfig::optimism(),
                     input_clone,
                     Some(op_builder_provider_factory),
                 )

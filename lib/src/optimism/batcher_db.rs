@@ -26,7 +26,7 @@ use zeth_primitives::{
     trie::MptNode,
 };
 
-use crate::optimism::{config::OPTIMISM_CHAIN_SPEC, deposits, system_config};
+use super::{config::ChainConfig, deposits, system_config};
 
 /// Input for extracting deposits.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -40,7 +40,7 @@ pub struct BlockInput<E: TxEssence> {
 }
 
 pub trait BatcherDb {
-    fn validate(&self) -> Result<()>;
+    fn validate(&self, config: &ChainConfig) -> Result<()>;
     fn get_full_op_block(&mut self, block_no: u64) -> Result<BlockInput<OptimismTxEssence>>;
     fn get_op_block_header(&mut self, block_no: u64) -> Result<Header>;
     fn get_full_eth_block(&mut self, block_no: u64) -> Result<&BlockInput<EthereumTxEssence>>;
@@ -72,12 +72,10 @@ impl Default for MemDb {
 }
 
 impl BatcherDb for MemDb {
-    fn validate(&self) -> Result<()> {
+    fn validate(&self, config: &ChainConfig) -> Result<()> {
         for (block_no, op_block) in &self.full_op_block {
-            ensure!(
-                *block_no == op_block.block_header.number,
-                "Block number mismatch"
-            );
+            let header = &op_block.block_header;
+            ensure!(*block_no == header.number, "Block number mismatch");
 
             // Validate tx list
             {
@@ -86,7 +84,7 @@ impl BatcherDb for MemDb {
                     tx_trie.insert_rlp(&alloy_rlp::encode(tx_no), tx)?;
                 }
                 ensure!(
-                    tx_trie.hash() == op_block.block_header.transactions_root,
+                    tx_trie.hash() == header.transactions_root,
                     "Invalid op block transaction data!"
                 );
             }
@@ -103,10 +101,8 @@ impl BatcherDb for MemDb {
         }
 
         for (block_no, eth_block) in &self.full_eth_block {
-            ensure!(
-                *block_no == eth_block.block_header.number,
-                "Block number mismatch"
-            );
+            let header = &eth_block.block_header;
+            ensure!(*block_no == header.number, "Block number mismatch");
 
             // Validate tx list
             {
@@ -115,7 +111,7 @@ impl BatcherDb for MemDb {
                     tx_trie.insert_rlp(&alloy_rlp::encode(tx_no), tx)?;
                 }
                 ensure!(
-                    tx_trie.hash() == eth_block.block_header.transactions_root,
+                    tx_trie.hash() == header.transactions_root,
                     "Invalid eth block transaction data!"
                 );
             }
@@ -127,18 +123,14 @@ impl BatcherDb for MemDb {
                     receipt_trie.insert_rlp(&alloy_rlp::encode(tx_no), receipt)?;
                 }
                 ensure!(
-                    receipt_trie.hash() == eth_block.block_header.receipts_root,
+                    receipt_trie.hash() == header.receipts_root,
                     "Invalid eth block receipt data!"
                 );
             } else {
-                let can_contain_deposits = deposits::can_contain(
-                    &OPTIMISM_CHAIN_SPEC.deposit_contract,
-                    &eth_block.block_header.logs_bloom,
-                );
-                let can_contain_config = system_config::can_contain(
-                    &OPTIMISM_CHAIN_SPEC.system_config_contract,
-                    &eth_block.block_header.logs_bloom,
-                );
+                let can_contain_deposits =
+                    deposits::can_contain(&config.deposit_contract, &header.logs_bloom);
+                let can_contain_config =
+                    system_config::can_contain(&config.system_config_contract, &header.logs_bloom);
                 ensure!(
                     !can_contain_deposits,
                     "Eth block has no receipts, but bloom filter indicates it has deposits"

@@ -16,6 +16,7 @@ use core::cmp::Ordering;
 use std::collections::{BTreeMap, VecDeque};
 
 use anyhow::{bail, ensure, Context, Result};
+use revm::primitives::SpecId;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
     batch::{Batch, BatchEssence},
@@ -124,11 +125,15 @@ pub struct BatchWithInclusion {
 }
 
 pub struct Batcher {
+    config: ChainConfig,
+    spec_id: SpecId,
+
+    /// The current state of the batch derivation.
+    pub state: State,
+
     /// Multimap of batches, keyed by timestamp
     batches: BTreeMap<u64, VecDeque<BatchWithInclusion>>,
     batcher_channel: BatcherChannels,
-    pub state: State,
-    pub config: ChainConfig,
 }
 
 impl Batcher {
@@ -136,11 +141,13 @@ impl Batcher {
         config: ChainConfig,
         op_head: L2BlockInfo,
         eth_block: &BlockInput<EthereumTxEssence>,
-    ) -> Result<Batcher> {
+    ) -> Result<Self> {
+        let timestamp = eth_block.block_header.timestamp;
+        let spec_id = config.chain_spec.active_fork(0, &timestamp)?;
+
+        let batcher_channel = BatcherChannels::new(&config, spec_id);
+
         let eth_block_hash = eth_block.block_header.hash();
-
-        let batcher_channel = BatcherChannels::new(&config);
-
         let state = State::new(
             eth_block.block_header.number,
             eth_block_hash,
@@ -148,18 +155,24 @@ impl Batcher {
             Epoch {
                 number: eth_block.block_header.number,
                 hash: eth_block_hash,
-                timestamp: eth_block.block_header.timestamp.try_into().unwrap(),
+                timestamp: timestamp.try_into().unwrap(),
                 base_fee_per_gas: eth_block.block_header.base_fee_per_gas,
                 deposits: deposits::extract_transactions(&config, eth_block)?,
             },
         );
 
         Ok(Batcher {
+            config,
+            spec_id,
+            state,
             batches: BTreeMap::new(),
             batcher_channel,
-            state,
-            config,
         })
+    }
+
+    /// Returns a reference to the chain configuration.
+    pub fn config(&self) -> &ChainConfig {
+        &self.config
     }
 
     pub fn process_l1_block(&mut self, eth_block: &BlockInput<EthereumTxEssence>) -> Result<()> {
@@ -171,11 +184,17 @@ impl Batcher {
             "Eth block has invalid parent hash"
         );
 
-        // Update the system config. From the spec:
-        // "Upon traversal of the L1 block, the system configuration copy used by the L1 retrieval
-        //  stage is updated, such that the batch-sender authentication is always accurate to the
-        //  exact L1 block that is read by the stage"
+        // Set the spec_id according to the L1 timestamp
+        self.spec_id = self
+            .config
+            .chain_spec
+            .active_fork(0, &eth_block.block_header.timestamp)?;
+
         if eth_block.receipts.is_some() {
+            // Update the system config. From the spec:
+            // "Upon traversal of the L1 block, the system configuration copy used by the L1
+            //  retrieval stage is updated, such that the batch-sender authentication is always
+            //  accurate to the exact L1 block that is read by the stage"
             self.config
                 .system_config
                 .update(&self.config.system_config_contract, eth_block)

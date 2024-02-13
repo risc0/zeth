@@ -16,7 +16,7 @@ use std::{fs::File, io::BufReader, path::PathBuf};
 
 use revm::primitives::SpecId;
 use serde_json::Value;
-use zeth_lib::consts::ChainSpec;
+use zeth_lib::consts::{ChainSpec, ETH_MAINNET_EIP1559_CONSTANTS};
 use zeth_primitives::block::Header;
 
 use crate::TestJson;
@@ -45,7 +45,7 @@ pub fn read_eth_test(path: PathBuf) -> Vec<EthTestCase> {
                 println!("skipping ({})", json.network);
                 return None;
             }
-            let chain_spec = ChainSpec::new_single(1, spec, Default::default());
+            let chain_spec = ChainSpec::new_single(1, spec, ETH_MAINNET_EIP1559_CONSTANTS);
 
             let genesis: Header = json.genesis.clone().into();
             assert_eq!(genesis.hash(), json.genesis.hash);

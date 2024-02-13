@@ -86,16 +86,6 @@ impl Provider for RpcProvider {
         Ok(response)
     }
 
-    fn get_block_receipts(&mut self, query: &BlockQuery) -> Result<Vec<TransactionReceipt>> {
-        info!("Querying RPC for block receipts: {:?}", query);
-
-        let response = self
-            .tokio_handle
-            .block_on(async { self.http_client.get_block_receipts(query.block_no).await })?;
-
-        Ok(response)
-    }
-
     fn get_proof(&mut self, query: &ProofQuery) -> Result<EIP1186ProofResponse> {
         info!("Querying RPC for inclusion proof: {:?}", query);
 

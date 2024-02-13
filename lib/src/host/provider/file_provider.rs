@@ -140,13 +140,6 @@ impl Provider for FileProvider {
         }
     }
 
-    fn get_block_receipts(&mut self, query: &BlockQuery) -> Result<Vec<TransactionReceipt>> {
-        match self.receipts.get(query) {
-            Some(val) => Ok(val.clone()),
-            None => Err(anyhow!("No data for {:?}", query)),
-        }
-    }
-
     fn get_proof(&mut self, query: &ProofQuery) -> Result<EIP1186ProofResponse> {
         match self.proofs.get(query) {
             Some(val) => Ok(val.clone()),

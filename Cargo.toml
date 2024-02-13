@@ -3,10 +3,10 @@ resolver = "2"
 members = [
     "lib",
     "primitives",
-    "raiko-guest",
-    "raiko-host",
-    "sgx-ra",
-    "tests/*",
+    # "raiko-guest",
+    # "raiko-host",
+    # "sgx-ra",
+    # "tests/*",
 ]
 
 # Always optimize; building and running the guest takes much longer without optimization.

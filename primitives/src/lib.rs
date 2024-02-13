@@ -30,7 +30,6 @@ pub mod withdrawal;
 pub mod ethers;
 
 pub mod batch;
-pub mod batch;
 #[cfg(feature = "revm")]
 pub mod revm;
 

@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
+use alloc::vec::Vec;
 use std::collections::BTreeSet;
 
 use ethers_core::types::{EIP1186ProofResponse, H160, H256};

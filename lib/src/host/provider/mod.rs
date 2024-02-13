@@ -11,8 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-use std::{collections::BTreeSet, path::PathBuf};
 use std::{collections::BTreeSet, path::PathBuf};
 
 use alloy_primitives::{Address, TxHash};
@@ -76,7 +74,6 @@ pub trait Provider: Send {
     fn get_full_block(&mut self, query: &BlockQuery) -> Result<Block<Transaction>>;
     fn get_partial_block(&mut self, query: &BlockQuery) -> Result<Block<H256>>;
     fn get_block_receipts(&mut self, query: &BlockQuery) -> Result<Vec<TransactionReceipt>>;
-    fn get_block_receipts(&mut self, query: &BlockQuery) -> Result<Vec<TransactionReceipt>>;
     fn get_proof(&mut self, query: &ProofQuery) -> Result<EIP1186ProofResponse>;
     fn get_transaction_count(&mut self, query: &AccountQuery) -> Result<U256>;
     fn get_balance(&mut self, query: &AccountQuery) -> Result<U256>;
@@ -92,7 +89,6 @@ pub trait MutProvider: Provider {
     fn insert_full_block(&mut self, query: BlockQuery, val: Block<Transaction>);
     fn insert_partial_block(&mut self, query: BlockQuery, val: Block<H256>);
     fn insert_block_receipts(&mut self, query: BlockQuery, val: Vec<TransactionReceipt>);
-    fn insert_block_receipts(&mut self, query: BlockQuery, val: Vec<TransactionReceipt>);
     fn insert_proof(&mut self, query: ProofQuery, val: EIP1186ProofResponse);
     fn insert_transaction_count(&mut self, query: AccountQuery, val: U256);
     fn insert_balance(&mut self, query: AccountQuery, val: U256);
@@ -106,7 +102,7 @@ pub trait MutProvider: Provider {
 
 pub fn new_file_provider(file_path: PathBuf) -> Result<Box<dyn Provider>> {
     let provider = file_provider::FileProvider::from_file(&file_path)
-        .with_context(|| format!("invalid cache file: {}", file_path.display()))?;
+        .with_context(|| anyhow!("invalid cache file: {}", file_path.display()))?;
 
     Ok(Box::new(provider))
 }
@@ -117,7 +113,6 @@ pub fn new_rpc_provider(rpc_url: String) -> Result<Box<dyn Provider>> {
     Ok(Box::new(provider))
 }
 
-pub fn new_cached_rpc_provider(cache_path: PathBuf, rpc_url: String) -> Result<Box<dyn Provider>> {
 pub fn new_cached_rpc_provider(cache_path: PathBuf, rpc_url: String) -> Result<Box<dyn Provider>> {
     let provider = cached_rpc_provider::CachedRpcProvider::new(cache_path, rpc_url)?;
 
@@ -162,7 +157,7 @@ impl dyn Provider {
             .map(|log| {
                 let topics = log.topics.iter().map(|topic| from_ethers_h256(*topic));
                 let event = E::decode_raw_log(topics, &log.data, false)
-                    .expect(&format!( "Decode log failed for l1_block_no {}", l1_block_no));
+                    .expect(&anyhow!( "Decode log failed for l1_block_no {}", l1_block_no));
                 (log.clone(), event)
             })
             .collect::<Vec<_>>();
@@ -191,7 +186,7 @@ impl dyn Provider {
             .map(|log| {
                 let topics = log.topics.iter().map(|topic| from_ethers_h256(*topic));
                 let block_proposed = BlockProposed::decode_raw_log(topics, &log.data, false)
-                    .expect(&format!(
+                    .expect(&anyhow!(
                         "Decode log failed for l1_block_no {}",
                         l1_block_no
                     ));
@@ -216,3 +211,4 @@ impl dyn Provider {
         Ok((tx, event))
     }
 }
+

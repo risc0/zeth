@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #![feature(path_file_prefix)]
-#![cfg_attr(any(not(feature = "std"), target_os = "zkvm"), no_std)]
+// #![cfg_attr(any(not(feature = "std"), target_os = "zkvm"), no_std)]
 
 extern crate alloc;
 extern crate core;
@@ -26,11 +26,11 @@ pub mod mem_db;
 #[cfg(feature = "optimism")]
 pub mod optimism;
 
-#[cfg(feature = "taiko")]
-pub mod taiko;
+// #[cfg(feature = "taiko")]
+// pub mod taiko;
 
-#[cfg(any(feature = "std", not(target_os = "zkvm")))]
-pub mod host;
+// #[cfg(any(feature = "std", not(target_os = "zkvm")))]
+// pub mod host;
 
 #[cfg(feature = "optimism")]
 mod utils;

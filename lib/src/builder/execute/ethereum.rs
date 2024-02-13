@@ -19,7 +19,6 @@ use anyhow::{anyhow, bail, Context};
 use log::debug;
 use revm::{
     interpreter::Host,
-    interpreter::Host,
     primitives::{Account, Address, ResultAndState, SpecId, TransactTo, TxEnv},
     Database, DatabaseCommit, Evm,
 };
@@ -34,11 +33,6 @@ use zeth_primitives::{
     Bloom, RlpBytes,
 };
 
-use super::TxExecStrategy;
-use crate::{builder::BlockBuilder, consts, guest_mem_forget};
-
-/// Minimum supported protocol version: Paris (Block no. 15537394).
-const MIN_SPEC_ID: SpecId = SpecId::MERGE;
 use super::TxExecStrategy;
 use crate::{builder::BlockBuilder, consts, guest_mem_forget};
 
@@ -94,7 +88,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             .modify_cfg_env(|cfg_env| {
                 // set the EVM configuration
                 cfg_env.chain_id = block_builder.chain_spec.chain_id();
-                cfg_env.optimism = false;
+                // cfg_env.optimism = false;
             })
             .modify_block_env(|blk_env| {
                 // set the EVM block environment

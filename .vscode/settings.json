@@ -6,6 +6,7 @@
         "./guests/op-block/Cargo.toml",
         "./guests/op-derive/Cargo.toml",
         "./host/Cargo.toml",
-        "./testing/ef-tests/testguest/Cargo.toml"
+        "./testing/ef-tests/testguest/Cargo.toml",
+        "./lib/Cargo.toml"
     ]
 }

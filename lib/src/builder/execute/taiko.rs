@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use core::{fmt::Debug, mem::take, str::from_utf8};
-
+use alloc::{vec::Vec, string::String};
 use alloy_primitives::hex::decode;
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use ethers_core::types::Transaction as EthersTransaction;
@@ -35,10 +35,17 @@ use zeth_primitives::{
 };
 
 use super::{ethereum, TxExecStrategy};
+
 use crate::{
-    builder::{prepare::EthHeaderPrepStrategy, BlockBuilder, TaikoStrategy}, consts::{self, ChainSpec}, guest_mem_forget, 
-    host::{preflight::{new_preflight_input, Data, Preflight}, 
-    provider::{new_provider, BlockQuery}, provider_db::ProviderDb}, taiko::{consts::{MAX_TX_LIST, MAX_TX_LIST_BYTES}, decode_anchor, provider::TaikoProvider}
+    builder::{prepare::EthHeaderPrepStrategy, BlockBuilder, TaikoStrategy}, 
+    consts::{self, ChainSpec}, guest_mem_forget,  
+    taiko::{consts::{MAX_TX_LIST, MAX_TX_LIST_BYTES}, decode_anchor, provider::TaikoProvider}
+};
+
+#[cfg(any(feature = "std", not(target_os = "zkvm")))]
+use crate::host::{
+    preflight::{new_preflight_input, Data, Preflight}, 
+    provider::{new_provider, BlockQuery}, provider_db::ProviderDb
 };
 
 /// Minimum supported protocol version: Bedrock (Block no. 105235063).
@@ -127,7 +134,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
             // verify the transaction signature
             let tx_from = tx
                 .recover_from()
-                .with_context(|| format!("Error recovering address for transaction {}", tx_no))?;
+                .with_context(|| anynow!("Error recovering address for transaction {}", tx_no))?;
 
             #[cfg(not(target_os = "zkvm"))]
             {
@@ -220,10 +227,10 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
             let trie_key = tx_no.to_rlp();
             tx_trie
                 .insert_rlp(&trie_key, tx)
-                .context("failed to insert transaction")?;
+                .with_context(|| anynow!("failed to insert transaction"))?;
             receipt_trie
                 .insert_rlp(&trie_key, receipt)
-                .context("failed to insert receipt")?;
+                .with_context(|| anynow!("failed to insert transaction"))?;
         }
 
         // Update result header with computed values
@@ -255,13 +262,14 @@ pub fn fill_eth_tx_env(
     ethereum::fill_eth_tx_env(tx_env, essence, caller);
 }
 
+#[cfg(any(not(feature = "std"), target_os = "zkvm"))]
 impl Preflight<EthereumTxEssence> for TaikoStrategy {
     fn run_preflight(
         chain_spec: ChainSpec,
         cache_path: Option<std::path::PathBuf>,
         rpc_url: Option<String>,
         block_no: u64,
-    ) -> Result<crate::host::preflight::Data<EthereumTxEssence>> {
+    ) -> Result<Data<EthereumTxEssence>> {
         let mut tp = TaikoProvider::new(None, None, cache_path, rpc_url)?;
 
         // Fetch the parent block

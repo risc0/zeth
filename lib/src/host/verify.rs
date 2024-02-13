@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-use anyhow::{bail, Context, Result};
+use alloc::vec::Vec;
+use anyhow::{anyhow, bail, Context, Result};
 use ethers_core::types::EIP1186ProofResponse;
 use hashbrown::HashMap;
 use log::error;
@@ -161,7 +161,7 @@ fn verify_state_trie(
                 None => {
                     // the RPC response should prove that the account is not included
                     if !account_deleted(&key, account_proof)
-                        .with_context(|| format!("invalid account_proof for {address:#}"))?
+                        .with_context(|| anynow!("invalid account_proof for {address:#}"))?
                     {
                         address_errors.push(VerifyError::MissingAccount);
                     }

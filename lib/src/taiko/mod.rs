@@ -32,7 +32,8 @@ sol! {
 #[inline]
 pub fn decode_anchor(bytes: &[u8]) -> Result<anchorCall> {
     anchorCall::abi_decode(bytes, true)
-        .context("Invalid anchor call")
+        .map_err(|e| anyhow!(e))
+        /* .context("Invalid anchor call") */
 } 
 
 sol! {

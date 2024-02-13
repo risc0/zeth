@@ -121,7 +121,6 @@ pub fn new_cached_rpc_provider(cache_path: PathBuf, rpc_url: String) -> Result<B
 
 pub fn new_provider(
     cache_path: Option<PathBuf>,
-    cache_path: Option<PathBuf>,
     rpc_url: Option<String>,
 ) -> Result<Box<dyn Provider>> {
     match (cache_path, rpc_url) {
@@ -132,6 +131,7 @@ pub fn new_provider(
     }
 }
 
+#[cfg(feature = "taiko")]
 use alloy_sol_types::TopicList;
 use zeth_primitives::ethers::from_ethers_h256;
 
@@ -157,7 +157,7 @@ impl dyn Provider {
             .map(|log| {
                 let topics = log.topics.iter().map(|topic| from_ethers_h256(*topic));
                 let event = E::decode_raw_log(topics, &log.data, false)
-                    .expect(&anyhow!( "Decode log failed for l1_block_no {}", l1_block_no));
+                    .expect(&format!( "Decode log failed for l1_block_no {}", l1_block_no));
                 (log.clone(), event)
             })
             .collect::<Vec<_>>();
@@ -186,7 +186,7 @@ impl dyn Provider {
             .map(|log| {
                 let topics = log.topics.iter().map(|topic| from_ethers_h256(*topic));
                 let block_proposed = BlockProposed::decode_raw_log(topics, &log.data, false)
-                    .expect(&anyhow!(
+                    .expect(&format!(
                         "Decode log failed for l1_block_no {}",
                         l1_block_no
                     ));
@@ -212,3 +212,15 @@ impl dyn Provider {
     }
 }
 
+
+#[cfg(feature = "taiko")]
+pub enum HostError {
+    AlloyError(alloy_sol_types::Error),
+}
+
+#[cfg(feature = "taiko")]
+impl From<HostError> for anyhow::Error {
+    fn from(error: HostError) -> Self {
+        anyhow!(error)
+    }
+}

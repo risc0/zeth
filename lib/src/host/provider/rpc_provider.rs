@@ -20,8 +20,8 @@ use ethers_core::types::{
 };
 use ethers_providers::{Http, Middleware, RetryClient};
 use log::info;
-#[cfg(feature = "taiko")]
-use zeth_primitives::taiko::BlockProposed;
+// #[cfg(feature = "taiko")]
+// use zeth_primitives::taiko::BlockProposed;
 
 use super::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery};
 #[cfg(feature = "taiko")]

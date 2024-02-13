@@ -161,7 +161,7 @@ fn verify_state_trie(
                 None => {
                     // the RPC response should prove that the account is not included
                     if !account_deleted(&key, account_proof)
-                        .with_context(|| anynow!("invalid account_proof for {address:#}"))?
+                        .with_context(|| anyhow!("invalid account_proof for {address:#}"))?
                     {
                         address_errors.push(VerifyError::MissingAccount);
                     }

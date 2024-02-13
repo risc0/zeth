@@ -18,7 +18,6 @@ use std::{
     fs::File,
     io::{Read, Write},
     path::{Path, PathBuf},
-    path::{Path, PathBuf},
 };
 
 use anyhow::{anyhow, Result};
@@ -28,8 +27,8 @@ use ethers_core::{
 };
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-#[cfg(feature = "taiko")]
-use zeth_primitives::taiko::BlockProposed;
+// #[cfg(feature = "taiko")]
+// use zeth_primitives::taiko::BlockProposed;
 
 use super::{AccountQuery, BlockQuery, MutProvider, ProofQuery, Provider, StorageQuery};
 #[cfg(feature = "taiko")]
@@ -200,11 +199,6 @@ impl MutProvider for FileProvider {
 
     fn insert_partial_block(&mut self, query: BlockQuery, val: Block<H256>) {
         self.partial_blocks.insert(query, val);
-        self.dirty = true;
-    }
-
-    fn insert_block_receipts(&mut self, query: BlockQuery, val: Vec<TransactionReceipt>) {
-        self.receipts.insert(query, val);
         self.dirty = true;
     }
 

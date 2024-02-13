@@ -103,8 +103,8 @@ impl TaikoProvider {
                         block_no: log.block_number.map(|b| b.as_u64()),
                     }
                 ).with_context(|| anyhow!("Cannot find BlockProposed Tx {:?}", log.transaction_hash.unwrap()))?;
-                let call = proposeBlockCall::abi_decode(&tx.input, false)
-                    .with_context(|| "failed to decode propose block call")?;
+                let call = proposeBlockCall::abi_decode(&tx.input, false).unwrap();
+                    // .with_context(|| "failed to decode propose block call")?;
                 return Ok((call, event));
             }
         }

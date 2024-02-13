@@ -134,7 +134,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
             // verify the transaction signature
             let tx_from = tx
                 .recover_from()
-                .with_context(|| anynow!("Error recovering address for transaction {}", tx_no))?;
+                .with_context(|| anyhow!("Error recovering address for transaction {}", tx_no))?;
 
             #[cfg(not(target_os = "zkvm"))]
             {
@@ -225,12 +225,8 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
 
             // Add receipt and tx to tries
             let trie_key = tx_no.to_rlp();
-            tx_trie
-                .insert_rlp(&trie_key, tx)
-                .with_context(|| anynow!("failed to insert transaction"))?;
-            receipt_trie
-                .insert_rlp(&trie_key, receipt)
-                .with_context(|| anynow!("failed to insert transaction"))?;
+            tx_trie.insert_rlp(&trie_key, tx)?;
+            receipt_trie.insert_rlp(&trie_key, receipt)?;
         }
 
         // Update result header with computed values
@@ -262,7 +258,7 @@ pub fn fill_eth_tx_env(
     ethereum::fill_eth_tx_env(tx_env, essence, caller);
 }
 
-#[cfg(any(not(feature = "std"), target_os = "zkvm"))]
+#[cfg(any(feature = "std", not(target_os = "zkvm")))]
 impl Preflight<EthereumTxEssence> for TaikoStrategy {
     fn run_preflight(
         chain_spec: ChainSpec,

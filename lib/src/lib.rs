@@ -26,11 +26,11 @@ pub mod mem_db;
 #[cfg(feature = "optimism")]
 pub mod optimism;
 
-// #[cfg(feature = "taiko")]
-// pub mod taiko;
+#[cfg(feature = "taiko")]
+pub mod taiko;
 
-// #[cfg(any(feature = "std", not(target_os = "zkvm")))]
-// pub mod host;
+#[cfg(any(feature = "std", not(target_os = "zkvm")))]
+pub mod host;
 
 #[cfg(feature = "optimism")]
 mod utils;

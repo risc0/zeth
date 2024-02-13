@@ -93,12 +93,8 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
 
         // initialize the Evm
         let mut evm = Evm::builder()
-            .spec_id(spec_id)
-            .modify_cfg_env(|cfg_env| {
-                // set the EVM configuration
-                cfg_env.chain_id = block_builder.chain_spec.chain_id();
-                cfg_env.optimism = false;
-            })
+            .with_db(block_builder.db.take().unwrap())
+            .with_spec_id(spec_id)
             .modify_block_env(|blk_env| {
                 // set the EVM block environment
                 blk_env.number = header.number.try_into().unwrap();
@@ -109,7 +105,10 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
                 blk_env.basefee = header.base_fee_per_gas;
                 blk_env.gas_limit = block_builder.input.state_input.gas_limit;
             })
-            .with_db(block_builder.db.take().unwrap())
+            .modify_cfg_env(|cfg_env| {
+                // set the EVM configuration
+                cfg_env.chain_id = block_builder.chain_spec.chain_id();
+            })
             .build();
 
         // bloom filter over all transaction logs
@@ -146,7 +145,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             }
 
             // process the transaction
-            fill_eth_tx_env(&mut evm.env().tx, &tx.essence, tx_from);
+            fill_eth_tx_env(&mut evm.env_mut().tx, &tx.essence, tx_from);
             let ResultAndState { result, state } = evm
                 .transact()
                 .map_err(|evm_err| anyhow!("Error at transaction {}: {:?}", tx_no, evm_err))

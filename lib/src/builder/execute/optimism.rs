@@ -19,7 +19,6 @@ use anyhow::{anyhow, bail, Context, Result};
 use log::trace;
 use revm::{
     interpreter::Host,
-    optimism,
     primitives::{Address, ResultAndState, SpecId, TransactTo, TxEnv},
     Database, DatabaseCommit, Evm,
 };
@@ -91,12 +90,9 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
 
         let chain_id = block_builder.chain_spec.chain_id();
         let mut evm = Evm::builder()
-            .spec_id(spec_id)
-            .modify_cfg_env(|cfg_env| {
-                // set the EVM configuration
-                cfg_env.chain_id = chain_id;
-                cfg_env.optimism = true;
-            })
+            .with_db(block_builder.db.take().unwrap())
+            .optimism()
+            .with_spec_id(spec_id)
             .modify_block_env(|blk_env| {
                 // set the EVM block environment
                 blk_env.number = header.number.try_into().unwrap();
@@ -107,8 +103,10 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                 blk_env.basefee = header.base_fee_per_gas;
                 blk_env.gas_limit = block_builder.input.state_input.gas_limit;
             })
-            .with_db(block_builder.db.take().unwrap())
-            .append_handler_register(optimism::optimism_handle_register)
+            .modify_cfg_env(|cfg_env| {
+                // set the EVM configuration
+                cfg_env.chain_id = chain_id;
+            })
             .build();
 
         // bloom filter over all transaction logs
@@ -163,10 +161,15 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                     }
 
                     // Initialize tx environment
-                    fill_deposit_tx_env(&mut evm.env().tx, deposit, tx_from);
+                    fill_deposit_tx_env(&mut evm.env_mut().tx, deposit, tx_from);
                 }
                 OptimismTxEssence::Ethereum(essence) => {
-                    fill_eth_tx_env(&mut evm.env().tx, alloy_rlp::encode(&tx), essence, tx_from);
+                    fill_eth_tx_env(
+                        &mut evm.env_mut().tx,
+                        alloy_rlp::encode(&tx),
+                        essence,
+                        tx_from,
+                    );
                 }
             };
 

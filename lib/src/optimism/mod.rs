@@ -125,11 +125,12 @@ pub struct DeriveMachine<D> {
 impl<D: BatcherDb> DeriveMachine<D> {
     /// Creates a new instance of DeriveMachine.
     pub fn new(
-        chain_config: &ChainConfig,
+        mut chain_config: ChainConfig,
         mut derive_input: DeriveInput<D>,
         provider_factory: Option<ProviderFactory>,
     ) -> Result<Self> {
-        derive_input.db.validate()?;
+        derive_input.db.validate(&chain_config)?;
+
         #[cfg(not(target_os = "zkvm"))]
         ensure!(provider_factory.is_some(), "Missing provider factory!");
 
@@ -152,7 +153,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
             .first()
             .context("block is empty")?
             .essence;
-        if let Err(err) = validate_l1_attributes_deposited_tx(chain_config, l1_attributes_tx) {
+        if let Err(err) = validate_l1_attributes_deposited_tx(&chain_config, l1_attributes_tx) {
             bail!(
                 "First transaction in block is not a valid L1 attributes deposited transaction: {}",
                 err
@@ -184,15 +185,13 @@ impl<D: BatcherDb> DeriveMachine<D> {
         );
 
         let op_batcher = {
-            // copy the chain config and update the system config
-            let mut op_chain_config = chain_config.clone();
-            op_chain_config.system_config.batch_sender =
+            chain_config.system_config.batch_sender =
                 Address::from_slice(&set_l1_block_values.batcher_hash.as_slice()[12..]);
-            op_chain_config.system_config.l1_fee_overhead = set_l1_block_values.l1_fee_overhead;
-            op_chain_config.system_config.l1_fee_scalar = set_l1_block_values.l1_fee_scalar;
+            chain_config.system_config.l1_fee_overhead = set_l1_block_values.l1_fee_overhead;
+            chain_config.system_config.l1_fee_scalar = set_l1_block_values.l1_fee_scalar;
 
             Batcher::new(
-                op_chain_config,
+                chain_config,
                 L2BlockInfo {
                     hash: op_head_block_hash,
                     timestamp: op_head.block_header.timestamp.try_into().unwrap(),
@@ -340,8 +339,8 @@ impl<D: BatcherDb> DeriveMachine<D> {
                 let new_op_head_input = BlockBuildInput {
                     state_input: StateInput {
                         parent_header: self.op_head_block_header.clone(),
-                        beneficiary: self.op_batcher.config.sequencer_fee_vault,
-                        gas_limit: self.op_batcher.config.system_config.gas_limit,
+                        beneficiary: self.op_batcher.config().sequencer_fee_vault,
+                        gas_limit: self.op_batcher.config().system_config.gas_limit,
                         timestamp: U256::from(op_batch.0.timestamp),
                         extra_data: Default::default(),
                         mix_hash: l1_epoch_header_mix_hash,
@@ -475,7 +474,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
     ) -> Transaction<OptimismTxEssence> {
         let batcher_hash = {
             let all_zero: FixedBytes<12> = FixedBytes::ZERO;
-            all_zero.concat_const::<20, 32>(self.op_batcher.config.system_config.batch_sender.0)
+            all_zero.concat_const::<20, 32>(self.op_batcher.config().system_config.batch_sender.0)
         };
 
         let set_l1_block_values =
@@ -486,8 +485,8 @@ impl<D: BatcherDb> DeriveMachine<D> {
                 hash: self.op_batcher.state.epoch.hash,
                 sequence_number: self.op_block_seq_no,
                 batcher_hash,
-                l1_fee_overhead: self.op_batcher.config.system_config.l1_fee_overhead,
-                l1_fee_scalar: self.op_batcher.config.system_config.l1_fee_scalar,
+                l1_fee_overhead: self.op_batcher.config().system_config.l1_fee_overhead,
+                l1_fee_scalar: self.op_batcher.config().system_config.l1_fee_scalar,
             });
 
         let source_hash: B256 = {
@@ -496,8 +495,8 @@ impl<D: BatcherDb> DeriveMachine<D> {
             let source_hash_sequencing = keccak([l1_block_hash, seq_number].concat());
             keccak([ONE.to_be_bytes::<32>(), source_hash_sequencing].concat()).into()
         };
-        let config = &self.op_batcher.config;
 
+        let config = self.op_batcher.config();
         Transaction {
             essence: OptimismTxEssence::OptimismDeposited(TxEssenceOptimismDeposited {
                 source_hash,

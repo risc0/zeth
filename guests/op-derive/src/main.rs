@@ -15,15 +15,13 @@
 #![no_main]
 
 use risc0_zkvm::guest::env;
-use zeth_lib::optimism::{
-    batcher_db::MemDb, config::OPTIMISM_CHAIN_SPEC, DeriveInput, DeriveMachine,
-};
+use zeth_lib::optimism::{batcher_db::MemDb, config::ChainConfig, DeriveInput, DeriveMachine};
 
 risc0_zkvm::guest::entry!(main);
 
 pub fn main() {
     let derive_input: DeriveInput<MemDb> = env::read();
-    let mut derive_machine = DeriveMachine::new(&OPTIMISM_CHAIN_SPEC, derive_input, None)
+    let mut derive_machine = DeriveMachine::new(ChainConfig::optimism(), derive_input, None)
         .expect("Could not create derive machine");
     let output = derive_machine
         .derive(None)

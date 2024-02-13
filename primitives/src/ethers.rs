@@ -1,4 +1,4 @@
-// Copyright 2023 RISC Zero, Inc.
+// Copyright 2024 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ use ethers_core::types::{
 use crate::{
     access_list::{AccessList, AccessListItem},
     block::Header,
-    receipt::{Log, Receipt, ReceiptPayload},
+    receipt::{Log, Receipt, ReceiptPayload, OPTIMISM_DEPOSIT_NONCE_VERSION},
     transactions::{
         ethereum::{
             EthereumTxEssence, TransactionKind, TxEssenceEip1559, TxEssenceEip2930, TxEssenceLegacy,
@@ -294,6 +294,10 @@ impl TryFrom<EthersReceipt> for Receipt {
                         }
                     })
                     .collect(),
+                deposit_nonce: receipt.deposit_nonce,
+                deposit_nonce_version: receipt
+                    .deposit_nonce
+                    .map(|_| OPTIMISM_DEPOSIT_NONCE_VERSION),
             },
         })
     }

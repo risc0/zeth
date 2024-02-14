@@ -2,13 +2,5 @@
     "rust-analyzer.cargo.features": "all",
     "rust-analyzer.linkedProjects": [
         "./Cargo.toml",
-        "./guests/eth-block/Cargo.toml",
-        "./guests/op-block/Cargo.toml",
-        "./guests/op-derive/Cargo.toml",
-        "./host/Cargo.toml",
-        "./testing/ef-tests/testguest/Cargo.toml",
-        "./lib/Cargo.toml",
-        "./lib/Cargo.toml",
-        "./lib/Cargo.toml"
     ]
 }

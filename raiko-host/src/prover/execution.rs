@@ -1,7 +1,5 @@
 use std::time::Instant;
 
-use zeth_lib::taiko::block_builder::TaikoStrategyBundle;
-
 use super::{
     context::Context,
     error::Result,
@@ -39,7 +37,7 @@ pub async fn execute(
     let result = async {
         // 1. load input data into cache path
         let start = Instant::now();
-        let _ = prepare_input::<TaikoStrategyBundle>(ctx, req).await?;
+        let _ = prepare_input(ctx, req.clone()).await?;
         let elapsed = Instant::now().duration_since(start).as_millis() as i64;
         observe_input(elapsed);
         // 2. run proof

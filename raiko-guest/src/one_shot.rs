@@ -11,13 +11,9 @@ use base64_serde::base64_serde_type;
 use secp256k1::KeyPair;
 use serde::Serialize;
 use zeth_lib::{
-    consts::{get_taiko_chain_spec, ChainSpec, ETH_MAINNET_CHAIN_SPEC},
-    host::{taiko::TaikoExtra, Init},
-    input::Input,
-    taiko::block_builder::{TaikoBlockBuilder, TaikoStrategyBundle},
-    EthereumTxEssence,
+    builder::{BlockBuilderStrategy, TaikoStrategy}, consts::{ChainSpec, TKO_MAINNET_CHAIN_SPEC}, input::Input, taiko::{host::{init_taiko, HostArgs}, protocol_instance::{assemble_protocol_instance, EvidenceType}, TaikoSystemInfo}, EthereumTxEssence
 };
-use zeth_primitives::{taiko::EvidenceType, Address, B256};
+use zeth_primitives::{Address, B256};
 base64_serde_type!(Base64Standard, base64::engine::general_purpose::STANDARD);
 
 use crate::{
@@ -125,7 +121,7 @@ pub async fn one_shot(global_opts: GlobalOpts, args: OneShotArgs) -> Result<()> 
     // let (new_privkey, new_pubkey) = generate_new_keypair()?;
     let new_pubkey = public_key(&prev_privkey);
     let new_instance = public_key_to_address(&new_pubkey);
-    let l2_chain_spec = get_taiko_chain_spec(&args.l2_chain.unwrap());
+    let l2_chain_spec = TKO_MAINNET_CHAIN_SPEC.clone();
 
     // fs::write(privkey_path, new_privkey.to_bytes())?;
     let pi_hash = get_data_to_sign(
@@ -177,8 +173,8 @@ async fn get_data_to_sign(
     block_no: u64,
     new_pubkey: Address,
 ) -> Result<B256> {
-    let (init, extra) = parse_to_init(
-        l2_chain_spec,
+    let (input, sys_info) = parse_to_init(
+        l2_chain_spec.clone(),
         path_str,
         l1_blocks_path,
         prover,
@@ -186,40 +182,37 @@ async fn get_data_to_sign(
         graffiti,
     )
     .await?;
-    let input: Input<zeth_lib::EthereumTxEssence> = init.clone().into();
-    let output = TaikoBlockBuilder::build_from(l2_chain_spec, input)
+    let (header, mpt_node) = TaikoStrategy::build_from(l2_chain_spec, input)
         .expect("Failed to build the resulting block");
-    let pi = zeth_lib::host::taiko::assemble_protocol_instance(&extra, &output)?;
-    let pi_hash = pi.hash(EvidenceType::Sgx { new_pubkey });
+    let pi = assemble_protocol_instance(&sys_info, &header)?;
+    let pi_hash = pi.instance_hash(EvidenceType::Sgx { new_pubkey });
     Ok(pi_hash)
 }
 
 async fn parse_to_init(
-    l2_chain_spec: &ChainSpec,
+    l2_chain_spec: ChainSpec,
     blocks_path: String,
     l1_blocks_path: String,
     prover: Address,
     block_no: u64,
     graffiti: B256,
-) -> Result<(Init<zeth_lib::EthereumTxEssence>, TaikoExtra), Error> {
-    let l2_chain_spec = l2_chain_spec.clone();
-    let (init, extra) = tokio::task::spawn_blocking(move || {
-        zeth_lib::host::taiko::get_taiko_initial_data::<TaikoStrategyBundle>(
-            Some(l1_blocks_path),
-            ETH_MAINNET_CHAIN_SPEC.clone(),
-            None,
-            prover,
-            Some(blocks_path),
+) -> Result<(Input<EthereumTxEssence>, TaikoSystemInfo), Error> {
+    let (input, sys_info) = tokio::task::spawn_blocking(move || {
+        init_taiko(
+            HostArgs {
+                    l1_cache: PathBuf::from_str(&l1_blocks_path).ok(),
+                    l1_rpc: None,
+                    l2_cache: PathBuf::from_str(&blocks_path).ok(),
+                    l2_rpc: None,
+            },
             l2_chain_spec,
-            None,
             block_no,
             graffiti,
-        )
-        .expect("Could not init")
+            prover,
+        ).expect("Init taiko failed")
     })
     .await?;
-
-    Ok::<(Init<EthereumTxEssence>, TaikoExtra), _>((init, extra))
+    Ok((input, sys_info))
 }
 
 fn save_attestation_user_report_data(pubkey: Address) -> Result<()> {

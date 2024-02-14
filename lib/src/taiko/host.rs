@@ -25,18 +25,18 @@ use super::{TaikoSystemInfo, provider::TaikoProvider};
 
 #[derive(Debug, Clone)]
 pub struct HostArgs {
-    l1_cache: Option<PathBuf>, 
-    l1_rpc: Option<String>, 
-    l2_cache: Option<PathBuf>, 
-    l2_rpc: Option<String>,
-    prover: Address,
+    pub l1_cache: Option<PathBuf>, 
+    pub l1_rpc: Option<String>, 
+    pub l2_cache: Option<PathBuf>, 
+    pub l2_rpc: Option<String>,
 }
 
-async fn init_taiko(
+pub fn init_taiko(
     args: HostArgs,
     l2_chain_spec: ChainSpec,
     l2_block_no: u64,
     graffiti: B256,
+    prover: Address,
 ) -> Result<(Input<EthereumTxEssence>, TaikoSystemInfo)> {
     let mut tp = TaikoProvider::new(
         args.l1_cache.clone(),
@@ -44,21 +44,22 @@ async fn init_taiko(
         args.l2_cache.clone(),
         args.l2_rpc.clone(),
     )?
-    .with_prover(args.prover)
+    .with_prover(prover)
     .with_l2_spec(l2_chain_spec.clone())
     .with_contracts(|| {
         use crate::taiko::consts::testnet::*;
         (*L1_CONTRACT, *L2_CONTRACT, *L1_SIGNAL_SERVICE, *L2_SIGNAL_SERVICE)
     });
     
-    let sys_info = derive_sys_info(&mut tp, l2_block_no, args.prover, graffiti)?;
+    let sys_info = derive_sys_info(&mut tp, l2_block_no, prover, graffiti)?;
     tp.save()?;
 
-    let preflight_result = tokio::task::spawn_blocking(move || {
-        TaikoStrategy::run_preflight(l2_chain_spec, args.l2_cache, args.l2_rpc, l2_block_no)
-    })
-    .await?;
-    let preflight_data = preflight_result.context("preflight failed")?;
+    let preflight_data = TaikoStrategy::run_preflight(
+        l2_chain_spec, 
+        args.l2_cache, 
+        args.l2_rpc, 
+        l2_block_no
+    )?;
 
     // Create the guest input from [Init]
     let input: Input<EthereumTxEssence> = preflight_data

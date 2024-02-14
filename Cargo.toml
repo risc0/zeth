@@ -5,8 +5,8 @@ members = [
     "primitives",
     "raiko-guest",
     "raiko-host",
-    # "sgx-ra",
-    # "tests/*",
+    "sgx-ra",
+    "tests/*",
 ]
 
 # Always optimize; building and running the guest takes much longer without optimization.

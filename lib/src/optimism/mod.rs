@@ -15,7 +15,7 @@
 use core::iter::once;
 
 use alloy_sol_types::{sol, SolInterface};
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{anyhow, bail, ensure, Context, Result};
 #[cfg(not(target_os = "zkvm"))]
 use log::info;
 use serde::{Deserialize, Serialize};
@@ -134,6 +134,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
         // decode the L1 attributes deposited transaction
         let set_l1_block_values = {
             let call = OpSystemInfo::OpSystemInfoCalls::abi_decode(l1_attributes_tx.data(), true)
+                .map_err(|e| anyhow!(e))
                 .context("invalid L1 attributes data")?;
             match call {
                 OpSystemInfo::OpSystemInfoCalls::setL1BlockValues(x) => x,

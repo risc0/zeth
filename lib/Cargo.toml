@@ -51,4 +51,4 @@ taiko = [
     "dep:rlp",
     "dep:tracing"
     ]
-optimism = ["std", "revm/optimism"]
+optimism = ["std", "revm/optimism",  "dep:alloy-sol-types"]

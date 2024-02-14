@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use alloy_sol_types::SolValue;
 use anyhow::{Result, anyhow};
 use alloy_primitives::{Address, TxHash, B256};

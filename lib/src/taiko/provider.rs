@@ -1,6 +1,7 @@
 
 use std::path::PathBuf;
-
+use alloc::vec::Vec;
+use alloc::string::String;
 use alloy_primitives::{Address, Bytes, B256};
 use alloy_sol_types::{sol, SolCall};
 use anyhow::{bail, ensure, Context, Result, anyhow};

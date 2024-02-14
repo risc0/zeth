@@ -131,9 +131,6 @@ pub fn new_provider(
     }
 }
 
-#[cfg(feature = "taiko")]
-use alloy_sol_types::TopicList;
-use zeth_primitives::ethers::from_ethers_h256;
 
 #[cfg(feature = "taiko")]
 impl dyn Provider {
@@ -143,6 +140,10 @@ impl dyn Provider {
         l1_block_no: u64,
         l2_block_no: u64,
     ) -> Result<Vec<(Log, E)>> {
+
+        use alloy_sol_types::TopicList;
+        use zeth_primitives::ethers::from_ethers_h256;
+
         let logs = self.get_logs(&LogsQuery {
             address: l1_contract.into_array().into(),
             from_block: l1_block_no,
@@ -172,6 +173,10 @@ impl dyn Provider {
         l1_block_no: u64,
         l2_block_no: u64,
     ) -> Result<(Transaction, BlockProposed)> {
+
+        use alloy_sol_types::TopicList;
+        use zeth_primitives::ethers::from_ethers_h256;
+        
         let logs = self.get_logs(&LogsQuery {
             address: l1_contract,
             from_block: l1_block_no,
@@ -212,15 +217,3 @@ impl dyn Provider {
     }
 }
 
-
-#[cfg(feature = "taiko")]
-pub enum HostError {
-    AlloyError(alloy_sol_types::Error),
-}
-
-#[cfg(feature = "taiko")]
-impl From<HostError> for anyhow::Error {
-    fn from(error: HostError) -> Self {
-        anyhow!(error)
-    }
-}

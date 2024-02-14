@@ -39,7 +39,7 @@ use crate::{
 mod execute;
 mod finalize;
 mod initialize;
-mod prepare;
+pub mod prepare;
 
 /// A generic builder for building a block.
 #[derive(Clone, Debug)]

@@ -27,6 +27,7 @@ pub async fn prepare_input(
             // Todo(Cecilia): should contract address as args, curently hardcode 
             let l1_cache = ctx.l1_cache_file.clone();
             let l2_cache = ctx.l2_cache_file.clone();
+            let testnet = ctx.l2_chain.clone();
             tokio::task::spawn_blocking(move || {
                 init_taiko(
                     HostArgs {
@@ -36,6 +37,7 @@ pub async fn prepare_input(
                             l2_rpc: Some(l2_rpc),
                     },
                     TKO_MAINNET_CHAIN_SPEC.clone(),
+                    &testnet,
                     block,
                     graffiti.clone(),
                     prover.clone(),

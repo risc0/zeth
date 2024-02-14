@@ -60,13 +60,14 @@ impl TaikoProvider {
 
     pub fn with_contracts(
         mut self, 
-        f: impl FnOnce() -> (Address, Address, Address, Address)
+        f: impl FnOnce() -> Result<(Address, Address, Address, Address)>
     ) -> Self {
-        let (l1_contract, l2_contract, l1_signal_service, l2_signal_service) = f();
-        self.l1_contract = Some(l1_contract);
-        self.l2_contract = Some(l2_contract);
-        self.l1_signal_service = Some(l1_signal_service);
-        self.l2_signal_service = Some(l2_signal_service);
+        if let Ok((l1_contract, l2_contract, l1_signal_service, l2_signal_service)) = f() {
+            self.l1_contract = Some(l1_contract);
+            self.l2_contract = Some(l2_contract);
+            self.l1_signal_service = Some(l1_signal_service);
+            self.l2_signal_service = Some(l2_signal_service);
+        }
         self
     }
 

@@ -121,11 +121,10 @@ pub async fn one_shot(global_opts: GlobalOpts, args: OneShotArgs) -> Result<()> 
     // let (new_privkey, new_pubkey) = generate_new_keypair()?;
     let new_pubkey = public_key(&prev_privkey);
     let new_instance = public_key_to_address(&new_pubkey);
-    let l2_chain_spec = TKO_MAINNET_CHAIN_SPEC.clone();
 
     // fs::write(privkey_path, new_privkey.to_bytes())?;
     let pi_hash = get_data_to_sign(
-        &l2_chain_spec,
+        "testnet".to_string(),
         path_str,
         args.l1_blocks_data_file.to_string_lossy().to_string(),
         args.prover,
@@ -165,7 +164,7 @@ fn is_bootstrapped(secrets_dir: &Path) -> bool {
 }
 
 async fn get_data_to_sign(
-    l2_chain_spec: &ChainSpec,
+    testnet: String,
     path_str: String,
     l1_blocks_path: String,
     prover: Address,
@@ -174,7 +173,7 @@ async fn get_data_to_sign(
     new_pubkey: Address,
 ) -> Result<B256> {
     let (input, sys_info) = parse_to_init(
-        l2_chain_spec.clone(),
+        testnet,
         path_str,
         l1_blocks_path,
         prover,
@@ -182,7 +181,7 @@ async fn get_data_to_sign(
         graffiti,
     )
     .await?;
-    let (header, mpt_node) = TaikoStrategy::build_from(l2_chain_spec, input)
+    let (header, mpt_node) = TaikoStrategy::build_from(&TKO_MAINNET_CHAIN_SPEC.clone(), input)
         .expect("Failed to build the resulting block");
     let pi = assemble_protocol_instance(&sys_info, &header)?;
     let pi_hash = pi.instance_hash(EvidenceType::Sgx { new_pubkey });
@@ -190,7 +189,7 @@ async fn get_data_to_sign(
 }
 
 async fn parse_to_init(
-    l2_chain_spec: ChainSpec,
+    testnet: String,
     blocks_path: String,
     l1_blocks_path: String,
     prover: Address,
@@ -205,7 +204,8 @@ async fn parse_to_init(
                     l2_cache: PathBuf::from_str(&blocks_path).ok(),
                     l2_rpc: None,
             },
-            l2_chain_spec,
+            TKO_MAINNET_CHAIN_SPEC.clone(),
+            &testnet,
             block_no,
             graffiti,
             prover,

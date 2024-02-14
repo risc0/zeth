@@ -4,6 +4,7 @@ use alloy_primitives::{Address, Bytes, B256};
 use alloy_sol_types::{sol, SolCall};
 use anyhow::{bail, ensure, Context, Result, anyhow};
 use log::info;
+use revm::taiko;
 use rlp::{Decodable, DecoderError, Rlp};
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
@@ -11,7 +12,9 @@ use zeth_primitives::{block::Header, ethers::{from_ethers_h160, from_ethers_h256
 use ethers_core::types::{Block, Transaction, H160, H256, U256, U64};
 use ethers_core::types::Transaction as EthersTransaction;
 use crate::{
-    builder::{prepare::EthHeaderPrepStrategy, BlockBuilder, TaikoStrategy, TkoTxExecStrategy}, consts::ChainSpec, host::{preflight::{new_preflight_input, Data}, provider_db::ProviderDb}, input::Input, taiko::consts::{check_anchor_signature, ANCHOR_GAS_LIMIT, GOLDEN_TOUCH_ACCOUNT, MAX_TX_LIST, MAX_TX_LIST_BYTES}
+    builder::{prepare::EthHeaderPrepStrategy, BlockBuilder, TaikoStrategy, TkoTxExecStrategy}, 
+    consts::ChainSpec, host::{preflight::{new_preflight_input, Data}, provider_db::ProviderDb}, input::Input, 
+    taiko::consts::{get_contracts, MAX_TX_LIST, MAX_TX_LIST_BYTES}
 };
 use std::path::PathBuf;
 use crate::host::{
@@ -34,6 +37,7 @@ pub struct HostArgs {
 pub fn init_taiko(
     args: HostArgs,
     l2_chain_spec: ChainSpec,
+    testnet: &str,
     l2_block_no: u64,
     graffiti: B256,
     prover: Address,
@@ -46,10 +50,7 @@ pub fn init_taiko(
     )?
     .with_prover(prover)
     .with_l2_spec(l2_chain_spec.clone())
-    .with_contracts(|| {
-        use crate::taiko::consts::testnet::*;
-        (*L1_CONTRACT, *L2_CONTRACT, *L1_SIGNAL_SERVICE, *L2_SIGNAL_SERVICE)
-    });
+    .with_contracts(|| get_contracts(testnet));
     
     let sys_info = derive_sys_info(&mut tp, l2_block_no, prover, graffiti)?;
     tp.save()?;

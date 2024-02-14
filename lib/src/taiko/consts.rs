@@ -14,6 +14,23 @@ pub static GOLDEN_TOUCH_ACCOUNT: Lazy<Address> = Lazy::new(|| {
         .expect("invalid golden touch account")
 });
 
+macro_rules! taiko_contracts {
+    ($name:ident) => {{
+        use crate::taiko::consts::$name::*;
+        Ok((*L1_CONTRACT, *L2_CONTRACT, *L1_SIGNAL_SERVICE, *L2_SIGNAL_SERVICE))
+    }};
+}
+
+pub fn get_contracts(name: &str) -> Result<(Address, Address, Address, Address)>{
+    match name {
+        "testnet" => taiko_contracts!(testnet),
+        "internal_devnet_a" => taiko_contracts!(internal_devnet_a),
+        "internal_devnet_b" => taiko_contracts!(internal_devnet_b),
+        _ => bail!("invalid chain name: {}", name),
+    }
+}
+
+
 pub mod testnet {
     use super::*;
     pub static CHAIN_ID: u64 = 167008;

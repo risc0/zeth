@@ -1,24 +1,26 @@
-use alloc::string::String;
-use alloc::vec::Vec;
-use alloy_primitives::{Address, Bytes, B256};
+use alloc::{vec::Vec};
+
+use alloy_primitives::{Address, B256};
 use alloy_sol_types::{sol, SolCall};
-use anyhow::{bail, ensure, Context, Result, anyhow};
+use anyhow::{anyhow, Result};
+use ethers_core::types::{
+    Block, Transaction as EthersTransaction,
+};
 use serde::{Deserialize, Serialize};
-use thiserror::Error as ThisError;
-use zeth_primitives::{ethers::{from_ethers_h160, from_ethers_h256}, transactions::{ethereum::EthereumTxEssence, TxEssence}, withdrawal::Withdrawal};
-use ethers_core::types::{Block, Transaction, H160, H256, U256, U64};
-use ethers_core::types::{Transaction as EthersTransaction};
-use crate::{
-    builder::{TaikoStrategy, TkoTxExecStrategy}, consts::ChainSpec, 
-    input::Input, taiko::consts::{check_anchor_signature, ANCHOR_GAS_LIMIT, GOLDEN_TOUCH_ACCOUNT}
+
+use zeth_primitives::{
+    transactions::{TxEssence},
+    withdrawal::Withdrawal,
 };
 
-pub mod protocol_instance;
+
+
 pub mod consts;
 #[cfg(all(feature = "std", not(target_os = "zkvm")))]
-pub mod provider;
-#[cfg(all(feature = "std", not(target_os = "zkvm")))]
 pub mod host;
+pub mod protocol_instance;
+#[cfg(all(feature = "std", not(target_os = "zkvm")))]
+pub mod provider;
 
 sol! {
     function anchor(
@@ -33,10 +35,9 @@ sol! {
 
 #[inline]
 pub fn decode_anchor(bytes: &[u8]) -> Result<anchorCall> {
-    anchorCall::abi_decode(bytes, true)
-        .map_err(|e| anyhow!(e))
-        /* .context("Invalid anchor call") */
-} 
+    anchorCall::abi_decode(bytes, true).map_err(|e| anyhow!(e))
+    // .context("Invalid anchor call")
+}
 
 sol! {
     #[derive(Debug, Default, Deserialize, Serialize)]
@@ -93,7 +94,6 @@ sol! {
     function proveBlock(uint64 blockId, bytes calldata input) {}
 }
 
-
 #[derive(Debug)]
 pub struct TaikoSystemInfo {
     pub l1_hash: B256,
@@ -108,4 +108,3 @@ pub struct TaikoSystemInfo {
     pub l1_next_block: Block<EthersTransaction>,
     pub l2_block: Block<EthersTransaction>,
 }
-

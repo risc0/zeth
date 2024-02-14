@@ -25,7 +25,7 @@ use anyhow::bail;
 use once_cell::sync::Lazy;
 use revm::primitives::SpecId;
 use serde::{Deserialize, Serialize};
-use zeth_primitives::{uint, Address, BlockNumber, ChainId, U256};
+use zeth_primitives::{uint, BlockNumber, ChainId, U256};
 
 /// U256 representation of 0.
 pub const ZERO: U256 = U256::ZERO;
@@ -73,7 +73,7 @@ pub static TKO_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| {
         chain_id: 1,
         hard_forks: BTreeMap::from([
             (SpecId::SHANGHAI, ForkCondition::Block(0)),
-            (SpecId::SHANGHAI /*change*/, ForkCondition::Block(0)),
+            (SpecId::SHANGHAI /* change */, ForkCondition::Block(0)),
             // previous versions not supported
             (SpecId::CANCUN, ForkCondition::TBD),
         ]),

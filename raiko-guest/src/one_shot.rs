@@ -11,7 +11,15 @@ use base64_serde::base64_serde_type;
 use secp256k1::KeyPair;
 use serde::Serialize;
 use zeth_lib::{
-    builder::{BlockBuilderStrategy, TaikoStrategy}, consts::{ChainSpec, TKO_MAINNET_CHAIN_SPEC}, input::Input, taiko::{host::{init_taiko, HostArgs}, protocol_instance::{assemble_protocol_instance, EvidenceType}, TaikoSystemInfo}, EthereumTxEssence
+    builder::{BlockBuilderStrategy, TaikoStrategy},
+    consts::{TKO_MAINNET_CHAIN_SPEC},
+    input::Input,
+    taiko::{
+        host::{init_taiko, HostArgs},
+        protocol_instance::{assemble_protocol_instance, EvidenceType},
+        TaikoSystemInfo,
+    },
+    EthereumTxEssence,
 };
 use zeth_primitives::{Address, B256};
 base64_serde_type!(Base64Standard, base64::engine::general_purpose::STANDARD);
@@ -181,7 +189,7 @@ async fn get_data_to_sign(
         graffiti,
     )
     .await?;
-    let (header, mpt_node) = TaikoStrategy::build_from(&TKO_MAINNET_CHAIN_SPEC.clone(), input)
+    let (header, _mpt_node) = TaikoStrategy::build_from(&TKO_MAINNET_CHAIN_SPEC.clone(), input)
         .expect("Failed to build the resulting block");
     let pi = assemble_protocol_instance(&sys_info, &header)?;
     let pi_hash = pi.instance_hash(EvidenceType::Sgx { new_pubkey });
@@ -199,17 +207,18 @@ async fn parse_to_init(
     let (input, sys_info) = tokio::task::spawn_blocking(move || {
         init_taiko(
             HostArgs {
-                    l1_cache: PathBuf::from_str(&l1_blocks_path).ok(),
-                    l1_rpc: None,
-                    l2_cache: PathBuf::from_str(&blocks_path).ok(),
-                    l2_rpc: None,
+                l1_cache: PathBuf::from_str(&l1_blocks_path).ok(),
+                l1_rpc: None,
+                l2_cache: PathBuf::from_str(&blocks_path).ok(),
+                l2_rpc: None,
             },
             TKO_MAINNET_CHAIN_SPEC.clone(),
             &testnet,
             block_no,
             graffiti,
             prover,
-        ).expect("Init taiko failed")
+        )
+        .expect("Init taiko failed")
     })
     .await?;
     Ok((input, sys_info))

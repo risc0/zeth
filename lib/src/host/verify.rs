@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use alloc::vec::Vec;
+
 use anyhow::{anyhow, bail, Context, Result};
 use ethers_core::types::EIP1186ProofResponse;
 use hashbrown::HashMap;

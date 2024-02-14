@@ -1,36 +1,44 @@
-use alloc::string::String;
-use alloc::vec::Vec;
-use alloy_primitives::{Address, Bytes, B256};
-use alloy_sol_types::{sol, SolCall};
-use anyhow::{bail, ensure, Context, Result, anyhow};
-use log::info;
-use revm::taiko;
-use rlp::{Decodable, DecoderError, Rlp};
-use serde::{Deserialize, Serialize};
-use thiserror::Error as ThisError;
-use zeth_primitives::{block::Header, ethers::{from_ethers_h160, from_ethers_h256}, transactions::{ethereum::EthereumTxEssence, TxEssence}, withdrawal::Withdrawal};
-use ethers_core::types::{Block, Transaction, H160, H256, U256, U64};
-use ethers_core::types::Transaction as EthersTransaction;
-use crate::{
-    builder::{prepare::EthHeaderPrepStrategy, BlockBuilder, TaikoStrategy, TkoTxExecStrategy}, 
-    consts::ChainSpec, host::{preflight::{new_preflight_input, Data}, provider_db::ProviderDb}, input::Input, 
-    taiko::consts::{get_contracts, MAX_TX_LIST, MAX_TX_LIST_BYTES}
-};
+use alloc::{string::String, vec::Vec};
 use std::path::PathBuf;
-use crate::host::{
-    provider::{
-        new_cached_rpc_provider, new_file_provider, new_provider, new_rpc_provider, 
-        BlockQuery, ProofQuery, Provider, TxQuery
-    },
-    preflight::Preflight
+
+use alloy_primitives::{Address, B256};
+use alloy_sol_types::{SolCall};
+use anyhow::{bail, ensure, Context, Result};
+use ethers_core::types::{
+    Transaction as EthersTransaction,
 };
-use super::{TaikoSystemInfo, provider::TaikoProvider};
+use log::info;
+
+use rlp::{Decodable, DecoderError, Rlp};
+
+
+use zeth_primitives::{
+    block::Header,
+    ethers::{from_ethers_h256},
+    transactions::{ethereum::EthereumTxEssence},
+};
+
+use super::{provider::TaikoProvider, TaikoSystemInfo};
+use crate::{
+    builder::{prepare::EthHeaderPrepStrategy, BlockBuilder, TaikoStrategy, TkoTxExecStrategy},
+    consts::ChainSpec,
+    host::{
+        preflight::{new_preflight_input, Data, Preflight},
+        provider::{
+            BlockQuery,
+            ProofQuery, Provider,
+        },
+        provider_db::ProviderDb,
+    },
+    input::Input,
+    taiko::consts::{get_contracts, MAX_TX_LIST, MAX_TX_LIST_BYTES},
+};
 
 #[derive(Debug, Clone)]
 pub struct HostArgs {
-    pub l1_cache: Option<PathBuf>, 
-    pub l1_rpc: Option<String>, 
-    pub l2_cache: Option<PathBuf>, 
+    pub l1_cache: Option<PathBuf>,
+    pub l1_rpc: Option<String>,
+    pub l2_cache: Option<PathBuf>,
     pub l2_rpc: Option<String>,
 }
 
@@ -51,16 +59,12 @@ pub fn init_taiko(
     .with_prover(prover)
     .with_l2_spec(l2_chain_spec.clone())
     .with_contracts(|| get_contracts(testnet));
-    
+
     let sys_info = derive_sys_info(&mut tp, l2_block_no, prover, graffiti)?;
     tp.save()?;
 
-    let preflight_data = TaikoStrategy::run_preflight(
-        l2_chain_spec, 
-        args.l2_cache, 
-        args.l2_rpc, 
-        l2_block_no
-    )?;
+    let preflight_data =
+        TaikoStrategy::run_preflight(l2_chain_spec, args.l2_cache, args.l2_rpc, l2_block_no)?;
 
     // Create the guest input from [Init]
     let input: Input<EthereumTxEssence> = preflight_data
@@ -71,23 +75,20 @@ pub fn init_taiko(
     Ok((input, sys_info))
 }
 
-
-
 pub fn derive_sys_info(
     tp: &mut TaikoProvider,
     l2_block_no: u64,
     prover: Address,
     graffiti: B256,
 ) -> Result<TaikoSystemInfo> {
-
     let l2_block = tp.get_l2_full_block(l2_block_no)?;
     let l2_parent_block = tp.get_l2_full_block(l2_block_no - 1)?;
 
     let (anchor_tx, anchor_call) = tp.get_anchor(&l2_block)?;
-    
+
     let l1_block_no = anchor_call.l1Height;
     let l1_block = tp.get_l1_full_block(l1_block_no)?;
-    let l1_next_block = tp.get_l1_full_block(l1_block_no + 1 )?;
+    let l1_next_block = tp.get_l1_full_block(l1_block_no + 1)?;
 
     let (proposal_call, proposal_event) = tp.get_proposal(l1_block_no, l2_block_no)?;
 
@@ -95,10 +96,13 @@ pub fn derive_sys_info(
     tp.check_anchor_tx(&anchor_tx, &l2_block);
 
     // 1. check l2 parent gas used
-    ensure!(l2_parent_block.gas_used == ethers_core::types::U256::from(anchor_call.parentGasUsed), "parentGasUsed mismatch");
-    
+    ensure!(
+        l2_parent_block.gas_used == ethers_core::types::U256::from(anchor_call.parentGasUsed),
+        "parentGasUsed mismatch"
+    );
+
     // 2. check l1 signal root
-    let mut l1_signal_root;
+    let l1_signal_root;
     if let Some(l1_signal_service) = tp.l1_signal_service {
         let proof = tp.l1_provider.get_proof(&ProofQuery {
             block_no: l1_block_no,
@@ -106,17 +110,27 @@ pub fn derive_sys_info(
             indices: Default::default(),
         })?;
         l1_signal_root = from_ethers_h256(proof.storage_hash);
-        ensure!(l1_signal_root == anchor_call.l1SignalRoot, "l1SignalRoot mismatch");
+        ensure!(
+            l1_signal_root == anchor_call.l1SignalRoot,
+            "l1SignalRoot mismatch"
+        );
     } else {
         bail!("l1_signal_service not set");
     }
-    
+
     // 3. check l1 block hash
-    ensure!(l1_block.hash.unwrap() == ethers_core::types::H256::from(anchor_call.l1Hash.0), "l1Hash mismatch");
+    ensure!(
+        l1_block.hash.unwrap() == ethers_core::types::H256::from(anchor_call.l1Hash.0),
+        "l1Hash mismatch"
+    );
 
     let proof = tp.l2_provider.get_proof(&ProofQuery {
         block_no: l2_block_no,
-        address: tp.l2_signal_service.expect("l2_signal_service not set").into_array().into(),
+        address: tp
+            .l2_signal_service
+            .expect("l2_signal_service not set")
+            .into_array()
+            .into(),
         indices: Default::default(),
     })?;
     let l2_signal_root = from_ethers_h256(proof.storage_hash);
@@ -172,19 +186,24 @@ impl Preflight<EthereumTxEssence> for TaikoStrategy {
         let mut block = tp.l2_provider.get_full_block(&BlockQuery { block_no })?;
         let (anchor_tx, anchor_call) = tp.get_anchor(&block)?;
         let (proposal_call, _) = tp.get_proposal(anchor_call.l1Height, block_no)?;
-        
+
         let mut l2_tx_list: Vec<EthersTransaction> = rlp_decode_list(&proposal_call.txList)?;
-        ensure!(proposal_call.txList.len() <= MAX_TX_LIST_BYTES, "tx list bytes must be not more than MAX_TX_LIST_BYTES");
-        ensure!(l2_tx_list.len() <=  MAX_TX_LIST, "tx list size must be not more than MAX_TX_LISTs");
-        
-        // TODO(Cecilia): reset to empty necessary if wrong? 
+        ensure!(
+            proposal_call.txList.len() <= MAX_TX_LIST_BYTES,
+            "tx list bytes must be not more than MAX_TX_LIST_BYTES"
+        );
+        ensure!(
+            l2_tx_list.len() <= MAX_TX_LIST,
+            "tx list size must be not more than MAX_TX_LISTs"
+        );
+
+        // TODO(Cecilia): reset to empty necessary if wrong?
         // tracing::log for particular reason instead of uniform error handling?
         // txs.clear();
-        
+
         info!(
             "Inserted anchor {:?} in tx_list decoded from {:?}",
-            anchor_tx.hash,
-            proposal_call.txList
+            anchor_tx.hash, proposal_call.txList
         );
         l2_tx_list.insert(0, anchor_tx);
         block.transactions = l2_tx_list;
@@ -195,7 +214,6 @@ impl Preflight<EthereumTxEssence> for TaikoStrategy {
             block.hash.unwrap()
         );
         info!("Transaction count: {:?}", block.transactions.len());
-
 
         // Create the provider DB
         let provider_db = ProviderDb::new(tp.l2_provider, parent_header.number);
@@ -238,7 +256,6 @@ impl Preflight<EthereumTxEssence> for TaikoStrategy {
             proofs,
             ancestor_headers,
         })
-
     }
 }
 

@@ -131,6 +131,8 @@ impl TxEssence for OptimismTxEssence {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
+
     use alloy_primitives::{address, b256};
     use serde_json::json;
 

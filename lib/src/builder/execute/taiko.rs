@@ -12,38 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+
 use core::{fmt::Debug, mem::take, str::from_utf8};
-use alloc::{vec::Vec, string::String};
-use alloy_primitives::hex::decode;
-use anyhow::{anyhow, bail, ensure, Context, Result};
-use ethers_core::types::Transaction as EthersTransaction;
+
+
+use anyhow::{anyhow, bail, Context, Result};
+
 #[cfg(not(target_os = "zkvm"))]
 use log::debug;
 use log::info;
 use revm::{
     interpreter::Host,
-    primitives::{Address, ResultAndState, SpecId, TransactTo, TxEnv},
+    primitives::{Address, ResultAndState, SpecId, TxEnv},
     taiko, Database, DatabaseCommit, Evm,
 };
-use rlp::{Decodable, DecoderError, Rlp};
+
 use ruint::aliases::U256;
 use zeth_primitives::{
-    block::Header, receipt::Receipt, transactions::{
-        ethereum::{EthereumTxEssence, TransactionKind},
+    receipt::Receipt,
+    transactions::{
+        ethereum::{EthereumTxEssence},
         TxEssence,
-    }, trie::MptNode, Bloom, Bytes, RlpBytes
+    },
+    trie::MptNode,
+    Bloom, RlpBytes,
 };
 
 use super::{ethereum, TxExecStrategy};
-
 use crate::{
-    builder::{prepare::EthHeaderPrepStrategy, BlockBuilder, TaikoStrategy}, 
-    consts::{self, ChainSpec}, guest_mem_forget,  
-    taiko::{consts::{MAX_TX_LIST, MAX_TX_LIST_BYTES}, decode_anchor}
+    builder::{BlockBuilder},
+    consts::{self, ChainSpec},
+    guest_mem_forget,
 };
 
 /// Minimum supported protocol version: Bedrock (Block no. 105235063).
-const MIN_SPEC_ID: SpecId = SpecId::SHANGHAI /*change*/; 
+const MIN_SPEC_ID: SpecId = SpecId::SHANGHAI /*change*/;
 
 pub struct TkoTxExecStrategy {}
 
@@ -238,7 +241,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
 }
 
 pub fn fill_eth_tx_env(
-    l2_chain_spec: &ChainSpec,
+    _l2_chain_spec: &ChainSpec,
     tx_env: &mut TxEnv,
     essence: &EthereumTxEssence,
     caller: Address,

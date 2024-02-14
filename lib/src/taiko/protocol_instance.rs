@@ -1,15 +1,19 @@
 use alloc::vec::Vec;
-use alloy_sol_types::SolValue;
-use anyhow::{Result, anyhow};
+
 use alloy_primitives::{Address, TxHash, B256};
+use alloy_sol_types::SolValue;
+use anyhow::{anyhow, Result};
 use revm::primitives::SpecId;
-use serde_json::to_string;
-use zeth_primitives::{block::Header, ethers::{from_ethers_h256, from_ethers_u256}, keccak::keccak, transactions::EthereumTransaction};
+
+use zeth_primitives::{
+    block::Header,
+    ethers::{from_ethers_h256, from_ethers_u256},
+    keccak::keccak,
+    transactions::EthereumTransaction,
+};
+
+use super::{consts::ANCHOR_GAS_LIMIT, BlockMetadata, EthDeposit, TaikoSystemInfo, Transition};
 use crate::consts::TKO_MAINNET_CHAIN_SPEC;
-
-use super::{consts::ANCHOR_GAS_LIMIT, TaikoSystemInfo, BlockMetadata, EthDeposit, Transition};
-
-
 
 #[derive(Debug)]
 pub struct ProtocolInstance {
@@ -52,10 +56,13 @@ pub enum EvidenceType {
 }
 
 // TODO(cecilia): rewrite
-pub fn assemble_protocol_instance(sys: &TaikoSystemInfo, header: &Header) -> Result<ProtocolInstance> {
+pub fn assemble_protocol_instance(
+    sys: &TaikoSystemInfo,
+    header: &Header,
+) -> Result<ProtocolInstance> {
     let tx_list_hash = TxHash::from(keccak(sys.l2_tx_list.as_slice()));
     let block_hash: zeth_primitives::U256 = tx_list_hash.into();
-    
+
     let deposits = sys
         .l2_withdrawals
         .iter()
@@ -69,12 +76,11 @@ pub fn assemble_protocol_instance(sys: &TaikoSystemInfo, header: &Header) -> Res
 
     let extra_data: B256 = bytes_to_bytes32(&header.extra_data).into();
 
-    let prevrandao = 
-        if TKO_MAINNET_CHAIN_SPEC.spec_id(header.number) >= SpecId::SHANGHAI {
-            from_ethers_h256(sys.l1_next_block.mix_hash.unwrap_or_default()).into()
-        } else {
-            from_ethers_u256(sys.l1_next_block.difficulty)
-        };
+    let prevrandao = if TKO_MAINNET_CHAIN_SPEC.spec_id(header.number) >= SpecId::SHANGHAI {
+        from_ethers_h256(sys.l1_next_block.mix_hash.unwrap_or_default()).into()
+    } else {
+        from_ethers_u256(sys.l1_next_block.difficulty)
+    };
     let difficulty = block_hash
         ^ (prevrandao
             * zeth_primitives::U256::from(header.number)
@@ -92,7 +98,7 @@ pub fn assemble_protocol_instance(sys: &TaikoSystemInfo, header: &Header) -> Res
             l1Hash: sys.l1_hash,
             difficulty: difficulty.into(),
             blobHash: tx_list_hash,
-            extraData: extra_data.into(),
+            extraData: extra_data,
             depositsHash: deposits_hash,
             coinbase: header.beneficiary,
             id: header.number,
@@ -122,22 +128,21 @@ pub fn verify(sys: &TaikoSystemInfo, header: &Header, pi: &mut ProtocolInstance)
     }
     // Check the block hash
     if Some(header.hash()) != sys.l2_block.hash.map(from_ethers_h256) {
-        let txs: Vec<EthereumTransaction> = sys
+        let _txs: Vec<EthereumTransaction> = sys
             .l2_block
             .transactions
             .iter()
             .filter_map(|tx| tx.clone().try_into().ok())
             .collect();
         return Err(anyhow!(
-            "block hash mismatch, expected: {}, got: {}", 
-            header.hash(), 
+            "block hash mismatch, expected: {}, got: {}",
+            header.hash(),
             sys.l2_block.hash.map(from_ethers_h256).unwrap()
         ));
     }
 
     Ok(())
 }
-
 
 fn bytes_to_bytes32(input: &[u8]) -> [u8; 32] {
     let mut bytes = [0u8; 32];

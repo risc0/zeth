@@ -31,12 +31,9 @@ use zeth_primitives::{
 };
 
 use crate::{
-    builder::{BlockBuilder, BlockBuilderStrategy},
     consts::ChainSpec,
     host::{
         mpt::{is_not_included, mpt_from_proof, parse_proof, resolve_nodes, shorten_node_path},
-        provider::{new_provider, BlockQuery},
-        provider_db::ProviderDb,
     },
     input::{Input, StorageEntry},
     mem_db::MemDb,
@@ -191,7 +188,9 @@ where
         contracts: Default::default(),
         parent_header,
         ancestor_headers: Default::default(),
-        base_fee_per_gas: from_ethers_u256(block.base_fee_per_gas.context("base_fee_per_gas missing")?)
+        base_fee_per_gas: from_ethers_u256(
+            block.base_fee_per_gas.context("base_fee_per_gas missing")?,
+        ),
     };
     Ok(input)
 }
@@ -241,7 +240,7 @@ impl<E: TxEssence> TryFrom<Data<E>> for Input<E> {
             parent_storage: storage,
             contracts: contracts.into_iter().collect(),
             ancestor_headers: data.ancestor_headers,
-            base_fee_per_gas: data.header.base_fee_per_gas
+            base_fee_per_gas: data.header.base_fee_per_gas,
         };
         Ok(input)
     }

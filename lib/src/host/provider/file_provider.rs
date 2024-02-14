@@ -14,7 +14,7 @@
 
 use alloc::vec::Vec;
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{HashMap},
     fs::File,
     io::{Read, Write},
     path::{Path, PathBuf},
@@ -22,14 +22,13 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use ethers_core::{
-    abi::Hash,
     types::{Block, Bytes, EIP1186ProofResponse, Log, Transaction, TransactionReceipt, H256, U256},
 };
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+
 // #[cfg(feature = "taiko")]
 // use zeth_primitives::taiko::BlockProposed;
-
 use super::{AccountQuery, BlockQuery, MutProvider, ProofQuery, Provider, StorageQuery};
 #[cfg(feature = "taiko")]
 use super::{LogsQuery, TxQuery};

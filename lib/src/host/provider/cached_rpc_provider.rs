@@ -26,7 +26,7 @@ use super::{
     ProofQuery, Provider, StorageQuery,
 };
 #[cfg(feature = "taiko")]
-use crate::host::provider::{LogsQuery, TxQuery};
+use crate::host::provider::{LogsQuery};
 
 pub struct CachedRpcProvider {
     cache: FileProvider,
@@ -161,7 +161,7 @@ impl Provider for CachedRpcProvider {
 
     #[cfg(feature = "taiko")]
     fn get_transaction(&mut self, query: &super::TxQuery) -> Result<Transaction> {
-        let mut cache_out = self.cache.get_transaction(query);
+        let cache_out = self.cache.get_transaction(query);
         if cache_out.is_ok() {
             return cache_out;
         }
@@ -169,11 +169,12 @@ impl Provider for CachedRpcProvider {
         // Search cached block for target Tx
         if let Some(block_no) = query.block_no {
             if let Ok(block) = self
-            .cache
-            .get_full_block(&BlockQuery { block_no: block_no }) {
+                .cache
+                .get_full_block(&BlockQuery { block_no })
+            {
                 for tx in block.transactions {
                     if tx.hash == query.tx_hash {
-                        return Ok(tx.clone())
+                        return Ok(tx.clone());
                     }
                 }
             }

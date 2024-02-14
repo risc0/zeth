@@ -16,7 +16,7 @@ use anyhow::Result;
 use revm::{Database, DatabaseCommit};
 use zeth_primitives::{
     block::Header,
-    transactions::{ethereum::EthereumTxEssence, optimism::OptimismTxEssence, TxEssence},
+    transactions::{ethereum::EthereumTxEssence, TxEssence},
     trie::MptNode,
 };
 

@@ -1,22 +1,26 @@
-
+use alloc::{string::String};
 use std::path::PathBuf;
-use alloc::vec::Vec;
-use alloc::string::String;
-use alloy_primitives::{Address, Bytes, B256};
-use alloy_sol_types::{sol, SolCall};
-use anyhow::{bail, ensure, Context, Result, anyhow};
-use serde::{Deserialize, Serialize};
-use thiserror::Error as ThisError;
+
+use alloy_primitives::{Address};
+use alloy_sol_types::{SolCall};
+use anyhow::{anyhow, bail, ensure, Context, Result};
+use ethers_core::types::{Block, Transaction, H256, U256, U64};
+
+
 use zeth_primitives::{
-    ethers::{from_ethers_h160, from_ethers_h256}, 
-    transactions::{ethereum::EthereumTxEssence, EthereumTransaction, TxEssence}, withdrawal::Withdrawal};
-use ethers_core::types::{Block, Transaction, H160, H256, U256, U64};
-use crate::{consts::ChainSpec, 
-    host::provider::{
-        new_cached_rpc_provider, new_file_provider, new_provider, new_rpc_provider, 
-        BlockQuery, ProofQuery, Provider, TxQuery}, taiko::consts::{check_anchor_signature, ANCHOR_GAS_LIMIT, GOLDEN_TOUCH_ACCOUNT}};
+    ethers::{from_ethers_h160, from_ethers_h256},
+    transactions::{EthereumTransaction, TxEssence},
+};
 
 use super::{anchorCall, decode_anchor, proposeBlockCall, BlockProposed};
+use crate::{
+    consts::ChainSpec,
+    host::provider::{
+        new_provider, BlockQuery,
+        ProofQuery, Provider, TxQuery,
+    },
+    taiko::consts::{check_anchor_signature, ANCHOR_GAS_LIMIT, GOLDEN_TOUCH_ACCOUNT},
+};
 
 pub struct TaikoProvider {
     pub l1_provider: Box<dyn Provider>,
@@ -31,10 +35,10 @@ pub struct TaikoProvider {
 
 impl TaikoProvider {
     pub fn new(
-        l1_cache: Option<PathBuf>, 
-        l1_rpc: Option<String>, 
-        l2_cache: Option<PathBuf>, 
-        l2_rpc: Option<String>
+        l1_cache: Option<PathBuf>,
+        l1_rpc: Option<String>,
+        l2_cache: Option<PathBuf>,
+        l2_rpc: Option<String>,
     ) -> Result<Self> {
         Ok(Self {
             l1_provider: new_provider(l1_cache, l1_rpc)?,
@@ -59,8 +63,8 @@ impl TaikoProvider {
     }
 
     pub fn with_contracts(
-        mut self, 
-        f: impl FnOnce() -> Result<(Address, Address, Address, Address)>
+        mut self,
+        f: impl FnOnce() -> Result<(Address, Address, Address, Address)>,
     ) -> Self {
         if let Ok((l1_contract, l2_contract, l1_signal_service, l2_signal_service)) = f() {
             self.l1_contract = Some(l1_contract);
@@ -78,20 +82,28 @@ impl TaikoProvider {
     }
 
     pub fn get_l1_full_block(&mut self, l1_block_no: u64) -> Result<Block<Transaction>> {
-        self.l1_provider.get_full_block(&BlockQuery { block_no: l1_block_no })
+        self.l1_provider.get_full_block(&BlockQuery {
+            block_no: l1_block_no,
+        })
     }
 
     pub fn get_l2_full_block(&mut self, l2_block_no: u64) -> Result<Block<Transaction>> {
-        self.l2_provider.get_full_block(&BlockQuery { block_no: l2_block_no })
+        self.l2_provider.get_full_block(&BlockQuery {
+            block_no: l2_block_no,
+        })
     }
 
-    pub fn get_anchor(&self, l2_block: &Block<Transaction> ) -> Result<(Transaction, anchorCall)> {
+    pub fn get_anchor(&self, l2_block: &Block<Transaction>) -> Result<(Transaction, anchorCall)> {
         let tx = l2_block.transactions[0].clone();
         let call = decode_anchor(tx.input.as_ref())?;
         Ok((tx, call))
     }
 
-    pub fn get_proposal(&mut self, l1_block_no: u64, l2_block_no: u64) -> Result<(proposeBlockCall, BlockProposed)> {
+    pub fn get_proposal(
+        &mut self,
+        l1_block_no: u64,
+        l2_block_no: u64,
+    ) -> Result<(proposeBlockCall, BlockProposed)> {
         let logs = self.l1_provider.filter_event_log::<BlockProposed>(
             self.l1_contract.unwrap(),
             l1_block_no,
@@ -99,14 +111,20 @@ impl TaikoProvider {
         )?;
         for (log, event) in logs {
             if event.blockId == zeth_primitives::U256::from(l2_block_no) {
-                let tx = self.l1_provider.get_transaction(
-                    &TxQuery {
+                let tx = self
+                    .l1_provider
+                    .get_transaction(&TxQuery {
                         tx_hash: log.transaction_hash.unwrap(),
                         block_no: log.block_number.map(|b| b.as_u64()),
-                    }
-                ).with_context(|| anyhow!("Cannot find BlockProposed Tx {:?}", log.transaction_hash.unwrap()))?;
+                    })
+                    .with_context(|| {
+                        anyhow!(
+                            "Cannot find BlockProposed Tx {:?}",
+                            log.transaction_hash.unwrap()
+                        )
+                    })?;
                 let call = proposeBlockCall::abi_decode(&tx.input, false).unwrap();
-                    // .with_context(|| "failed to decode propose block call")?;
+                // .with_context(|| "failed to decode propose block call")?;
                 return Ok((call, event));
             }
         }
@@ -117,11 +135,14 @@ impl TaikoProvider {
         &mut self,
         l1_block: &Block<TX1>,
         l2_parent_block: &Block<TX2>,
-        anchor: anchorCall, 
+        anchor: anchorCall,
     ) -> Result<()> {
         // 1. check l2 parent gas used
-        ensure!(l2_parent_block.gas_used == U256::from(anchor.parentGasUsed), "parentGasUsed mismatch");
-        
+        ensure!(
+            l2_parent_block.gas_used == U256::from(anchor.parentGasUsed),
+            "parentGasUsed mismatch"
+        );
+
         // 2. check l1 signal root
         if let Some(l1_signal_service) = self.l1_signal_service {
             let proof = self.l1_provider.get_proof(&ProofQuery {
@@ -134,32 +155,53 @@ impl TaikoProvider {
         } else {
             bail!("l1_signal_service not set");
         }
-        
+
         // 3. check l1 block hash
-        ensure!(l1_block.hash.unwrap() == H256::from(anchor.l1Hash.0), "l1Hash mismatch");
-        
+        ensure!(
+            l1_block.hash.unwrap() == H256::from(anchor.l1Hash.0),
+            "l1Hash mismatch"
+        );
+
         Ok(())
     }
 
     pub fn check_anchor_tx(
-        &self, 
+        &self,
         anchor: &Transaction,
         l2_block: &Block<Transaction>,
     ) -> Result<()> {
         let tx1559_type = U64::from(0x2);
-        ensure!(anchor.transaction_type == Some(tx1559_type), "anchor transaction type mismatch");
+        ensure!(
+            anchor.transaction_type == Some(tx1559_type),
+            "anchor transaction type mismatch"
+        );
 
-        let tx: EthereumTransaction = anchor.clone().try_into()
+        let tx: EthereumTransaction = anchor
+            .clone()
+            .try_into()
             .context(anyhow!("failed to decode anchor transaction: {:?}", anchor))?;
-        check_anchor_signature(&tx)
-            .context(anyhow!("failed to check anchor signature"));
-        
-        
-        ensure!(from_ethers_h160(anchor.from) == *GOLDEN_TOUCH_ACCOUNT, "anchor transaction from mismatch");
-        ensure!(from_ethers_h160(anchor.to.unwrap()) == self.l1_contract.unwrap(), "anchor transaction to mismatch");
-        ensure!(anchor.value == U256::from(0), "anchor transaction value mismatch");
-        ensure!(anchor.gas == U256::from(ANCHOR_GAS_LIMIT), "anchor transaction gas price mismatch");
-        ensure!(anchor.max_fee_per_gas == l2_block.base_fee_per_gas, "anchor transaction gas mismatch");
+        check_anchor_signature(&tx).context(anyhow!("failed to check anchor signature"));
+
+        ensure!(
+            from_ethers_h160(anchor.from) == *GOLDEN_TOUCH_ACCOUNT,
+            "anchor transaction from mismatch"
+        );
+        ensure!(
+            from_ethers_h160(anchor.to.unwrap()) == self.l1_contract.unwrap(),
+            "anchor transaction to mismatch"
+        );
+        ensure!(
+            anchor.value == U256::from(0),
+            "anchor transaction value mismatch"
+        );
+        ensure!(
+            anchor.gas == U256::from(ANCHOR_GAS_LIMIT),
+            "anchor transaction gas price mismatch"
+        );
+        ensure!(
+            anchor.max_fee_per_gas == l2_block.base_fee_per_gas,
+            "anchor transaction gas mismatch"
+        );
 
         Ok(())
     }

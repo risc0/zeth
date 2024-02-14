@@ -107,6 +107,8 @@ impl Header {
 
 #[cfg(test)]
 mod tests {
+    use alloc::string::ToString;
+
     use serde_json::json;
 
     use super::*;

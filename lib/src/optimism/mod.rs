@@ -348,6 +348,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                         withdrawals: vec![],
                     },
                     // initializing these fields is not needed here
+                    verifying_key_hints: vec![],
                     parent_state_trie: Default::default(),
                     parent_storage: Default::default(),
                     contracts: vec![],

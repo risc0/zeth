@@ -342,6 +342,7 @@ pub fn create_input(
             withdrawals: withdrawals.clone(),
             parent_header: parent_header.clone(),
         },
+        verifying_key_hints: vec![],
         parent_state_trie: Default::default(),
         parent_storage: Default::default(),
         contracts: vec![],

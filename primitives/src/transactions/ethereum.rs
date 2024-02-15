@@ -18,7 +18,10 @@ use alloy_rlp_derive::{RlpDecodable, RlpEncodable};
 use anyhow::Context;
 use bytes::Buf;
 use k256::{
-    ecdsa::{RecoveryId, Signature as K256Signature, VerifyingKey as K256VerifyingKey},
+    ecdsa::{
+        signature::hazmat::PrehashVerifier, RecoveryId, Signature as K256Signature,
+        VerifyingKey as K256VerifyingKey, VerifyingKey,
+    },
     elliptic_curve::sec1::ToEncodedPoint,
     PublicKey as K256PublicKey,
 };
@@ -581,27 +584,42 @@ impl TxEssence for EthereumTxEssence {
             EthereumTxEssence::Eip1559(tx) => tx.to.into(),
         }
     }
-    /// Recovers the Ethereum address of the sender from the transaction's signature.
-    fn recover_from(&self, signature: &TxSignature) -> anyhow::Result<Address> {
+    /// Recovers the Ethereum address of the sender from the transaction's signature
+    /// and the given ecdsa verification key.
+    fn recover_with_vk(
+        &self,
+        signature: &TxSignature,
+        verifying_key: &VerifyingKey,
+    ) -> anyhow::Result<Address> {
+        let signature =
+            K256Signature::from_scalars(signature.r.to_be_bytes(), signature.s.to_be_bytes())
+                .context("r, s invalid")?;
+        let sig_hash = self.signing_hash();
+
+        verifying_key.verify_prehash(sig_hash.as_slice(), &signature)?;
+
+        Ok(vk_to_addr(verifying_key))
+    }
+    /// Recovers the ECDSA verification key of this transaction's signer
+    fn verifying_key(&self, signature: &TxSignature) -> anyhow::Result<VerifyingKey> {
         let is_y_odd = self.is_y_odd(signature).context("v invalid")?;
         let signature =
             K256Signature::from_scalars(signature.r.to_be_bytes(), signature.s.to_be_bytes())
                 .context("r, s invalid")?;
 
+        let sig_hash = self.signing_hash();
+
         let verify_key = K256VerifyingKey::recover_from_prehash(
-            self.signing_hash().as_slice(),
+            sig_hash.as_slice(),
             &signature,
             RecoveryId::new(is_y_odd, false),
         )
         .context("invalid signature")?;
-
-        let public_key = K256PublicKey::from(&verify_key);
-        let public_key = public_key.to_encoded_point(false);
-        let public_key = public_key.as_bytes();
-        debug_assert_eq!(public_key[0], 0x04);
-        let hash = keccak(&public_key[1..]);
-
-        Ok(Address::from_slice(&hash[12..]))
+        Ok(verify_key)
+    }
+    /// Recovers the Ethereum address of the sender from the transaction's signature.
+    fn recover_from(&self, signature: &TxSignature) -> anyhow::Result<Address> {
+        Ok(vk_to_addr(&self.verifying_key(signature)?))
     }
     /// Returns the length of the RLP-encoding payload in bytes.
     fn payload_length(&self) -> usize {
@@ -619,6 +637,16 @@ impl TxEssence for EthereumTxEssence {
             EthereumTxEssence::Eip1559(tx) => &tx.data,
         }
     }
+}
+
+fn vk_to_addr(verifying_key: &VerifyingKey) -> Address {
+    let public_key = K256PublicKey::from(verifying_key);
+    let public_key = public_key.to_encoded_point(false);
+    let public_key = public_key.as_bytes();
+    debug_assert_eq!(public_key[0], 0x04);
+    let hash = keccak(&public_key[1..]);
+
+    Address::from_slice(&hash[12..])
 }
 
 #[cfg(test)]

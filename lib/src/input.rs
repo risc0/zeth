@@ -15,6 +15,7 @@
 use alloy_rlp_derive::RlpEncodable;
 use ethers_core::k256::sha2::{Digest, Sha256};
 use hashbrown::HashMap;
+use k256::ecdsa::VerifyingKey;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
     block::Header,
@@ -35,6 +36,8 @@ pub type StorageEntry = (MptNode, Vec<U256>);
 pub struct BlockBuildInput<E: TxEssence> {
     /// Block and transaction data to execute
     pub state_input: StateInput<E>,
+    /// Verification key hints (as encoded points) to avoid ecdsa recovery
+    pub verifying_key_hints: Vec<Option<VerifyingKey>>,
     /// State trie of the parent block.
     pub parent_state_trie: MptNode,
     /// Maps each address with its storage trie and the used storage slots.
@@ -92,6 +95,7 @@ mod tests {
                 transactions: vec![],
                 withdrawals: vec![],
             },
+            verifying_key_hints: vec![],
             parent_state_trie: Default::default(),
             parent_storage: Default::default(),
             contracts: vec![],

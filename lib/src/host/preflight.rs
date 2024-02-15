@@ -207,6 +207,11 @@ where
         })
         .collect::<Result<Vec<_>, _>>()?;
 
+    let verifying_key_hints: Vec<_> = transactions
+        .iter()
+        .map(|tx: &Transaction<E>| tx.verifying_key().ok())
+        .collect();
+
     let input = BlockBuildInput {
         state_input: StateInput {
             parent_header,
@@ -218,6 +223,7 @@ where
             transactions,
             withdrawals,
         },
+        verifying_key_hints,
         parent_state_trie: Default::default(),
         parent_storage: Default::default(),
         contracts: Default::default(),
@@ -257,6 +263,12 @@ impl<E: TxEssence> TryFrom<Data<E>> for BlockBuildInput<E> {
             storage.values().map(|(n, _)| n.size()).sum::<usize>()
         );
 
+        let verifying_key_hints: Vec<_> = data
+            .transactions
+            .iter()
+            .map(|tx| tx.verifying_key().ok())
+            .collect();
+
         // Create the block builder input
         let header = data.header.as_ref().expect("Missing header data");
         let input = BlockBuildInput {
@@ -270,6 +282,7 @@ impl<E: TxEssence> TryFrom<Data<E>> for BlockBuildInput<E> {
                 transactions: data.transactions,
                 withdrawals: data.withdrawals,
             },
+            verifying_key_hints,
             parent_state_trie: state_trie,
             parent_storage: storage,
             contracts: contracts.into_iter().collect(),

@@ -14,7 +14,7 @@
 
 use core::{fmt::Debug, mem::take};
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, Result};
 #[cfg(not(target_os = "zkvm"))]
 use log::trace;
 use revm::{
@@ -36,7 +36,10 @@ use zeth_primitives::{
 };
 
 use super::{ethereum, TxExecStrategy};
-use crate::{builder::BlockBuilder, consts, guest_mem_forget};
+use crate::{
+    builder::{execute::ethereum::hinted_ec_recover, BlockBuilder},
+    consts, guest_mem_forget,
+};
 
 pub struct OpTxExecStrategy {}
 
@@ -122,9 +125,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             .enumerate()
         {
             // verify the transaction signature
-            let tx_from = tx
-                .recover_from()
-                .with_context(|| format!("Error recovering address for transaction {}", tx_no))?;
+            let tx_from = hinted_ec_recover(&tx, &block_builder.input.verifying_key_hints, tx_no)?;
 
             #[cfg(not(target_os = "zkvm"))]
             {

@@ -1,2 +1,7 @@
 [env]
 CARGO_WORKSPACE_DIR = { value = "", relative = true }
+
+
+[patch.crates-io]
+k256 = { git = "https://github.com/risc0/RustCrypto-elliptic-curves", tag = "k256/v0.13.3-risczero.0" }
+sha2 = { git = "https://github.com/risc0/RustCrypto-hashes", tag = "sha2-v0.10.6-risczero.0" }

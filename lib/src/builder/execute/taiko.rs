@@ -12,12 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 use core::{fmt::Debug, mem::take, str::from_utf8};
 
-
 use anyhow::{anyhow, bail, Context, Result};
-
 #[cfg(not(target_os = "zkvm"))]
 use log::debug;
 use log::info;
@@ -26,21 +23,17 @@ use revm::{
     primitives::{Address, ResultAndState, SpecId, TxEnv},
     taiko, Database, DatabaseCommit, Evm,
 };
-
 use ruint::aliases::U256;
 use zeth_primitives::{
     receipt::Receipt,
-    transactions::{
-        ethereum::{EthereumTxEssence},
-        TxEssence,
-    },
+    transactions::{ethereum::EthereumTxEssence, TxEssence},
     trie::MptNode,
     Bloom, RlpBytes,
 };
 
 use super::{ethereum, TxExecStrategy};
 use crate::{
-    builder::{BlockBuilder},
+    builder::BlockBuilder,
     consts::{self, ChainSpec},
     guest_mem_forget,
 };

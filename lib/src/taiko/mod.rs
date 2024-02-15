@@ -1,19 +1,11 @@
-use alloc::{vec::Vec};
+use alloc::vec::Vec;
 
 use alloy_primitives::{Address, B256};
 use alloy_sol_types::{sol, SolCall};
 use anyhow::{anyhow, Result};
-use ethers_core::types::{
-    Block, Transaction as EthersTransaction,
-};
+use ethers_core::types::{Block, Transaction as EthersTransaction};
 use serde::{Deserialize, Serialize};
-
-use zeth_primitives::{
-    transactions::{TxEssence},
-    withdrawal::Withdrawal,
-};
-
-
+use zeth_primitives::{transactions::TxEssence, withdrawal::Withdrawal};
 
 pub mod consts;
 #[cfg(all(feature = "std", not(target_os = "zkvm")))]

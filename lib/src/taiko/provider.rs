@@ -1,12 +1,10 @@
-use alloc::{string::String};
+use alloc::string::String;
 use std::path::PathBuf;
 
-use alloy_primitives::{Address};
-use alloy_sol_types::{SolCall};
+use alloy_primitives::Address;
+use alloy_sol_types::SolCall;
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use ethers_core::types::{Block, Transaction, H256, U256, U64};
-
-
 use zeth_primitives::{
     ethers::{from_ethers_h160, from_ethers_h256},
     transactions::{EthereumTransaction, TxEssence},
@@ -15,10 +13,7 @@ use zeth_primitives::{
 use super::{anchorCall, decode_anchor, proposeBlockCall, BlockProposed};
 use crate::{
     consts::ChainSpec,
-    host::provider::{
-        new_provider, BlockQuery,
-        ProofQuery, Provider, TxQuery,
-    },
+    host::provider::{new_provider, BlockQuery, ProofQuery, Provider, TxQuery},
     taiko::consts::{check_anchor_signature, ANCHOR_GAS_LIMIT, GOLDEN_TOUCH_ACCOUNT},
 };
 

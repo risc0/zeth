@@ -2,20 +2,13 @@ use alloc::{string::String, vec::Vec};
 use std::path::PathBuf;
 
 use alloy_primitives::{Address, B256};
-use alloy_sol_types::{SolCall};
+use alloy_sol_types::SolCall;
 use anyhow::{bail, ensure, Context, Result};
-use ethers_core::types::{
-    Transaction as EthersTransaction,
-};
+use ethers_core::types::Transaction as EthersTransaction;
 use log::info;
-
 use rlp::{Decodable, DecoderError, Rlp};
-
-
 use zeth_primitives::{
-    block::Header,
-    ethers::{from_ethers_h256},
-    transactions::{ethereum::EthereumTxEssence},
+    block::Header, ethers::from_ethers_h256, transactions::ethereum::EthereumTxEssence,
 };
 
 use super::{provider::TaikoProvider, TaikoSystemInfo};
@@ -24,10 +17,7 @@ use crate::{
     consts::ChainSpec,
     host::{
         preflight::{new_preflight_input, Data, Preflight},
-        provider::{
-            BlockQuery,
-            ProofQuery, Provider,
-        },
+        provider::{BlockQuery, ProofQuery, Provider},
         provider_db::ProviderDb,
     },
     input::Input,

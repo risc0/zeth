@@ -12,7 +12,7 @@ use secp256k1::KeyPair;
 use serde::Serialize;
 use zeth_lib::{
     builder::{BlockBuilderStrategy, TaikoStrategy},
-    consts::{TKO_MAINNET_CHAIN_SPEC},
+    consts::TKO_MAINNET_CHAIN_SPEC,
     input::Input,
     taiko::{
         host::{init_taiko, HostArgs},

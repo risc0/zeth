@@ -4,7 +4,6 @@ use std::{
     os::raw::c_char,
 };
 
-
 use serde::Deserialize;
 extern "C" {
     fn MptRoot(str: *const c_char) -> *const c_char;

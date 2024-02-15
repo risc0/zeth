@@ -4,7 +4,6 @@ use alloy_primitives::{Address, TxHash, B256};
 use alloy_sol_types::SolValue;
 use anyhow::{anyhow, Result};
 use revm::primitives::SpecId;
-
 use zeth_primitives::{
     block::Header,
     ethers::{from_ethers_h256, from_ethers_u256},

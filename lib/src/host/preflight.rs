@@ -32,9 +32,7 @@ use zeth_primitives::{
 
 use crate::{
     consts::ChainSpec,
-    host::{
-        mpt::{is_not_included, mpt_from_proof, parse_proof, resolve_nodes, shorten_node_path},
-    },
+    host::mpt::{is_not_included, mpt_from_proof, parse_proof, resolve_nodes, shorten_node_path},
     input::{Input, StorageEntry},
     mem_db::MemDb,
 };

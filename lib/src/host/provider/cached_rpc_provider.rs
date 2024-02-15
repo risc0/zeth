@@ -26,7 +26,7 @@ use super::{
     ProofQuery, Provider, StorageQuery,
 };
 #[cfg(feature = "taiko")]
-use crate::host::provider::{LogsQuery};
+use crate::host::provider::LogsQuery;
 
 pub struct CachedRpcProvider {
     cache: FileProvider,
@@ -168,10 +168,7 @@ impl Provider for CachedRpcProvider {
 
         // Search cached block for target Tx
         if let Some(block_no) = query.block_no {
-            if let Ok(block) = self
-                .cache
-                .get_full_block(&BlockQuery { block_no })
-            {
+            if let Ok(block) = self.cache.get_full_block(&BlockQuery { block_no }) {
                 for tx in block.transactions {
                     if tx.hash == query.tx_hash {
                         return Ok(tx.clone());

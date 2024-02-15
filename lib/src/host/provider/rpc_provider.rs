@@ -25,7 +25,7 @@ use log::info;
 // use zeth_primitives::taiko::BlockProposed;
 use super::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery};
 #[cfg(feature = "taiko")]
-use crate::host::provider::{LogsQuery};
+use crate::host::provider::LogsQuery;
 
 pub struct RpcProvider {
     http_client: ethers_providers::Provider<RetryClient<Http>>,

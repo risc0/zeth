@@ -31,7 +31,10 @@ jobs:
         crate: cargo-binstall
     - run: cargo binstall -y --force cargo-risczero@${{ env.RISC0_VERSION }}
     - run: cargo risczero install --version $RISC0_TOOLCHAIN_VERSION
-    - run: cargo test --workspace --all-targets --all-features
+    - run: cargo test --workspace --all-targets --features taiko
+    - run: cargo test --workspace --all-targets --features "taiko std"
+    - run: cargo test --workspace --all-targets --features optimism
+
 
   clippy:
     name: clippy

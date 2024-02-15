@@ -13,8 +13,8 @@
 // limitations under the License.
 use std::{collections::BTreeSet, path::PathBuf};
 
-use alloy_primitives::{Address};
-use alloy_sol_types::{SolEvent};
+use alloy_primitives::Address;
+use alloy_sol_types::SolEvent;
 use anyhow::{anyhow, Context, Result};
 use ethers_core::types::{
     Block, Bytes, EIP1186ProofResponse, Log, Transaction, TransactionReceipt, H160, H256, U256,
@@ -153,8 +153,9 @@ impl dyn Provider {
             .filter(|log| from_ethers_h256(log.topics[0]) == E::SIGNATURE_HASH)
             .map(|log| {
                 let topics = log.topics.iter().map(|topic| from_ethers_h256(*topic));
-                let event = E::decode_raw_log(topics, &log.data, false).unwrap_or_else(|_| panic!("Decode log failed for l1_block_no {}",
-                    l1_block_no));
+                let event = E::decode_raw_log(topics, &log.data, false).unwrap_or_else(|_| {
+                    panic!("Decode log failed for l1_block_no {}", l1_block_no)
+                });
                 (log.clone(), event)
             })
             .collect::<Vec<_>>();
@@ -185,8 +186,9 @@ impl dyn Provider {
             .map(|log| {
                 let topics = log.topics.iter().map(|topic| from_ethers_h256(*topic));
                 let block_proposed = BlockProposed::decode_raw_log(topics, &log.data, false)
-                    .unwrap_or_else(|_| panic!("Decode log failed for l1_block_no {}",
-                        l1_block_no));
+                    .unwrap_or_else(|_| {
+                        panic!("Decode log failed for l1_block_no {}", l1_block_no)
+                    });
                 (log.block_number, log.transaction_hash, block_proposed)
             })
             .filter(|(_block_no, _tx_hash, event)| {

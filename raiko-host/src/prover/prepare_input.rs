@@ -1,6 +1,5 @@
 //! Prepare Input for guest
 
-
 use zeth_lib::{
     consts::TKO_MAINNET_CHAIN_SPEC,
     input::Input,

@@ -14,15 +14,15 @@
 
 use alloc::vec::Vec;
 use std::{
-    collections::{HashMap},
+    collections::HashMap,
     fs::File,
     io::{Read, Write},
     path::{Path, PathBuf},
 };
 
 use anyhow::{anyhow, Result};
-use ethers_core::{
-    types::{Block, Bytes, EIP1186ProofResponse, Log, Transaction, TransactionReceipt, H256, U256},
+use ethers_core::types::{
+    Block, Bytes, EIP1186ProofResponse, Log, Transaction, TransactionReceipt, H256, U256,
 };
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;

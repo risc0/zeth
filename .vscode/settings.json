@@ -2,6 +2,7 @@
     "rust-analyzer.cargo.features": "all",
     "rust-analyzer.linkedProjects": [
         "./Cargo.toml",
+        "./host/Cargo.toml",
         "./guests/eth-block/Cargo.toml",
         "./guests/op-block/Cargo.toml",
         "./guests/op-compose/Cargo.toml",

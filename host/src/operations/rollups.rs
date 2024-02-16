@@ -34,7 +34,6 @@ use zeth_lib::{
 use zeth_primitives::{
     block::Header,
     mmr::{MerkleMountainRange, MerkleProof},
-    transactions::optimism::OptimismTxEssence,
 };
 
 use crate::{
@@ -43,7 +42,6 @@ use crate::{
 };
 
 pub async fn derive_rollup_blocks(cli: &Cli) -> anyhow::Result<Option<(String, Receipt)>> {
-    info!("Fetching data ...");
     let build_args = cli.build_args();
     let op_builder_provider_factory = ProviderFactory::new(
         build_args.cache.clone(),
@@ -276,7 +274,7 @@ pub async fn compose_derived_rollup_blocks(
     let mut sibling_map = Default::default();
     let mut eth_mountain_range: MerkleMountainRange = Default::default();
     for block in &complete_eth_chain {
-        eth_mountain_range.append_leaf(block.hash().0, Some(&mut sibling_map));
+        eth_mountain_range.append_leaf(block.hash_slow().into(), Some(&mut sibling_map));
     }
     let eth_chain_root = eth_mountain_range
         .root(Some(&mut sibling_map))
@@ -471,7 +469,7 @@ pub async fn compose_derived_rollup_blocks(
 
 async fn build_op_blocks(
     cli: &Cli,
-    op_block_inputs: Vec<BlockBuildInput<OptimismTxEssence>>,
+    op_block_inputs: Vec<BlockBuildInput>,
 ) -> (Vec<Assumption>, Vec<String>, Vec<BlockBuildOutput>) {
     let mut assumptions: Vec<Assumption> = vec![];
     let mut bonsai_uuids = vec![];

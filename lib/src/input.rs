@@ -17,11 +17,7 @@ use ethers_core::k256::sha2::{Digest, Sha256};
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
-    block::Header,
-    mmr::Hash,
-    transactions::{Transaction, TxEssence},
-    trie::MptNode,
-    withdrawal::Withdrawal,
+    block::Header, mmr::Hash, transactions::TxEnvelope, trie::MptNode, withdrawal::Withdrawal,
     Address, Bytes, B256, U256,
 };
 
@@ -32,9 +28,9 @@ pub type StorageEntry = (MptNode, Vec<U256>);
 
 /// External block input.
 #[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize, Serialize)]
-pub struct BlockBuildInput<E: TxEssence> {
+pub struct BlockBuildInput {
     /// Block and transaction data to execute
-    pub state_input: StateInput<E>,
+    pub state_input: StateInput,
     /// State trie of the parent block.
     pub parent_state_trie: MptNode,
     /// Maps each address with its storage trie and the used storage slots.
@@ -46,26 +42,28 @@ pub struct BlockBuildInput<E: TxEssence> {
 }
 
 #[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize, Serialize, RlpEncodable)]
-pub struct StateInput<E: TxEssence> {
+#[rlp(trailing)]
+pub struct StateInput {
     /// Previous block header
     pub parent_header: Header,
     /// Address to which all priority fees in this block are transferred.
     pub beneficiary: Address,
     /// Scalar equal to the current limit of gas expenditure per block.
-    pub gas_limit: U256,
+    pub gas_limit: u64,
     /// Scalar corresponding to the seconds since Epoch at this block's inception.
-    pub timestamp: U256,
+    pub timestamp: u64,
     /// Arbitrary byte array containing data relevant for this block.
     pub extra_data: Bytes,
     /// Hash previously used for the PoW now containing the RANDAO value.
     pub mix_hash: B256,
     /// List of transactions for execution
-    pub transactions: Vec<Transaction<E>>,
+    pub transactions: Vec<TxEnvelope>,
     /// List of stake withdrawals for execution
     pub withdrawals: Vec<Withdrawal>,
+    pub parent_beacon_block_root: Option<B256>,
 }
 
-impl<E: TxEssence + Serialize> StateInput<E> {
+impl StateInput {
     pub fn hash(&self) -> Hash {
         let mut hasher = Sha256::new();
         hasher.update(&alloy_rlp::encode(self));
@@ -75,29 +73,12 @@ impl<E: TxEssence + Serialize> StateInput<E> {
 
 #[cfg(test)]
 mod tests {
-    use zeth_primitives::transactions::ethereum::EthereumTxEssence;
-
     use super::*;
 
     #[test]
     fn input_serde_roundtrip() {
-        let input = BlockBuildInput {
-            state_input: StateInput::<EthereumTxEssence> {
-                parent_header: Default::default(),
-                beneficiary: Default::default(),
-                gas_limit: Default::default(),
-                timestamp: Default::default(),
-                extra_data: Default::default(),
-                mix_hash: Default::default(),
-                transactions: vec![],
-                withdrawals: vec![],
-            },
-            parent_state_trie: Default::default(),
-            parent_storage: Default::default(),
-            contracts: vec![],
-            ancestor_headers: vec![],
-        };
-        let _: BlockBuildInput<EthereumTxEssence> =
+        let input: BlockBuildInput = Default::default();
+        let _: BlockBuildInput =
             bincode::deserialize(&bincode::serialize(&input).unwrap()).unwrap();
     }
 }

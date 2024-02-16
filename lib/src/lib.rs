@@ -26,8 +26,6 @@ pub mod output;
 
 mod utils;
 
-pub use zeth_primitives::transactions::{ethereum::EthereumTxEssence, optimism::OptimismTxEssence};
-
 /// call forget only if running inside the guest
 pub fn guest_mem_forget<T>(_t: T) {
     #[cfg(target_os = "zkvm")]

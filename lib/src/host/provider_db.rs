@@ -24,7 +24,7 @@ use revm::{
 };
 use zeth_primitives::{
     block::Header,
-    ethers::{from_ethers_bytes, from_ethers_u256},
+    ethers::{from_ethers_block, from_ethers_bytes, from_ethers_u256},
     Address, B256, U256,
 };
 
@@ -121,11 +121,12 @@ impl ProviderDb {
         let headers = (*earliest_block..self.block_no)
             .rev()
             .map(|block_no| {
-                self.provider
-                    .get_partial_block(&BlockQuery { block_no })
-                    .expect("Failed to retrieve ancestor block")
-                    .try_into()
-                    .expect("Failed to convert ethers block to zeth block")
+                from_ethers_block(
+                    self.provider
+                        .get_partial_block(&BlockQuery { block_no })
+                        .expect("Failed to retrieve ancestor block"),
+                )
+                .expect("Failed to convert ethers block to zeth block")
             })
             .collect();
         Ok(headers)

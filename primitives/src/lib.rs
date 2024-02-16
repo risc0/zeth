@@ -27,8 +27,6 @@ pub mod ethers;
 
 pub mod batch;
 pub mod mmr;
-#[cfg(feature = "revm")]
-pub mod revm;
 
 pub use alloy_primitives::*;
 pub use alloy_rlp;

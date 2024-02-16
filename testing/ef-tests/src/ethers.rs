@@ -53,15 +53,15 @@ impl Provider for TestProvider {
             logs_bloom: Some(Bloom::from_slice(self.header.logs_bloom.as_slice())),
             difficulty: self.header.difficulty.to_be_bytes().into(),
             number: Some(self.header.number.into()),
-            gas_limit: self.header.gas_limit.to_be_bytes().into(),
-            gas_used: self.header.gas_used.to_be_bytes().into(),
-            timestamp: self.header.timestamp.to_be_bytes().into(),
+            gas_limit: self.header.gas_limit.into(),
+            gas_used: self.header.gas_used.into(),
+            timestamp: self.header.timestamp.into(),
             extra_data: self.header.extra_data.0.clone().into(),
             mix_hash: Some(self.header.mix_hash.0.into()),
-            nonce: Some(self.header.nonce.0.into()),
-            base_fee_per_gas: Some(self.header.base_fee_per_gas.to_be_bytes().into()),
+            nonce: Some(self.header.nonce.to_be_bytes().into()),
+            base_fee_per_gas: self.header.base_fee_per_gas.map(U256::from),
             withdrawals_root: self.header.withdrawals_root.map(|r| r.0.into()),
-            hash: Some(self.header.hash().0.into()),
+            hash: Some(self.header.hash_slow().0.into()),
             ..Default::default()
         })
     }

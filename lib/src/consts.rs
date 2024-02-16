@@ -29,9 +29,9 @@ pub const ZERO: U256 = U256::ZERO;
 pub const ONE: U256 = uint!(1_U256);
 
 /// The bound divisor of the gas limit,
-pub const GAS_LIMIT_BOUND_DIVISOR: U256 = uint!(1024_U256);
+pub const GAS_LIMIT_BOUND_DIVISOR: u64 = 1024;
 /// Minimum the gas limit may ever be.
-pub const MIN_GAS_LIMIT: U256 = uint!(5000_U256);
+pub const MIN_GAS_LIMIT: u64 = 5000;
 
 /// Maximum size of extra data.
 pub const MAX_EXTRA_DATA_BYTES: usize = 32;
@@ -56,10 +56,10 @@ pub static ETH_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
 
 /// The Ethereum mainnet EIP-1559 gas constants.
 pub const ETH_MAINNET_EIP1559_CONSTANTS: Eip1559Constants = Eip1559Constants {
-    base_fee_change_denominator: uint!(8_U256),
-    base_fee_max_increase_denominator: uint!(8_U256),
-    base_fee_max_decrease_denominator: uint!(8_U256),
-    elasticity_multiplier: uint!(2_U256),
+    base_fee_change_denominator: 8,
+    base_fee_max_increase_denominator: 8,
+    base_fee_max_decrease_denominator: 8,
+    elasticity_multiplier: 2,
 };
 
 /// The Optimism mainnet specification.
@@ -79,19 +79,19 @@ pub static OP_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
         (
             SpecId::BEDROCK,
             Eip1559Constants {
-                base_fee_change_denominator: uint!(50_U256),
-                base_fee_max_increase_denominator: uint!(10_U256),
-                base_fee_max_decrease_denominator: uint!(50_U256),
-                elasticity_multiplier: uint!(6_U256),
+                base_fee_change_denominator: 50,
+                base_fee_max_increase_denominator: 10,
+                base_fee_max_decrease_denominator: 50,
+                elasticity_multiplier: 6,
             },
         ),
         (
             SpecId::CANYON,
             Eip1559Constants {
-                base_fee_change_denominator: uint!(250_U256),
-                base_fee_max_increase_denominator: uint!(10_U256),
-                base_fee_max_decrease_denominator: uint!(50_U256),
-                elasticity_multiplier: uint!(6_U256),
+                base_fee_change_denominator: 250,
+                base_fee_max_increase_denominator: 10,
+                base_fee_max_decrease_denominator: 50,
+                elasticity_multiplier: 6,
             },
         ),
     ]),
@@ -123,10 +123,10 @@ impl ForkCondition {
 /// [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559) parameters.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Eip1559Constants {
-    pub base_fee_change_denominator: U256,
-    pub base_fee_max_increase_denominator: U256,
-    pub base_fee_max_decrease_denominator: U256,
-    pub elasticity_multiplier: U256,
+    pub base_fee_change_denominator: u64,
+    pub base_fee_max_increase_denominator: u64,
+    pub base_fee_max_decrease_denominator: u64,
+    pub elasticity_multiplier: u64,
 }
 
 /// Specification of a specific chain.
@@ -156,10 +156,21 @@ impl ChainSpec {
     pub fn chain_id(&self) -> ChainId {
         self.chain_id
     }
+    /// Validates a [SpecId].
+    pub fn validate_spec_id(&self, spec_id: SpecId) -> Result<()> {
+        let (min_spec_id, _) = self.hard_forks.first_key_value().unwrap();
+        if spec_id < *min_spec_id {
+            bail!("expected >= {:?}, got {:?}", min_spec_id, spec_id);
+        }
+        if spec_id > self.max_spec_id {
+            bail!("expected <= {:?}, got {:?}", self.max_spec_id, spec_id);
+        }
+        Ok(())
+    }
     /// Returns the [SpecId] for a given block number and timestamp or an error if not
     /// supported.
-    pub fn active_fork(&self, block_number: BlockNumber, timestamp: &U256) -> Result<SpecId> {
-        match self.spec_id(block_number, timestamp.saturating_to()) {
+    pub fn active_fork(&self, block_number: BlockNumber, timestamp: u64) -> Result<SpecId> {
+        match self.spec_id(block_number, timestamp) {
             Some(spec_id) => {
                 if spec_id > self.max_spec_id {
                     bail!("expected <= {:?}, got {:?}", self.max_spec_id, spec_id);

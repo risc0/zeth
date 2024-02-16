@@ -12,91 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloy_primitives::{b256, Address, BlockHash, BlockNumber, Bloom, Bytes, B256, B64, U256};
-use alloy_rlp_derive::RlpEncodable;
-use serde::{Deserialize, Serialize};
-
-use crate::{keccak::keccak, trie::EMPTY_ROOT};
-
-/// Keccak-256 hash of the RLP of an empty list.
-pub const EMPTY_LIST_HASH: B256 =
-    b256!("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347");
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, RlpEncodable)]
-#[rlp(trailing)]
-pub struct Header {
-    /// Hash of the parent block's header.
-    pub parent_hash: BlockHash,
-    /// Unused 256-bit hash, always [EMPTY_LIST_HASH].
-    pub ommers_hash: B256,
-    /// Address that receives the priority fees of each transaction in the block.
-    pub beneficiary: Address,
-    /// Root hash of the state trie after all transactions in the block are executed.
-    pub state_root: B256,
-    /// Root hash of the trie containing all transactions in the block.
-    pub transactions_root: B256,
-    /// Root hash of the trie containing the receipts of each transaction in the block.
-    pub receipts_root: B256,
-    /// Bloom filter for log entries in the block.
-    pub logs_bloom: Bloom,
-    /// Always set to `0` as it's unused.
-    pub difficulty: U256,
-    /// The block number in the chain.
-    pub number: BlockNumber,
-    /// Maximum amount of gas that can be used in this block.
-    pub gas_limit: U256,
-    /// Total amount of gas used by all transactions in this block.
-    pub gas_used: U256,
-    /// Value corresponding to the seconds since Epoch at this block's inception.
-    pub timestamp: U256,
-    /// Arbitrary byte array containing extra data related to the block.
-    pub extra_data: Bytes,
-    /// Hash previously used for the PoW now containing the RANDAO value.
-    pub mix_hash: B256,
-    /// Unused 64-bit hash, always zero.
-    pub nonce: B64,
-    /// Base fee paid by all transactions in the block.
-    pub base_fee_per_gas: U256,
-    /// Root hash of the trie containing all withdrawals in the block. Present after the
-    /// Shanghai update.
-    #[serde(default)]
-    pub withdrawals_root: Option<B256>,
-}
-
-impl Default for Header {
-    /// Provides default values for a block header.
-    fn default() -> Self {
-        Header {
-            parent_hash: B256::ZERO,
-            ommers_hash: EMPTY_LIST_HASH,
-            beneficiary: Address::ZERO,
-            state_root: EMPTY_ROOT,
-            transactions_root: EMPTY_ROOT,
-            receipts_root: EMPTY_ROOT,
-            logs_bloom: Bloom::default(),
-            difficulty: U256::ZERO,
-            number: 0,
-            gas_limit: U256::ZERO,
-            gas_used: U256::ZERO,
-            timestamp: U256::ZERO,
-            extra_data: Bytes::new(),
-            mix_hash: B256::ZERO,
-            nonce: B64::ZERO,
-            base_fee_per_gas: U256::ZERO,
-            withdrawals_root: None,
-        }
-    }
-}
-
-impl Header {
-    /// Computes the hash of the block header.
-    pub fn hash(&self) -> BlockHash {
-        keccak(alloy_rlp::encode(self)).into()
-    }
-}
+pub use alloy_consensus::Header;
 
 #[cfg(test)]
 mod tests {
+    use alloy_primitives::b256;
     use serde_json::json;
 
     use super::*;
@@ -114,13 +34,13 @@ mod tests {
             "logs_bloom": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
             "difficulty": "0x0",
             "number": 15537394,
-            "gas_limit": "0x1c9c380",
-            "gas_used": "0x1c9811e",
-            "timestamp": "0x6322c973",
+            "gas_limit": 0x1c9c380_u64,
+            "gas_used": 0x1c9811e_u64,
+            "timestamp": 0x6322c973_u64,
             "extra_data": "0x",
             "mix_hash": "0xa86c2e601b6c44eb4848f7d23d9df3113fbcac42041c49cbed5000cb4f118777",
-            "nonce": "0x0000000000000000",
-            "base_fee_per_gas": "0xb5d68e0a3"
+            "nonce": 0,
+            "base_fee_per_gas": 0xb5d68e0a3_u64,
         });
         let header: Header = serde_json::from_value(value).unwrap();
 
@@ -128,8 +48,8 @@ mod tests {
         let _: Header = bincode::deserialize(&bincode::serialize(&header).unwrap()).unwrap();
 
         assert_eq!(
-            "0x56a9bb0302da44b8c0b3df540781424684c3af04d0b7a38d72842b762076a664",
-            header.hash().to_string()
+            header.hash_slow(),
+            b256!("56a9bb0302da44b8c0b3df540781424684c3af04d0b7a38d72842b762076a664")
         )
     }
 
@@ -146,13 +66,13 @@ mod tests {
             "logs_bloom": "0xb06769bc11f4d7a51a3bc4bed59367b75c32d1bd79e5970e73732ac0eed0251af0e2abc8811fc1b4c5d45a4a4eb5c5af9e73cc9a8be6ace72faadc03536d6b69fcdf80116fd89f7efbdbf38ff957e8f6ae83ccac60cf4b7c8b1c9487bebfa8ed6e42297e17172d5b678dd3f283b22f49bbf4a0565eb93d9d797b2f9a0adaff9813af53d6fffa71d5a6fb056ab73ca87659dc97c19f99839c6c3138e527161b4dfee8b1f64d42f927abc745f3ff168e8e9510e2e079f4868ba8ff94faf37c9a7947a43c1b4c931dfbef88edeb2d7ede5ceaebc85095cfbbd206646def0138683b687fa63fdf22898260d616bc714d698bc5748c7a5bff0a4a32dd797596a794a0",
             "difficulty": "0x0",
             "number": 17034870,
-            "gas_limit": "0x1c9c380",
-            "gas_used": "0x1c9bfe2",
-            "timestamp": "0x6437306f",
+            "gas_limit": 0x1c9c380_u64,
+            "gas_used": 0x1c9bfe2_u64,
+            "timestamp": 0x6437306f_u64,
             "extra_data": "0xd883010b05846765746888676f312e32302e32856c696e7578",
             "mix_hash": "0x812ed704cc408c435c7baa6e86296c1ac654a139ae8c4a26d6460742b951d4f9",
-            "nonce": "0x0000000000000000",
-            "base_fee_per_gas": "0x42fbae6d5",
+            "nonce": 0,
+            "base_fee_per_gas": 0x42fbae6d5_u64,
             "withdrawals_root": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
         });
         let header: Header = serde_json::from_value(value).unwrap();
@@ -161,8 +81,8 @@ mod tests {
         let _: Header = bincode::deserialize(&bincode::serialize(&header).unwrap()).unwrap();
 
         assert_eq!(
-            "0xe22c56f211f03baadcc91e4eb9a24344e6848c5df4473988f893b58223f5216c",
-            header.hash().to_string()
+            header.hash_slow(),
+            b256!("e22c56f211f03baadcc91e4eb9a24344e6848c5df4473988f893b58223f5216c")
         )
     }
 }

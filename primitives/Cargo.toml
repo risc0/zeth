@@ -4,7 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+alloy-consensus = { path = "../../alloy-rs/alloy/crates/consensus", features = [
+    "k256",
+] }
+alloy-eips = { path = "../../alloy-rs/alloy/crates/eips" }
+alloy-network = { path = "../../alloy-rs/alloy/crates/network", features = [
+    "k256",
+] }
 alloy-primitives = { version = "0.6.2", default-features = false, features = [
+    "k256",
     "rlp",
     "serde",
     "std",
@@ -35,4 +43,3 @@ serde_json = "1.0"
 
 [features]
 ethers = ["dep:ethers-core"]
-revm = ["dep:revm-primitives"]

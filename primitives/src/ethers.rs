@@ -14,29 +14,22 @@
 
 //! Convert from Ethers types.
 
-use alloy_primitives::{Address, Bloom, Bytes, B256, U256};
+use alloy_network::{eip2718::Eip2718Error, SignableTransaction};
+use alloy_primitives::{Address, Bloom, Bytes, Log, Signature, B256, U256};
 use anyhow::{anyhow, Context};
 use ethers_core::types::{
-    transaction::eip2930::{
-        AccessList as EthersAccessList, AccessListItem as EthersAccessListItem,
-    },
-    Block as EthersBlock, Bytes as EthersBytes, EIP1186ProofResponse,
-    Transaction as EthersTransaction, TransactionReceipt as EthersReceipt,
-    Withdrawal as EthersWithdrawal, H160 as EthersH160, H256 as EthersH256, U256 as EthersU256,
-    U64,
+    transaction::eip2930::AccessList as EthersAccessList, Block as EthersBlock,
+    Bytes as EthersBytes, EIP1186ProofResponse, Transaction as EthersTransaction,
+    TransactionReceipt as EthersReceipt, Withdrawal as EthersWithdrawal, H160 as EthersH160,
+    H256 as EthersH256, U256 as EthersU256, U64,
 };
 
 use crate::{
     access_list::{AccessList, AccessListItem},
     block::Header,
-    receipt::{Log, Receipt, ReceiptPayload, OPTIMISM_DEPOSIT_NONCE_VERSION},
+    receipt::{OptimismDepositReceipt, Receipt, ReceiptEnvelope, ReceiptWithBloom},
     transactions::{
-        ethereum::{
-            EthereumTxEssence, TransactionKind, TxEssenceEip1559, TxEssenceEip2930, TxEssenceLegacy,
-        },
-        optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
-        signature::TxSignature,
-        Transaction, TxEssence,
+        optimism::TxOptimismDeposit, TxEip1559, TxEip2930, TxEnvelope, TxLegacy, TxType,
     },
     trie::StateAccount,
     withdrawal::Withdrawal,
@@ -72,178 +65,212 @@ pub fn from_ethers_bytes(v: EthersBytes) -> Bytes {
     v.0.into()
 }
 
-/// Conversion from `EthersAccessListItem` to the local [AccessListItem].
-impl From<EthersAccessListItem> for AccessListItem {
-    fn from(item: EthersAccessListItem) -> Self {
-        AccessListItem {
-            address: item.address.0.into(),
+/// Convert an `AccessList` type to the `EthersAccessList` type.
+pub fn from_ethers_access_list(list: EthersAccessList) -> AccessList {
+    let items = list
+        .0
+        .into_iter()
+        .map(|item| AccessListItem {
+            address: from_ethers_h160(item.address),
             storage_keys: item
                 .storage_keys
                 .into_iter()
-                .map(|key| key.0.into())
+                .map(from_ethers_h256)
                 .collect(),
-        }
-    }
+        })
+        .collect();
+    AccessList(items)
 }
 
-/// Conversion from `EthersAccessList` to the local [AccessList].
-impl From<EthersAccessList> for AccessList {
-    fn from(list: EthersAccessList) -> Self {
-        AccessList(list.0.into_iter().map(|item| item.into()).collect())
-    }
-}
-
-/// Convert an optional `EthersH160` to the local [TransactionKind].
-impl From<Option<EthersH160>> for TransactionKind {
-    fn from(addr: Option<EthersH160>) -> Self {
-        match addr {
-            Some(address) => TransactionKind::Call(address.0.into()),
-            None => TransactionKind::Create,
-        }
-    }
+fn from_ethers_transaction_type(v: Option<U64>) -> Result<Option<TxType>, Eip2718Error> {
+    let tx_type = match v {
+        Some(v) => Some(match u8::try_from(v) {
+            Ok(v) => TxType::try_from(v)?,
+            Err(err) => return Err(Eip2718Error::Custom(err.into())),
+        }),
+        None => None,
+    };
+    Ok(tx_type)
 }
 
 /// Conversion from `EthersBlock` to the local [Header].
 /// This conversion may fail if certain expected fields are missing.
-impl<T> TryFrom<EthersBlock<T>> for Header {
-    type Error = anyhow::Error;
-
-    fn try_from(block: EthersBlock<T>) -> Result<Self, Self::Error> {
-        Ok(Header {
-            parent_hash: from_ethers_h256(block.parent_hash),
-            ommers_hash: from_ethers_h256(block.uncles_hash),
-            beneficiary: from_ethers_h160(block.author.context("author missing")?),
-            state_root: from_ethers_h256(block.state_root),
-            transactions_root: from_ethers_h256(block.transactions_root),
-            receipts_root: from_ethers_h256(block.receipts_root),
-            logs_bloom: Bloom::from_slice(
-                block.logs_bloom.context("logs_bloom missing")?.as_bytes(),
-            ),
-            difficulty: from_ethers_u256(block.difficulty),
-            number: block.number.context("number missing")?.as_u64(),
-            gas_limit: from_ethers_u256(block.gas_limit),
-            gas_used: from_ethers_u256(block.gas_used),
-            timestamp: from_ethers_u256(block.timestamp),
-            extra_data: block.extra_data.0.into(),
-            mix_hash: block.mix_hash.context("mix_hash missing")?.0.into(),
-            nonce: block.nonce.context("nonce missing")?.0.into(),
-            base_fee_per_gas: from_ethers_u256(
-                block.base_fee_per_gas.context("base_fee_per_gas missing")?,
-            ),
-            withdrawals_root: block.withdrawals_root.map(from_ethers_h256),
-        })
-    }
+pub fn from_ethers_block<T>(block: EthersBlock<T>) -> Result<Header, anyhow::Error> {
+    Ok(Header {
+        parent_hash: from_ethers_h256(block.parent_hash),
+        ommers_hash: from_ethers_h256(block.uncles_hash),
+        beneficiary: from_ethers_h160(block.author.context("author missing")?),
+        state_root: from_ethers_h256(block.state_root),
+        transactions_root: from_ethers_h256(block.transactions_root),
+        receipts_root: from_ethers_h256(block.receipts_root),
+        withdrawals_root: block.withdrawals_root.map(from_ethers_h256),
+        logs_bloom: Bloom::from_slice(block.logs_bloom.context("logs_bloom missing")?.as_bytes()),
+        difficulty: from_ethers_u256(block.difficulty),
+        number: block.number.context("number missing")?.as_u64(),
+        gas_limit: block
+            .gas_limit
+            .try_into()
+            .map_err(|err| anyhow!("invalid gas_limit: {}", err))?,
+        gas_used: block
+            .gas_used
+            .try_into()
+            .map_err(|err| anyhow!("invalid gas_used: {}", err))?,
+        timestamp: block
+            .timestamp
+            .try_into()
+            .map_err(|err| anyhow!("invalid timestamp: {}", err))?,
+        mix_hash: block
+            .mix_hash
+            .map(from_ethers_h256)
+            .context("mix_hash missing")?,
+        nonce: block.nonce.context("nonce missing")?.to_low_u64_be(),
+        base_fee_per_gas: block
+            .base_fee_per_gas
+            .map(u64::try_from)
+            .transpose()
+            .map_err(|err| anyhow!("invalid base_fee_per_gas: {}", err))?,
+        blob_gas_used: block
+            .blob_gas_used
+            .map(u64::try_from)
+            .transpose()
+            .map_err(|err| anyhow!("invalid blob_gas_used: {}", err))?,
+        excess_blob_gas: block
+            .excess_blob_gas
+            .map(u64::try_from)
+            .transpose()
+            .map_err(|err| anyhow!("invalid excess_blob_gas: {}", err))?,
+        parent_beacon_block_root: block.parent_beacon_block_root.map(from_ethers_h256),
+        extra_data: from_ethers_bytes(block.extra_data),
+    })
 }
 
-/// Conversion from `EthersTransaction` to the local [Transaction].
-/// This conversion may fail if certain expected fields are missing.
-impl<E: TxEssence + TryFrom<EthersTransaction>> TryFrom<EthersTransaction> for Transaction<E> {
-    type Error = <E as TryFrom<EthersTransaction>>::Error;
-
-    fn try_from(value: EthersTransaction) -> Result<Self, Self::Error> {
-        let signature = TxSignature {
-            v: value.v.as_u64(),
-            r: from_ethers_u256(value.r),
-            s: from_ethers_u256(value.s),
-        };
-        let essence = value.try_into()?;
-
-        Ok(Transaction { essence, signature })
-    }
-}
-
-/// Conversion from `EthersTransaction` to the local [EthereumTxEssence].
-/// This conversion may fail if certain expected fields are missing.
-impl TryFrom<EthersTransaction> for EthereumTxEssence {
+impl TryFrom<EthersTransaction> for TxEnvelope {
     type Error = anyhow::Error;
 
     fn try_from(tx: EthersTransaction) -> Result<Self, Self::Error> {
-        let essence = match tx.transaction_type.map(|t| t.as_u64()) {
-            None | Some(0) => EthereumTxEssence::Legacy(TxEssenceLegacy {
-                chain_id: match tx.chain_id {
-                    None => None,
-                    Some(chain_id) => Some(
-                        chain_id
-                            .try_into()
-                            .map_err(|err| anyhow!("invalid chain_id: {}", err))?,
+        let tx_type = from_ethers_transaction_type(tx.transaction_type)
+            .map_err(|err| anyhow!("invalid transaction_type: {}", err))?;
+
+        let signature = if tx_type != Some(TxType::OptimismDeposit) {
+            Some(Signature::from_rs_and_parity(
+                from_ethers_u256(tx.r),
+                from_ethers_u256(tx.s),
+                tx.v.as_u64(),
+            )?)
+        } else {
+            None
+        };
+
+        let tx = match tx_type {
+            None | Some(TxType::Legacy) => TxEnvelope::Legacy(
+                TxLegacy {
+                    chain_id: match tx.chain_id {
+                        None => None,
+                        Some(chain_id) => Some(
+                            chain_id
+                                .try_into()
+                                .map_err(|err| anyhow!("invalid chain_id: {}", err))?,
+                        ),
+                    },
+                    nonce: tx
+                        .nonce
+                        .try_into()
+                        .map_err(|err| anyhow!("invalid nonce: {}", err))?,
+                    gas_price: tx
+                        .gas_price
+                        .context("gas_price missing")?
+                        .try_into()
+                        .map_err(|err| anyhow!("invalid gas_price: {}", err))?,
+                    gas_limit: tx
+                        .gas
+                        .try_into()
+                        .map_err(|err| anyhow!("invalid gas_limit: {}", err))?,
+                    to: tx.to.map(from_ethers_h160).into(),
+                    value: from_ethers_u256(tx.value),
+                    input: tx.input.0.into(),
+                }
+                .into_signed(signature.unwrap()),
+            ),
+            Some(TxType::Eip2930) => TxEnvelope::Eip2930(
+                TxEip2930 {
+                    chain_id: tx
+                        .chain_id
+                        .context("chain_id missing")?
+                        .try_into()
+                        .map_err(|err| anyhow!("invalid chain_id: {}", err))?,
+                    nonce: tx
+                        .nonce
+                        .try_into()
+                        .map_err(|err| anyhow!("invalid nonce: {}", err))?,
+                    gas_price: tx
+                        .gas_price
+                        .context("gas_price missing")?
+                        .try_into()
+                        .map_err(|err| anyhow!("invalid gas_price: {}", err))?,
+                    gas_limit: tx
+                        .gas
+                        .try_into()
+                        .map_err(|err| anyhow!("invalid gas_limit: {}", err))?,
+                    to: tx.to.map(from_ethers_h160).into(),
+                    value: from_ethers_u256(tx.value),
+                    access_list: from_ethers_access_list(
+                        tx.access_list.context("access_list missing")?,
                     ),
-                },
-                nonce: tx
-                    .nonce
-                    .try_into()
-                    .map_err(|err| anyhow!("invalid nonce: {}", err))?,
-                gas_price: from_ethers_u256(tx.gas_price.context("gas_price missing")?),
-                gas_limit: from_ethers_u256(tx.gas),
-                to: tx.to.into(),
-                value: from_ethers_u256(tx.value),
-                data: tx.input.0.into(),
-            }),
-            Some(1) => EthereumTxEssence::Eip2930(TxEssenceEip2930 {
-                chain_id: tx
-                    .chain_id
-                    .context("chain_id missing")?
-                    .try_into()
-                    .map_err(|err| anyhow!("invalid chain_id: {}", err))?,
-                nonce: tx
-                    .nonce
-                    .try_into()
-                    .map_err(|err| anyhow!("invalid nonce: {}", err))?,
-                gas_price: from_ethers_u256(tx.gas_price.context("gas_price missing")?),
-                gas_limit: from_ethers_u256(tx.gas),
-                to: tx.to.into(),
-                value: from_ethers_u256(tx.value),
-                access_list: tx.access_list.context("access_list missing")?.into(),
-                data: tx.input.0.into(),
-            }),
-            Some(2) => EthereumTxEssence::Eip1559(TxEssenceEip1559 {
-                chain_id: tx
-                    .chain_id
-                    .context("chain_id missing")?
-                    .try_into()
-                    .map_err(|err| anyhow!("invalid chain_id: {}", err))?,
-                nonce: tx
-                    .nonce
-                    .try_into()
-                    .map_err(|err| anyhow!("invalid nonce: {}", err))?,
-                max_priority_fee_per_gas: from_ethers_u256(
-                    tx.max_priority_fee_per_gas
-                        .context("max_priority_fee_per_gas missing")?,
-                ),
-                max_fee_per_gas: from_ethers_u256(
-                    tx.max_fee_per_gas.context("max_fee_per_gas missing")?,
-                ),
-                gas_limit: from_ethers_u256(tx.gas),
-                to: tx.to.into(),
-                value: from_ethers_u256(tx.value),
-                access_list: tx.access_list.context("access_list missing")?.into(),
-                data: tx.input.0.into(),
-            }),
-            _ => unreachable!(),
-        };
-        Ok(essence)
-    }
-}
-
-/// Conversion from `EthersTransaction` to the local [OptimismTxEssence].
-/// This conversion may fail if certain expected fields are missing.
-impl TryFrom<EthersTransaction> for OptimismTxEssence {
-    type Error = anyhow::Error;
-
-    fn try_from(tx: EthersTransaction) -> Result<Self, Self::Error> {
-        let essence = match tx.transaction_type.map(|t| t.as_u64()) {
-            Some(0x7E) => OptimismTxEssence::OptimismDeposited(TxEssenceOptimismDeposited {
-                gas_limit: from_ethers_u256(tx.gas),
-                from: tx.from.0.into(),
-                to: tx.to.into(),
-                value: from_ethers_u256(tx.value),
-                data: tx.input.0.into(),
+                    input: tx.input.0.into(),
+                }
+                .into_signed(signature.unwrap()),
+            ),
+            Some(TxType::Eip1559) => TxEnvelope::Eip1559(
+                TxEip1559 {
+                    chain_id: tx
+                        .chain_id
+                        .context("chain_id missing")?
+                        .try_into()
+                        .map_err(|err| anyhow!("invalid chain_id: {}", err))?,
+                    nonce: tx
+                        .nonce
+                        .try_into()
+                        .map_err(|err| anyhow!("invalid nonce: {}", err))?,
+                    max_priority_fee_per_gas: tx
+                        .max_priority_fee_per_gas
+                        .context("max_priority_fee_per_gas missing")?
+                        .try_into()
+                        .map_err(|err| anyhow!("invalid max_priority_fee_per_gas: {}", err))?,
+                    max_fee_per_gas: tx
+                        .max_fee_per_gas
+                        .context("max_fee_per_gas missing")?
+                        .try_into()
+                        .map_err(|err| anyhow!("invalid max_fee_per_gas: {}", err))?,
+                    gas_limit: tx
+                        .gas
+                        .try_into()
+                        .map_err(|err| anyhow!("invalid gas_limit: {}", err))?,
+                    to: tx.to.map(from_ethers_h160).into(),
+                    value: from_ethers_u256(tx.value),
+                    access_list: from_ethers_access_list(
+                        tx.access_list.context("access_list missing")?,
+                    ),
+                    input: tx.input.0.into(),
+                }
+                .into_signed(signature.unwrap()),
+            ),
+            Some(TxType::Eip4844) => todo!(),
+            Some(TxType::OptimismDeposit) => TxEnvelope::OptimismDeposit(TxOptimismDeposit {
                 source_hash: from_ethers_h256(tx.source_hash),
+                from: tx.from.0.into(),
+                to: tx.to.map(from_ethers_h160).into(),
                 mint: from_ethers_u256(tx.mint.context("mint missing")?),
+                value: from_ethers_u256(tx.value),
+                gas_limit: tx
+                    .gas
+                    .try_into()
+                    .map_err(|err| anyhow!("invalid gas_limit: {}", err))?,
                 is_system_tx: tx.is_system_tx,
+                input: tx.input.0.into(),
             }),
-            _ => OptimismTxEssence::Ethereum(tx.try_into()?),
         };
-        Ok(essence)
+
+        Ok(tx)
     }
 }
 
@@ -265,40 +292,39 @@ impl TryFrom<EthersWithdrawal> for Withdrawal {
     }
 }
 
-impl TryFrom<EthersReceipt> for Receipt {
+impl TryFrom<EthersReceipt> for ReceiptEnvelope {
     type Error = anyhow::Error;
 
-    fn try_from(receipt: EthersReceipt) -> Result<Self, Self::Error> {
-        Ok(Receipt {
-            tx_type: receipt
-                .transaction_type
-                .context("transaction_type missing")?
-                .as_u64()
-                .try_into()
-                .context("invalid transaction_type")?,
-            payload: ReceiptPayload {
-                success: receipt.status.context("status missing")? == U64::one(),
-                cumulative_gas_used: from_ethers_u256(receipt.cumulative_gas_used),
-                logs_bloom: Bloom::from_slice(receipt.logs_bloom.as_bytes()),
-                logs: receipt
-                    .logs
-                    .into_iter()
-                    .map(|log| {
-                        let address = log.address.0.into();
-                        let topics = log.topics.into_iter().map(from_ethers_h256).collect();
-                        let data = log.data.0.into();
-                        Log {
-                            address,
-                            topics,
-                            data,
-                        }
-                    })
-                    .collect(),
-                deposit_nonce: receipt.deposit_nonce,
-                deposit_nonce_version: receipt
-                    .deposit_nonce
-                    .map(|_| OPTIMISM_DEPOSIT_NONCE_VERSION),
-            },
+    fn try_from(v: EthersReceipt) -> Result<Self, Self::Error> {
+        let tx_type = from_ethers_transaction_type(v.transaction_type)
+            .map_err(|err| anyhow!("invalid transaction_type: {}", err))?;
+
+        let receipt = Receipt {
+            success: v.status.context("status missing")? == U64::one(),
+            cumulative_gas_used: v.cumulative_gas_used.try_into().unwrap(),
+            logs: v
+                .logs
+                .into_iter()
+                .map(|log| {
+                    Log::new_unchecked(
+                        from_ethers_h160(log.address),
+                        log.topics.into_iter().map(from_ethers_h256).collect(),
+                        from_ethers_bytes(log.data),
+                    )
+                })
+                .collect(),
+        };
+        let receipt = ReceiptWithBloom::new(receipt, Bloom::from_slice(v.logs_bloom.as_bytes()));
+
+        Ok(match tx_type {
+            None | Some(TxType::Legacy) => ReceiptEnvelope::Legacy(receipt),
+            Some(TxType::Eip2930) => ReceiptEnvelope::Eip2930(receipt),
+            Some(TxType::Eip1559) => ReceiptEnvelope::Eip1559(receipt),
+            Some(TxType::Eip4844) => ReceiptEnvelope::Eip4844(receipt),
+            Some(TxType::OptimismDeposit) => {
+                let receipt = OptimismDepositReceipt::new(receipt, v.deposit_nonce);
+                ReceiptEnvelope::OptimismDeposit(receipt)
+            }
         })
     }
 }

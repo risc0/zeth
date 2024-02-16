@@ -17,40 +17,34 @@ use std::collections::HashMap;
 use anyhow::{ensure, Context, Result};
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
-    alloy_rlp,
-    block::Header,
-    receipt::Receipt,
-    transactions::{
-        ethereum::EthereumTxEssence, optimism::OptimismTxEssence, Transaction, TxEssence,
-    },
-    trie::MptNode,
+    alloy_rlp, block::Header, receipt::ReceiptEnvelope, transactions::TxEnvelope, trie::MptNode,
 };
 
 use super::{config::ChainConfig, deposits, system_config};
 
 /// Input for extracting deposits.
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct BlockInput<E: TxEssence> {
+pub struct BlockInput {
     /// Header of the block.
     pub block_header: Header,
     /// Transactions of the block.
-    pub transactions: Vec<Transaction<E>>,
+    pub transactions: Vec<TxEnvelope>,
     /// Transaction receipts of the block or `None` if not required.
-    pub receipts: Option<Vec<Receipt>>,
+    pub receipts: Option<Vec<ReceiptEnvelope>>,
 }
 
 pub trait BatcherDb {
     fn validate(&self, config: &ChainConfig) -> Result<()>;
-    fn get_full_op_block(&mut self, block_no: u64) -> Result<BlockInput<OptimismTxEssence>>;
+    fn get_full_op_block(&mut self, block_no: u64) -> Result<BlockInput>;
     fn get_op_block_header(&mut self, block_no: u64) -> Result<Header>;
-    fn get_full_eth_block(&mut self, block_no: u64) -> Result<&BlockInput<EthereumTxEssence>>;
+    fn get_full_eth_block(&mut self, block_no: u64) -> Result<&BlockInput>;
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MemDb {
-    pub full_op_block: HashMap<u64, BlockInput<OptimismTxEssence>>,
+    pub full_op_block: HashMap<u64, BlockInput>,
     pub op_block_header: HashMap<u64, Header>,
-    pub full_eth_block: HashMap<u64, BlockInput<EthereumTxEssence>>,
+    pub full_eth_block: HashMap<u64, BlockInput>,
     pub eth_block_header: HashMap<u64, Header>,
 }
 
@@ -145,7 +139,7 @@ impl BatcherDb for MemDb {
         Ok(())
     }
 
-    fn get_full_op_block(&mut self, block_no: u64) -> Result<BlockInput<OptimismTxEssence>> {
+    fn get_full_op_block(&mut self, block_no: u64) -> Result<BlockInput> {
         let op_block = self.full_op_block.remove(&block_no).unwrap();
 
         Ok(op_block)
@@ -160,7 +154,7 @@ impl BatcherDb for MemDb {
         Ok(op_block)
     }
 
-    fn get_full_eth_block(&mut self, block_no: u64) -> Result<&BlockInput<EthereumTxEssence>> {
+    fn get_full_eth_block(&mut self, block_no: u64) -> Result<&BlockInput> {
         let eth_block = self.full_eth_block.get(&block_no).unwrap();
 
         Ok(eth_block)

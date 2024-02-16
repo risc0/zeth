@@ -161,7 +161,7 @@ impl ComposeInput {
                         assert_eq!(block.parent_hash, parent_hash);
                     }
                     // Derive block's keccak hash
-                    let block_hash = block.hash();
+                    let block_hash = block.hash_slow();
                     // Insert hash into mountain range
                     mountain_range.append_leaf(block_hash.0, None);
                     // Mark block as new tail

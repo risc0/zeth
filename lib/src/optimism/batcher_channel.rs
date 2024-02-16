@@ -24,7 +24,7 @@ use revm::primitives::SpecId;
 use zeth_primitives::{
     alloy_rlp::Decodable,
     batch::Batch,
-    transactions::{ethereum::EthereumTxEssence, Transaction, TxEssence},
+    transactions::{EvmTransaction, TxEnvelope},
     Address, BlockNumber,
 };
 
@@ -61,18 +61,18 @@ impl BatcherChannels {
         &mut self,
         batch_sender: Address,
         block_number: BlockNumber,
-        transactions: &Vec<Transaction<EthereumTxEssence>>,
+        transactions: &Vec<TxEnvelope>,
     ) -> Result<()> {
         for tx in transactions {
             // From the spec:
             // "The receiver must be the configured batcher inbox address."
-            if tx.essence.to() != Some(self.batch_inbox) {
+            if tx.to() != Some(self.batch_inbox) {
                 continue;
             }
             // From the spec:
             // "The sender must match the batcher address loaded from the system config matching
             //  the L1 block of the data."
-            if tx.recover_from().context("invalid signature")? != batch_sender {
+            if tx.from().context("invalid signature")? != batch_sender {
                 continue;
             }
 
@@ -81,7 +81,7 @@ impl BatcherChannels {
 
             // From the spec:
             // "If any one frame fails to parse, the all frames in the transaction are rejected."
-            let frames = match Frame::process_batcher_transaction(&tx.essence) {
+            let frames = match Frame::process_batcher_transaction(tx) {
                 Ok(frames) => frames,
                 Err(_err) => {
                     #[cfg(not(target_os = "zkvm"))]
@@ -380,9 +380,9 @@ impl Frame {
     const MAX_FRAME_DATA_LENGTH: u32 = 1_000_000;
 
     /// Processes a batcher transaction and returns the list of contained frames.
-    pub fn process_batcher_transaction(tx_essence: &EthereumTxEssence) -> Result<Vec<Self>> {
+    pub fn process_batcher_transaction(tx_essence: &TxEnvelope) -> Result<Vec<Self>> {
         let (version, mut rollup_payload) = tx_essence
-            .data()
+            .input()
             .split_first()
             .context("empty transaction data")?;
         ensure!(version == &0, "invalid transaction version: {}", version);

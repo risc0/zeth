@@ -22,7 +22,6 @@ use revm::{
 };
 use zeth_primitives::{
     keccak::{keccak, KECCAK_EMPTY},
-    transactions::TxEssence,
     trie::StateAccount,
     Bytes,
 };
@@ -39,17 +38,13 @@ where
     D: Database + DatabaseCommit,
     <D as Database>::Error: core::fmt::Debug,
 {
-    fn initialize_database<E>(block_builder: BlockBuilder<D, E>) -> Result<BlockBuilder<D, E>>
-    where
-        E: TxEssence;
+    fn initialize_database(block_builder: BlockBuilder<D>) -> Result<BlockBuilder<D>>;
 }
 
 pub struct MemDbInitStrategy {}
 
 impl DbInitStrategy<MemDb> for MemDbInitStrategy {
-    fn initialize_database<E: TxEssence>(
-        mut block_builder: BlockBuilder<MemDb, E>,
-    ) -> Result<BlockBuilder<MemDb, E>> {
+    fn initialize_database(mut block_builder: BlockBuilder<MemDb>) -> Result<BlockBuilder<MemDb>> {
         // Verify state trie root
         if block_builder.input.parent_state_trie.hash()
             != block_builder.input.state_input.parent_header.state_root
@@ -127,11 +122,11 @@ impl DbInitStrategy<MemDb> for MemDbInitStrategy {
             HashMap::with_capacity(block_builder.input.ancestor_headers.len() + 1);
         block_hashes.insert(
             block_builder.input.state_input.parent_header.number,
-            block_builder.input.state_input.parent_header.hash(),
+            block_builder.input.state_input.parent_header.hash_slow(),
         );
         let mut prev = &block_builder.input.state_input.parent_header;
         for current in &block_builder.input.ancestor_headers {
-            let current_hash = current.hash();
+            let current_hash = current.hash_slow();
             if prev.parent_hash != current_hash {
                 bail!(
                     "Invalid chain: {} is not the parent of {}",

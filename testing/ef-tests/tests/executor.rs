@@ -42,6 +42,7 @@ fn executor(
         .try_init();
 
     for EthTestCase {
+        name,
         json,
         genesis,
         chain_spec,
@@ -57,9 +58,11 @@ fn executor(
             break;
         }
 
+        println!("running '{}'", name);
+
         let block_header = block.block_header.unwrap();
         let expected_header: Header = block_header.clone().into();
-        assert_eq!(&expected_header.hash(), &block_header.hash);
+        assert_eq!(&expected_header.hash_slow(), &block_header.hash);
 
         let input = create_input(
             &chain_spec,
@@ -99,6 +102,6 @@ fn executor(
             panic!("Block build failed!")
         };
         println!("Block hash (from executor): {}", new_block_hash);
-        assert_eq!(new_block_hash, expected_header.hash());
+        assert_eq!(new_block_hash, expected_header.hash_slow());
     }
 }

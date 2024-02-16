@@ -18,7 +18,7 @@ risc0-zkvm = { version = "0.20.1", default-features = false, features = ['std'] 
 ruint = { version = "1.10", default-features = false }
 serde = "1.0"
 thiserror = "1.0"
-zeth-primitives = { path = "../primitives", features = ["revm", "ethers"] }
+zeth-primitives = { path = "../primitives", features = ["ethers"] }
 
 [target.'cfg(not(target_os = "zkvm"))'.dependencies]
 chrono = { version = "0.4", default-features = false }
@@ -27,7 +27,7 @@ flate2 = "1.0.26"
 log = "0.4"
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 tokio = { version = "1.23", features = ["full"] }
-zeth-primitives = { path = "../primitives", features = ["revm", "ethers"] }
+zeth-primitives = { path = "../primitives", features = ["ethers"] }
 
 [dev-dependencies]
 bincode = "1.3"

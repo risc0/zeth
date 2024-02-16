@@ -17,12 +17,7 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 use revm::{primitives::SpecId, Database, DatabaseCommit};
-use serde::Serialize;
-use zeth_primitives::{
-    block::Header,
-    transactions::{ethereum::EthereumTxEssence, optimism::OptimismTxEssence, TxEssence},
-    trie::MptNode,
-};
+use zeth_primitives::{block::Header, trie::MptNode};
 
 use crate::{
     builder::{
@@ -49,9 +44,9 @@ type DatabaseRescue<D> = core::marker::PhantomData<D>;
 
 /// A generic builder for building a block.
 #[derive(Clone, Debug)]
-pub struct BlockBuilder<'a, D, E: TxEssence> {
+pub struct BlockBuilder<'a, D> {
     pub(crate) chain_spec: &'a ChainSpec,
-    pub(crate) input: BlockBuildInput<E>,
+    pub(crate) input: BlockBuildInput,
     pub(crate) db: Option<D>,
     pub(crate) spec_id: Option<SpecId>,
     pub(crate) header: Option<Header>,
@@ -60,7 +55,7 @@ pub struct BlockBuilder<'a, D, E: TxEssence> {
 
 // This implementation allows us to recover data during erroneous block builds on the host
 #[cfg(not(target_os = "zkvm"))]
-impl<'a, D, E: TxEssence> Drop for BlockBuilder<'a, D, E> {
+impl<'a, D> Drop for BlockBuilder<'a, D> {
     fn drop(&mut self) {
         if let Some(backup_target) = &mut self.db_drop_destination {
             if let Some(dropped_db) = self.db.take() {
@@ -72,18 +67,17 @@ impl<'a, D, E: TxEssence> Drop for BlockBuilder<'a, D, E> {
     }
 }
 
-impl<D, E> BlockBuilder<'_, D, E>
+impl<D> BlockBuilder<'_, D>
 where
     D: Database + DatabaseCommit,
     <D as Database>::Error: core::fmt::Debug,
-    E: TxEssence,
 {
     /// Creates a new block builder.
     pub fn new(
         chain_spec: &ChainSpec,
-        input: BlockBuildInput<E>,
+        input: BlockBuildInput,
         db_backup: Option<DatabaseRescue<D>>,
-    ) -> BlockBuilder<'_, D, E> {
+    ) -> BlockBuilder<'_, D> {
         BlockBuilder {
             chain_spec,
             db: None,
@@ -111,7 +105,7 @@ where
     }
 
     /// Executes all input transactions.
-    pub fn execute_transactions<T: TxExecStrategy<E>>(self) -> Result<Self> {
+    pub fn execute_transactions<T: TxExecStrategy>(self) -> Result<Self> {
         T::execute_transactions(self)
     }
 
@@ -138,21 +132,16 @@ where
 
 /// A bundle of strategies for building a block using [BlockBuilder].
 pub trait BlockBuilderStrategy {
-    type TxEssence: TxEssence + Serialize;
-
     type DbInitStrategy: DbInitStrategy<MemDb>;
     type HeaderPrepStrategy: HeaderPrepStrategy;
-    type TxExecStrategy: TxExecStrategy<Self::TxEssence>;
+    type TxExecStrategy: TxExecStrategy;
     type BlockFinalizeStrategy: BlockFinalizeStrategy<MemDb>;
 
     /// Builds a block from the given input.
-    fn build_from(
-        chain_spec: &ChainSpec,
-        input: BlockBuildInput<Self::TxEssence>,
-    ) -> Result<BlockBuildOutput> {
+    fn build_from(chain_spec: &ChainSpec, input: BlockBuildInput) -> Result<BlockBuildOutput> {
         let input_hash = input.state_input.hash();
 
-        let builder = BlockBuilder::<MemDb, Self::TxEssence>::new(chain_spec, input, None);
+        let builder = BlockBuilder::<MemDb>::new(chain_spec, input, None);
 
         // Database initialization errors do not indicate a faulty block
         let initialized = builder.initialize_database::<Self::DbInitStrategy>()?;
@@ -181,7 +170,7 @@ pub trait BlockBuilderStrategy {
         let (header, state) = executed.finalize::<Self::BlockFinalizeStrategy>()?;
 
         Ok(BlockBuildOutput::SUCCESS {
-            hash: header.hash(),
+            hash: header.hash_slow(),
             head: header,
             state,
             state_input_hash: input_hash.into(),
@@ -193,7 +182,6 @@ pub trait BlockBuilderStrategy {
 pub struct EthereumStrategy {}
 
 impl BlockBuilderStrategy for EthereumStrategy {
-    type TxEssence = EthereumTxEssence;
     type DbInitStrategy = MemDbInitStrategy;
     type HeaderPrepStrategy = EthHeaderPrepStrategy;
     type TxExecStrategy = EthTxExecStrategy;
@@ -204,7 +192,6 @@ impl BlockBuilderStrategy for EthereumStrategy {
 pub struct OptimismStrategy {}
 
 impl BlockBuilderStrategy for OptimismStrategy {
-    type TxEssence = OptimismTxEssence;
     type DbInitStrategy = MemDbInitStrategy;
     type HeaderPrepStrategy = EthHeaderPrepStrategy;
     type TxExecStrategy = OpTxExecStrategy;

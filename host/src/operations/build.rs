@@ -12,13 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
-
 use anyhow::Context;
-use ethers_core::types::Transaction as EthersTransaction;
 use log::{info, warn};
 use risc0_zkvm::{compute_image_id, Receipt};
-use serde::{Deserialize, Serialize};
 use zeth_lib::{
     builder::BlockBuilderStrategy,
     consts::ChainSpec,
@@ -38,11 +34,7 @@ pub async fn build_block<N: BlockBuilderStrategy>(
     rpc_url: Option<String>,
     chain_spec: &ChainSpec,
     guest_elf: &[u8],
-) -> anyhow::Result<Option<(String, Receipt)>>
-where
-    N::TxEssence: 'static + Send + TryFrom<EthersTransaction> + Serialize + Deserialize<'static>,
-    <N::TxEssence as TryFrom<EthersTransaction>>::Error: Debug,
-{
+) -> anyhow::Result<Option<(String, Receipt)>> {
     let build_args = cli.build_args().clone();
     if build_args.block_count > 1 {
         warn!("Building multiple blocks is not supported. Only the first block will be built.");
@@ -66,7 +58,7 @@ where
     let preflight_data = preflight_result.context("preflight failed")?;
 
     // Create the guest input from [Init]
-    let input: BlockBuildInput<N::TxEssence> = preflight_data
+    let input: BlockBuildInput = preflight_data
         .clone()
         .try_into()
         .context("invalid preflight data")?;

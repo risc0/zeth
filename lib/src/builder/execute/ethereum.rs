@@ -14,22 +14,23 @@
 
 use core::{fmt::Debug, mem::take};
 
-use anyhow::{anyhow, bail, Context};
+use anyhow::{anyhow, bail, ensure, Context};
 #[cfg(not(target_os = "zkvm"))]
 use log::{debug, trace};
 use revm::{
     interpreter::Host,
-    primitives::{Account, Address, ResultAndState, SpecId, TransactTo, TxEnv},
+    primitives::{
+        calc_excess_blob_gas as calculate_excess_blob_gas, Account, Address, ResultAndState,
+        SpecId, TransactTo, TxEnv, MAX_BLOB_GAS_PER_BLOCK,
+    },
     Database, DatabaseCommit, Evm,
 };
 use ruint::aliases::U256;
 use zeth_primitives::{
     alloy_rlp,
-    receipt::Receipt,
-    transactions::{
-        ethereum::{EthereumTxEssence, TransactionKind},
-        TxEssence,
-    },
+    block::Header,
+    receipt::{Receipt, ReceiptEnvelope},
+    transactions::{EvmTransaction, TxEnvelope, TxType},
     trie::MptNode,
     Bloom,
 };
@@ -39,10 +40,10 @@ use crate::{builder::BlockBuilder, consts, guest_mem_forget};
 
 pub struct EthTxExecStrategy {}
 
-impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
+impl TxExecStrategy for EthTxExecStrategy {
     fn execute_transactions<D>(
-        mut block_builder: BlockBuilder<D, EthereumTxEssence>,
-    ) -> anyhow::Result<BlockBuilder<D, EthereumTxEssence>>
+        mut block_builder: BlockBuilder<D>,
+    ) -> anyhow::Result<BlockBuilder<D>>
     where
         D: Database + DatabaseCommit,
         <D as Database>::Error: Debug,
@@ -84,7 +85,6 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
                 block_builder.input.state_input.beneficiary
             );
             trace!("  Gas limit: {}", block_builder.input.state_input.gas_limit);
-            trace!("  Base fee per gas: {}", header.base_fee_per_gas);
             trace!(
                 "  Extra data: {:?}",
                 block_builder.input.state_input.extra_data
@@ -99,11 +99,11 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
                 // set the EVM block environment
                 blk_env.number = header.number.try_into().unwrap();
                 blk_env.coinbase = block_builder.input.state_input.beneficiary;
-                blk_env.timestamp = header.timestamp;
+                blk_env.timestamp = U256::from(header.timestamp);
                 blk_env.difficulty = U256::ZERO;
                 blk_env.prevrandao = Some(header.mix_hash);
-                blk_env.basefee = header.base_fee_per_gas;
-                blk_env.gas_limit = block_builder.input.state_input.gas_limit;
+                blk_env.basefee = U256::from(header.base_fee_per_gas.unwrap_or_default());
+                blk_env.gas_limit = U256::from(block_builder.input.state_input.gas_limit);
             })
             .modify_cfg_env(|cfg_env| {
                 // set the EVM configuration
@@ -114,7 +114,9 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
         // bloom filter over all transaction logs
         let mut logs_bloom = Bloom::default();
         // keep track of the gas used over all transactions
-        let mut cumulative_gas_used = consts::ZERO;
+        let mut cumulative_gas_used = 0_u64;
+
+        let mut blob_gas_used = 0_u64;
 
         // process all the transactions
         let mut tx_trie = MptNode::default();
@@ -124,50 +126,70 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             .enumerate()
         {
             // verify the transaction signature
-            let tx_from = tx
-                .recover_from()
+            let tx_from: Address = tx
+                .from()
                 .with_context(|| format!("Error recovering address for transaction {}", tx_no))?;
 
             #[cfg(not(target_os = "zkvm"))]
             {
                 let tx_hash = tx.hash();
                 trace!("Tx no. {} (hash: {})", tx_no, tx_hash);
-                trace!("  Type: {}", tx.essence.tx_type());
+                trace!("  Type: {:?}", tx.tx_type());
                 trace!("  Fr: {:?}", tx_from);
-                trace!("  To: {:?}", tx.essence.to().unwrap_or_default());
+                trace!("  To: {:?}", tx.to().unwrap_or_default());
             }
 
-            // verify transaction gas
+            // validate transaction gas
             let block_available_gas =
                 block_builder.input.state_input.gas_limit - cumulative_gas_used;
-            if block_available_gas < tx.essence.gas_limit() {
+            if block_available_gas < tx.gas_limit() {
                 bail!("Error at transaction {}: gas exceeds block limit", tx_no);
             }
 
+            // validity blob gas
+            if let TxEnvelope::Eip4844(signed) = &tx {
+                let tx = signed.tx();
+                blob_gas_used = blob_gas_used.checked_add(tx.blob_gas()).unwrap();
+                ensure!(
+                    blob_gas_used <= MAX_BLOB_GAS_PER_BLOCK,
+                    "Error at transaction {}: total blob gas spent exceeds the limit",
+                    tx_no
+                );
+            }
+
             // process the transaction
-            fill_eth_tx_env(&mut evm.env_mut().tx, &tx.essence, tx_from);
+            fill_eth_tx_env(&mut evm.env_mut().tx, &tx, tx_from);
             let ResultAndState { result, state } = evm
                 .transact()
                 .map_err(|evm_err| anyhow!("Error at transaction {}: {:?}", tx_no, evm_err))
                 // todo: change unrecoverable panic to host-side recoverable `Result`
-                .expect("Block construction failure.");
+                .expect("Block construction failure");
 
-            let gas_used = result.gas_used().try_into().unwrap();
+            let gas_used = result.gas_used();
             cumulative_gas_used = cumulative_gas_used.checked_add(gas_used).unwrap();
 
             #[cfg(not(target_os = "zkvm"))]
             trace!("  Ok: {:?}", result);
 
             // create the receipt from the EVM result
-            let receipt = Receipt::new(
-                tx.essence.tx_type(),
-                result.is_success(),
+            let receipt = Receipt {
+                success: result.is_success(),
                 cumulative_gas_used,
-                result.logs().into_iter().map(|log| log.into()).collect(),
-            );
+                logs: result.logs(),
+            }
+            .with_bloom();
 
             // accumulate logs to the block bloom filter
-            logs_bloom.accrue_bloom(&receipt.payload.logs_bloom);
+            logs_bloom.accrue_bloom(&receipt.bloom);
+
+            // create the EIP-2718 enveloped receipt
+            let receipt = match tx.tx_type() {
+                TxType::Legacy => ReceiptEnvelope::Legacy(receipt),
+                TxType::Eip2930 => ReceiptEnvelope::Eip2930(receipt),
+                TxType::Eip1559 => ReceiptEnvelope::Eip1559(receipt),
+                TxType::Eip4844 => ReceiptEnvelope::Eip4844(receipt),
+                TxType::OptimismDeposit => unreachable!(),
+            };
 
             // Add receipt and tx to tries
             let trie_key = alloy_rlp::encode(tx_no);
@@ -247,11 +269,15 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
         header.receipts_root = receipt_trie.hash();
         header.logs_bloom = logs_bloom;
         header.gas_used = cumulative_gas_used;
-        header.withdrawals_root = if spec_id < SpecId::SHANGHAI {
-            None
-        } else {
-            Some(withdrawals_trie.hash())
-        };
+        if spec_id >= SpecId::SHANGHAI {
+            header.withdrawals_root = Some(withdrawals_trie.hash());
+        }
+        if spec_id >= SpecId::CANCUN {
+            let input = &block_builder.input.state_input;
+            header.blob_gas_used = Some(blob_gas_used);
+            header.excess_blob_gas = Some(calc_excess_blob_gas(&input.parent_header));
+            header.parent_beacon_block_root = Some(input.parent_beacon_block_root.unwrap());
+        }
 
         // Leak memory, save cycles
         guest_mem_forget([tx_trie, receipt_trie, withdrawals_trie]);
@@ -260,56 +286,81 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
     }
 }
 
-pub fn fill_eth_tx_env(tx_env: &mut TxEnv, essence: &EthereumTxEssence, caller: Address) {
+pub fn fill_eth_tx_env(tx_env: &mut TxEnv, essence: &TxEnvelope, caller: Address) {
     match essence {
-        EthereumTxEssence::Legacy(tx) => {
+        TxEnvelope::Legacy(tx) => {
             tx_env.caller = caller;
-            tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
-            tx_env.gas_price = tx.gas_price;
+            tx_env.gas_limit = tx.gas_limit;
+            tx_env.gas_price = U256::from(tx.gas_price);
             tx_env.gas_priority_fee = None;
-            tx_env.transact_to = if let TransactionKind::Call(to_addr) = tx.to {
+            tx_env.transact_to = if let Some(to_addr) = tx.to.to() {
                 TransactTo::Call(to_addr)
             } else {
                 TransactTo::create()
             };
             tx_env.value = tx.value;
-            tx_env.data = tx.data.clone();
+            tx_env.data = tx.input.clone();
             tx_env.chain_id = tx.chain_id;
             tx_env.nonce = Some(tx.nonce);
             tx_env.access_list.clear();
+            tx_env.blob_hashes.clear();
+            tx_env.max_fee_per_blob_gas = None;
         }
-        EthereumTxEssence::Eip2930(tx) => {
+        TxEnvelope::Eip2930(tx) => {
             tx_env.caller = caller;
-            tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
-            tx_env.gas_price = tx.gas_price;
+            tx_env.gas_limit = tx.gas_limit;
+            tx_env.gas_price = U256::from(tx.gas_price);
             tx_env.gas_priority_fee = None;
-            tx_env.transact_to = if let TransactionKind::Call(to_addr) = tx.to {
+            tx_env.transact_to = if let Some(to_addr) = tx.to.to() {
                 TransactTo::Call(to_addr)
             } else {
                 TransactTo::create()
             };
             tx_env.value = tx.value;
-            tx_env.data = tx.data.clone();
+            tx_env.data = tx.input.clone();
             tx_env.chain_id = Some(tx.chain_id);
             tx_env.nonce = Some(tx.nonce);
-            tx_env.access_list = tx.access_list.clone().into();
+            tx_env.access_list = tx.access_list.flattened();
+            tx_env.blob_hashes.clear();
+            tx_env.max_fee_per_blob_gas = None;
         }
-        EthereumTxEssence::Eip1559(tx) => {
+        TxEnvelope::Eip1559(tx) => {
             tx_env.caller = caller;
-            tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
-            tx_env.gas_price = tx.max_fee_per_gas;
-            tx_env.gas_priority_fee = Some(tx.max_priority_fee_per_gas);
-            tx_env.transact_to = if let TransactionKind::Call(to_addr) = tx.to {
+            tx_env.gas_limit = tx.gas_limit;
+            tx_env.gas_price = U256::from(tx.max_fee_per_gas);
+            tx_env.gas_priority_fee = Some(U256::from(tx.max_priority_fee_per_gas));
+            tx_env.transact_to = if let Some(to_addr) = tx.to.to() {
                 TransactTo::Call(to_addr)
             } else {
                 TransactTo::create()
             };
             tx_env.value = tx.value;
-            tx_env.data = tx.data.clone();
+            tx_env.data = tx.input.clone();
             tx_env.chain_id = Some(tx.chain_id);
             tx_env.nonce = Some(tx.nonce);
-            tx_env.access_list = tx.access_list.clone().into();
+            tx_env.access_list = tx.access_list.flattened();
+            tx_env.blob_hashes.clear();
+            tx_env.max_fee_per_blob_gas = None;
         }
+        TxEnvelope::Eip4844(tx) => {
+            tx_env.caller = caller;
+            tx_env.gas_limit = tx.gas_limit;
+            tx_env.gas_price = U256::from(tx.max_fee_per_gas);
+            tx_env.gas_priority_fee = Some(U256::from(tx.max_priority_fee_per_gas));
+            tx_env.transact_to = if let Some(to_addr) = tx.to.to() {
+                TransactTo::Call(to_addr)
+            } else {
+                TransactTo::create()
+            };
+            tx_env.value = tx.value;
+            tx_env.data = tx.input.clone();
+            tx_env.chain_id = Some(tx.chain_id);
+            tx_env.nonce = Some(tx.nonce);
+            tx_env.access_list = tx.access_list.flattened();
+            tx_env.blob_hashes = tx.blob_versioned_hashes.clone();
+            tx_env.max_fee_per_blob_gas = Some(U256::from(tx.max_fee_per_blob_gas));
+        }
+        _ => unreachable!(),
     };
 }
 
@@ -341,4 +392,11 @@ where
     db.commit([(address, account)].into());
 
     Ok(())
+}
+
+fn calc_excess_blob_gas(parent: &Header) -> u64 {
+    calculate_excess_blob_gas(
+        parent.excess_blob_gas.unwrap_or_default(),
+        parent.blob_gas_used.unwrap_or_default(),
+    )
 }

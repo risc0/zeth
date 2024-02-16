@@ -16,12 +16,13 @@ use std::{fs::File, io::BufReader, path::PathBuf};
 
 use revm::primitives::SpecId;
 use serde_json::Value;
-use zeth_lib::consts::{ChainSpec, ETH_MAINNET_EIP1559_CONSTANTS};
+use zeth_lib::consts::{ChainSpec, ETH_MAINNET_CHAIN_SPEC, ETH_MAINNET_EIP1559_CONSTANTS};
 use zeth_primitives::block::Header;
 
 use crate::TestJson;
 
 pub struct EthTestCase {
+    pub name: String,
     pub json: TestJson,
     pub genesis: Header,
     pub chain_spec: ChainSpec,
@@ -36,21 +37,20 @@ pub fn read_eth_test(path: PathBuf) -> Vec<EthTestCase> {
         .unwrap()
         .into_iter()
         .filter_map(|(name, test)| {
-            println!("test '{}'", name);
             let json: TestJson = serde_json::from_value(test.take()).unwrap();
 
-            let spec: SpecId = json.network.as_str().into();
-            // skip tests with an unsupported network version
-            if spec < SpecId::MERGE || spec > SpecId::SHANGHAI {
-                println!("skipping ({})", json.network);
+            let spec: SpecId = json.network.replace("Paris", "Merge").as_str().into();
+            if let Err(err) = ETH_MAINNET_CHAIN_SPEC.validate_spec_id(spec) {
+                println!("skipping '{}': {}", name, err);
                 return None;
             }
             let chain_spec = ChainSpec::new_single(1, spec, ETH_MAINNET_EIP1559_CONSTANTS);
 
             let genesis: Header = json.genesis.clone().into();
-            assert_eq!(genesis.hash(), json.genesis.hash);
+            assert_eq!(genesis.hash_slow(), json.genesis.hash);
 
             Some(EthTestCase {
+                name: name.clone(),
                 json,
                 genesis,
                 chain_spec,

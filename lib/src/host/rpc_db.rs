@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::path::{Path, PathBuf};
+use std::{
+    mem,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Context;
-use zeth_primitives::{
-    block::Header,
-    transactions::{ethereum::EthereumTxEssence, optimism::OptimismTxEssence},
-    Address,
-};
+use zeth_primitives::{block::Header, ethers::from_ethers_block, Address};
 
 use crate::{
     host::provider::{new_provider, BlockQuery},
@@ -85,24 +84,21 @@ impl BatcherDb for RpcDb {
         Ok(())
     }
 
-    fn get_full_op_block(
-        &mut self,
-        block_no: u64,
-    ) -> anyhow::Result<BlockInput<OptimismTxEssence>> {
+    fn get_full_op_block(&mut self, block_no: u64) -> anyhow::Result<BlockInput> {
         let mut provider = new_provider(
             op_cache_path(&self.cache, block_no),
             self.op_rpc_url.clone(),
         )
         .context("failed to create provider")?;
         let block = {
-            let ethers_block = provider.get_full_block(&BlockQuery { block_no })?;
+            let mut ethers_block = provider.get_full_block(&BlockQuery { block_no })?;
+            let transactions = mem::take(&mut ethers_block.transactions)
+                .into_iter()
+                .map(|tx| tx.try_into().unwrap())
+                .collect();
             BlockInput {
-                block_header: ethers_block.clone().try_into().unwrap(),
-                transactions: ethers_block
-                    .transactions
-                    .into_iter()
-                    .map(|tx| tx.try_into().unwrap())
-                    .collect(),
+                block_header: from_ethers_block(ethers_block).unwrap(),
+                transactions,
                 receipts: None,
             }
         };
@@ -116,18 +112,13 @@ impl BatcherDb for RpcDb {
             op_cache_path(&self.cache, block_no),
             self.op_rpc_url.clone(),
         )?;
-        let header: Header = provider
-            .get_partial_block(&BlockQuery { block_no })?
-            .try_into()?;
+        let header = from_ethers_block(provider.get_partial_block(&BlockQuery { block_no })?)?;
         self.mem_db.op_block_header.insert(block_no, header.clone());
         provider.save()?;
         Ok(header)
     }
 
-    fn get_full_eth_block(
-        &mut self,
-        block_no: u64,
-    ) -> anyhow::Result<&BlockInput<EthereumTxEssence>> {
+    fn get_full_eth_block(&mut self, block_no: u64) -> anyhow::Result<&BlockInput> {
         let query = BlockQuery { block_no };
         let mut provider = new_provider(
             eth_cache_path(&self.cache, block_no),
@@ -135,7 +126,7 @@ impl BatcherDb for RpcDb {
         )?;
         let block = {
             let ethers_block = provider.get_full_block(&query)?;
-            let block_header: Header = ethers_block.clone().try_into().unwrap();
+            let block_header = from_ethers_block(ethers_block.clone()).unwrap();
             // include receipts when needed
             let can_contain_deposits =
                 deposits::can_contain(&self.deposit_contract, &block_header.logs_bloom);

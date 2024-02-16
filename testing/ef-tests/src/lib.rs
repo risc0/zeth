@@ -44,7 +44,7 @@ use zeth_primitives::{
     },
     trie::{self, MptNode, MptNodeData, StateAccount},
     withdrawal::Withdrawal,
-    Address, Bloom, Bytes, StorageKey, B256, B64, U256, U64,
+    Address, Bloom, Bytes, Parity, StorageKey, B256, B64, U256, U64, U8,
 };
 
 use crate::ethers::TestProvider;
@@ -78,9 +78,7 @@ pub struct TestBlock {
     pub rlp: Bytes,
     #[serde(default)]
     pub transactions: Vec<TestTransaction>,
-    #[serde(default)]
-    pub uncle_headers: Vec<TestHeader>,
-    pub withdrawals: Option<Vec<Withdrawal>>,
+    pub withdrawals: Option<Vec<TestWithdrawal>>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -176,16 +174,19 @@ impl From<TestHeader> for Header {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TestTransaction {
-    pub data: Bytes,
     pub access_list: Option<TestAccessList>,
+    pub chain_id: Option<U64>,
+    pub data: Bytes,
     pub gas_limit: U256,
     pub gas_price: Option<U256>,
     pub max_fee_per_gas: Option<U256>,
     pub max_priority_fee_per_gas: Option<U256>,
-    pub value: U256,
+    pub nonce: U64,
     #[serde_as(as = "NoneAsEmptyString")]
     pub to: Option<Address>,
-    pub nonce: U64,
+    #[serde(rename = "type")]
+    pub type_id: Option<U8>,
+    pub value: U256,
     pub v: U64,
     pub r: U256,
     pub s: U256,
@@ -198,9 +199,9 @@ impl From<TestTransaction> for EthereumTransaction {
             r: tx.r,
             s: tx.s,
         };
-        let essence = if tx.access_list.is_none() {
-            EthereumTxEssence::Legacy(TxEssenceLegacy {
-                chain_id: None,
+        let essence = match tx.type_id.map(|v| u8::try_from(v).unwrap()) {
+            None | Some(0) => EthereumTxEssence::Legacy(TxEssenceLegacy {
+                chain_id: Parity::try_from(tx.v).unwrap().chain_id(),
                 nonce: tx.nonce.try_into().unwrap(),
                 gas_price: tx.gas_price.unwrap(),
                 gas_limit: tx.gas_limit,
@@ -210,10 +211,9 @@ impl From<TestTransaction> for EthereumTransaction {
                 },
                 value: tx.value,
                 data: tx.data,
-            })
-        } else if tx.max_fee_per_gas.is_none() {
-            EthereumTxEssence::Eip2930(TxEssenceEip2930 {
-                chain_id: 1,
+            }),
+            Some(1) => EthereumTxEssence::Eip2930(TxEssenceEip2930 {
+                chain_id: tx.chain_id.unwrap().try_into().unwrap(),
                 nonce: tx.nonce.try_into().unwrap(),
                 gas_price: tx.gas_price.unwrap(),
                 gas_limit: tx.gas_limit,
@@ -224,10 +224,9 @@ impl From<TestTransaction> for EthereumTransaction {
                 value: tx.value,
                 data: tx.data,
                 access_list: tx.access_list.unwrap().into(),
-            })
-        } else {
-            EthereumTxEssence::Eip1559(TxEssenceEip1559 {
-                chain_id: 1,
+            }),
+            Some(2) => EthereumTxEssence::Eip1559(TxEssenceEip1559 {
+                chain_id: tx.chain_id.unwrap().try_into().unwrap(),
                 nonce: tx.nonce.try_into().unwrap(),
                 max_priority_fee_per_gas: tx.max_priority_fee_per_gas.unwrap(),
                 max_fee_per_gas: tx.max_fee_per_gas.unwrap(),
@@ -239,7 +238,8 @@ impl From<TestTransaction> for EthereumTransaction {
                 value: tx.value,
                 data: tx.data,
                 access_list: tx.access_list.unwrap().into(),
-            })
+            }),
+            v @ _ => panic!("invalid transaction type: {}", v.unwrap()),
         };
         EthereumTransaction { essence, signature }
     }
@@ -267,6 +267,26 @@ impl From<TestAccessList> for AccessList {
                 })
                 .collect(),
         )
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TestWithdrawal {
+    pub address: Address,
+    pub amount: U64,
+    pub index: U64,
+    pub validator_index: U64,
+}
+
+impl From<TestWithdrawal> for Withdrawal {
+    fn from(w: TestWithdrawal) -> Self {
+        Withdrawal {
+            address: w.address,
+            amount: w.amount.try_into().unwrap(),
+            index: w.index.try_into().unwrap(),
+            validator_index: w.validator_index.try_into().unwrap(),
+        }
     }
 }
 
@@ -314,7 +334,7 @@ pub fn create_input(
     parent_state: TestState,
     header: Header,
     transactions: Vec<TestTransaction>,
-    withdrawals: Vec<Withdrawal>,
+    withdrawals: Vec<TestWithdrawal>,
     state: TestState,
 ) -> BlockBuildInput<EthereumTxEssence> {
     // create the provider DB
@@ -327,10 +347,11 @@ pub fn create_input(
         parent_header.number,
     );
 
-    let transactions: Vec<EthereumTransaction> = transactions
+    let transactions: Vec<_> = transactions
         .into_iter()
         .map(EthereumTransaction::from)
         .collect();
+    let withdrawals: Vec<_> = withdrawals.into_iter().map(Withdrawal::from).collect();
     let input = BlockBuildInput {
         state_input: StateInput {
             beneficiary: header.beneficiary,

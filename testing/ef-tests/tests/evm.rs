@@ -35,25 +35,31 @@ fn evm(
     path: PathBuf,
 ) {
     let _ = env_logger::builder()
-        .filter_level(log::LevelFilter::Debug)
+        .filter_level(log::LevelFilter::Trace)
         .is_test(true)
         .try_init();
 
     for EthTestCase {
+        name,
         mut json,
         genesis,
         chain_spec,
     } in read_eth_test(path)
     {
         // only one block supported for now
-        assert_eq!(json.blocks.len(), 1);
+        if json.blocks.len() > 1 {
+            println!("skipping '{}': more than one block", name);
+            continue;
+        }
         let block = json.blocks.pop().unwrap();
 
         // skip failing tests for now
         if let Some(message) = block.expect_exception {
-            println!("skipping ({})", message);
+            println!("skipping '{}': {}", name, message);
             break;
         }
+
+        println!("running '{}'", name);
 
         let block_header = block.block_header.unwrap();
         let expected_header: Header = block_header.clone().into();

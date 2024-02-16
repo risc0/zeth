@@ -42,6 +42,7 @@ fn executor(
         .try_init();
 
     for EthTestCase {
+        name,
         json,
         genesis,
         chain_spec,
@@ -56,6 +57,8 @@ fn executor(
             println!("skipping ({})", message);
             break;
         }
+
+        println!("running: {}", name);
 
         let block_header = block.block_header.unwrap();
         let expected_header: Header = block_header.clone().into();

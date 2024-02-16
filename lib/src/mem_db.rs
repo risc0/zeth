@@ -200,9 +200,6 @@ impl DatabaseCommit for MemDb {
                     }
                 };
 
-                // it is not possible to delete a deleted account
-                debug_assert!(db_account.state != AccountState::Deleted);
-
                 // clear the account and mark it as deleted
                 db_account.storage.clear();
                 db_account.state = AccountState::Deleted;

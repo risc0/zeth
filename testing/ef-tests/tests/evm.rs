@@ -35,7 +35,7 @@ fn evm(
     path: PathBuf,
 ) {
     let _ = env_logger::builder()
-        .filter_level(log::LevelFilter::Trace)
+        .filter_level(log::LevelFilter::Debug)
         .is_test(true)
         .try_init();
 
@@ -56,7 +56,7 @@ fn evm(
         // skip failing tests for now
         if let Some(message) = block.expect_exception {
             println!("skipping '{}': {}", name, message);
-            break;
+            continue;
         }
 
         println!("running '{}'", name);

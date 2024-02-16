@@ -2,7 +2,6 @@ use alloc::{string::String, vec::Vec};
 use std::path::PathBuf;
 
 use alloy_primitives::{Address, B256};
-use alloy_sol_types::SolCall;
 use anyhow::{bail, ensure, Context, Result};
 use ethers_core::types::Transaction as EthersTransaction;
 use log::info;
@@ -17,7 +16,7 @@ use crate::{
     consts::ChainSpec,
     host::{
         preflight::{new_preflight_input, Data, Preflight},
-        provider::{BlockQuery, ProofQuery, Provider},
+        provider::{BlockQuery, ProofQuery},
         provider_db::ProviderDb,
     },
     input::Input,
@@ -83,7 +82,7 @@ pub fn derive_sys_info(
     let (proposal_call, proposal_event) = tp.get_proposal(l1_block_no, l2_block_no)?;
 
     // 0. check anchor Tx
-    tp.check_anchor_tx(&anchor_tx, &l2_block);
+    tp.check_anchor_tx(&anchor_tx, &l2_block)?;
 
     // 1. check l2 parent gas used
     ensure!(
@@ -92,21 +91,22 @@ pub fn derive_sys_info(
     );
 
     // 2. check l1 signal root
-    let l1_signal_root;
-    if let Some(l1_signal_service) = tp.l1_signal_service {
-        let proof = tp.l1_provider.get_proof(&ProofQuery {
-            block_no: l1_block_no,
-            address: l1_signal_service.into_array().into(),
-            indices: Default::default(),
-        })?;
-        l1_signal_root = from_ethers_h256(proof.storage_hash);
-        ensure!(
-            l1_signal_root == anchor_call.l1SignalRoot,
-            "l1SignalRoot mismatch"
-        );
-    } else {
+    let Some(l1_signal_service) = tp.l1_signal_service else {
         bail!("l1_signal_service not set");
-    }
+    };
+
+    let proof = tp.l1_provider.get_proof(&ProofQuery {
+        block_no: l1_block_no,
+        address: l1_signal_service.into_array().into(),
+        indices: Default::default(),
+    })?;
+
+    let l1_signal_root = from_ethers_h256(proof.storage_hash);
+
+    ensure!(
+        l1_signal_root == anchor_call.l1SignalRoot,
+        "l1SignalRoot mismatch"
+    );
 
     // 3. check l1 block hash
     ensure!(

@@ -17,7 +17,6 @@ use core::{fmt::Debug, mem::take, str::from_utf8};
 use anyhow::{anyhow, bail, Context, Result};
 #[cfg(not(target_os = "zkvm"))]
 use log::debug;
-use log::info;
 use revm::{
     interpreter::Host,
     primitives::{Address, ResultAndState, SpecId, TxEnv},
@@ -58,11 +57,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
         // Compute the spec id
         let spec_id = block_builder.chain_spec.spec_id(header.number);
         if !SpecId::enabled(spec_id, MIN_SPEC_ID) {
-            bail!(
-                "Invalid protocol version: expected >= {:?}, got {:?}",
-                MIN_SPEC_ID,
-                spec_id,
-            )
+            bail!("Invalid protocol version: expected >= {MIN_SPEC_ID:?}, got {spec_id:?}")
         }
         let chain_id = block_builder.chain_spec.chain_id();
 
@@ -71,12 +66,19 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
             use chrono::{TimeZone, Utc};
             use log::info;
             let dt = Utc
-                .timestamp_opt(block_builder.input.timestamp.try_into().unwrap(), 0)
+                .timestamp_opt(
+                    block_builder
+                        .input
+                        .timestamp
+                        .try_into()
+                        .expect("Timestamp could not fit into i64"),
+                    0,
+                )
                 .unwrap();
 
             info!("Block no. {}", header.number);
-            info!("  EVM spec ID: {:?}", spec_id);
-            info!("  Timestamp: {}", dt);
+            info!("  EVM spec ID: {spec_id:?}");
+            info!("  Timestamp: {dt}");
             info!("  Transactions: {}", block_builder.input.transactions.len());
             info!("  Fee Recipient: {:?}", block_builder.input.beneficiary);
             info!("  Gas limit: {}", block_builder.input.gas_limit);
@@ -93,7 +95,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
             })
             .modify_block_env(|blk_env| {
                 // set the EVM block environment
-                blk_env.number = header.number.try_into().unwrap();
+                blk_env.number = U256::from(header.number);
                 blk_env.coinbase = block_builder.input.beneficiary;
                 blk_env.timestamp = header.timestamp;
                 blk_env.difficulty = U256::ZERO;
@@ -113,6 +115,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
         // process all the transactions
         let mut tx_trie = MptNode::default();
         let mut receipt_trie = MptNode::default();
+        #[allow(unused_variables)]
         let mut actual_tx_no = 0usize;
 
         for (tx_no, tx) in take(&mut block_builder.input.transactions)
@@ -124,21 +127,21 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
             // verify the transaction signature
             let tx_from = tx
                 .recover_from()
-                .with_context(|| anyhow!("Error recovering address for transaction {}", tx_no))?;
+                .with_context(|| anyhow!("Error recovering address for transaction {tx_no}"))?;
 
             #[cfg(not(target_os = "zkvm"))]
             {
                 let tx_hash = tx.hash();
-                debug!("Tx no. {} (hash: {})", tx_no, tx_hash);
+                debug!("Tx no. {tx_no} (hash: {tx_hash})");
                 debug!("  Type: {}", tx.essence.tx_type());
-                debug!("  Fr: {:?}", tx_from);
+                debug!("  Fr: {tx_from:?}");
                 debug!("  To: {:?}", tx.essence.to().unwrap_or_default());
             }
 
             // verify transaction gas
             let block_available_gas = block_builder.input.gas_limit - cumulative_gas_used;
             if block_available_gas < tx.essence.gas_limit() {
-                bail!("Error at transaction {}: gas exceeds block limit", tx_no);
+                bail!("Error at transaction {tx_no}: gas exceeds block limit");
             }
 
             fill_eth_tx_env(
@@ -152,13 +155,11 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
             // process the transaction
             let ResultAndState { result, state } = evm
                 .transact()
-                .map_err(|evm_err| anyhow!("Error at transaction {}: {:?}", tx_no, evm_err))?;
+                .map_err(|evm_err| anyhow!("Error at transaction {tx_no}: {evm_err:?}"))?;
 
             if is_anchor && !result.is_success() {
                 bail!(
-                    "Error at transaction {}: execute anchor failed {:?}, output {:?}",
-                    tx_no,
-                    result,
+                    "Error at transaction {tx_no}: execute anchor failed {result:?}, output {:?}",
                     result.output().map(|o| from_utf8(o).unwrap_or_default())
                 );
             }
@@ -167,7 +168,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
             cumulative_gas_used = cumulative_gas_used.checked_add(gas_used).unwrap();
 
             #[cfg(not(target_os = "zkvm"))]
-            debug!("  Ok: {:?}", result);
+            debug!("  Ok: {result:?}");
 
             // create the receipt from the EVM result
             let receipt = Receipt::new(
@@ -183,8 +184,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
                 if account.is_touched() {
                     // log account
                     debug!(
-                        "  State {:?} (is_selfdestructed={}, is_loaded_as_not_existing={}, is_created={})",
-                        address,
+                        "  State {address:?} (is_selfdestructed={}, is_loaded_as_not_existing={}, is_created={})",
                         account.is_selfdestructed(),
                         account.is_loaded_as_not_existing(),
                         account.is_created()
@@ -198,7 +198,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
                     // log state changes
                     for (addr, slot) in &account.storage {
                         if slot.is_changed() {
-                            debug!("    Storage address: {:?}", addr);
+                            debug!("    Storage address: {addr:?}");
                             debug!("      Before: {:?}", slot.original_value());
                             debug!("       After: {:?}", slot.present_value());
                         }

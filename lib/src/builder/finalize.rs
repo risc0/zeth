@@ -21,7 +21,6 @@ use zeth_primitives::{
     keccak::keccak,
     transactions::TxEssence,
     trie::{MptNode, StateAccount},
-    U256,
 };
 
 use crate::{
@@ -70,8 +69,11 @@ impl BlockFinalizeStrategy<MemDb> for MemDbBlockFinalizeStrategy {
             let storage_root = {
                 // getting a mutable reference is more efficient than calling remove
                 // every account must have an entry, even newly created accounts
-                let (storage_trie, _) =
-                    block_builder.input.parent_storage.get_mut(address).unwrap();
+                let (storage_trie, _) = block_builder
+                    .input
+                    .parent_storage
+                    .get_mut(address)
+                    .expect("Address not found in storage");
                 // for cleared accounts always start from the empty trie
                 if account.state == AccountState::StorageCleared {
                     storage_trie.clear();
@@ -80,7 +82,7 @@ impl BlockFinalizeStrategy<MemDb> for MemDbBlockFinalizeStrategy {
                 // apply all new storage entries for the current account (address)
                 for (key, value) in state_storage {
                     let storage_trie_index = keccak(key.to_be_bytes::<32>());
-                    if value == &U256::ZERO {
+                    if value.is_zero() {
                         storage_trie.delete(&storage_trie_index)?;
                     } else {
                         storage_trie.insert_rlp(&storage_trie_index, *value)?;

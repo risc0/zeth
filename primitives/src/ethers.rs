@@ -183,13 +183,13 @@ impl TryFrom<EthersTransaction> for EthereumTxEssence {
                     Some(chain_id) => Some(
                         chain_id
                             .try_into()
-                            .map_err(|err| anyhow!("invalid chain_id: {}", err))?,
+                            .map_err(|err| anyhow!("invalid chain_id: {err}"))?,
                     ),
                 },
                 nonce: tx
                     .nonce
                     .try_into()
-                    .map_err(|err| anyhow!("invalid nonce: {}", err))?,
+                    .map_err(|err| anyhow!("invalid nonce: {err}"))?,
                 gas_price: from_ethers_u256(tx.gas_price.context("gas_price missing")?),
                 gas_limit: from_ethers_u256(tx.gas),
                 to: tx.to.into(),
@@ -201,11 +201,11 @@ impl TryFrom<EthersTransaction> for EthereumTxEssence {
                     .chain_id
                     .context("chain_id missing")?
                     .try_into()
-                    .map_err(|err| anyhow!("invalid chain_id: {}", err))?,
+                    .map_err(|err| anyhow!("invalid chain_id: {err}"))?,
                 nonce: tx
                     .nonce
                     .try_into()
-                    .map_err(|err| anyhow!("invalid nonce: {}", err))?,
+                    .map_err(|err| anyhow!("invalid nonce: {err}"))?,
                 gas_price: from_ethers_u256(tx.gas_price.context("gas_price missing")?),
                 gas_limit: from_ethers_u256(tx.gas),
                 to: tx.to.into(),
@@ -218,11 +218,11 @@ impl TryFrom<EthersTransaction> for EthereumTxEssence {
                     .chain_id
                     .context("chain_id missing")?
                     .try_into()
-                    .map_err(|err| anyhow!("invalid chain_id: {}", err))?,
+                    .map_err(|err| anyhow!("invalid chain_id: {err}"))?,
                 nonce: tx
                     .nonce
                     .try_into()
-                    .map_err(|err| anyhow!("invalid nonce: {}", err))?,
+                    .map_err(|err| anyhow!("invalid nonce: {err}"))?,
                 max_priority_fee_per_gas: from_ethers_u256(
                     tx.max_priority_fee_per_gas
                         .context("max_priority_fee_per_gas missing")?,
@@ -278,7 +278,7 @@ impl TryFrom<EthersWithdrawal> for Withdrawal {
             amount: withdrawal
                 .amount
                 .try_into()
-                .map_err(|err| anyhow!("invalid amount: {}", err))?,
+                .map_err(|err| anyhow!("invalid amount: {err}"))?,
         })
     }
 }

@@ -48,7 +48,7 @@ fn evm(
 
         // skip failing tests for now
         if let Some(message) = block.expect_exception {
-            println!("skipping ({})", message);
+            println!("skipping ({message})");
             break;
         }
 
@@ -81,9 +81,9 @@ fn evm(
                 &exp_state.debug_rlp::<StateAccount>(),
             ) {
                 match diff {
-                    diff::Result::Left(l) => println!("✗{}", l),
-                    diff::Result::Right(r) => println!("✓{}", r),
-                    diff::Result::Both(l, _) => println!(" {}", l),
+                    diff::Result::Left(l) => println!("✗{l}"),
+                    diff::Result::Right(r) => println!("✓{r}"),
+                    diff::Result::Both(l, _) => println!(" {l}"),
                 }
             }
             assert_eq!(state.hash(), exp_state.hash());

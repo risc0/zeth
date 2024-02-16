@@ -82,8 +82,7 @@ impl DbInitStrategy<MemDb> for MemDbInitStrategy {
             // Verify storage trie root
             if storage_trie.hash() != state_account.storage_root {
                 bail!(
-                    "Invalid storage trie for {:?}: expected {}, got {}",
-                    address,
+                    "Invalid storage trie for {address:?}: expected {}, got {}",
                     state_account.storage_root,
                     storage_trie.hash()
                 );
@@ -94,7 +93,10 @@ impl DbInitStrategy<MemDb> for MemDbInitStrategy {
             let bytecode = if code_hash.0 == KECCAK_EMPTY.0 {
                 Bytecode::new()
             } else {
-                let bytes = contracts.get(&code_hash).unwrap().clone();
+                let bytes = contracts
+                    .get(&code_hash)
+                    .expect("Contract not found")
+                    .clone();
                 Bytecode::new_raw(bytes)
             };
 
@@ -143,9 +145,8 @@ impl DbInitStrategy<MemDb> for MemDbInitStrategy {
                 || block_builder.input.parent_header.number - current.number >= MAX_BLOCK_HASH_AGE
             {
                 bail!(
-                    "Invalid chain: {} is not one of the {} most recent blocks",
+                    "Invalid chain: {} is not one of the {MAX_BLOCK_HASH_AGE} most recent blocks",
                     current.number,
-                    MAX_BLOCK_HASH_AGE,
                 );
             }
             block_hashes.insert(current.number, current_hash);

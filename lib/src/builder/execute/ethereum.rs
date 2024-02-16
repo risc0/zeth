@@ -56,11 +56,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
         // Compute the spec id
         let spec_id = block_builder.chain_spec.spec_id(header.number);
         if !SpecId::enabled(spec_id, MIN_SPEC_ID) {
-            bail!(
-                "Invalid protocol version: expected >= {:?}, got {:?}",
-                MIN_SPEC_ID,
-                spec_id,
-            )
+            bail!("Invalid protocol version: expected >= {MIN_SPEC_ID:?}, got {spec_id:?}");
         }
 
         #[cfg(not(target_os = "zkvm"))]
@@ -68,12 +64,19 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             use chrono::{TimeZone, Utc};
             use log::info;
             let dt = Utc
-                .timestamp_opt(block_builder.input.timestamp.try_into().unwrap(), 0)
+                .timestamp_opt(
+                    block_builder
+                        .input
+                        .timestamp
+                        .try_into()
+                        .expect("Timestamp could not fit into i64"),
+                    0,
+                )
                 .unwrap();
 
             info!("Block no. {}", header.number);
-            info!("  EVM spec ID: {:?}", spec_id);
-            info!("  Timestamp: {}", dt);
+            info!("  EVM spec ID: {spec_id:?}");
+            info!("  Timestamp: {dt}");
             info!("  Transactions: {}", block_builder.input.transactions.len());
             info!("  Withdrawals: {}", block_builder.input.withdrawals.len());
             info!("  Fee Recipient: {:?}", block_builder.input.beneficiary);
@@ -92,7 +95,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             })
             .modify_block_env(|blk_env| {
                 // set the EVM block environment
-                blk_env.number = header.number.try_into().unwrap();
+                blk_env.number = U256::from(header.number);
                 blk_env.coinbase = block_builder.input.beneficiary;
                 blk_env.timestamp = header.timestamp;
                 blk_env.difficulty = U256::ZERO;
@@ -100,7 +103,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
                 blk_env.basefee = header.base_fee_per_gas;
                 blk_env.gas_limit = block_builder.input.gas_limit;
             })
-            .with_db(block_builder.db.take().unwrap())
+            .with_db(block_builder.db.take().expect("No database"))
             .build();
 
         // bloom filter over all transaction logs
@@ -118,34 +121,34 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             // verify the transaction signature
             let tx_from = tx
                 .recover_from()
-                .with_context(|| format!("Error recovering address for transaction {}", tx_no))?;
+                .with_context(|| format!("Error recovering address for transaction {tx_no}"))?;
 
             #[cfg(not(target_os = "zkvm"))]
             {
                 let tx_hash = tx.hash();
-                debug!("Tx no. {} (hash: {})", tx_no, tx_hash);
+                debug!("Tx no. {tx_no} (hash: {tx_hash})");
                 debug!("  Type: {}", tx.essence.tx_type());
-                debug!("  Fr: {:?}", tx_from);
+                debug!("  Fr: {tx_from:?}");
                 debug!("  To: {:?}", tx.essence.to().unwrap_or_default());
             }
 
             // verify transaction gas
             let block_available_gas = block_builder.input.gas_limit - cumulative_gas_used;
             if block_available_gas < tx.essence.gas_limit() {
-                bail!("Error at transaction {}: gas exceeds block limit", tx_no);
+                bail!("Error at transaction {tx_no}: gas exceeds block limit");
             }
 
             // process the transaction
             fill_eth_tx_env(&mut evm.env().tx, &tx.essence, tx_from);
             let ResultAndState { result, state } = evm
                 .transact()
-                .map_err(|evm_err| anyhow!("Error at transaction {}: {:?}", tx_no, evm_err))?;
+                .map_err(|evm_err| anyhow!("Error at transaction {tx_no}: {evm_err:?}"))?;
 
             let gas_used = result.gas_used().try_into().unwrap();
             cumulative_gas_used = cumulative_gas_used.checked_add(gas_used).unwrap();
 
             #[cfg(not(target_os = "zkvm"))]
-            debug!("  Ok: {:?}", result);
+            debug!("  Ok: {result:?}");
 
             // create the receipt from the EVM result
             let receipt = Receipt::new(
@@ -175,8 +178,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
                 if account.is_touched() {
                     // log account
                     debug!(
-                        "  State {:?} (is_selfdestructed={}, is_loaded_as_not_existing={}, is_created={}, is_empty={})",
-                        address,
+                        "  State {address:?} (is_selfdestructed={}, is_loaded_as_not_existing={}, is_created={}, is_empty={})",
                         account.is_selfdestructed(),
                         account.is_loaded_as_not_existing(),
                         account.is_created(),
@@ -191,7 +193,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
                     // log state changes
                     for (addr, slot) in &account.storage {
                         if slot.is_changed() {
-                            debug!("    Storage address: {:?}", addr);
+                            debug!("    Storage address: {addr:?}");
                             debug!("      Before: {:?}", slot.original_value());
                             debug!("       After: {:?}", slot.present_value());
                         }
@@ -217,7 +219,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             {
                 debug!("Withdrawal no. {}", withdrawal.index);
                 debug!("  Recipient: {:?}", withdrawal.address);
-                debug!("  Value: {}", amount_wei);
+                debug!("  Value: {amount_wei}");
             }
             // Credit withdrawal amount
             increase_account_balance(&mut evm.context.evm.db, withdrawal.address, amount_wei)?;
@@ -233,11 +235,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
         header.receipts_root = receipt_trie.hash();
         header.logs_bloom = logs_bloom;
         header.gas_used = cumulative_gas_used;
-        header.withdrawals_root = if spec_id < SpecId::SHANGHAI {
-            None
-        } else {
-            Some(withdrawals_trie.hash())
-        };
+        header.withdrawals_root = (spec_id < SpecId::SHANGHAI).then_some(withdrawals_trie.hash());
 
         // Leak memory, save cycles
         guest_mem_forget([tx_trie, receipt_trie, withdrawals_trie]);
@@ -311,13 +309,7 @@ where
     // Read account from database
     let mut account: Account = db
         .basic(address)
-        .map_err(|db_err| {
-            anyhow!(
-                "Error increasing account balance for {}: {:?}",
-                address,
-                db_err
-            )
-        })?
+        .map_err(|db_err| anyhow!("Error increasing account balance for {address}: {db_err:?}"))?
         .unwrap_or_default()
         .into();
     // Credit withdrawal amount

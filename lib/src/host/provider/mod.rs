@@ -153,9 +153,8 @@ impl dyn Provider {
             .filter(|log| from_ethers_h256(log.topics[0]) == E::SIGNATURE_HASH)
             .map(|log| {
                 let topics = log.topics.iter().map(|topic| from_ethers_h256(*topic));
-                let event = E::decode_raw_log(topics, &log.data, false).unwrap_or_else(|_| {
-                    panic!("Decode log failed for l1_block_no {}", l1_block_no)
-                });
+                let event = E::decode_raw_log(topics, &log.data, false)
+                    .unwrap_or_else(|_| panic!("Decode log failed for l1_block_no {l1_block_no}"));
                 (log.clone(), event)
             })
             .collect::<Vec<_>>();
@@ -163,6 +162,7 @@ impl dyn Provider {
         Ok(res)
     }
 
+    #[allow(dead_code)]
     fn filter_block_proposal(
         &mut self,
         l1_contract: H160,
@@ -186,9 +186,7 @@ impl dyn Provider {
             .map(|log| {
                 let topics = log.topics.iter().map(|topic| from_ethers_h256(*topic));
                 let block_proposed = BlockProposed::decode_raw_log(topics, &log.data, false)
-                    .unwrap_or_else(|_| {
-                        panic!("Decode log failed for l1_block_no {}", l1_block_no)
-                    });
+                    .unwrap_or_else(|_| panic!("Decode log failed for l1_block_no {l1_block_no}"));
                 (log.block_number, log.transaction_hash, block_proposed)
             })
             .filter(|(_block_no, _tx_hash, event)| {
@@ -198,14 +196,14 @@ impl dyn Provider {
 
         let (block_no, tx_hash, event) = res
             .pop()
-            .with_context(|| anyhow!("Cannot find BlockProposed event for {}", l2_block_no))?;
+            .with_context(|| anyhow!("Cannot find BlockProposed event for {l2_block_no}"))?;
 
         let tx = self
             .get_transaction(&TxQuery {
                 tx_hash: tx_hash.unwrap(),
                 block_no: block_no.map(|b| b.as_u64()),
             })
-            .with_context(|| anyhow!("Cannot find BlockProposed Tx {:?}", tx_hash))?;
+            .with_context(|| anyhow!("Cannot find BlockProposed Tx {tx_hash:?}"))?;
 
         Ok((tx, event))
     }

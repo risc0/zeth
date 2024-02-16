@@ -51,9 +51,10 @@ pub async fn execute_sgx(ctx: &mut Context, req: &SgxRequest) -> Result<SgxRespo
     info!("Sgx execution stdout: {:?}", str::from_utf8(&output.stdout));
     if !output.status.success() {
         inc_sgx_error(req.block);
-        return Err(output.status.to_string());
+        Err(output.status.to_string())
+    } else {
+        parse_sgx_result(output.stdout)
     }
-    parse_sgx_result(output.stdout)
 }
 
 fn parse_sgx_result(output: Vec<u8>) -> Result<SgxResponse, String> {

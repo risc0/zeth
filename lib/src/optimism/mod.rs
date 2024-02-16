@@ -127,9 +127,8 @@ impl<D: BatcherDb> DeriveMachine<D> {
             .essence;
         if let Err(err) = validate_l1_attributes_deposited_tx(chain_config, l1_attributes_tx) {
             bail!(
-                "First transaction in block is not a valid L1 attributes deposited transaction: {}",
-                err
-            )
+                "First transaction in block is not a valid L1 attributes deposited transaction: {err}"
+            );
         }
         // decode the L1 attributes deposited transaction
         let set_l1_block_values = {
@@ -152,8 +151,8 @@ impl<D: BatcherDb> DeriveMachine<D> {
         );
         #[cfg(not(target_os = "zkvm"))]
         info!(
-            "Fetched Eth head (block no {}) {}",
-            eth_block_no, set_l1_block_values.hash
+            "Fetched Eth head (block no {eth_block_no}) {}",
+            set_l1_block_values.hash
         );
 
         let op_batcher = {
@@ -332,8 +331,8 @@ impl<D: BatcherDb> DeriveMachine<D> {
 
                 #[cfg(not(target_os = "zkvm"))]
                 info!(
-                    "Derived Op block {} w/ hash {}",
-                    new_op_head.number, new_op_head_hash
+                    "Derived Op block {} w/ hash {new_op_head_hash}",
+                    new_op_head.number
                 );
 
                 self.op_batcher.state.safe_head = L2BlockInfo {

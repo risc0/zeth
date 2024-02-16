@@ -82,10 +82,7 @@ impl BatcherChannels {
                 Ok(frames) => frames,
                 Err(_err) => {
                     #[cfg(not(target_os = "zkvm"))]
-                    log::warn!(
-                        "failed to decode all frames; skip entire batcher tx: {:#}",
-                        _err
-                    );
+                    log::warn!("failed to decode all frames; skip entire batcher tx: {_err:#}");
                     continue;
                 }
             };
@@ -144,9 +141,10 @@ impl BatcherChannels {
                     #[cfg(not(target_os = "zkvm"))]
                     log::warn!("frame's channel is timed out; ignored");
                     return;
-                } else if let Err(_err) = channel.add_frame(frame) {
+                }
+                if let Err(_err) = channel.add_frame(frame) {
                     #[cfg(not(target_os = "zkvm"))]
-                    log::warn!("failed to add frame to channel; ignored: {:#}", _err);
+                    log::warn!("failed to add frame to channel; ignored: {_err:#}");
                     return;
                 }
             }
@@ -288,10 +286,7 @@ impl Channel {
         let mut batches = Vec::new();
         if let Err(_err) = self.decode_batches(block_number, &mut batches) {
             #[cfg(not(target_os = "zkvm"))]
-            log::warn!(
-                "failed to decode all batches; skipping rest of channel: {:#}",
-                _err
-            );
+            log::warn!("failed to decode all batches; skipping rest of channel: {_err:#}");
         }
 
         batches
@@ -364,7 +359,7 @@ impl Frame {
             .data()
             .split_first()
             .context("empty transaction data")?;
-        ensure!(version == &0, "invalid transaction version: {}", version);
+        ensure!(version == &0, "invalid transaction version: {version}");
 
         let mut frames = Vec::new();
         while !rollup_payload.is_empty() {

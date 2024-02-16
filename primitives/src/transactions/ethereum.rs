@@ -33,7 +33,6 @@ use alloy_primitives::{Address, Bytes, ChainId, TxNumber, B256, U256};
 use alloy_rlp::{Encodable, EMPTY_STRING_CODE};
 use alloy_rlp_derive::RlpEncodable;
 use anyhow::{anyhow, Context};
-use bytes::BufMut;
 use k256::{
     ecdsa::{RecoveryId, Signature as K256Signature, VerifyingKey as K256VerifyingKey},
     elliptic_curve::sec1::ToEncodedPoint,

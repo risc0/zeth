@@ -109,19 +109,21 @@ impl<E: TxEssence> Encodable for Transaction<E> {
     #[inline]
     fn length(&self) -> usize {
         let tx_type = self.essence.tx_type();
-        let payload_length = if tx_type == OPTIMISM_DEPOSITED_TX_TYPE {
-            // optimism deposited transactions have no signature
-            self.essence.payload_length()
-        } else {
-            self.essence.payload_length() + self.signature.payload_length()
-        };
+        let payload_length = self.essence.payload_length()
+            + if tx_type == OPTIMISM_DEPOSITED_TX_TYPE {
+                // optimism deposited transactions have no signature
+                0
+            } else {
+                self.signature.payload_length()
+            };
 
-        let mut length = payload_length + alloy_rlp::length_of_length(payload_length);
+        let length = payload_length + alloy_rlp::length_of_length(payload_length);
         // add the EIP-2718 transaction type for non-legacy transactions
         if tx_type != 0 {
-            length += 1;
+            length + 1
+        } else {
+            length
         }
-        length
     }
 }
 

@@ -274,7 +274,7 @@ fn proofs_to_tries(
 
         let fini_proofs = proofs
             .get(&address)
-            .with_context(|| format!("missing fini_proofs for address {:#}", &address))?;
+            .with_context(|| format!("missing fini_proofs for address {address:#}"))?;
 
         // assure that addresses can be deleted from the state trie
         add_orphaned_leafs(address, &fini_proofs.account_proof, &mut state_nodes)?;
@@ -336,7 +336,7 @@ fn add_orphaned_leafs(
         let proof_nodes = parse_proof(proof).context("invalid proof encoding")?;
         if is_not_included(&keccak(key), &proof_nodes)? {
             // add the leaf node to the nodes
-            let leaf = proof_nodes.last().unwrap();
+            let leaf = proof_nodes.last().expect("No leaf node");
             shorten_node_path(leaf).into_iter().for_each(|node| {
                 nodes_by_reference.insert(node.reference(), node);
             });

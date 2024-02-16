@@ -5,7 +5,7 @@ use alloy_sol_types::{sol, SolCall};
 use anyhow::{anyhow, Result};
 use ethers_core::types::{Block, Transaction as EthersTransaction};
 use serde::{Deserialize, Serialize};
-use zeth_primitives::{transactions::TxEssence, withdrawal::Withdrawal};
+use zeth_primitives::withdrawal::Withdrawal;
 
 pub mod consts;
 #[cfg(all(feature = "std", not(target_os = "zkvm")))]

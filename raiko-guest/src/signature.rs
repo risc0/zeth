@@ -84,7 +84,7 @@ mod tests {
         let pubkey = public_key(&priv_key);
         let pub_addr = public_key_to_address(&pubkey);
         assert_eq!(pub_addr, proof_addr);
-        println!("Public address: {}", pub_addr);
-        println!("Proof public address: {}", proof_addr);
+        println!("Public address: {pub_addr}");
+        println!("Proof public address: {proof_addr}");
     }
 }

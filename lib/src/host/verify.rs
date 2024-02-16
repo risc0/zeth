@@ -71,12 +71,11 @@ impl<E: TxEssence> Verifier for preflight::Data<E> {
 
         for (address, address_errors) in &errors {
             error!(
-                "Verify found {:?} error(s) for address {:?}",
+                "Verify found {:?} error(s) for address {address:?}",
                 address_errors.len(),
-                address
             );
             for error in address_errors {
-                error!("  Error: {:?}", error);
+                error!("  Error: {error:?}");
             }
         }
 
@@ -84,8 +83,7 @@ impl<E: TxEssence> Verifier for preflight::Data<E> {
         let errors_len = errors.len();
         if errors_len > 0 {
             error!(
-                "Verify found {:?} account(s) with error(s) ({}% correct)",
-                errors_len,
+                "Verify found {errors_len:?} account(s) with error(s) ({}% correct)",
                 (100.0 * (accounts_len - errors_len) as f64 / accounts_len as f64)
             );
         }
@@ -133,10 +131,7 @@ fn verify_header(header: &Header, exp_header: &Header) -> Result<()> {
     let found_hash = header.hash();
     let expected_hash = exp_header.hash();
     if found_hash.as_slice() != expected_hash.as_slice() {
-        error!(
-            "Final block hash mismatch {} (expected {})",
-            found_hash, expected_hash,
-        );
+        error!("Final block hash mismatch {found_hash} (expected {expected_hash})");
 
         bail!("Invalid block hash");
     }
@@ -224,7 +219,7 @@ fn verify_state_trie(
                 address_errors.push(VerifyError::UnresolvedAccount);
             }
             Err(err) => {
-                bail!("Error while fetching account {:?}: {:?}", address, err);
+                bail!("Error while fetching account {address:?}: {err:?}");
             }
         }
 

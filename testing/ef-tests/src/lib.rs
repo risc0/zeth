@@ -111,8 +111,10 @@ impl From<&MemDb> for TestState {
         TestState(
             db.accounts
                 .iter()
-                .filter(|(_, account)| account.state != AccountState::Deleted)
-                .map(|(addr, account)| (*addr, account.clone().into()))
+                .filter_map(|(addr, account)| {
+                    (account.state != AccountState::Deleted)
+                        .then_some((*addr, account.clone().into()))
+                })
                 .collect(),
         )
     }

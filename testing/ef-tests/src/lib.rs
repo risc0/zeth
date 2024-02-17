@@ -78,7 +78,8 @@ pub struct TestBlock {
     pub rlp: Bytes,
     #[serde(default)]
     pub transactions: Vec<TestTransaction>,
-    pub withdrawals: Option<Vec<TestWithdrawal>>,
+    #[serde(default)]
+    pub withdrawals: Vec<TestWithdrawal>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -201,7 +202,7 @@ impl From<TestTransaction> for EthereumTransaction {
         };
         let essence = match tx.type_id.map(|v| u8::try_from(v).unwrap()) {
             None | Some(0) => EthereumTxEssence::Legacy(TxEssenceLegacy {
-                chain_id: Parity::try_from(tx.v).unwrap().chain_id(),
+                chain_id: Parity::try_from(tx.v).unwrap().chain_id(), // derive chain ID from sig
                 nonce: tx.nonce.try_into().unwrap(),
                 gas_price: tx.gas_price.unwrap(),
                 gas_limit: tx.gas_limit,

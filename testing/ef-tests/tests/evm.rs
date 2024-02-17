@@ -75,7 +75,7 @@ fn evm(
             json.pre,
             expected_header.clone(),
             block.transactions,
-            block.withdrawals.unwrap_or_default(),
+            block.withdrawals,
             post_state,
         );
         let input_state_input_hash = input.state_input.hash();

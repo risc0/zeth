@@ -73,7 +73,7 @@ impl BatcherChannels {
                 continue;
             }
 
-            #[cfg(not(target_os = "zkvm"))]
+            #[cfg(not(feature = "std"))]
             log::debug!("received batcher tx: {}", tx.hash());
 
             // From the spec:
@@ -81,7 +81,7 @@ impl BatcherChannels {
             let frames = match Frame::process_batcher_transaction(&tx.essence) {
                 Ok(frames) => frames,
                 Err(_err) => {
-                    #[cfg(not(target_os = "zkvm"))]
+                    #[cfg(not(feature = "std"))]
                     log::warn!(
                         "failed to decode all frames; skip entire batcher tx: {:#}",
                         _err
@@ -92,7 +92,7 @@ impl BatcherChannels {
 
             // load received frames into the channel bank
             for frame in frames {
-                #[cfg(not(target_os = "zkvm"))]
+                #[cfg(not(feature = "std"))]
                 log::debug!(
                     "received frame: channel_id={}, frame_number={}, is_last={}",
                     frame.channel_id,
@@ -109,14 +109,14 @@ impl BatcherChannels {
             while matches!(self.channels.front(), Some(channel) if block_number > channel.open_l1_block + self.channel_timeout)
             {
                 let _channel = self.channels.pop_front().unwrap();
-                #[cfg(not(target_os = "zkvm"))]
+                #[cfg(not(feature = "std"))]
                 log::debug!("timed-out channel: {}", _channel.id);
             }
 
             // read all ready channels from the front of the queue
             while matches!(self.channels.front(), Some(channel) if channel.is_ready()) {
                 let channel = self.channels.pop_front().unwrap();
-                #[cfg(not(target_os = "zkvm"))]
+                #[cfg(not(feature = "std"))]
                 log::debug!("received channel: {}", channel.id);
 
                 self.batches.push_back(channel.read_batches(block_number));
@@ -141,11 +141,11 @@ impl BatcherChannels {
                 if block_number > channel.open_l1_block + self.channel_timeout {
                     // From the spec:
                     // "New frames for timed-out channels are dropped instead of buffered."
-                    #[cfg(not(target_os = "zkvm"))]
+                    #[cfg(not(feature = "std"))]
                     log::warn!("frame's channel is timed out; ignored");
                     return;
                 } else if let Err(_err) = channel.add_frame(frame) {
-                    #[cfg(not(target_os = "zkvm"))]
+                    #[cfg(not(feature = "std"))]
                     log::warn!("failed to add frame to channel; ignored: {:#}", _err);
                     return;
                 }
@@ -172,7 +172,7 @@ impl BatcherChannels {
             let dropped_channel = self.channels.pop_front().unwrap();
             total_size -= dropped_channel.size;
 
-            #[cfg(not(target_os = "zkvm"))]
+            #[cfg(not(feature = "std"))]
             log::debug!(
                 "pruned channel: {} (channel_size: {})",
                 dropped_channel.id,
@@ -287,7 +287,7 @@ impl Channel {
 
         let mut batches = Vec::new();
         if let Err(_err) = self.decode_batches(block_number, &mut batches) {
-            #[cfg(not(target_os = "zkvm"))]
+            #[cfg(not(feature = "std"))]
             log::warn!(
                 "failed to decode all batches; skipping rest of channel: {:#}",
                 _err

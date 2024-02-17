@@ -63,7 +63,7 @@ pub struct Input<E: TxEssence> {
 #[cfg(test)]
 mod tests {
     use zeth_primitives::transactions::ethereum::EthereumTxEssence;
-
+    use alloc::vec;
     use super::*;
 
     #[test]

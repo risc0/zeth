@@ -15,9 +15,8 @@
 use core::{fmt::Debug, mem::take, str::from_utf8};
 
 use anyhow::{anyhow, bail, Context, Result};
-#[cfg(not(target_os = "zkvm"))]
+#[cfg(feature = "std")]
 use log::debug;
-use log::info;
 use revm::{
     interpreter::Host,
     primitives::{Address, ResultAndState, SpecId, TxEnv},
@@ -66,7 +65,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
         }
         let chain_id = block_builder.chain_spec.chain_id();
 
-        #[cfg(not(target_os = "zkvm"))]
+        #[cfg(feature = "std")]
         {
             use chrono::{TimeZone, Utc};
             use log::info;
@@ -126,7 +125,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
                 .recover_from()
                 .with_context(|| anyhow!("Error recovering address for transaction {}", tx_no))?;
 
-            #[cfg(not(target_os = "zkvm"))]
+            #[cfg(feature = "std")]
             {
                 let tx_hash = tx.hash();
                 debug!("Tx no. {} (hash: {})", tx_no, tx_hash);
@@ -166,7 +165,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
             let gas_used = result.gas_used().try_into().unwrap();
             cumulative_gas_used = cumulative_gas_used.checked_add(gas_used).unwrap();
 
-            #[cfg(not(target_os = "zkvm"))]
+            #[cfg(feature = "std")]
             debug!("  Ok: {:?}", result);
 
             // create the receipt from the EVM result
@@ -178,7 +177,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
             );
 
             // update account states
-            #[cfg(not(target_os = "zkvm"))]
+            #[cfg(feature = "std")]
             for (address, account) in &state {
                 if account.is_touched() {
                     // log account

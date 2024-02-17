@@ -144,8 +144,8 @@ pub fn derive_sys_info(
             .map(|w| w.try_into().unwrap())
             .collect(),
         block_proposed: proposal_event,
-        l1_next_block,
-        l2_block,
+        l1_next_block: l1_next_block.try_into().expect("l1_next_block converstion failed"),
+        l2_block: l2_block.try_into().expect("l2_block converstion failed"),
     };
 
     Ok(sys_info)

@@ -3,9 +3,8 @@ use alloc::vec::Vec;
 use alloy_primitives::{Address, B256};
 use alloy_sol_types::{sol, SolCall};
 use anyhow::{anyhow, Result};
-use ethers_core::types::{Block, Transaction as EthersTransaction};
 use serde::{Deserialize, Serialize};
-use zeth_primitives::{transactions::TxEssence, withdrawal::Withdrawal};
+use zeth_primitives::{block::Header, transactions::TxEssence, withdrawal::Withdrawal};
 
 pub mod consts;
 #[cfg(all(feature = "std", not(target_os = "zkvm")))]
@@ -97,6 +96,6 @@ pub struct TaikoSystemInfo {
     pub l2_signal_root: B256,
     pub l2_withdrawals: Vec<Withdrawal>,
     pub block_proposed: BlockProposed,
-    pub l1_next_block: Block<EthersTransaction>,
-    pub l2_block: Block<EthersTransaction>,
+    pub l1_next_block: Header,
+    pub l2_block: Header,
 }

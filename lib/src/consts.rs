@@ -15,6 +15,8 @@
 //! Constants for the Ethereum protocol.
 extern crate alloc;
 
+use core::cell::{SyncUnsafeCell, UnsafeCell};
+
 use alloc::{
     collections::BTreeMap,
     str::FromStr,
@@ -22,7 +24,7 @@ use alloc::{
 };
 
 use anyhow::bail;
-use once_cell::sync::Lazy;
+use once_cell::unsync::Lazy;
 use revm::primitives::SpecId;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{uint, BlockNumber, ChainId, U256};
@@ -47,7 +49,7 @@ pub const MAX_BLOCK_HASH_AGE: u64 = 256;
 pub const GWEI_TO_WEI: U256 = uint!(1_000_000_000_U256);
 
 /// The Ethereum mainnet specification.
-pub static ETH_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| {
+pub const ETH_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| {
     ChainSpec {
         chain_id: 1,
         hard_forks: BTreeMap::from([
@@ -68,7 +70,7 @@ pub static ETH_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| {
 
 /// The Taiko mainnet specification.
 #[cfg(feature = "taiko")]
-pub static TKO_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| {
+pub const TKO_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| {
     ChainSpec {
         chain_id: 1,
         hard_forks: BTreeMap::from([
@@ -91,7 +93,7 @@ pub use crate::taiko::consts::testnet::*;
 
 /// The Optimism mainnet specification.
 #[cfg(feature = "optimism")]
-pub static OP_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
+pub const OP_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
     chain_id: 10,
     hard_forks: BTreeMap::from([
         (SpecId::FRONTIER, ForkCondition::Block(0)),

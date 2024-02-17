@@ -11,7 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#![feature(path_file_prefix)]
+// #![feature(path_file_prefix)]
+#![feature(sync_unsafe_cell)]
 #![cfg_attr(any(not(feature = "std"), target_os = "zkvm"), no_std)]
 
 extern crate alloc;

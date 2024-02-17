@@ -58,7 +58,7 @@ impl SystemConfig {
             return Ok(updated);
         }
 
-        #[cfg(not(target_os = "zkvm"))]
+        #[cfg(not(feature = "std"))]
         log::info!("Process config");
 
         let receipts = input.receipts.as_ref().context("receipts missing")?;

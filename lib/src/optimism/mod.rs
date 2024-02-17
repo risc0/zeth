@@ -16,7 +16,7 @@ use core::iter::once;
 
 use alloy_sol_types::{sol, SolInterface};
 use anyhow::{anyhow, bail, ensure, Context, Result};
-#[cfg(not(target_os = "zkvm"))]
+#[cfg(not(feature = "std"))]
 use log::info;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
@@ -113,7 +113,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
         let op_head = derive_input.db.get_full_op_block(op_block_no)?;
         let op_head_block_hash = op_head.block_header.hash();
 
-        #[cfg(not(target_os = "zkvm"))]
+        #[cfg(not(feature = "std"))]
         info!(
             "Fetched Op head (block no {}) {}",
             op_block_no, op_head_block_hash
@@ -150,7 +150,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
             eth_head.block_header.hash() == set_l1_block_values.hash,
             "Ethereum head block hash mismatch"
         );
-        #[cfg(not(target_os = "zkvm"))]
+        #[cfg(not(feature = "std"))]
         info!(
             "Fetched Eth head (block no {}) {}",
             eth_block_no, set_l1_block_values.hash
@@ -195,7 +195,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
         let mut process_next_eth_block = false;
 
         while self.op_block_no < target_block_no {
-            #[cfg(not(target_os = "zkvm"))]
+            #[cfg(not(feature = "std"))]
             info!(
                 "op_block_no = {}, eth_block_no = {}",
                 self.op_block_no, self.op_batcher.state.current_l1_block_number
@@ -221,7 +221,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                 // Process the batch
                 self.op_block_no += 1;
 
-                #[cfg(not(target_os = "zkvm"))]
+                #[cfg(not(feature = "std"))]
                 info!(
                     "Read batch for Op block {}: timestamp={}, epoch={}, tx count={}, parent hash={:?}",
                     self.op_block_no,
@@ -330,7 +330,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
 
                 let new_op_head_hash = new_op_head.hash();
 
-                #[cfg(not(target_os = "zkvm"))]
+                #[cfg(not(feature = "std"))]
                 info!(
                     "Derived Op block {} w/ hash {}",
                     new_op_head.number, new_op_head_hash

@@ -1,12 +1,11 @@
 use alloc::vec::Vec;
-
+use alloc::format;
 use alloy_primitives::{Address, TxHash, B256};
 use alloy_sol_types::SolValue;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, ensure, Result};
 use revm::primitives::SpecId;
 use zeth_primitives::{
     block::Header,
-    ethers::{from_ethers_h256, from_ethers_u256},
     keccak::keccak,
     transactions::EthereumTransaction,
 };
@@ -76,14 +75,14 @@ pub fn assemble_protocol_instance(
     let extra_data: B256 = bytes_to_bytes32(&header.extra_data).into();
 
     let prevrandao = if TKO_MAINNET_CHAIN_SPEC.spec_id(header.number) >= SpecId::SHANGHAI {
-        from_ethers_h256(sys.l1_next_block.mix_hash.unwrap_or_default()).into()
+        sys.l1_next_block.mix_hash.into()
     } else {
-        from_ethers_u256(sys.l1_next_block.difficulty)
+        sys.l1_next_block.difficulty
     };
     let difficulty = block_hash
         ^ (prevrandao
             * zeth_primitives::U256::from(header.number)
-            * zeth_primitives::U256::from(sys.l1_next_block.number.unwrap_or_default().as_u64()));
+            * zeth_primitives::U256::from(sys.l1_next_block.number));
 
     let gas_limit: u64 = header.gas_limit.try_into().unwrap();
     let mut pi = ProtocolInstance {
@@ -118,27 +117,14 @@ pub fn assemble_protocol_instance(
 
 pub fn verify(sys: &TaikoSystemInfo, header: &Header, pi: &mut ProtocolInstance) -> Result<()> {
     // check the block metadata
-    if pi.block_metadata.abi_encode() != sys.block_proposed.meta.abi_encode() {
-        return Err(anyhow!(
-            "block metadata mismatch, expected: {:?}, got: {:?}",
-            sys.block_proposed.meta,
-            pi.block_metadata
-        ));
-    }
-    // Check the block hash
-    if Some(header.hash()) != sys.l2_block.hash.map(from_ethers_h256) {
-        let _txs: Vec<EthereumTransaction> = sys
-            .l2_block
-            .transactions
-            .iter()
-            .filter_map(|tx| tx.clone().try_into().ok())
-            .collect();
-        return Err(anyhow!(
-            "block hash mismatch, expected: {}, got: {}",
-            header.hash(),
-            sys.l2_block.hash.map(from_ethers_h256).unwrap()
-        ));
-    }
+    ensure!(
+        pi.block_metadata.abi_encode() == sys.block_proposed.meta.abi_encode(),
+        format!("block hash mismatch, expected: {:?}, got: {:?}",  sys.block_proposed.meta, pi.block_metadata)
+    );
+    ensure!(
+        header.hash() == sys.l2_block.hash(),
+        format!("block hash mismatch, expected: {:?}, got: {:?}",  header.hash(), sys.l2_block.hash())
+    );
 
     Ok(())
 }

@@ -70,7 +70,7 @@ fn executor(
             json.pre,
             expected_header.clone(),
             block.transactions,
-            block.withdrawals.unwrap_or_default(),
+            block.withdrawals,
             json.post.unwrap(),
         );
 

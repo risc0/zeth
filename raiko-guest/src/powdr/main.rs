@@ -7,5 +7,6 @@ use alloc::{collections::BTreeMap, vec};
 use zeth_primitives::U256;
 use zeth_lib::consts::ChainSpec;
 
+#[no_mangle]
 fn main() {
 }

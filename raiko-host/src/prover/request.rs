@@ -8,6 +8,7 @@ use zeth_primitives::{Address, B256};
 pub enum ProofRequest {
     Sgx(SgxRequest),
     PseZk(PseZkRequest),
+    Powdr(PowdrRequest),
 }
 
 #[serde_as]
@@ -25,6 +26,8 @@ pub struct SgxRequest {
     pub prover: Address,
     pub graffiti: B256,
 }
+
+pub type PowdrRequest = SgxRequest;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PseZkRequest {}

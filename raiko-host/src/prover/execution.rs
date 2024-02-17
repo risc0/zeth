@@ -4,7 +4,7 @@ use super::{
     context::Context,
     error::Result,
     prepare_input::prepare_input,
-    proof::{cache::Cache, sgx::execute_sgx},
+    proof::{cache::Cache, sgx::execute_sgx, powdr::execute_powdr},
     request::{ProofRequest, ProofResponse},
     utils::cache_file_path,
 };
@@ -21,7 +21,8 @@ pub async fn execute(
             let l1_cache_file = cache_file_path(&ctx.cache_path, req.block, true);
             let l2_cache_file = cache_file_path(&ctx.cache_path, req.block, false);
             (l1_cache_file, l2_cache_file)
-        }
+        },
+        ProofRequest::Powdr(_) => todo!(),
         ProofRequest::PseZk(_) => todo!(),
     };
     // set cache file path to context
@@ -51,6 +52,13 @@ pub async fn execute(
                 observe_sgx_gen(bid, time_elapsed);
                 inc_sgx_success(bid);
                 Ok(ProofResponse::Sgx(resp))
+            },
+            ProofRequest::Powdr(req) => {
+                let start = Instant::now();
+                let bid = req.block;
+                let resp = execute_powdr().await?;
+                let time_elapsed = Instant::now().duration_since(start).as_millis() as i64;
+                todo!()
             }
             ProofRequest::PseZk(_) => todo!(),
         }

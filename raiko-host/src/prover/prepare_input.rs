@@ -51,7 +51,8 @@ pub async fn prepare_input(
             })
             .await
             .map_err(Into::<Error>::into)
-        }
+        },
+        ProofRequest::Powdr(_) => todo!(),
         ProofRequest::PseZk(PseZkRequest { .. }) => todo!(),
     }
 }

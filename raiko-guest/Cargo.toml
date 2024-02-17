@@ -76,3 +76,4 @@ sgx-ra = [
 # cargo +nightly build --release -Z build-std=core,alloc --target riscv32imac-unknown-none-elf --lib
 
 
+[workspace]

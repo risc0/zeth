@@ -5,30 +5,67 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+# Powdr has to compile as lib because replace the entry point
+[lib]
+name = "powdr"
+path = "src/powdr/main.rs"
+
+[[bin]]
+name = "sgx"
+path = "src/sgx/main.rs"
+
+[[bin]]
+name = "risc0"
+path = "src/risc0/main.rs"
+
 [dependencies]
-risc0-zkvm = { version = "0.18", default-features = false, features = ["std"] }
-zeth-lib = { path = "../lib", default-features = false, features = ["taiko"] }
-raiko-host = { path = "../raiko-host"}
-sgx-ra = { optional = true, path = "../sgx-ra" }
-tokio = { version = "1.23", features = ["full"] }
-anyhow = "1.0"
+zeth-primitives = { path = "../primitives", features = ["revm"] }
+zeth-lib = { path = "../lib", features = ["taiko"] }
+
+# SGX dependencies
+sgx-ra = { optional = true, path = "../sgx-ra"}
+tokio = { version = "1.23", features = ["full"], optional = true }
 secp256k1 = { version = "0.27.0", features = [
     'global-context',
     "rand",
     "recovery",
-] }
-rand = "0.8.5"
-hex = "0.4.3"
-clap = { version = "4.4.6", features = ["derive", "string"] }
-ethers-core = { version = "2.0", features = ["optimism"] }
-zeth-primitives = { path = "../primitives", features = ["taiko"] }
-rand_core = "0.6.4"
-sha3 = "0.10.8"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-base64-serde = "0.7.0"
-base64 = "0.21.7"
-dirs = "5.0.1"
+], optional = true  }
+rand = { version = "0.8.5", optional = true}
+# hex = {version = "0.4.3", optional = true}
+clap = { version = "4.4.6", features = ["derive", "string"] , optional = true}
+ethers-core = { version = "2.0", features = ["optimism"], optional = true }
+rand_core = {version = "0.6.4", optional = true}
+sha3 = {version = "0.10.8", optional = true}
+# serde = { version = "1.0", features = ["derive"], optional = true}
+serde_json = {version = "1.0", optional = true}
+base64-serde = {version = "0.7.0", optional = true}
+base64 = {version = "0.21.7", optional = true}
+dirs = {version = "5.0.1", optional = true}
+
+
+[target.'cfg(target_os = "riscv32imac-unknown-none-elf")'.dependencies]
+powdr-riscv-runtime ={ git = "https://github.com/ceciliaz030/powdr", branch = "+nightly" }
+
+[target.'cfg(target_os = "zkvm")'.dependencies]
+risc0-zkvm = { version = "0.18", default-features = false, features = ["std"] }
+
 
 [features]
-sgx-ra = ["dep:sgx-ra"]
+sgx-ra = [
+  "dep:sgx-ra",
+  "dep:tokio",
+  "dep:secp256k1",
+  "dep:rand",
+  "dep:clap",
+  "dep:ethers-core",
+  "dep:rand_core",
+  "dep:sha3",
+  "dep:serde_json",
+  "dep:base64-serde",
+  "dep:base64",
+  "dep:dirs",
+  ]
+
+# cargo +nightly build --release -Z build-std=core,alloc --target riscv32imac-unknown-none-elf --lib
+
+

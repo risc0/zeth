@@ -171,9 +171,7 @@ fn is_bootstrapped(secrets_dir: &Path) -> bool {
     privkey_path.is_file() && !privkey_path.metadata().unwrap().permissions().readonly()
 }
 
-async fn 
-
-get_data_to_sign(
+async fn get_data_to_sign(
     testnet: String,
     path_str: String,
     l1_blocks_path: String,

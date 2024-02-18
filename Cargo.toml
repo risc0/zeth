@@ -22,7 +22,7 @@ hashbrown = { version = "0.14.3", features = ["inline-more"] }
 risc0-build = { version = "0.20.1" }
 risc0-zkvm = { version = "0.20.1", default-features = false }
 revm-primitives = { version = "2.0", default_features = false }
-revm = { version = "5.0", default-features = false, features = [
+revm = { version = "6.0", default-features = false, features = [
     "std",
     "serde",
     "optimism",

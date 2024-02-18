@@ -35,7 +35,7 @@ use zeth_primitives::{
     block::Header,
     ethers::from_ethers_h160,
     keccak::keccak,
-    transactions::{SignableTransaction, TxEip1559, TxEip2930, TxEnvelope, TxLegacy},
+    transactions::{SignableTransaction, TxEip1559, TxEip2930, TxEip4844, TxEnvelope, TxLegacy},
     trie::{self, MptNode, MptNodeData, StateAccount},
     withdrawal::Withdrawal,
     Address, Bloom, Bytes, Signature, StorageKey, B256, B64, U128, U256, U64, U8,
@@ -122,16 +122,19 @@ impl From<&ProviderDb> for TestState {
 #[serde(rename_all = "camelCase")]
 pub struct TestHeader {
     pub base_fee_per_gas: Option<U64>,
+    pub blob_gas_used: Option<U64>,
     pub bloom: Bloom,
     pub coinbase: Address,
-    pub extra_data: Bytes,
     pub difficulty: U256,
+    pub excess_blob_gas: Option<U64>,
+    pub extra_data: Bytes,
     pub gas_limit: U64,
     pub gas_used: U64,
     pub hash: B256,
     pub mix_hash: B256,
     pub nonce: B64,
     pub number: U64,
+    pub parent_beacon_block_root: Option<B256>,
     pub parent_hash: B256,
     pub receipt_trie: B256,
     pub state_root: B256,
@@ -139,9 +142,6 @@ pub struct TestHeader {
     pub transactions_trie: B256,
     pub uncle_hash: B256,
     pub withdrawals_root: Option<B256>,
-    pub blob_gas_used: Option<U64>,
-    pub excess_blob_gas: Option<U64>,
-    pub parent_beacon_block_root: Option<B256>,
 }
 
 impl From<TestHeader> for Header {
@@ -239,6 +239,26 @@ impl From<TestTransaction> for TxEnvelope {
                     value: tx.value,
                     input: tx.data,
                     access_list: tx.access_list.unwrap().into(),
+                }
+                .into_signed(signature),
+            ),
+            Some(3) => TxEnvelope::Eip4844(
+                TxEip4844 {
+                    chain_id: tx.chain_id.unwrap().try_into().unwrap(),
+                    nonce: tx.nonce.try_into().unwrap(),
+                    gas_limit: tx.gas_limit.try_into().unwrap(),
+                    max_fee_per_gas: tx.max_fee_per_gas.unwrap().try_into().unwrap(),
+                    max_priority_fee_per_gas: tx
+                        .max_priority_fee_per_gas
+                        .unwrap()
+                        .try_into()
+                        .unwrap(),
+                    to: tx.to.into(),
+                    value: tx.value,
+                    access_list: tx.access_list.unwrap().into(),
+                    blob_versioned_hashes: tx.blob_versioned_hashes.unwrap(),
+                    max_fee_per_blob_gas: tx.max_fee_per_blob_gas.unwrap().try_into().unwrap(),
+                    input: tx.data,
                 }
                 .into_signed(signature),
             ),

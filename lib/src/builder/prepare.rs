@@ -15,7 +15,10 @@
 use core::fmt::Debug;
 
 use anyhow::{bail, Context, Result};
-use revm::{Database, DatabaseCommit};
+use revm::{
+    primitives::{calc_excess_blob_gas as calculate_excess_blob_gas, SpecId},
+    Database, DatabaseCommit,
+};
 use zeth_primitives::block::Header;
 
 use crate::{
@@ -38,41 +41,37 @@ impl HeaderPrepStrategy for EthHeaderPrepStrategy {
         D: Database + DatabaseCommit,
         <D as Database>::Error: Debug,
     {
+        let input = &block_builder.input.state_input;
+
         // Validate gas limit
-        let diff = block_builder
-            .input
-            .state_input
-            .parent_header
-            .gas_limit
-            .abs_diff(block_builder.input.state_input.gas_limit);
-        let limit =
-            block_builder.input.state_input.parent_header.gas_limit / GAS_LIMIT_BOUND_DIVISOR;
+        let diff = input.parent_header.gas_limit.abs_diff(input.gas_limit);
+        let limit = input.parent_header.gas_limit / GAS_LIMIT_BOUND_DIVISOR;
         if diff >= limit {
             bail!(
                 "Invalid gas limit: expected {} +- {}, got {}",
-                block_builder.input.state_input.parent_header.gas_limit,
+                input.parent_header.gas_limit,
                 limit,
-                block_builder.input.state_input.gas_limit,
+                input.gas_limit,
             );
         }
-        if block_builder.input.state_input.gas_limit < MIN_GAS_LIMIT {
+        if input.gas_limit < MIN_GAS_LIMIT {
             bail!(
                 "Invalid gas limit: expected >= {}, got {}",
                 MIN_GAS_LIMIT,
-                block_builder.input.state_input.gas_limit,
+                input.gas_limit,
             );
         }
         // Validate timestamp
-        let timestamp = block_builder.input.state_input.timestamp;
-        if timestamp <= block_builder.input.state_input.parent_header.timestamp {
+        let timestamp = input.timestamp;
+        if timestamp <= input.parent_header.timestamp {
             bail!(
                 "Invalid timestamp: expected > {}, got {}",
-                block_builder.input.state_input.parent_header.timestamp,
-                block_builder.input.state_input.timestamp,
+                input.parent_header.timestamp,
+                input.timestamp,
             );
         }
         // Validate extra data
-        let extra_data_bytes = block_builder.input.state_input.extra_data.len();
+        let extra_data_bytes = input.extra_data.len();
         if extra_data_bytes > MAX_EXTRA_DATA_BYTES {
             bail!(
                 "Invalid extra data: expected <= {}, got {}",
@@ -81,38 +80,42 @@ impl HeaderPrepStrategy for EthHeaderPrepStrategy {
             )
         }
         // Validate number
-        let parent_number = block_builder.input.state_input.parent_header.number;
+        let parent_number = input.parent_header.number;
         let number = parent_number
             .checked_add(1)
             .context("Invalid number: too large")?;
-
-        // Derive fork version
+        // Validate fork version
         let spec_id = block_builder
             .chain_spec
             .active_fork(number, timestamp)
             .unwrap_or_else(|err| panic!("Invalid version: {:#}", err));
+        // Validate `parent_beacon_block_root`
+        if spec_id >= SpecId::CANCUN && input.parent_beacon_block_root.is_none() {
+            bail!("Invalid beacon block root: missing")
+        }
+
         block_builder.spec_id = Some(spec_id);
         // Derive header
         block_builder.header = Some(Header {
             // Initialize fields that we can compute from the parent
-            parent_hash: block_builder.input.state_input.parent_header.hash_slow(),
-            number: block_builder
-                .input
-                .state_input
-                .parent_header
-                .number
-                .checked_add(1)
-                .context("Invalid block number: too large")?,
-            base_fee_per_gas: Some(derive_base_fee(
-                &block_builder.input.state_input.parent_header,
-                block_builder.chain_spec.gas_constants(spec_id).unwrap(),
-            )),
+            parent_hash: input.parent_header.hash_slow(),
+            number,
+            base_fee_per_gas: (spec_id >= SpecId::LONDON).then(|| {
+                calc_base_fee_per_gas(
+                    &input.parent_header,
+                    block_builder.chain_spec.gas_constants(spec_id).unwrap(),
+                )
+            }),
+            excess_blob_gas: (spec_id >= SpecId::CANCUN)
+                .then(|| calc_excess_blob_gas(&input.parent_header)),
+
             // Initialize metadata from input
-            beneficiary: block_builder.input.state_input.beneficiary,
-            gas_limit: block_builder.input.state_input.gas_limit,
+            beneficiary: input.beneficiary,
+            gas_limit: input.gas_limit,
             timestamp,
-            mix_hash: block_builder.input.state_input.mix_hash,
-            extra_data: block_builder.input.state_input.extra_data.clone(),
+            mix_hash: input.mix_hash,
+            parent_beacon_block_root: input.parent_beacon_block_root,
+            extra_data: input.extra_data.clone(),
             // do not fill the remaining fields
             ..Default::default()
         });
@@ -121,7 +124,7 @@ impl HeaderPrepStrategy for EthHeaderPrepStrategy {
 }
 
 /// Base fee for next block. [EIP-1559](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1559.md) spec
-fn derive_base_fee(parent: &Header, eip_1559_constants: &Eip1559Constants) -> u64 {
+fn calc_base_fee_per_gas(parent: &Header, eip_1559_constants: &Eip1559Constants) -> u64 {
     let parent_gas_target = parent.gas_limit / eip_1559_constants.elasticity_multiplier;
     let parent_base_fee = parent.base_fee_per_gas.unwrap();
 
@@ -150,4 +153,11 @@ fn derive_base_fee(parent: &Header, eip_1559_constants: &Eip1559Constants) -> u6
             parent_base_fee.saturating_sub(base_fee_delta)
         }
     }
+}
+
+fn calc_excess_blob_gas(parent: &Header) -> u64 {
+    calculate_excess_blob_gas(
+        parent.excess_blob_gas.unwrap_or_default(),
+        parent.blob_gas_used.unwrap_or_default(),
+    )
 }

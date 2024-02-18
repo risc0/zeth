@@ -19,24 +19,24 @@ use anyhow::{anyhow, bail, ensure, Context};
 use log::{debug, trace};
 use revm::{
     interpreter::Host,
-    primitives::{
-        calc_excess_blob_gas as calculate_excess_blob_gas, Account, Address, ResultAndState,
-        SpecId, TransactTo, TxEnv, MAX_BLOB_GAS_PER_BLOCK,
-    },
+    primitives::{Account, ResultAndState, SpecId, TransactTo, TxEnv, MAX_BLOB_GAS_PER_BLOCK},
     Database, DatabaseCommit, Evm,
 };
 use ruint::aliases::U256;
 use zeth_primitives::{
     alloy_rlp,
-    block::Header,
     receipt::{Receipt, ReceiptEnvelope},
     transactions::{EvmTransaction, TxEnvelope, TxType},
     trie::MptNode,
-    Bloom,
+    Address, Bloom,
 };
 
 use super::TxExecStrategy;
-use crate::{builder::BlockBuilder, consts, guest_mem_forget};
+use crate::{
+    builder::BlockBuilder,
+    consts::{self, BEACON_ROOTS_ADDRESS, SYSTEM_ADDRESS},
+    guest_mem_forget,
+};
 
 pub struct EthTxExecStrategy {}
 
@@ -64,7 +64,7 @@ impl TxExecStrategy for EthTxExecStrategy {
                         .state_input
                         .timestamp
                         .try_into()
-                        .unwrap(),
+                        .unwrap_or(32503676400),
                     0,
                 )
                 .unwrap();
@@ -100,16 +100,52 @@ impl TxExecStrategy for EthTxExecStrategy {
                 blk_env.number = header.number.try_into().unwrap();
                 blk_env.coinbase = block_builder.input.state_input.beneficiary;
                 blk_env.timestamp = U256::from(header.timestamp);
+                blk_env.gas_limit = U256::from(block_builder.input.state_input.gas_limit);
+                blk_env.basefee = U256::from(header.base_fee_per_gas.unwrap_or_default());
                 blk_env.difficulty = U256::ZERO;
                 blk_env.prevrandao = Some(header.mix_hash);
-                blk_env.basefee = U256::from(header.base_fee_per_gas.unwrap_or_default());
-                blk_env.gas_limit = U256::from(block_builder.input.state_input.gas_limit);
+                // EIP-4844 excess blob gas of this block, introduced in Cancun
+                if let Some(excess_blob_gas) = header.excess_blob_gas {
+                    blk_env.set_blob_excess_gas_and_price(excess_blob_gas)
+                }
             })
             .modify_cfg_env(|cfg_env| {
                 // set the EVM configuration
                 cfg_env.chain_id = block_builder.chain_spec.chain_id();
             })
             .build();
+
+        // set the beacon block root in the EVM
+        if spec_id >= SpecId::CANCUN {
+            let parent_beacon_block_root = header.parent_beacon_block_root.unwrap();
+
+            // From EIP-4788 Beacon block root in the EVM (Cancun):
+            // "Call BEACON_ROOTS_ADDRESS as SYSTEM_ADDRESS with the 32-byte input of
+            //  header.parent_beacon_block_root, a gas limit of 30_000_000, and 0 value."
+            evm.env_mut().tx = TxEnv {
+                transact_to: TransactTo::Call(BEACON_ROOTS_ADDRESS),
+                caller: SYSTEM_ADDRESS,
+                data: parent_beacon_block_root.0.into(),
+                gas_limit: 30_000_000,
+                value: U256::ZERO,
+                ..Default::default()
+            };
+
+            let tmp = evm.env_mut().block.clone();
+
+            // disable block gas limit validation and base fee checks
+            evm.block_mut().gas_limit = U256::from(evm.tx().gas_limit);
+            evm.block_mut().basefee = U256::ZERO;
+
+            let ResultAndState { mut state, .. } =
+                evm.transact().expect("beacon roots contract call failed");
+            evm.env_mut().block = tmp;
+
+            // commit only the changes to the beacon roots contract
+            state.remove(&SYSTEM_ADDRESS);
+            state.remove(&evm.block().coinbase);
+            evm.context.evm.db.commit(state);
+        }
 
         // bloom filter over all transaction logs
         let mut logs_bloom = Bloom::default();
@@ -273,10 +309,7 @@ impl TxExecStrategy for EthTxExecStrategy {
             header.withdrawals_root = Some(withdrawals_trie.hash());
         }
         if spec_id >= SpecId::CANCUN {
-            let input = &block_builder.input.state_input;
             header.blob_gas_used = Some(blob_gas_used);
-            header.excess_blob_gas = Some(calc_excess_blob_gas(&input.parent_header));
-            header.parent_beacon_block_root = Some(input.parent_beacon_block_root.unwrap());
         }
 
         // Leak memory, save cycles
@@ -304,7 +337,7 @@ pub fn fill_eth_tx_env(tx_env: &mut TxEnv, essence: &TxEnvelope, caller: Address
             tx_env.nonce = Some(tx.nonce);
             tx_env.access_list.clear();
             tx_env.blob_hashes.clear();
-            tx_env.max_fee_per_blob_gas = None;
+            tx_env.max_fee_per_blob_gas.take();
         }
         TxEnvelope::Eip2930(tx) => {
             tx_env.caller = caller;
@@ -322,7 +355,7 @@ pub fn fill_eth_tx_env(tx_env: &mut TxEnv, essence: &TxEnvelope, caller: Address
             tx_env.nonce = Some(tx.nonce);
             tx_env.access_list = tx.access_list.flattened();
             tx_env.blob_hashes.clear();
-            tx_env.max_fee_per_blob_gas = None;
+            tx_env.max_fee_per_blob_gas.take();
         }
         TxEnvelope::Eip1559(tx) => {
             tx_env.caller = caller;
@@ -340,7 +373,7 @@ pub fn fill_eth_tx_env(tx_env: &mut TxEnv, essence: &TxEnvelope, caller: Address
             tx_env.nonce = Some(tx.nonce);
             tx_env.access_list = tx.access_list.flattened();
             tx_env.blob_hashes.clear();
-            tx_env.max_fee_per_blob_gas = None;
+            tx_env.max_fee_per_blob_gas.take();
         }
         TxEnvelope::Eip4844(tx) => {
             tx_env.caller = caller;
@@ -392,11 +425,4 @@ where
     db.commit([(address, account)].into());
 
     Ok(())
-}
-
-fn calc_excess_blob_gas(parent: &Header) -> u64 {
-    calculate_excess_blob_gas(
-        parent.excess_blob_gas.unwrap_or_default(),
-        parent.blob_gas_used.unwrap_or_default(),
-    )
 }

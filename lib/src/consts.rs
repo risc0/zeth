@@ -21,7 +21,7 @@ use anyhow::{bail, Result};
 use once_cell::sync::Lazy;
 use revm::primitives::SpecId;
 use serde::{Deserialize, Serialize};
-use zeth_primitives::{uint, BlockNumber, ChainId, U256};
+use zeth_primitives::{address, uint, Address, BlockNumber, ChainId, U256};
 
 /// U256 representation of 0.
 pub const ZERO: U256 = U256::ZERO;
@@ -42,10 +42,14 @@ pub const MAX_BLOCK_HASH_AGE: u64 = 256;
 /// Multiplier for converting gwei to wei.
 pub const GWEI_TO_WEI: U256 = uint!(1_000_000_000_U256);
 
+/// EIP-4788 constants.
+pub const SYSTEM_ADDRESS: Address = address!("fffffffffffffffffffffffffffffffffffffffe");
+pub const BEACON_ROOTS_ADDRESS: Address = address!("000F3df6D732807Ef1319fB7B8bB8522d0Beac02");
+
 /// The Ethereum mainnet specification.
 pub static ETH_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
     chain_id: 1,
-    max_spec_id: SpecId::SHANGHAI,
+    max_spec_id: SpecId::CANCUN,
     hard_forks: BTreeMap::from([
         (SpecId::MERGE, ForkCondition::Block(15537394)),
         (SpecId::SHANGHAI, ForkCondition::Timestamp(1681338455)),

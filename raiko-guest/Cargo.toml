@@ -18,6 +18,10 @@ path = "src/sgx/main.rs"
 name = "risc0"
 path = "src/risc0/main.rs"
 
+[[bin]]
+name = "succinct"
+path = "src/succinct/main.rs"
+
 [dependencies]
 zeth-primitives = { path = "../primitives", features = ["revm"] }
 zeth-lib = { path = "../lib", features = ["taiko"] }
@@ -44,12 +48,15 @@ base64 = {version = "0.21.7", optional = true}
 dirs = {version = "5.0.1", optional = true}
 
 
-[target.'cfg(target_os = "riscv32imac-unknown-none-elf")'.dependencies]
+[target.'riscv32imac-unknown-none-elf'.dependencies]
 powdr-riscv-runtime ={ git = "https://github.com/ceciliaz030/powdr", branch = "+nightly" }
 
-[target.'cfg(target_os = "zkvm")'.dependencies]
+[target.'zkvm'.dependencies]
 risc0-zkvm = { version = "0.18", default-features = false, features = ["std"] }
 
+[target.'riscv32im-succinct-zkvm-elf'.dependencies]
+sp1-zkvm = { git = "https://github.com/succinctlabs/sp1.git" }
+serde = { version = "1.0.195", features = ["derive"] }
 
 [features]
 sgx-ra = [
@@ -74,6 +81,5 @@ sgx-ra = [
   ]
 
 # cargo +nightly build --release -Z build-std=core,alloc --target riscv32imac-unknown-none-elf --lib
-
 
 [workspace]

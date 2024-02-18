@@ -7,6 +7,6 @@ edition = "2021"
 
 [dependencies]
 zeth-primitives = { path = "../../primitives", features = ["revm"] }
-zeth-lib = { path = "../../lib", features = ["taiko"] }
+zeth-lib = { path = "../../lib", features = ["taiko", "std"] }
 sp1-zkvm = { git = "https://github.com/succinctlabs/sp1.git" }
 serde = { version = "1.0.195", features = ["derive"] }

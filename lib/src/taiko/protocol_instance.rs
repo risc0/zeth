@@ -40,6 +40,15 @@ impl ProtocolInstance {
             .into(),
             EvidenceType::Pse => todo!(),
             EvidenceType::Powdr => todo!(),
+            EvidenceType::Succinct => keccak(
+                (
+                    self.transition.clone(),
+                    // no pubkey since we don't need TEE to sign
+                    self.prover,
+                    self.meta_hash(),
+                )
+                    .abi_encode(),
+            ).into(),
         }
     }
 }
@@ -51,6 +60,7 @@ pub enum EvidenceType {
     },
     Pse,
     Powdr,
+    Succinct,
 }
 
 // TODO(cecilia): rewrite

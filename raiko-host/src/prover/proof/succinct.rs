@@ -1,5 +1,7 @@
+use alloy_primitives::FixedBytes;
 use serde::{Deserialize, Serialize};
 use sp1_core::{utils, SP1Prover, SP1Stdin, SP1Verifier};
+use zeth_lib::{consts::TKO_MAINNET_CHAIN_SPEC, taiko::host::HostArgs};
 
 use crate::{
     metrics::inc_sgx_error,
@@ -28,25 +30,28 @@ pub async fn execute_sp1(ctx: &mut Context, req: &SgxRequest) -> Result<SgxRespo
 
     // Create an input stream.
     let mut stdin = SP1Stdin::new();
-    let p = MyPointUnaligned {
-        x: 1,
-        y: 2,
-        b: true,
+    
+    let host_args = HostArgs {
+        l1_cache: ctx.l1_cache_file.clone(),
+        l1_rpc: Some(req.l1_rpc.clone()),
+        l2_cache: ctx.l2_cache_file.clone(),
+        l2_rpc: Some(req.l2_rpc.clone()),
     };
-    let q = MyPointUnaligned {
-        x: 3,
-        y: 4,
-        b: false,
-    };
-    stdin.write(&p);
-    stdin.write(&q);
+    let l2_chain_spec = TKO_MAINNET_CHAIN_SPEC.clone();
+    let graffiti = req.graffiti;
+
+    stdin.write(&host_args);
+    stdin.write(&l2_chain_spec);
+    stdin.write(&ctx.l2_chain);
+    stdin.write(&req.block);
+    stdin.write(&graffiti);
 
     // Generate the proof for the given program.
     let mut proof = SP1Prover::prove(ELF, stdin).expect("proving failed");
 
     // Read the output.
-    let r = proof.stdout.read::<MyPointUnaligned>();
-    println!("r: {:?}", r);
+    let pi_hash = proof.stdout.read::<FixedBytes<32>>();
+    println!("pi_hash: {:?}", pi_hash);
 
     // Verify proof.
     SP1Verifier::verify(ELF, &proof).expect("verification failed");

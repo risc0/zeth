@@ -1,4 +1,5 @@
 use alloc::{string::String, vec::Vec};
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 use alloy_primitives::{Address, B256};
@@ -24,7 +25,7 @@ use crate::{
     taiko::consts::{get_contracts, MAX_TX_LIST, MAX_TX_LIST_BYTES},
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HostArgs {
     pub l1_cache: Option<PathBuf>,
     pub l1_rpc: Option<String>,

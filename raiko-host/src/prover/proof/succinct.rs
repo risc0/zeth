@@ -38,13 +38,13 @@ pub async fn execute_sp1(ctx: &mut Context, req: &SgxRequest) -> Result<SgxRespo
         l2_rpc: Some(req.l2_rpc.clone()),
     };
     let l2_chain_spec = TKO_MAINNET_CHAIN_SPEC.clone();
-    let graffiti = req.graffiti;
 
     stdin.write(&host_args);
     stdin.write(&l2_chain_spec);
     stdin.write(&ctx.l2_chain);
     stdin.write(&req.block);
-    stdin.write(&graffiti);
+    stdin.write(&req.graffiti);
+    stdin.write(&req.prover);
 
     // Generate the proof for the given program.
     let mut proof = SP1Prover::prove(ELF, stdin).expect("proving failed");

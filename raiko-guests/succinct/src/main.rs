@@ -3,7 +3,7 @@ sp1_zkvm::entrypoint!(main);
 
 use::std::fmt::Debug;
 use zeth_lib::{builder::{BlockBuilderStrategy, TaikoStrategy}, 
-    consts::{ChainSpec, TKO_MAINNET_CHAIN_SPEC}, taiko::{host::{init_taiko, HostArgs}, protocol_instance::assemble_protocol_instance}};
+    consts::{ChainSpec, TKO_MAINNET_CHAIN_SPEC}, taiko::{host::{init_taiko, HostArgs}, protocol_instance::{assemble_protocol_instance, EvidenceType}}};
 use zeth_primitives::{Address, B256};
 
 pub fn main() {
@@ -14,7 +14,7 @@ pub fn main() {
     let graffiti = sp1_zkvm::io::read::<B256>();
     let prover = sp1_zkvm::io::read::<Address>();
 
-    let (init, sys_info) = init_taiko(
+    let (input, sys_info) = init_taiko(
         host_args,
         l2_chain_spec,
         &testnet,
@@ -26,7 +26,8 @@ pub fn main() {
     let (header, _mpt_node) = TaikoStrategy::build_from(&TKO_MAINNET_CHAIN_SPEC.clone(), input)
         .expect("Failed to build the resulting block");
 
-    let pi = assemble_protocol_instance(&sys_info, &header)?;
+    let pi = assemble_protocol_instance(&sys_info, &header)
+        .expect("Failed to assemble the protocol instance");
     let pi_hash = pi.instance_hash(EvidenceType::Succinct);
     
     sp1_zkvm::io::write(&pi_hash);

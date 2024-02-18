@@ -9,6 +9,7 @@ pub enum ProofRequest {
     Sgx(SgxRequest),
     PseZk(PseZkRequest),
     Powdr(PowdrRequest),
+    Succinct(SP1Request),
 }
 
 #[serde_as]
@@ -29,6 +30,8 @@ pub struct SgxRequest {
 
 pub type PowdrRequest = SgxRequest;
 
+pub type SP1Request = SgxRequest;
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PseZkRequest {}
 
@@ -39,7 +42,7 @@ pub enum ProofResponse {
     PseZk(PseZkResponse),
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Default, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SgxResponse {
     /// proof format: 4b(id)+20b(pubkey)+65b(signature)
@@ -49,3 +52,8 @@ pub struct SgxResponse {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PseZkResponse {}
+
+
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct SP1Response {}

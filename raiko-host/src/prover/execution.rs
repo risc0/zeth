@@ -8,7 +8,7 @@ use super::{
     request::{ProofRequest, ProofResponse},
     utils::cache_file_path,
 };
-use crate::metrics::{inc_sgx_success, observe_input, observe_sgx_gen};
+use crate::{metrics::{inc_sgx_success, observe_input, observe_sgx_gen}, prover::proof::succinct::execute_sp1};
 // use crate::rolling::prune_old_caches;
 
 pub async fn execute(
@@ -24,6 +24,11 @@ pub async fn execute(
         },
         ProofRequest::Powdr(_) => todo!(),
         ProofRequest::PseZk(_) => todo!(),
+        ProofRequest::Succinct(req) => {
+            let l1_cache_file = cache_file_path(&ctx.cache_path, req.block, true);
+            let l2_cache_file = cache_file_path(&ctx.cache_path, req.block, false);
+            (l1_cache_file, l2_cache_file)
+        },
     };
     // set cache file path to context
     ctx.l1_cache_file = Some(l1_cache_file);
@@ -61,6 +66,13 @@ pub async fn execute(
                 todo!()
             }
             ProofRequest::PseZk(_) => todo!(),
+            ProofRequest::Succinct(req) => {
+                let start = Instant::now();
+                let bid = req.block;
+                let resp = execute_sp1(ctx, req).await?;
+                let time_elapsed = Instant::now().duration_since(start).as_millis() as i64;
+                todo!()
+            },
         }
     }
     .await;

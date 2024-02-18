@@ -1,0 +1,19 @@
+[package]
+name = "powdr"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+# Powdr has to compile as lib because replace the entry point
+[lib]
+name = "powdr"
+path = "src/main.rs"
+
+
+[dependencies]
+zeth-primitives = { path = "../../primitives", features = ["revm"] }
+zeth-lib = { path = "../../lib", features = ["taiko"] }
+powdr-riscv-runtime ={ git = "https://github.com/ceciliaz030/powdr", branch = "+nightly" }
+
+[workspace]

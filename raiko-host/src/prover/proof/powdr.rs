@@ -33,3 +33,5 @@ pub async fn execute_powdr() -> Result<(), Error> {
     println!("Verification done.");
     Ok(())
 }
+// phoebe@cecilia-gz:~/projects/zeth$ 
+//  cargo +nightly build --release -Z build-std=core,alloc --target riscv32imac-unknown-none-elf --lib --manifest-path ./raiko-guest/Cargo.toml

@@ -54,5 +54,35 @@ pub async fn prepare_input(
         },
         ProofRequest::Powdr(_) => todo!(),
         ProofRequest::PseZk(PseZkRequest { .. }) => todo!(),
+        ProofRequest::Succinct(SgxRequest {
+            block,
+            l1_rpc,
+            l2_rpc,
+            prover,
+            graffiti,
+        }) => {
+            // Todo(Cecilia): should contract address as args, curently hardcode
+            let l1_cache = ctx.l1_cache_file.clone();
+            let l2_cache = ctx.l2_cache_file.clone();
+            let testnet = ctx.l2_chain.clone();
+            tokio::task::spawn_blocking(move || {
+                init_taiko(
+                    HostArgs {
+                        l1_cache,
+                        l1_rpc: Some(l1_rpc),
+                        l2_cache,
+                        l2_rpc: Some(l2_rpc),
+                    },
+                    TKO_MAINNET_CHAIN_SPEC.clone(),
+                    &testnet,
+                    block,
+                    graffiti,
+                    prover,
+                )
+                .expect("Init taiko failed")
+            })
+            .await
+            .map_err(Into::<Error>::into)
+        },
     }
 }

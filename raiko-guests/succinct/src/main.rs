@@ -1,7 +1,7 @@
 #![no_main]
-#![cfg(target_os = "riscv32im-succinct-zkvm-elf")]
 sp1_zkvm::entrypoint!(main);
-use::std::String;
+
+use::std::fmt::Debug;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]

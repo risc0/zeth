@@ -96,12 +96,12 @@ impl State {
     fn deque_next_epoch_if_none(&mut self) -> Result<()> {
         if self.next_epoch.is_none() {
             while let Some(next_epoch) = self.op_epoch_queue.pop_front() {
-                if next_epoch.number <= self.epoch.number {
-                    continue;
-                } else if next_epoch.number == self.epoch.number + 1 {
+                if next_epoch.number == self.epoch.number + 1 {
                     self.next_epoch = Some(next_epoch);
                     break;
-                } else {
+                }
+
+                if next_epoch.number > self.epoch.number + 1 {
                     bail!("Epoch gap!");
                 }
             }
@@ -336,18 +336,16 @@ impl Batcher {
             Ordering::Greater => {
                 #[cfg(not(target_os = "zkvm"))]
                 log::trace!(
-                    "Future batch: {} = batch.timestamp > next_timestamp = {}",
+                    "Future batch: {} = batch.timestamp > next_timestamp = {next_timestamp}",
                     &batch.essence.timestamp,
-                    &next_timestamp
                 );
                 return BatchStatus::Future;
             }
             Ordering::Less => {
                 #[cfg(not(target_os = "zkvm"))]
                 log::trace!(
-                    "Batch too old: {} = batch.timestamp < next_timestamp = {}",
+                    "Batch too old: {} = batch.timestamp < next_timestamp = {next_timestamp}",
                     &batch.essence.timestamp,
-                    &next_timestamp
                 );
                 return BatchStatus::Drop;
             }
@@ -391,29 +389,29 @@ impl Batcher {
             return BatchStatus::Drop;
         }
 
-        let batch_origin = if batch.essence.epoch_num == epoch.number {
+        let batch_origin = match batch.essence.epoch_num {
             // From the spec:
             // "batch.epoch_num == epoch.number: define batch_origin as epoch"
-            epoch
-        } else if batch.essence.epoch_num == epoch.number + 1 {
+            n if n == epoch.number => epoch,
             // From the spec:
             // "batch.epoch_num == epoch.number+1:"
             // "  If known, then define batch_origin as next_epoch"
             // "  If next_epoch is not known -> undecided"
-            match next_epoch {
+            n if n == epoch.number + 1 => match next_epoch {
                 Some(epoch) => epoch,
                 None => return BatchStatus::Undecided,
-            }
-        } else {
+            },
             // From the spec:
             // "batch.epoch_num > epoch.number+1 -> drop"
-            #[cfg(not(target_os = "zkvm"))]
-            log::warn!(
-                "Batch epoch number is too large: {} > {}",
-                batch.essence.epoch_num,
-                epoch.number + 1
-            );
-            return BatchStatus::Drop;
+            _ => {
+                #[cfg(not(target_os = "zkvm"))]
+                log::warn!(
+                    "Batch epoch number is too large: {} > {}",
+                    batch.essence.epoch_num,
+                    epoch.number + 1
+                );
+                return BatchStatus::Drop;
+            }
         };
 
         // From the spec:
@@ -465,20 +463,20 @@ impl Batcher {
             //    epoch.number == batch.epoch_num: this implies the batch does not already
             //    advance the L1 origin, and must thus be checked against next_epoch."
             if epoch.number == batch.essence.epoch_num {
-                if let Some(next_epoch) = next_epoch {
-                    // From the spec:
-                    // "If batch.timestamp >= next_epoch.time -> drop"
-                    if batch.essence.timestamp >= next_epoch.timestamp {
-                        #[cfg(not(target_os = "zkvm"))]
-                        log::warn!("Sequencer drift detected; drop; batch timestamp is too far into the future. {} >= {}", batch.essence.timestamp, next_epoch.timestamp);
-                        return BatchStatus::Drop;
-                    }
-                } else {
+                let Some(next_epoch) = next_epoch else {
                     // From the spec:
                     // "If next_epoch is not known -> undecided"
                     #[cfg(not(target_os = "zkvm"))]
                     log::debug!("Sequencer drift detected, but next epoch is not known; undecided");
                     return BatchStatus::Undecided;
+                };
+
+                // From the spec:
+                // "If batch.timestamp >= next_epoch.time -> drop"
+                if batch.essence.timestamp >= next_epoch.timestamp {
+                    #[cfg(not(target_os = "zkvm"))]
+                    log::warn!("Sequencer drift detected; drop; batch timestamp is too far into the future. {} >= {}", batch.essence.timestamp, next_epoch.timestamp);
+                    return BatchStatus::Drop;
                 }
             }
         }

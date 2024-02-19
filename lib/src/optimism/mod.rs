@@ -142,9 +142,8 @@ impl<D: BatcherDb> DeriveMachine<D> {
 
         #[cfg(not(target_os = "zkvm"))]
         log::debug!(
-            "Fetched Op head (block no {}) {}",
+            "Fetched Op head (block no {}) {op_head_block_hash}",
             derive_input.op_head_block_no,
-            op_head_block_hash
         );
 
         // the first transaction in a block MUST be a L1 attributes deposited transaction
@@ -154,10 +153,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
             .context("block is empty")?
             .essence;
         if let Err(err) = validate_l1_attributes_deposited_tx(&chain_config, l1_attributes_tx) {
-            bail!(
-                "First transaction in block is not a valid L1 attributes deposited transaction: {}",
-                err
-            )
+            bail!("First transaction in block is not a valid L1 attributes deposited transaction: {err}");
         }
         // decode the L1 attributes deposited transaction
         let set_l1_block_values = {
@@ -179,8 +175,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
         );
         #[cfg(not(target_os = "zkvm"))]
         log::debug!(
-            "Fetched Eth head (block no {}) {}",
-            eth_block_no,
+            "Fetched Eth head (block no {eth_block_no}) {}",
             set_l1_block_values.hash
         );
 
@@ -312,7 +307,7 @@ impl<D: BatcherDb> DeriveMachine<D> {
                         }
                         Err(_err) => {
                             #[cfg(not(target_os = "zkvm"))]
-                            log::warn!("Skipping undecodable transaction: {:#}", _err);
+                            log::warn!("Skipping undecodable transaction: {_err:#}");
                             decoding_error = true;
                             break;
                         }
@@ -425,9 +420,8 @@ impl<D: BatcherDb> DeriveMachine<D> {
                         // obtain verified op block header
                         #[cfg(not(target_os = "zkvm"))]
                         log::info!(
-                            "Derived Op block {} w/ hash {}",
+                            "Derived Op block {} w/ hash {new_block_hash}",
                             new_block_head.number,
-                            new_block_hash
                         );
 
                         self.op_batcher.state.safe_head = L2BlockInfo {

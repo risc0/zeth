@@ -42,18 +42,18 @@ pub fn mpt_from_proof(proof_nodes: &[MptNode]) -> Result<MptNode> {
         // find the child that references the next node
         let resolved: MptNode = match node.as_data().clone() {
             MptNodeData::Branch(mut children) => {
-                if let Some(child) = children.iter_mut().flatten().find(
+                let Some(child) = children.iter_mut().flatten().find(
                     |child| matches!(child.as_data(), MptNodeData::Digest(d) if d == child_ref),
-                ) {
-                    *child = Box::new(replacement);
-                } else {
-                    bail!("node {} does not reference the successor", i);
-                }
+                ) else {
+                    bail!("node {i} does not reference the successor");
+                };
+                *child = Box::new(replacement);
+
                 MptNodeData::Branch(children).into()
             }
             MptNodeData::Extension(prefix, child) => {
                 if !matches!(child.as_data(), MptNodeData::Digest(d) if d == child_ref) {
-                    bail!("node {} does not reference the successor", i);
+                    bail!("node {i} does not reference the successor");
                 }
                 MptNodeData::Extension(prefix, Box::new(replacement)).into()
             }

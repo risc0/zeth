@@ -144,56 +144,56 @@ impl Provider for FileProvider {
     fn get_full_block(&mut self, query: &BlockQuery) -> Result<Block<Transaction>> {
         match self.full_blocks.get(query) {
             Some(val) => Ok(val.clone()),
-            None => Err(anyhow!("No data for {:?}", query)),
+            None => Err(anyhow!("No data for {query:?}")),
         }
     }
 
     fn get_partial_block(&mut self, query: &BlockQuery) -> Result<Block<H256>> {
         match self.partial_blocks.get(query) {
             Some(val) => Ok(val.clone()),
-            None => Err(anyhow!("No data for {:?}", query)),
+            None => Err(anyhow!("No data for {query:?}")),
         }
     }
 
     fn get_block_receipts(&mut self, query: &BlockQuery) -> Result<Vec<TransactionReceipt>> {
         match self.receipts.get(query) {
             Some(val) => Ok(val.clone()),
-            None => Err(anyhow!("No data for {:?}", query)),
+            None => Err(anyhow!("No data for {query:?}")),
         }
     }
 
     fn get_proof(&mut self, query: &ProofQuery) -> Result<EIP1186ProofResponse> {
         match self.proofs.get(query) {
             Some(val) => Ok(val.clone()),
-            None => Err(anyhow!("No data for {:?}", query)),
+            None => Err(anyhow!("No data for {query:?}")),
         }
     }
 
     fn get_transaction_count(&mut self, query: &AccountQuery) -> Result<U256> {
         match self.transaction_count.get(query) {
             Some(val) => Ok(*val),
-            None => Err(anyhow!("No data for {:?}", query)),
+            None => Err(anyhow!("No data for {query:?}")),
         }
     }
 
     fn get_balance(&mut self, query: &AccountQuery) -> Result<U256> {
         match self.balance.get(query) {
             Some(val) => Ok(*val),
-            None => Err(anyhow!("No data for {:?}", query)),
+            None => Err(anyhow!("No data for {query:?}")),
         }
     }
 
     fn get_code(&mut self, query: &AccountQuery) -> Result<Bytes> {
         match self.code.get(query) {
             Some(val) => Ok(val.clone()),
-            None => Err(anyhow!("No data for {:?}", query)),
+            None => Err(anyhow!("No data for {query:?}")),
         }
     }
 
     fn get_storage(&mut self, query: &StorageQuery) -> Result<H256> {
         match self.storage.get(query) {
             Some(val) => Ok(*val),
-            None => Err(anyhow!("No data for {:?}", query)),
+            None => Err(anyhow!("No data for {query:?}")),
         }
     }
 }

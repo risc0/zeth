@@ -142,8 +142,5 @@ pub fn can_contain(address: &Address, bloom: &Bloom) -> bool {
         return false;
     }
     let input = BloomInput::Raw(CONFIG_UPDATE_SIGNATURE.as_slice());
-    if !bloom.contains_input(input) {
-        return false;
-    }
-    true
+    bloom.contains_input(input)
 }

@@ -28,13 +28,13 @@ use zeth_primitives::{
     trie::{MptNode, MptNodeData, MptNodeReference, EMPTY_ROOT},
     withdrawal::Withdrawal,
     Address, B256, U256,
+    
 };
-
 use crate::{
-    consts::ChainSpec,
-    host::mpt::{is_not_included, mpt_from_proof, parse_proof, resolve_nodes, shorten_node_path},
-    input::{Input, StorageEntry},
-    mem_db::MemDb,
+    builder::{BlockBuilder, BlockBuilderStrategy}, 
+    consts::ChainSpec, 
+    host::{mpt::{is_not_included, mpt_from_proof, parse_proof, resolve_nodes, shorten_node_path}, provider::{new_provider, BlockQuery}, provider_db::ProviderDb}, 
+    input::{Input, StorageEntry}, mem_db::MemDb
 };
 
 /// The initial data required to build a block as returned by the [Preflight].

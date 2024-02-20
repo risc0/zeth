@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = { version = "1.0", default-features = false }
-alloy-sol-types = { version = "0.6", default-features = false, optional = true }
+alloy-sol-types = { version = "0.6", default-features = false }
 alloy-primitives = { version = "0.6", default-features = false, features = [
   "rlp",
   "serde",
@@ -18,14 +18,14 @@ once_cell = { version = "1.18", default-features = false }
 revm = { workspace = true, default-features = false }
 ruint = { version = "1.10", default-features = false }
 serde = { version = "1.0", default-features = false, features = ["alloc"] }
-thiserror-no-std = "2.0.2"
+thiserror-no-std = {version = "2.0.2", optional = true}
 zeth-primitives = { path = "../primitives", features = ["revm"] }
 hex = { version = "0.4.3", optional = true}
 rlp = { version = "0.5.2", optional = true}
 tracing = { version = "0.1", optional = true}
 
 # [target.'cfg(not(target_os = "zkvm"))'.dependencies]
-# thiserror = "1.0"
+thiserror = {version = "1.0", optional = true }
 # anyhow = "1.0"
 chrono = { version = "0.4", default-features = false, optional = true}
 ethers-providers = { version = "2.0", features = ["optimism"], optional = true}
@@ -50,12 +50,14 @@ std = [
   "dep:serde_json",
   "dep:serde_with",
   "dep:tokio",
-  "zeth-primitives/ethers",  "zeth-primitives/std"
+  "dep:thiserror",
+  "zeth-primitives/ethers",  
+  "zeth-primitives/std",
+  "anyhow/std",
 ]
 taiko = [
     "zeth-primitives/taiko", 
     "revm/taiko",
-    "dep:alloy-sol-types",
     "dep:hex",
     "dep:rlp",
     "dep:tracing"
@@ -64,5 +66,4 @@ optimism = [
   "std", 
   "zeth-primitives/optimism", 
   "revm/optimism",  
-  "dep:alloy-sol-types"
   ]

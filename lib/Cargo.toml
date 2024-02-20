@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = { version = "1.0", default-features = false }
-alloy-sol-types = { version = "0.6", default-features = false, optional = true }
+alloy-sol-types = { version = "0.6", default-features = false }
 alloy-primitives = { version = "0.6", default-features = false, features = [
   "rlp",
   "serde",
@@ -46,9 +46,8 @@ std = []
 taiko = [
     "zeth-primitives/taiko", 
     "revm/taiko",
-    "dep:alloy-sol-types",
     "dep:hex",
     "dep:rlp",
     "dep:tracing"
     ]
-optimism = ["std", "revm/optimism",  "dep:alloy-sol-types"]
+optimism = ["std", "revm/optimism"]

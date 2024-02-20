@@ -33,7 +33,7 @@ hex-literal = "0.4"
 serde_json = { version = "1.0", default-features = false }
 
 [features]
-std = []
+std = ["anyhow/std"]
 taiko = ["revm-primitives/taiko"]
 optimism = ["revm-primitives/optimism"]
 ethers = ["dep:ethers-core"]

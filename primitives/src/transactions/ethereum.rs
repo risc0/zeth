@@ -227,6 +227,42 @@ pub struct TxEssenceEip1559 {
     pub access_list: AccessList,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, RlpEncodable)]
+pub struct TxEssenceEip4844 {
+    /// The network's chain ID, ensuring the transaction is valid on the intended chain,
+    /// as introduced in EIP-155.
+    pub chain_id: ChainId,
+    /// A numeric value representing the total number of transactions previously sent by
+    /// the sender.
+    pub nonce: TxNumber,
+    /// The maximum priority fee per unit of gas that the sender is willing to pay to the
+    /// miner.
+    pub max_priority_fee_per_gas: U256,
+    /// The combined maximum fee (base + priority) per unit of gas that the sender is
+    /// willing to pay for the transaction's execution.
+    pub max_fee_per_gas: U256,
+    /// The maximum amount of gas allocated for the transaction's execution.
+    pub gas_limit: U256,
+    /// The 160-bit address of the intended recipient for a message call. For contract
+    /// creation transactions, this is null.
+    pub to: TransactionKind,
+    /// The amount, in Wei, to be transferred to the recipient of the message call.
+    pub value: U256,
+    /// The transaction's payload, represented as a variable-length byte array.
+    pub data: Bytes,
+    /// A list of addresses and storage keys that the transaction will access, aiding in
+    /// gas optimization.
+    pub access_list: AccessList,
+
+    /// It contains a vector of fixed size hash(32 bytes)
+    pub blob_versioned_hashes: Vec<B256>,
+
+    /// Max fee per data gas
+    ///
+    /// aka BlobFeeCap or blobGasFeeCap
+    pub max_fee_per_blob_gas: U256,
+}
+
 /// Represents the type of an Ethereum transaction: either a contract creation or a call
 /// to an existing contract.
 ///
@@ -313,6 +349,7 @@ pub enum EthereumTxEssence {
     /// This mechanism aims to improve the predictability of gas fees and enhances the
     /// overall user experience.
     Eip1559(TxEssenceEip1559),
+    Eip4844(TxEssenceEip4844),
 }
 
 impl Encodable for EthereumTxEssence {
@@ -327,6 +364,7 @@ impl Encodable for EthereumTxEssence {
             EthereumTxEssence::Legacy(tx) => tx.encode(out),
             EthereumTxEssence::Eip2930(tx) => tx.encode(out),
             EthereumTxEssence::Eip1559(tx) => tx.encode(out),
+            EthereumTxEssence::Eip4844(tx) => tx.encode(out),
         }
     }
 
@@ -341,6 +379,7 @@ impl Encodable for EthereumTxEssence {
             EthereumTxEssence::Legacy(tx) => tx.length(),
             EthereumTxEssence::Eip2930(tx) => tx.length(),
             EthereumTxEssence::Eip1559(tx) => tx.length(),
+            EthereumTxEssence::Eip4844(tx) => tx.length(),
         }
     }
 }
@@ -375,6 +414,12 @@ impl EthereumTxEssence {
             EthereumTxEssence::Eip1559(tx) => {
                 let mut buf = Vec::with_capacity(tx.length() + 1);
                 buf.push(0x02);
+                tx.encode(&mut buf);
+                buf
+            }
+            EthereumTxEssence::Eip4844(tx) => {
+                let mut buf = Vec::with_capacity(tx.length() + 1);
+                buf.push(0x03);
                 tx.encode(&mut buf);
                 buf
             }
@@ -415,6 +460,7 @@ impl TxEssence for EthereumTxEssence {
             EthereumTxEssence::Legacy(_) => 0x00,
             EthereumTxEssence::Eip2930(_) => 0x01,
             EthereumTxEssence::Eip1559(_) => 0x02,
+            EthereumTxEssence::Eip4844(_) => 0x03,
         }
     }
     /// Returns the gas limit set for the transaction.
@@ -423,6 +469,7 @@ impl TxEssence for EthereumTxEssence {
             EthereumTxEssence::Legacy(tx) => tx.gas_limit,
             EthereumTxEssence::Eip2930(tx) => tx.gas_limit,
             EthereumTxEssence::Eip1559(tx) => tx.gas_limit,
+            EthereumTxEssence::Eip4844(tx) => tx.gas_limit,
         }
     }
     /// Returns the recipient address of the transaction, if available.
@@ -431,6 +478,7 @@ impl TxEssence for EthereumTxEssence {
             EthereumTxEssence::Legacy(tx) => tx.to.into(),
             EthereumTxEssence::Eip2930(tx) => tx.to.into(),
             EthereumTxEssence::Eip1559(tx) => tx.to.into(),
+            EthereumTxEssence::Eip4844(tx) => tx.to.into(),
         }
     }
     /// Recovers the Ethereum address of the sender from the transaction's signature.
@@ -463,6 +511,7 @@ impl TxEssence for EthereumTxEssence {
             EthereumTxEssence::Legacy(tx) => tx.payload_length(),
             EthereumTxEssence::Eip2930(tx) => tx._alloy_rlp_payload_length(),
             EthereumTxEssence::Eip1559(tx) => tx._alloy_rlp_payload_length(),
+            EthereumTxEssence::Eip4844(tx) => tx._alloy_rlp_payload_length(),
         }
     }
     /// Returns a reference to the transaction's call data
@@ -471,6 +520,7 @@ impl TxEssence for EthereumTxEssence {
             EthereumTxEssence::Legacy(tx) => &tx.data,
             EthereumTxEssence::Eip2930(tx) => &tx.data,
             EthereumTxEssence::Eip1559(tx) => &tx.data,
+            EthereumTxEssence::Eip4844(tx) => &tx.data,
         }
     }
 }

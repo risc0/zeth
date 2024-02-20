@@ -15,7 +15,7 @@ use alloc::{format, vec, vec::Vec};
 use core::{fmt::Debug, mem::take, str::FromStr};
 
 use anyhow::{anyhow, bail, Context, Result};
-#[cfg(not(target_os = "zkvm"))]
+#[cfg(feature = "std")]
 use log::debug;
 use revm::{
     interpreter::Host,
@@ -62,7 +62,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
         }
         let chain_id = block_builder.chain_spec.chain_id();
 
-        #[cfg(not(target_os = "zkvm"))]
+        #[cfg(feature = "std")]
         {
             use chrono::{TimeZone, Utc};
             use log::info;
@@ -125,7 +125,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                 .recover_from()
                 .with_context(|| format!("Error recovering address for transaction {tx_no}"))?;
 
-            #[cfg(not(target_os = "zkvm"))]
+            #[cfg(feature = "std")]
             {
                 let tx_hash = tx.hash();
                 debug!("Tx no. {tx_no} (hash: {tx_hash})");
@@ -142,7 +142,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
 
             match &tx.essence {
                 OptimismTxEssence::OptimismDeposited(deposit) => {
-                    #[cfg(not(target_os = "zkvm"))]
+                    #[cfg(feature = "std")]
                     {
                         debug!("  Source: {:?}", &deposit.source_hash);
                         debug!("  Mint: {:?}", &deposit.mint);
@@ -165,7 +165,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             let gas_used = result.gas_used().try_into().unwrap();
             cumulative_gas_used = cumulative_gas_used.checked_add(gas_used).unwrap();
 
-            #[cfg(not(target_os = "zkvm"))]
+            #[cfg(feature = "std")]
             debug!("  Ok: {result:?}");
 
             // create the receipt from the EVM result
@@ -177,7 +177,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             );
 
             // update account states
-            #[cfg(not(target_os = "zkvm"))]
+            #[cfg(feature = "std")]
             for (address, account) in &state {
                 if account.is_touched() {
                     // log account

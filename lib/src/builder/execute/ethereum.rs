@@ -15,7 +15,7 @@ use alloc::format;
 use core::{fmt::Debug, mem::take};
 
 use anyhow::{anyhow, bail, Context};
-#[cfg(not(target_os = "zkvm"))]
+#[cfg(feature = "std")]
 use log::debug;
 use revm::{
     interpreter::Host,
@@ -59,7 +59,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             bail!("Invalid protocol version: expected >= {MIN_SPEC_ID:?}, got {spec_id:?}");
         }
 
-        #[cfg(not(target_os = "zkvm"))]
+        #[cfg(feature = "std")]
         {
             use chrono::{TimeZone, Utc};
             use log::info;
@@ -123,7 +123,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
                 .recover_from()
                 .with_context(|| format!("Error recovering address for transaction {tx_no}"))?;
 
-            #[cfg(not(target_os = "zkvm"))]
+            #[cfg(feature = "std")]
             {
                 let tx_hash = tx.hash();
                 debug!("Tx no. {tx_no} (hash: {tx_hash})");
@@ -147,7 +147,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             let gas_used = result.gas_used().try_into().unwrap();
             cumulative_gas_used = cumulative_gas_used.checked_add(gas_used).unwrap();
 
-            #[cfg(not(target_os = "zkvm"))]
+            #[cfg(feature = "std")]
             debug!("  Ok: {result:?}");
 
             // create the receipt from the EVM result
@@ -173,7 +173,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
                 .context("failed to insert receipt")?;
 
             // update account states
-            #[cfg(not(target_os = "zkvm"))]
+            #[cfg(feature = "std")]
             for (address, account) in &state {
                 if account.is_touched() {
                     // log account
@@ -215,7 +215,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
                 .checked_mul(withdrawal.amount.try_into().unwrap())
                 .unwrap();
 
-            #[cfg(not(target_os = "zkvm"))]
+            #[cfg(feature = "std")]
             {
                 debug!("Withdrawal no. {}", withdrawal.index);
                 debug!("  Recipient: {:?}", withdrawal.address);
@@ -279,6 +279,22 @@ pub fn fill_eth_tx_env(tx_env: &mut TxEnv, essence: &EthereumTxEssence, caller: 
             tx_env.access_list = tx.access_list.clone().into();
         }
         EthereumTxEssence::Eip1559(tx) => {
+            tx_env.caller = caller;
+            tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
+            tx_env.gas_price = tx.max_fee_per_gas;
+            tx_env.gas_priority_fee = Some(tx.max_priority_fee_per_gas);
+            tx_env.transact_to = if let TransactionKind::Call(to_addr) = tx.to {
+                TransactTo::Call(to_addr)
+            } else {
+                TransactTo::create()
+            };
+            tx_env.value = tx.value;
+            tx_env.data = tx.data.clone();
+            tx_env.chain_id = Some(tx.chain_id);
+            tx_env.nonce = Some(tx.nonce);
+            tx_env.access_list = tx.access_list.clone().into();
+        }
+        EthereumTxEssence::Eip4844(tx) => {
             tx_env.caller = caller;
             tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
             tx_env.gas_price = tx.max_fee_per_gas;

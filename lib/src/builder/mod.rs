@@ -22,6 +22,8 @@ use zeth_primitives::{
 
 #[cfg(feature = "optimism")]
 pub use self::execute::optimism::OpTxExecStrategy;
+#[cfg(feature = "optimism")]
+use crate::OptimismTxEssence;
 #[cfg(feature = "taiko")]
 pub use self::execute::taiko::TkoTxExecStrategy;
 use crate::{

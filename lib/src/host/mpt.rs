@@ -47,18 +47,18 @@ pub fn mpt_from_proof(proof_nodes: &[MptNode]) -> Result<MptNode> {
                 ) {
                     *child = Box::new(replacement);
                 } else {
-                    bail!("node {} does not reference the successor", i);
+                    bail!("node {i} does not reference the successor");
                 }
                 MptNodeData::Branch(children).into()
             }
             MptNodeData::Extension(prefix, child) => {
                 if !matches!(child.as_data(), MptNodeData::Digest(d) if d == child_ref) {
-                    bail!("node {} does not reference the successor", i);
+                    bail!("node {i} does not reference the successor");
                 }
                 MptNodeData::Extension(prefix, Box::new(replacement)).into()
             }
             MptNodeData::Null | MptNodeData::Leaf(_, _) | MptNodeData::Digest(_) => {
-                bail!("node {} has no children to replace", i);
+                bail!("node {i} has no children to replace");
             }
         };
 

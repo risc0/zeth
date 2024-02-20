@@ -91,7 +91,7 @@ pub fn bootstrap(global_opts: GlobalOpts) -> Result<()> {
     println!("Public key: 0x{}", key_pair.public_key());
     let new_instance = public_key_to_address(&key_pair.public_key());
     save_attestation_user_report_data(new_instance)?;
-    println!("Instance address: {}", new_instance);
+    println!("Instance address: {new_instance}");
     let quote = get_sgx_quote()?;
     let bootstrap_details_file_path = global_opts.config_dir.join(BOOTSTRAP_INFO_FILENAME);
     save_bootstrap_details(&key_pair, new_instance, quote, &bootstrap_details_file_path)?;
@@ -105,13 +105,10 @@ pub fn bootstrap(global_opts: GlobalOpts) -> Result<()> {
 
 pub async fn one_shot(global_opts: GlobalOpts, args: OneShotArgs) -> Result<()> {
     if !is_bootstrapped(&global_opts.secrets_dir) {
-        bail!("Application was not bootstrapped. Bootstrap it first.")
+        bail!("Application was not bootstrapped. Bootstrap it first.");
     }
 
-    println!(
-        "Global options: {:?}, OneShot options: {:?}",
-        global_opts, args
-    );
+    println!("Global options: {global_opts:?}, OneShot options: {args:?}");
 
     let path_str = args.blocks_data_file.to_string_lossy().to_string();
     let block_no = u64::from_str(&String::from(
@@ -122,7 +119,7 @@ pub async fn one_shot(global_opts: GlobalOpts, args: OneShotArgs) -> Result<()> 
             .unwrap(),
     ))?;
 
-    println!("Reading input file {} (block no: {})", path_str, block_no);
+    println!("Reading input file {path_str} (block no: {block_no})");
 
     let privkey_path = global_opts.secrets_dir.join(PRIV_KEY_FILENAME);
     let prev_privkey = load_private_key(&privkey_path)?;
@@ -142,7 +139,7 @@ pub async fn one_shot(global_opts: GlobalOpts, args: OneShotArgs) -> Result<()> 
     )
     .await?;
 
-    println!("Data to be signed: {}", pi_hash);
+    println!("Data to be signed: {pi_hash}");
 
     let sig = sign_message(&prev_privkey, pi_hash)?;
 
@@ -156,12 +153,12 @@ pub async fn one_shot(global_opts: GlobalOpts, args: OneShotArgs) -> Result<()> 
     save_attestation_user_report_data(new_instance)?;
     let quote = get_sgx_quote()?;
     let data = serde_json::json!({
-        "proof": format!("0x{}", proof),
+        "proof": format!("0x{proof}"),
         "quote": hex::encode(quote),
-        "public_key": format!("0x{}", new_pubkey),
+        "public_key": format!("0x{new_pubkey}"),
         "instance_address": new_instance.to_string(),
     });
-    println!("{}", data);
+    println!("{data}");
 
     print_sgx_info()
 }
@@ -232,7 +229,7 @@ fn save_attestation_user_report_data(pubkey: Address) -> Result<()> {
         .open(ATTESTATION_USER_REPORT_DATA_DEVICE_FILE)?;
     user_report_data_file
         .write_all(&extended_pubkey)
-        .map_err(|err| anyhow!("Failed to save user report data: {}", err))
+        .map_err(|err| anyhow!("Failed to save user report data: {err}"))
 }
 
 fn print_sgx_info() -> Result<()> {
@@ -282,15 +279,15 @@ fn print_sgx_info() -> Result<()> {
 
 fn get_sgx_attestation_type() -> Result<String> {
     let mut attestation_type = String::new();
-    if File::open(ATTESTATION_TYPE_DEVICE_FILE)
+    if !File::open(ATTESTATION_TYPE_DEVICE_FILE)
         .and_then(|mut file| file.read_to_string(&mut attestation_type))
         .is_ok()
     {
-        return Ok(attestation_type.trim().to_string());
+        bail!(
+            "Cannot find `{}`; are you running under SGX, with remote attestation enabled?",
+            ATTESTATION_TYPE_DEVICE_FILE
+        );
     }
 
-    bail!(
-        "Cannot find `{}`; are you running under SGX, with remote attestation enabled?",
-        ATTESTATION_TYPE_DEVICE_FILE
-    );
+    Ok(attestation_type.trim().to_string())
 }

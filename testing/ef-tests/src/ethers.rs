@@ -79,12 +79,14 @@ impl Provider for TestProvider {
             .iter()
             .map(|idx| LibU256::from_be_bytes(idx.0));
 
-        if query.block_no == self.header.number {
-            get_proof(from_ethers_h160(query.address), indices, &self.state)
-        } else if query.block_no == self.header.number + 1 {
-            get_proof(from_ethers_h160(query.address), indices, &self.post)
-        } else {
-            panic!("invalid block number: {}", query.block_no)
+        match query.block_no {
+            n if n == self.header.number => {
+                get_proof(from_ethers_h160(query.address), indices, &self.state)
+            }
+            n if n == self.header.number + 1 => {
+                get_proof(from_ethers_h160(query.address), indices, &self.post)
+            }
+            _ => panic!("invalid block number: {}", query.block_no),
         }
     }
 
@@ -185,10 +187,10 @@ fn get_proof(
         .into_iter()
         .map(|p| p.into())
         .collect();
-    let mut storage_proof = vec![];
     let index_set = indices.into_iter().collect::<BTreeSet<_>>();
-    for index in index_set {
-        let proof = StorageProof {
+    let storage_proof = index_set
+        .into_iter()
+        .map(|index| StorageProof {
             key: index.to_be_bytes().into(),
             proof: mpt_proof(&storage_trie, keccak(index.to_be_bytes::<32>()))?
                 .into_iter()
@@ -201,9 +203,8 @@ fn get_proof(
                 .unwrap_or_default()
                 .to_be_bytes()
                 .into(),
-        };
-        storage_proof.push(proof);
-    }
+        })
+        .collect::<Vec<_>>();
 
     Ok(EIP1186ProofResponse {
         address: address.into_array().into(),

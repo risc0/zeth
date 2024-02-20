@@ -206,6 +206,7 @@ impl FromStr for Network {
         match s.to_lowercase().as_str() {
             "ethereum" => Ok(Network::Ethereum),
             "optimism" => Ok(Network::Optimism),
+            #[allow(clippy::needless_return)]
             _ => bail!("Unknown network"),
         }
     }

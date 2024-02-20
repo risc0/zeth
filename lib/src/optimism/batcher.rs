@@ -94,12 +94,12 @@ impl State {
     fn deque_next_epoch_if_none(&mut self) -> Result<()> {
         if self.next_epoch.is_none() {
             while let Some(next_epoch) = self.op_epoch_queue.pop_front() {
-                if next_epoch.number <= self.epoch.number {
-                    continue;
-                } else if next_epoch.number == self.epoch.number + 1 {
+                if next_epoch.number == self.epoch.number + 1 {
                     self.next_epoch = Some(next_epoch);
                     break;
-                } else {
+                }
+
+                if next_epoch.number > self.epoch.number {
                     bail!("Epoch gap!");
                 }
             }
@@ -202,7 +202,7 @@ impl Batcher {
         // Read batches
         while let Some(batches) = self.batcher_channel.read_batches() {
             batches.into_iter().for_each(|batch| {
-                #[cfg(not(feature = "std"))]
+                #[cfg(feature = "std")]
                 log::debug!(
                     "received batch: timestamp={}, parent_hash={}, epoch={}",
                     batch.essence.timestamp,
@@ -274,31 +274,33 @@ impl Batcher {
         let sequence_window_size = self.config.seq_window_size;
         let first_of_epoch = epoch.number == safe_l2_head.l1_origin.number + 1;
 
-        if current_l1_block > epoch.number + sequence_window_size {
-            if let Some(next_epoch) = &self.state.next_epoch {
-                let next_timestamp = safe_l2_head.timestamp + self.config.blocktime;
-                let batch_epoch = if next_timestamp < next_epoch.timestamp || first_of_epoch {
-                    // From the spec:
-                    // "If next_timestamp < next_epoch.time: the current L1 origin is repeated,
-                    //  to preserve the L2 time invariant."
-                    // "If the batch is the first batch of the epoch, that epoch is used instead
-                    //  of advancing the epoch to ensure that there is at least one L2 block per
-                    //  epoch."
-                    epoch
-                } else {
-                    next_epoch
-                };
-
-                return Ok(Some(Batch::new(
-                    safe_l2_head.hash,
-                    batch_epoch.number,
-                    batch_epoch.hash,
-                    next_timestamp,
-                )));
-            }
+        if current_l1_block <= epoch.number + sequence_window_size {
+            return Ok(None);
         }
 
-        Ok(None)
+        let Some(next_epoch) = &self.state.next_epoch else {
+            return Ok(None);
+        };
+
+        let next_timestamp = safe_l2_head.timestamp + self.config.blocktime;
+        let batch_epoch = if next_timestamp < next_epoch.timestamp || first_of_epoch {
+            // From the spec:
+            // "If next_timestamp < next_epoch.time: the current L1 origin is repeated,
+            //  to preserve the L2 time invariant."
+            // "If the batch is the first batch of the epoch, that epoch is used instead
+            //  of advancing the epoch to ensure that there is at least one L2 block per
+            //  epoch."
+            epoch
+        } else {
+            next_epoch
+        };
+
+        Ok(Some(Batch::new(
+            safe_l2_head.hash,
+            batch_epoch.number,
+            batch_epoch.hash,
+            next_timestamp,
+        )))
     }
 
     fn batch_status(&self, batch: &BatchWithInclusion) -> BatchStatus {
@@ -314,7 +316,7 @@ impl Batcher {
         // "batch.timestamp < next_timestamp -> drop"
         match batch.essence.timestamp.cmp(&next_timestamp) {
             Ordering::Greater => {
-                #[cfg(not(feature = "std"))]
+                #[cfg(feature = "std")]
                 log::debug!(
                     "Future batch: {} = batch.timestamp > next_timestamp = {}",
                     &batch.essence.timestamp,
@@ -323,7 +325,7 @@ impl Batcher {
                 return BatchStatus::Future;
             }
             Ordering::Less => {
-                #[cfg(not(feature = "std"))]
+                #[cfg(feature = "std")]
                 log::debug!(
                     "Batch too old: {} = batch.timestamp < next_timestamp = {}",
                     &batch.essence.timestamp,
@@ -337,7 +339,7 @@ impl Batcher {
         // From the spec:
         // "batch.parent_hash != safe_l2_head.hash -> drop"
         if batch.essence.parent_hash != safe_l2_head.hash {
-            #[cfg(not(feature = "std"))]
+            #[cfg(feature = "std")]
             log::debug!(
                 "Incorrect parent hash: {} != {}",
                 batch.essence.parent_hash,
@@ -349,7 +351,7 @@ impl Batcher {
         // From the spec:
         // "batch.epoch_num + sequence_window_size < inclusion_block_number -> drop"
         if batch.essence.epoch_num + self.config.seq_window_size < batch.inclusion_block_number {
-            #[cfg(not(feature = "std"))]
+            #[cfg(feature = "std")]
             log::debug!(
                 "Batch is not timely: {} + {} < {}",
                 batch.essence.epoch_num,
@@ -362,7 +364,7 @@ impl Batcher {
         // From the spec:
         // "batch.epoch_num < epoch.number -> drop"
         if batch.essence.epoch_num < epoch.number {
-            #[cfg(not(feature = "std"))]
+            #[cfg(feature = "std")]
             log::debug!(
                 "Batch epoch number is too low: {} < {}",
                 batch.essence.epoch_num,
@@ -371,35 +373,35 @@ impl Batcher {
             return BatchStatus::Drop;
         }
 
-        let batch_origin = if batch.essence.epoch_num == epoch.number {
+        let batch_origin = match batch.essence.epoch_num {
             // From the spec:
             // "batch.epoch_num == epoch.number: define batch_origin as epoch"
-            epoch
-        } else if batch.essence.epoch_num == epoch.number + 1 {
+            n if n == epoch.number => epoch,
             // From the spec:
             // "batch.epoch_num == epoch.number+1:"
             // "  If known, then define batch_origin as next_epoch"
             // "  If next_epoch is not known -> undecided"
-            match next_epoch {
+            n if n == epoch.number + 1 => match next_epoch {
                 Some(epoch) => epoch,
                 None => return BatchStatus::Undecided,
-            }
-        } else {
+            },
             // From the spec:
             // "batch.epoch_num > epoch.number+1 -> drop"
-            #[cfg(not(feature = "std"))]
-            log::debug!(
-                "Batch epoch number is too large: {} > {}",
-                batch.essence.epoch_num,
-                epoch.number + 1
-            );
-            return BatchStatus::Drop;
+            _ => {
+                #[cfg(feature = "std")]
+                log::debug!(
+                    "Batch epoch number is too large: {} > {}",
+                    batch.essence.epoch_num,
+                    epoch.number + 1
+                );
+                return BatchStatus::Drop;
+            }
         };
 
         // From the spec:
         // "batch.epoch_hash != batch_origin.hash -> drop"
         if batch.essence.epoch_hash != batch_origin.hash {
-            #[cfg(not(feature = "std"))]
+            #[cfg(feature = "std")]
             log::debug!(
                 "Epoch hash mismatch: {} != {}",
                 batch.essence.epoch_hash,
@@ -411,7 +413,7 @@ impl Batcher {
         // From the spec:
         // "batch.timestamp < batch_origin.time -> drop"
         if batch.essence.timestamp < batch_origin.timestamp {
-            #[cfg(not(feature = "std"))]
+            #[cfg(feature = "std")]
             log::debug!(
                 "Batch violates timestamp rule: {} < {}",
                 batch.essence.timestamp,
@@ -424,7 +426,7 @@ impl Batcher {
         // "batch.timestamp > batch_origin.time + max_sequencer_drift: enforce the L2 timestamp
         //  drift rule, but with exceptions to preserve above min L2 timestamp invariant:"
         if batch.essence.timestamp > batch_origin.timestamp + self.config.max_seq_drift {
-            #[cfg(not(feature = "std"))]
+            #[cfg(feature = "std")]
             log::debug!(
                 "Sequencer drift detected: {} > {} + {}",
                 batch.essence.timestamp,
@@ -435,7 +437,7 @@ impl Batcher {
             // From the spec:
             // "len(batch.transactions) > 0: -> drop"
             if !batch.essence.transactions.is_empty() {
-                #[cfg(not(feature = "std"))]
+                #[cfg(feature = "std")]
                 log::debug!("Sequencer drift detected for non-empty batch; drop.");
                 return BatchStatus::Drop;
             }
@@ -445,20 +447,20 @@ impl Batcher {
             //    epoch.number == batch.epoch_num: this implies the batch does not already
             //    advance the L1 origin, and must thus be checked against next_epoch."
             if epoch.number == batch.essence.epoch_num {
-                if let Some(next_epoch) = next_epoch {
-                    // From the spec:
-                    // "If batch.timestamp >= next_epoch.time -> drop"
-                    if batch.essence.timestamp >= next_epoch.timestamp {
-                        #[cfg(not(feature = "std"))]
-                        log::debug!("Sequencer drift detected; drop; batch timestamp is too far into the future. {} >= {}", batch.essence.timestamp, next_epoch.timestamp);
-                        return BatchStatus::Drop;
-                    }
-                } else {
+                let Some(next_epoch) = next_epoch else {
                     // From the spec:
                     // "If next_epoch is not known -> undecided"
-                    #[cfg(not(feature = "std"))]
+                    #[cfg(feature = "std")]
                     log::debug!("Sequencer drift detected, but next epoch is not known; undecided");
                     return BatchStatus::Undecided;
+                };
+
+                // From the spec:
+                // "If batch.timestamp >= next_epoch.time -> drop"
+                if batch.essence.timestamp >= next_epoch.timestamp {
+                    #[cfg(feature = "std")]
+                    log::debug!("Sequencer drift detected; drop; batch timestamp is too far into the future. {} >= {}", batch.essence.timestamp, next_epoch.timestamp);
+                    return BatchStatus::Drop;
                 }
             }
         }
@@ -470,7 +472,7 @@ impl Batcher {
         //    any deposited transactions (identified by the transaction type prefix byte)"
         for tx in &batch.essence.transactions {
             if matches!(tx.first(), None | Some(&OPTIMISM_DEPOSITED_TX_TYPE)) {
-                #[cfg(not(feature = "std"))]
+                #[cfg(feature = "std")]
                 log::debug!("Batch contains empty or invalid transaction");
                 return BatchStatus::Drop;
             }

@@ -49,7 +49,7 @@ use crate::{
     receipt::{Log, Receipt, ReceiptPayload},
     transactions::{
         ethereum::{
-            EthereumTxEssence, TransactionKind, TxEssenceEip1559, TxEssenceEip2930, TxEssenceLegacy,
+            EthereumTxEssence, TransactionKind, TxEssenceEip1559, TxEssenceEip2930, TxEssenceEip4844, TxEssenceLegacy
         },
         optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
         signature::TxSignature,
@@ -183,13 +183,13 @@ impl TryFrom<EthersTransaction> for EthereumTxEssence {
                     Some(chain_id) => Some(
                         chain_id
                             .try_into()
-                            .map_err(|err| anyhow!("invalid chain_id: {}", err))?,
+                            .map_err(|err| anyhow!("invalid chain_id: {err}"))?,
                     ),
                 },
                 nonce: tx
                     .nonce
                     .try_into()
-                    .map_err(|err| anyhow!("invalid nonce: {}", err))?,
+                    .map_err(|err| anyhow!("invalid nonce: {err}"))?,
                 gas_price: from_ethers_u256(tx.gas_price.context("gas_price missing")?),
                 gas_limit: from_ethers_u256(tx.gas),
                 to: tx.to.into(),
@@ -201,11 +201,11 @@ impl TryFrom<EthersTransaction> for EthereumTxEssence {
                     .chain_id
                     .context("chain_id missing")?
                     .try_into()
-                    .map_err(|err| anyhow!("invalid chain_id: {}", err))?,
+                    .map_err(|err| anyhow!("invalid chain_id: {err}"))?,
                 nonce: tx
                     .nonce
                     .try_into()
-                    .map_err(|err| anyhow!("invalid nonce: {}", err))?,
+                    .map_err(|err| anyhow!("invalid nonce: {err}"))?,
                 gas_price: from_ethers_u256(tx.gas_price.context("gas_price missing")?),
                 gas_limit: from_ethers_u256(tx.gas),
                 to: tx.to.into(),
@@ -214,6 +214,29 @@ impl TryFrom<EthersTransaction> for EthereumTxEssence {
                 data: tx.input.0.into(),
             }),
             Some(2) => EthereumTxEssence::Eip1559(TxEssenceEip1559 {
+                chain_id: tx
+                    .chain_id
+                    .context("chain_id missing")?
+                    .try_into()
+                    .map_err(|err| anyhow!("invalid chain_id: {err}"))?,
+                nonce: tx
+                    .nonce
+                    .try_into()
+                    .map_err(|err| anyhow!("invalid nonce: {err}"))?,
+                max_priority_fee_per_gas: from_ethers_u256(
+                    tx.max_priority_fee_per_gas
+                        .context("max_priority_fee_per_gas missing")?,
+                ),
+                max_fee_per_gas: from_ethers_u256(
+                    tx.max_fee_per_gas.context("max_fee_per_gas missing")?,
+                ),
+                gas_limit: from_ethers_u256(tx.gas),
+                to: tx.to.into(),
+                value: from_ethers_u256(tx.value),
+                access_list: tx.access_list.context("access_list missing")?.into(),
+                data: tx.input.0.into(),
+            }),
+            Some(3) => EthereumTxEssence::Eip4844(TxEssenceEip4844 {
                 chain_id: tx
                     .chain_id
                     .context("chain_id missing")?
@@ -235,6 +258,8 @@ impl TryFrom<EthersTransaction> for EthereumTxEssence {
                 value: from_ethers_u256(tx.value),
                 access_list: tx.access_list.context("access_list missing")?.into(),
                 data: tx.input.0.into(),
+                blob_versioned_hashes: Default::default(),
+                max_fee_per_blob_gas: Default::default(),
             }),
             _ => unreachable!(),
         };
@@ -278,7 +303,7 @@ impl TryFrom<EthersWithdrawal> for Withdrawal {
             amount: withdrawal
                 .amount
                 .try_into()
-                .map_err(|err| anyhow!("invalid amount: {}", err))?,
+                .map_err(|err| anyhow!("invalid amount: {err}"))?,
         })
     }
 }

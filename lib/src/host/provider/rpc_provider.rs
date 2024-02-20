@@ -51,7 +51,7 @@ impl Provider for RpcProvider {
     }
 
     fn get_full_block(&mut self, query: &BlockQuery) -> Result<Block<Transaction>> {
-        info!("Querying RPC for full block: {:?}", query);
+        info!("Querying RPC for full block: {query:?}");
 
         let response = self
             .tokio_handle
@@ -59,12 +59,12 @@ impl Provider for RpcProvider {
 
         match response {
             Some(out) => Ok(out),
-            None => Err(anyhow!("No data for {:?}", query)),
+            None => Err(anyhow!("No data for {query:?}")),
         }
     }
 
     fn get_partial_block(&mut self, query: &BlockQuery) -> Result<Block<H256>> {
-        info!("Querying RPC for partial block: {:?}", query);
+        info!("Querying RPC for partial block: {query:?}");
 
         let response = self
             .tokio_handle
@@ -72,12 +72,12 @@ impl Provider for RpcProvider {
 
         match response {
             Some(out) => Ok(out),
-            None => Err(anyhow!("No data for {:?}", query)),
+            None => Err(anyhow!("No data for {query:?}")),
         }
     }
 
     fn get_block_receipts(&mut self, query: &BlockQuery) -> Result<Vec<TransactionReceipt>> {
-        info!("Querying RPC for block receipts: {:?}", query);
+        info!("Querying RPC for block receipts: {query:?}");
 
         let response = self
             .tokio_handle
@@ -87,7 +87,7 @@ impl Provider for RpcProvider {
     }
 
     fn get_proof(&mut self, query: &ProofQuery) -> Result<EIP1186ProofResponse> {
-        info!("Querying RPC for inclusion proof: {:?}", query);
+        info!("Querying RPC for inclusion proof: {query:?}");
 
         let out = self.tokio_handle.block_on(async {
             self.http_client
@@ -103,7 +103,7 @@ impl Provider for RpcProvider {
     }
 
     fn get_transaction_count(&mut self, query: &AccountQuery) -> Result<U256> {
-        info!("Querying RPC for transaction count: {:?}", query);
+        info!("Querying RPC for transaction count: {query:?}");
 
         let out = self.tokio_handle.block_on(async {
             self.http_client
@@ -115,7 +115,7 @@ impl Provider for RpcProvider {
     }
 
     fn get_balance(&mut self, query: &AccountQuery) -> Result<U256> {
-        info!("Querying RPC for balance: {:?}", query);
+        info!("Querying RPC for balance: {query:?}");
 
         let out = self.tokio_handle.block_on(async {
             self.http_client
@@ -127,7 +127,7 @@ impl Provider for RpcProvider {
     }
 
     fn get_code(&mut self, query: &AccountQuery) -> Result<Bytes> {
-        info!("Querying RPC for code: {:?}", query);
+        info!("Querying RPC for code: {query:?}");
 
         let out = self.tokio_handle.block_on(async {
             self.http_client
@@ -139,7 +139,7 @@ impl Provider for RpcProvider {
     }
 
     fn get_storage(&mut self, query: &StorageQuery) -> Result<H256> {
-        info!("Querying RPC for storage: {:?}", query);
+        info!("Querying RPC for storage: {query:?}");
 
         let out = self.tokio_handle.block_on(async {
             self.http_client
@@ -152,7 +152,7 @@ impl Provider for RpcProvider {
 
     #[cfg(feature = "taiko")]
     fn get_logs(&mut self, query: &LogsQuery) -> Result<Vec<Log>> {
-        info!("Querying RPC for logs: {:?}", query);
+        info!("Querying RPC for logs: {query:?}");
 
         let out = self.tokio_handle.block_on(async {
             self.http_client
@@ -170,13 +170,13 @@ impl Provider for RpcProvider {
 
     #[cfg(feature = "taiko")]
     fn get_transaction(&mut self, query: &super::TxQuery) -> Result<Transaction> {
-        info!("Querying RPC for tx: {:?}", query);
+        info!("Querying RPC for tx: {query:?}");
         let out = self
             .tokio_handle
             .block_on(async { self.http_client.get_transaction(query.tx_hash).await })?;
         match out {
             Some(out) => Ok(out),
-            None => Err(anyhow!("No data for {:?}", query)),
+            None => Err(anyhow!("No data for {query:?}")),
         }
     }
 }

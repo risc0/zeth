@@ -31,7 +31,8 @@ pub fn get_contracts(name: &str) -> Result<(Address, Address, Address, Address)>
         "testnet" => taiko_contracts!(testnet),
         "internal_devnet_a" => taiko_contracts!(internal_devnet_a),
         "internal_devnet_b" => taiko_contracts!(internal_devnet_b),
-        _ => bail!("invalid chain name: {}", name),
+        #[allow(clippy::needless_return)]
+        _ => bail!("invalid chain name: {name}"),
     }
 }
 
@@ -125,8 +126,8 @@ pub fn check_anchor_signature(anchor: &EthereumTransaction) -> Result<()> {
         // alias: when r == GX2 require N == msg_hash + *GX1_MUL_PRIVATEKEY
         if *N != msg_hash + *GX1_MUL_PRIVATEKEY {
             bail!(
-                "r == GX2, but N != msg_hash + *GX1_MUL_PRIVATEKEY, N: {}, msg_hash: {}, *GX1_MUL_PRIVATEKEY: {}",
-                *N, msg_hash, *GX1_MUL_PRIVATEKEY
+                "r == GX2, but N != msg_hash + *GX1_MUL_PRIVATEKEY, N: {}, msg_hash: {msg_hash}, *GX1_MUL_PRIVATEKEY: {}",
+                *N, *GX1_MUL_PRIVATEKEY
             );
         }
         return Ok(());

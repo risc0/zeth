@@ -7,7 +7,7 @@ use anyhow::{anyhow, bail, ensure, Context, Result};
 use ethers_core::types::{Block, Transaction, H256, U256, U64};
 use zeth_primitives::{
     ethers::{from_ethers_h160, from_ethers_h256},
-    transactions::{EthereumTransaction, TxEssence},
+    transactions::EthereumTransaction,
 };
 
 use super::{anchorCall, decode_anchor, proposeBlockCall, BlockProposed};
@@ -123,7 +123,7 @@ impl TaikoProvider {
                 return Ok((call, event));
             }
         }
-        bail!("No BlockProposed event found for block {}", l2_block_no);
+        bail!("No BlockProposed event found for block {l2_block_no}");
     }
 
     pub fn check_anchor_with_blocks<TX1, TX2>(
@@ -139,17 +139,18 @@ impl TaikoProvider {
         );
 
         // 2. check l1 signal root
-        if let Some(l1_signal_service) = self.l1_signal_service {
-            let proof = self.l1_provider.get_proof(&ProofQuery {
-                block_no: l1_block.number.unwrap().as_u64(),
-                address: l1_signal_service.into_array().into(),
-                indices: Default::default(),
-            })?;
-            let signal_root = from_ethers_h256(proof.storage_hash);
-            ensure!(signal_root == anchor.l1SignalRoot, "l1SignalRoot mismatch");
-        } else {
+        let Some(l1_signal_service) = self.l1_signal_service else {
             bail!("l1_signal_service not set");
-        }
+        };
+
+        let proof = self.l1_provider.get_proof(&ProofQuery {
+            block_no: l1_block.number.unwrap().as_u64(),
+            address: l1_signal_service.into_array().into(),
+            indices: Default::default(),
+        })?;
+        let signal_root = from_ethers_h256(proof.storage_hash);
+
+        ensure!(signal_root == anchor.l1SignalRoot, "l1SignalRoot mismatch");
 
         // 3. check l1 block hash
         ensure!(
@@ -175,7 +176,7 @@ impl TaikoProvider {
             .clone()
             .try_into()
             .context(anyhow!("failed to decode anchor transaction: {:?}", anchor))?;
-        check_anchor_signature(&tx).context(anyhow!("failed to check anchor signature"));
+        check_anchor_signature(&tx).context(anyhow!("failed to check anchor signature"))?;
 
         ensure!(
             from_ethers_h160(anchor.from) == *GOLDEN_TOUCH_ACCOUNT,

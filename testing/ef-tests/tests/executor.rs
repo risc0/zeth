@@ -52,7 +52,7 @@ fn executor(
 
         // skip failing tests for now
         if let Some(message) = block.expect_exception {
-            println!("skipping ({})", message);
+            println!("skipping ({message})");
             break;
         }
 
@@ -90,7 +90,7 @@ fn executor(
         println!("Generated {} segments", session.segments.len());
 
         let found_hash: BlockHash = session.journal.decode().unwrap();
-        println!("Block hash (from executor): {}", found_hash);
+        println!("Block hash (from executor): {found_hash}");
         assert_eq!(found_hash, expected_header.hash());
     }
 }

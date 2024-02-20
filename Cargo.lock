@@ -89,7 +89,6 @@ dependencies = [
 
 [[package]]
 name = "alloy-primitives"
-<<<<<<< HEAD
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a0628ec0ba5b98b3370bb6be17b12f23bfce8ee4ad83823325a20546d9b03b78"
@@ -109,10 +108,6 @@ dependencies = [
 name = "alloy-primitives"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-=======
-version = "0.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
->>>>>>> rebase-upstream-4844
 checksum = "ef197eb250c64962003cb08b90b17f0882c192f4a6f2f544809d424fd7cb0e7d"
 dependencies = [
  "alloy-rlp",
@@ -150,11 +145,7 @@ checksum = "1a047897373be4bbb0224c1afdabca92648dc57a9c9ef6e7b0be3aff7a859c83"
 dependencies = [
  "proc-macro2",
  "quote",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
 ]
 
 [[package]]
@@ -170,11 +161,7 @@ dependencies = [
  "proc-macro-error",
  "proc-macro2",
  "quote",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
  "syn-solidity",
  "tiny-keccak 2.0.2",
 ]
@@ -523,11 +510,7 @@ checksum = "c980ee35e870bd1a4d2c8294d4c04d0499e67bca1e4b5cefcc693c2fa00caea9"
 dependencies = [
  "proc-macro2",
  "quote",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
 ]
 
 [[package]]
@@ -570,11 +553,7 @@ checksum = "823b8bb275161044e2ac7a25879cb3e2480cb403e3943022c7c769c599b756aa"
 dependencies = [
  "proc-macro2",
  "quote",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
 ]
 
 [[package]]
@@ -679,11 +658,7 @@ dependencies = [
  "regex",
  "rustc-hash",
  "shlex",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
  "which",
 ]
 
@@ -934,11 +909,7 @@ checksum = "965ab7eb5f8f97d2a083c799f3a1b994fc397b2fe2da5d1da1626ce15a39f2b1"
 dependencies = [
  "proc-macro2",
  "quote",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
 ]
 
 [[package]]
@@ -1097,11 +1068,7 @@ dependencies = [
  "heck 0.4.1",
  "proc-macro2",
  "quote",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
 ]
 
 [[package]]
@@ -1361,7 +1328,7 @@ checksum = "f46882e17999c6cc590af592290432be3bce0428cb0d5f8b6715e4dc7b383eb3"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.49",
+ "syn 2.0.50",
 ]
 
 [[package]]
@@ -1385,11 +1352,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "strsim 0.10.0",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
 ]
 
 [[package]]
@@ -1400,11 +1363,7 @@ checksum = "c5a91391accf613803c2a9bf9abccdbaa07c54b4244a5b64883f9c3c137c86be"
 dependencies = [
  "darling_core",
  "quote",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
 ]
 
 [[package]]
@@ -1693,11 +1652,7 @@ checksum = "6fd000fd6988e73bbe993ea3db9b1aa64906ab88766d654973924340c8cddb42"
 dependencies = [
  "proc-macro2",
  "quote",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
 ]
 
 [[package]]
@@ -2086,11 +2041,7 @@ checksum = "87750cf4b7a4c0625b1529e4c543c2182106e4dedc60a2a6455e00d212c489ac"
 dependencies = [
  "proc-macro2",
  "quote",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
 ]
 
 [[package]]
@@ -3166,11 +3117,7 @@ checksum = "ed3955f1a9c7c0c15e092f9c887db08b1fc683305fdf6eb6684f22555355e202"
 dependencies = [
  "proc-macro2",
  "quote",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
 ]
 
 [[package]]
@@ -3264,11 +3211,7 @@ dependencies = [
  "proc-macro-crate 3.1.0",
  "proc-macro2",
  "quote",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
 ]
 
 [[package]]
@@ -3356,11 +3299,7 @@ checksum = "a948666b637a0f465e8564c73e89d4dde00d72d4d473cc972f390fc3dcee7d9c"
 dependencies = [
  "proc-macro2",
  "quote",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
 ]
 
 [[package]]
@@ -3784,7 +3723,7 @@ dependencies = [
  "pest_meta",
  "proc-macro2",
  "quote",
- "syn 2.0.49",
+ "syn 2.0.50",
 ]
 
 [[package]]
@@ -3844,11 +3783,7 @@ checksum = "266c042b60c9c76b8d53061e52b2e0d1116abc57cefc8c5cd671619a56ac3690"
 dependencies = [
  "proc-macro2",
  "quote",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
 ]
 
 [[package]]
@@ -4301,11 +4236,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a41cf62165e97c7f814d2221421dbb9afcbcdb0a88068e5ea206e19951c2cbb5"
 dependencies = [
  "proc-macro2",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
 ]
 
 [[package]]
@@ -4390,7 +4321,7 @@ source = "git+https://github.com/ChengYueJia/profiler-rs?rev=6d6a77f8#6d6a77f8ec
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.49",
+ "syn 2.0.50",
 ]
 
 [[package]]
@@ -4470,21 +4401,6 @@ checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
 name = "raiko-guest"
 version = "0.1.0"
 dependencies = [
-<<<<<<< HEAD
-=======
- "anyhow",
- "base64 0.21.7",
- "base64-serde",
- "clap 4.5.1",
- "dirs",
- "ethers-core",
- "hex 0.4.3",
- "raiko-host",
- "rand",
- "rand_core",
- "risc0-zkvm",
- "secp256k1 0.27.0",
->>>>>>> rebase-upstream-4844
  "serde",
  "sp1-zkvm",
  "zeth-lib",
@@ -4548,7 +4464,7 @@ dependencies = [
  "rand 0.8.5",
  "rand_core 0.6.4",
  "risc0-zkvm",
- "secp256k1",
+ "secp256k1 0.27.0",
  "serde",
  "serde_json",
  "sgx-ra",
@@ -4871,10 +4787,12 @@ version = "2.2.0"
 source = "git+https://github.com/ceciliaz030/revm.git?branch=sync-taiko-v3.5#0ebc1e0f5e2ab731bd583c4113440d6226dea58c"
 dependencies = [
  "aurora-engine-modexp",
+ "c-kzg",
  "k256",
  "once_cell",
  "revm-primitives 1.3.0 (git+https://github.com/ceciliaz030/revm.git?branch=sync-taiko-v3.5)",
  "ripemd",
+ "secp256k1 0.28.2",
  "sha2 0.10.8",
  "substrate-bn",
 ]
@@ -4944,11 +4862,7 @@ checksum = "c17fa4cb658e3583423e915b9f3acc01cceaee1860e33d59ebae66adc3a2dc0d"
 dependencies = [
  "cc",
  "cfg-if",
-<<<<<<< HEAD
  "getrandom 0.2.12",
-=======
- "getrandom",
->>>>>>> rebase-upstream-4844
  "libc",
  "spin 0.9.8",
  "untrusted 0.9.0",
@@ -5136,11 +5050,7 @@ dependencies = [
  "regex",
  "relative-path",
  "rustc_version 0.4.0",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
  "unicode-ident",
 ]
 
@@ -5382,7 +5292,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25996b82292a7a57ed3508f052cfff8640d38d32018784acd714758b43da9c8f"
 dependencies = [
  "rand 0.8.5",
- "secp256k1-sys",
+ "secp256k1-sys 0.8.1",
+]
+
+[[package]]
+name = "secp256k1"
+version = "0.28.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d24b59d129cdadea20aea4fb2352fa053712e5d713eee47d700cd4b2bc002f10"
+dependencies = [
+ "secp256k1-sys 0.9.2",
 ]
 
 [[package]]
@@ -5390,6 +5309,15 @@ name = "secp256k1-sys"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "70a129b9e9efbfb223753b9163c4ab3b13cff7fd9c7f010fbac25ab4099fa07e"
+dependencies = [
+ "cc",
+]
+
+[[package]]
+name = "secp256k1-sys"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5d1746aae42c19d583c3c1a8c646bfad910498e2051c551a7f2e3c0c9fbb7eb"
 dependencies = [
  "cc",
 ]
@@ -5483,8 +5411,7 @@ checksum = "7eb0b34b42edc17f6b7cac84a52a1c5f0e1bb2227e997ca9011ea3dd34e8610b"
 dependencies = [
  "proc-macro2",
  "quote",
-<<<<<<< HEAD
- "syn 2.0.49",
+ "syn 2.0.50",
 ]
 
 [[package]]
@@ -5496,9 +5423,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
-=======
- "syn 2.0.50",
->>>>>>> rebase-upstream-4844
 ]
 
 [[package]]
@@ -5507,6 +5431,7 @@ version = "1.0.114"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c5f09b1bd632ef549eaa9f60a1f8de742bdbc698e6cee2095fc84dde5f549ae0"
 dependencies = [
+ "indexmap 2.2.3",
  "itoa",
  "ryu",
  "serde",
@@ -5551,8 +5476,7 @@ dependencies = [
  "darling",
  "proc-macro2",
  "quote",
-<<<<<<< HEAD
- "syn 2.0.49",
+ "syn 2.0.50",
 ]
 
 [[package]]
@@ -5577,10 +5501,7 @@ checksum = "b93fb4adc70021ac1b47f7d45e8cc4169baaa7ea58483bc5b721d19a26202212"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
 ]
 
 [[package]]
@@ -5791,7 +5712,7 @@ dependencies = [
 [[package]]
 name = "sp1-core"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/sp1.git#d1f9a7415bfb7c15cd34cc07d5b94d9ebb6b0854"
+source = "git+https://github.com/succinctlabs/sp1.git#cf58553c9ba6811d597b3871fbdbaa7849cdfee2"
 dependencies = [
  "anyhow",
  "bincode",
@@ -5842,7 +5763,7 @@ dependencies = [
 [[package]]
 name = "sp1-derive"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/sp1.git#d1f9a7415bfb7c15cd34cc07d5b94d9ebb6b0854"
+source = "git+https://github.com/succinctlabs/sp1.git#cf58553c9ba6811d597b3871fbdbaa7849cdfee2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5850,9 +5771,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "sp1-zkvm"
+name = "sp1-precompiles"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/sp1.git#d1f9a7415bfb7c15cd34cc07d5b94d9ebb6b0854"
+source = "git+https://github.com/succinctlabs/sp1.git#cf58553c9ba6811d597b3871fbdbaa7849cdfee2"
 dependencies = [
  "anyhow",
  "bincode",
@@ -5861,6 +5782,21 @@ dependencies = [
  "k256",
  "rand 0.8.5",
  "serde",
+]
+
+[[package]]
+name = "sp1-zkvm"
+version = "0.1.0"
+source = "git+https://github.com/succinctlabs/sp1.git#cf58553c9ba6811d597b3871fbdbaa7849cdfee2"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "cfg-if",
+ "getrandom 0.2.12",
+ "k256",
+ "rand 0.8.5",
+ "serde",
+ "sp1-precompiles",
 ]
 
 [[package]]
@@ -6044,11 +5980,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustversion",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
 ]
 
 [[package]]
@@ -6083,15 +6015,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-<<<<<<< HEAD
-version = "2.0.49"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "915aea9e586f80826ee59f8453c1101f9d1c4b3964cd2460185ee8e299ada496"
-=======
 version = "2.0.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "74f1bdc9872430ce9b75da68329d1c1746faf50ffac5f19e02b71e37ff881ffb"
->>>>>>> rebase-upstream-4844
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6107,11 +6033,7 @@ dependencies = [
  "paste",
  "proc-macro2",
  "quote",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
 ]
 
 [[package]]
@@ -6224,11 +6146,7 @@ checksum = "a953cb265bef375dae3de6663da4d3804eee9682ea80d8e2542529b73c531c81"
 dependencies = [
  "proc-macro2",
  "quote",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
 ]
 
 [[package]]
@@ -6361,11 +6279,7 @@ checksum = "5b8a1e28f2deaa14e508979454cb3a223b10b938b45af148bc0986de36f1923b"
 dependencies = [
  "proc-macro2",
  "quote",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
 ]
 
 [[package]]
@@ -6530,11 +6444,7 @@ checksum = "34704c8d6ebcbc939824180af020566b01a7c01f80641264eba0999f6c2b6be7"
 dependencies = [
  "proc-macro2",
  "quote",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
 ]
 
 [[package]]
@@ -6845,11 +6755,7 @@ dependencies = [
  "once_cell",
  "proc-macro2",
  "quote",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
  "wasm-bindgen-shared",
 ]
 
@@ -6883,11 +6789,7 @@ checksum = "642f325be6301eb8107a83d12a8ac6c1e1c54345a7ef1a9261962dfefda09e66"
 dependencies = [
  "proc-macro2",
  "quote",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
@@ -7178,11 +7080,7 @@ checksum = "9ce1b18ccd8e73a9321186f97e46f9f04b778851177567b1975109d26a08d2a6"
 dependencies = [
  "proc-macro2",
  "quote",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
 ]
 
 [[package]]
@@ -7202,11 +7100,7 @@ checksum = "ce36e65b0d2999d2aafac989fb249189a141aee1f53c612c1f37d72631959f69"
 dependencies = [
  "proc-macro2",
  "quote",
-<<<<<<< HEAD
- "syn 2.0.49",
-=======
  "syn 2.0.50",
->>>>>>> rebase-upstream-4844
 ]
 
 [[package]]
@@ -7233,6 +7127,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "thiserror",
  "thiserror-no-std",
  "tokio",
  "tracing",

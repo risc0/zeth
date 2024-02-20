@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use zeth_primitives::{Address, B256};
 
+use super::proof::succinct::SP1Proof;
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 #[allow(clippy::large_enum_variant)]
@@ -40,6 +42,7 @@ pub struct PseZkRequest {}
 pub enum ProofResponse {
     Sgx(SgxResponse),
     PseZk(PseZkResponse),
+    SP1(SP1Response),
 }
 
 #[derive(Default, Clone, Serialize, Deserialize)]
@@ -56,4 +59,7 @@ pub struct PseZkResponse {}
 
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct SP1Response {}
+pub struct SP1Response {
+    pub proof: String,
+    pub pi_hash: String,
+}

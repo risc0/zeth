@@ -75,50 +75,49 @@ struct Opt {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    prover::proof::powdr::execute_powdr().await?;
-    // let mut opt = Opt::from_args();
+    let mut opt = Opt::from_args();
 
-    // if let Some(config_path) = opt.config_path {
-    //     let config_raw = std::fs::read(&config_path)
-    //         .context(format!("read config file {:?} failed", config_path))?;
-    //     opt =
-    //         Opt::from_args_with_toml(std::str::from_utf8(&config_raw).context("str parse failed")?)
-    //             .context("toml parse failed")?;
-    // };
+    if let Some(config_path) = opt.config_path {
+        let config_raw = std::fs::read(&config_path)
+            .context(format!("read config file {:?} failed", config_path))?;
+        opt =
+            Opt::from_args_with_toml(std::str::from_utf8(&config_raw).context("str parse failed")?)
+                .context("toml parse failed")?;
+    };
 
-    // let subscriber_builder = tracing_subscriber::FmtSubscriber::builder()
-    //     .with_env_filter(&opt.log_level)
-    //     .with_test_writer();
-    // let _guard = match opt.log_path {
-    //     Some(ref log_path) => {
-    //         let file_appender = tracing_appender::rolling::Builder::new()
-    //             .rotation(tracing_appender::rolling::Rotation::DAILY)
-    //             .filename_prefix("raiko.log")
-    //             .max_log_files(opt.max_log_days)
-    //             .build(log_path)
-    //             .expect("initializing rolling file appender failed");
-    //         let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-    //         let subscriber = subscriber_builder.json().with_writer(non_blocking).finish();
-    //         tracing::subscriber::set_global_default(subscriber).unwrap();
-    //         Some(_guard)
-    //     }
-    //     None => {
-    //         let subscriber = subscriber_builder.finish();
-    //         tracing::subscriber::set_global_default(subscriber).unwrap();
-    //         None
-    //     }
-    // };
-    // info!("Start args: {:?}", opt);
-    // serve(
-    //     &opt.bind,
-    //     &opt.guest,
-    //     &opt.cache,
-    //     &opt.l2_chain,
-    //     opt.sgx_instance_id,
-    //     opt.proof_cache,
-    //     opt.concurrency_limit,
-    //     opt.max_caches,
-    // )
-    // .await?;
+    let subscriber_builder = tracing_subscriber::FmtSubscriber::builder()
+        .with_env_filter(&opt.log_level)
+        .with_test_writer();
+    let _guard = match opt.log_path {
+        Some(ref log_path) => {
+            let file_appender = tracing_appender::rolling::Builder::new()
+                .rotation(tracing_appender::rolling::Rotation::DAILY)
+                .filename_prefix("raiko.log")
+                .max_log_files(opt.max_log_days)
+                .build(log_path)
+                .expect("initializing rolling file appender failed");
+            let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+            let subscriber = subscriber_builder.json().with_writer(non_blocking).finish();
+            tracing::subscriber::set_global_default(subscriber).unwrap();
+            Some(_guard)
+        }
+        None => {
+            let subscriber = subscriber_builder.finish();
+            tracing::subscriber::set_global_default(subscriber).unwrap();
+            None
+        }
+    };
+    info!("Start args: {:?}", opt);
+    serve(
+        &opt.bind,
+        &opt.guest,
+        &opt.cache,
+        &opt.l2_chain,
+        opt.sgx_instance_id,
+        opt.proof_cache,
+        opt.concurrency_limit,
+        opt.max_caches,
+    )
+    .await?;
     Ok(())
 }

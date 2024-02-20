@@ -5035,6 +5035,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "thiserror",
  "thiserror-no-std",
  "tokio",
  "tracing",

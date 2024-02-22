@@ -14,11 +14,10 @@
 
 use std::{collections::BTreeSet, path::PathBuf};
 
+use alloy::rpc::types::eth::{Block, EIP1186AccountProofResponse, TransactionReceipt};
 use anyhow::{anyhow, Result};
-use ethers_core::types::{
-    Block, Bytes, EIP1186ProofResponse, Transaction, TransactionReceipt, H160, H256, U256,
-};
 use serde::{Deserialize, Serialize};
+use zeth_primitives::{Address, Bytes, B256, U256};
 
 pub mod cached_rpc_provider;
 pub mod file_provider;
@@ -27,7 +26,7 @@ pub mod rpc_provider;
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 pub struct AccountQuery {
     pub block_no: u64,
-    pub address: H160,
+    pub address: Address,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
@@ -38,39 +37,39 @@ pub struct BlockQuery {
 #[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
 pub struct ProofQuery {
     pub block_no: u64,
-    pub address: H160,
-    pub indices: BTreeSet<H256>,
+    pub address: Address,
+    pub indices: BTreeSet<B256>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
 pub struct StorageQuery {
     pub block_no: u64,
-    pub address: H160,
-    pub index: H256,
+    pub address: Address,
+    pub index: U256,
 }
 
 pub trait Provider: Send {
     fn save(&self) -> Result<()>;
 
-    fn get_full_block(&mut self, query: &BlockQuery) -> Result<Block<Transaction>>;
-    fn get_partial_block(&mut self, query: &BlockQuery) -> Result<Block<H256>>;
+    fn get_full_block(&mut self, query: &BlockQuery) -> Result<Block>;
+    fn get_partial_block(&mut self, query: &BlockQuery) -> Result<Block>;
     fn get_block_receipts(&mut self, query: &BlockQuery) -> Result<Vec<TransactionReceipt>>;
-    fn get_proof(&mut self, query: &ProofQuery) -> Result<EIP1186ProofResponse>;
+    fn get_proof(&mut self, query: &ProofQuery) -> Result<EIP1186AccountProofResponse>;
     fn get_transaction_count(&mut self, query: &AccountQuery) -> Result<U256>;
     fn get_balance(&mut self, query: &AccountQuery) -> Result<U256>;
     fn get_code(&mut self, query: &AccountQuery) -> Result<Bytes>;
-    fn get_storage(&mut self, query: &StorageQuery) -> Result<H256>;
+    fn get_storage(&mut self, query: &StorageQuery) -> Result<U256>;
 }
 
 pub trait MutProvider: Provider {
-    fn insert_full_block(&mut self, query: BlockQuery, val: Block<Transaction>);
-    fn insert_partial_block(&mut self, query: BlockQuery, val: Block<H256>);
+    fn insert_full_block(&mut self, query: BlockQuery, val: Block);
+    fn insert_partial_block(&mut self, query: BlockQuery, val: Block);
     fn insert_block_receipts(&mut self, query: BlockQuery, val: Vec<TransactionReceipt>);
-    fn insert_proof(&mut self, query: ProofQuery, val: EIP1186ProofResponse);
+    fn insert_proof(&mut self, query: ProofQuery, val: EIP1186AccountProofResponse);
     fn insert_transaction_count(&mut self, query: AccountQuery, val: U256);
     fn insert_balance(&mut self, query: AccountQuery, val: U256);
     fn insert_code(&mut self, query: AccountQuery, val: Bytes);
-    fn insert_storage(&mut self, query: StorageQuery, val: H256);
+    fn insert_storage(&mut self, query: StorageQuery, val: U256);
 }
 
 pub fn new_file_provider(file_path: PathBuf) -> Result<Box<dyn Provider>> {

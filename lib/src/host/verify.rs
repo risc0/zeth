@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloy::rpc::types::eth::{Block, EIP1186AccountProofResponse, TransactionReceipt};
 use anyhow::{bail, Context, Result};
-use ethers_core::types::EIP1186ProofResponse;
 use hashbrown::HashMap;
 use log::error;
 use zeth_primitives::{
@@ -145,7 +145,7 @@ fn verify_header(header: &Header, exp_header: &Header) -> Result<()> {
 
 fn verify_state_trie(
     state_trie: &MptNode,
-    proofs: &HashMap<Address, EIP1186ProofResponse>,
+    proofs: &HashMap<Address, EIP1186AccountProofResponse>,
 ) -> Result<HashMap<Address, Vec<VerifyError>>> {
     let mut errors = HashMap::new();
 

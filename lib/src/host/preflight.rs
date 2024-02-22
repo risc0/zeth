@@ -18,15 +18,15 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use anyhow::{anyhow, Context, Result};
-use ethers_core::types::{
-    Block as EthersBlock, EIP1186ProofResponse, Transaction as EthersTransaction,
+use alloy::rpc::types::eth::{
+    Block as AlloyBlock, BlockTransactions, EIP1186AccountProofResponse,
+    Transaction as AlloyTransaction,
 };
+use anyhow::{anyhow, Context, Result};
 use hashbrown::{HashMap, HashSet};
 use log::{debug, info};
 use zeth_primitives::{
     block::Header,
-    ethers::{from_ethers_h160, from_ethers_h256, from_ethers_u256},
     keccak::keccak,
     transactions::{Transaction, TxEssence},
     trie::{MptNode, MptNodeReference},
@@ -51,11 +51,11 @@ use crate::{
 pub struct Data<E: TxEssence> {
     pub db: MemDb,
     pub parent_header: Header,
-    pub parent_proofs: HashMap<Address, EIP1186ProofResponse>,
+    pub parent_proofs: HashMap<Address, EIP1186AccountProofResponse>,
     pub header: Option<Header>,
     pub transactions: Vec<Transaction<E>>,
     pub withdrawals: Vec<Withdrawal>,
-    pub proofs: HashMap<Address, EIP1186ProofResponse>,
+    pub proofs: HashMap<Address, EIP1186AccountProofResponse>,
     pub ancestor_headers: Vec<Header>,
 }
 
@@ -79,8 +79,7 @@ pub trait Preflight<E: TxEssence> {
 /// Implements the [Preflight] trait for all compatible [BlockBuilderStrategy]s.
 impl<N: BlockBuilderStrategy> Preflight<N::TxEssence> for N
 where
-    N::TxEssence: TryFrom<EthersTransaction>,
-    <N::TxEssence as TryFrom<EthersTransaction>>::Error: Debug,
+    N::TxEssence: TryFrom<AlloyTransaction, Error = anyhow::Error>,
 {
     fn preflight_with_external_data(
         chain_spec: &ChainSpec,
@@ -97,18 +96,21 @@ where
 
         debug!(
             "Initial block: {:?} ({:?})",
-            parent_block.number.unwrap(),
-            parent_block.hash.unwrap()
+            parent_block.header.number.unwrap(),
+            parent_block.header.hash.unwrap()
         );
-        let parent_header: Header = parent_block.try_into().context("invalid parent block")?;
+        let parent_header: Header = parent_block
+            .header
+            .try_into()
+            .context("invalid parent block")?;
 
         // Fetch the target block
         let block = provider.get_full_block(&BlockQuery { block_no })?;
 
         debug!(
             "Final block number: {:?} ({:?})",
-            block.number.unwrap(),
-            block.hash.unwrap()
+            block.header.number.unwrap(),
+            block.header.hash.unwrap()
         );
         debug!("Transaction count: {:?}", block.transactions.len());
 
@@ -121,7 +123,8 @@ where
         // Create the block builder, run the transactions and extract the DB
         Self::preflight_with_local_data(chain_spec, provider_db, input).map(
             move |mut headerless_preflight_data| {
-                headerless_preflight_data.header = Some(block.try_into().expect("invalid block"));
+                headerless_preflight_data.header =
+                    Some(block.header.try_into().expect("invalid block"));
                 headerless_preflight_data
             },
         )
@@ -177,24 +180,22 @@ where
     }
 }
 
-fn new_preflight_input<E>(
-    block: EthersBlock<EthersTransaction>,
-    parent_header: Header,
-) -> Result<BlockBuildInput<E>>
+fn new_preflight_input<E>(block: AlloyBlock, parent_header: Header) -> Result<BlockBuildInput<E>>
 where
-    E: TxEssence + TryFrom<EthersTransaction>,
-    <E as TryFrom<EthersTransaction>>::Error: Debug,
+    E: TxEssence + TryFrom<AlloyTransaction, Error = anyhow::Error>,
 {
     // convert each transaction
-    let transactions = block
-        .transactions
-        .into_iter()
-        .enumerate()
-        .map(|(i, tx)| {
-            tx.try_into()
-                .map_err(|err| anyhow!("transaction {i} invalid: {err:?}"))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let transactions = match block.transactions {
+        BlockTransactions::Full(txs) => txs
+            .into_iter()
+            .enumerate()
+            .map(|(i, tx)| {
+                tx.try_into()
+                    .map_err(|err| anyhow!("transaction {i} invalid: {err:?}"))
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        _ => unreachable!(),
+    };
     // convert each withdrawal
     let withdrawals = block
         .withdrawals
@@ -210,11 +211,11 @@ where
     let input = BlockBuildInput {
         state_input: StateInput {
             parent_header,
-            beneficiary: from_ethers_h160(block.author.context("author missing")?),
-            gas_limit: from_ethers_u256(block.gas_limit),
-            timestamp: from_ethers_u256(block.timestamp),
-            extra_data: block.extra_data.0.into(),
-            mix_hash: from_ethers_h256(block.mix_hash.context("mix_hash missing")?),
+            beneficiary: block.header.miner,
+            gas_limit: block.header.gas_limit,
+            timestamp: block.header.timestamp,
+            extra_data: block.header.extra_data,
+            mix_hash: block.header.mix_hash.context("mix_hash missing")?,
             transactions,
             withdrawals,
         },
@@ -281,8 +282,8 @@ impl<E: TxEssence> TryFrom<Data<E>> for BlockBuildInput<E> {
 
 fn proofs_to_tries(
     state_root: B256,
-    parent_proofs: HashMap<Address, EIP1186ProofResponse>,
-    proofs: HashMap<Address, EIP1186ProofResponse>,
+    parent_proofs: HashMap<Address, EIP1186AccountProofResponse>,
+    proofs: HashMap<Address, EIP1186AccountProofResponse>,
 ) -> Result<(MptNode, HashMap<Address, StorageEntry>)> {
     // if no addresses are provided, return the trie only consisting of the state root
     if parent_proofs.is_empty() {
@@ -315,7 +316,7 @@ fn proofs_to_tries(
         add_orphaned_leafs(address, &fini_proofs.account_proof, &mut state_nodes)?;
 
         // if no slots are provided, return the trie only consisting of the storage root
-        let storage_root = from_ethers_h256(proof.storage_hash);
+        let storage_root = proof.storage_hash;
         if proof.storage_proof.is_empty() {
             storage.insert(address, (storage_root.into(), vec![]));
             continue;
@@ -340,7 +341,11 @@ fn proofs_to_tries(
 
         // assure that slots can be deleted from the storage trie
         for storage_proof in &fini_proofs.storage_proof {
-            add_orphaned_leafs(storage_proof.key, &storage_proof.proof, &mut storage_nodes)?;
+            add_orphaned_leafs(
+                storage_proof.key.0,
+                &storage_proof.proof,
+                &mut storage_nodes,
+            )?;
         }
         // create the storage trie, from all the relevant nodes
         let storage_trie = resolve_nodes(&storage_root_node, &storage_nodes);
@@ -350,7 +355,7 @@ fn proofs_to_tries(
         let slots = proof
             .storage_proof
             .iter()
-            .map(|p| U256::from_be_bytes(p.key.into()))
+            .map(|p| U256::from_be_bytes(p.key.0.into()))
             .collect();
         storage.insert(address, (storage_trie, slots));
     }

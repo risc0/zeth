@@ -7130,7 +7130,6 @@ dependencies = [
  "thiserror",
  "thiserror-no-std",
  "tokio",
- "tracing",
  "zeth-primitives",
 ]
 

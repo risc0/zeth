@@ -14,7 +14,7 @@ use powdr::{pipeline::test_util::verify_pipeline, Pipeline};
 pub async fn execute_powdr() -> Result<(), Error> {
     println!("Compiling Rust...");
     let (asm_file_path, asm_contents) = compile_rust(
-        "./raiko-guest/Cargo.toml",
+        "/raiko-guest/Cargo.toml",
         Path::new("/tmp/test"),
         true,
         &CoProcessors::base().with_poseidon(),

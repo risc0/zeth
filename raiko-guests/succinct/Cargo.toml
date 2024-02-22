@@ -10,3 +10,6 @@ zeth-primitives = { path = "../../primitives", features = ["revm", "ethers"] }
 zeth-lib = { path = "../../lib", features = ["taiko", "std"] }
 sp1-zkvm = { git = "https://github.com/succinctlabs/sp1.git" }
 serde = { version = "1.0.195", features = ["derive"] }
+
+[patch.crates-io]
+tiny-keccak = { git = "https://github.com/succinctlabs/tiny-keccak-private.git", branch = "chris/test" }

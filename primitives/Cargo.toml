@@ -13,7 +13,7 @@ alloy-dyn-abi = { version = "0.6",default-features = false, optional = true }
 alloy-rlp = { version = "0.3", default-features = false }
 alloy-rlp-derive = { version = "0.3", default-features = false }
 anyhow = { version = "1.0", default-features = false }
-bytes = { version = "1.1", default-features = false }
+bytes = { version = "1.5", default-features = false }
 ethers-core = { version = "2.0", optional = true, features = ["optimism"] }
 k256 = { version = "^0.13.3", features = ["ecdsa"], default_features = false }
 

@@ -596,16 +596,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
 
 [[package]]
-name = "base64-serde"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba368df5de76a5bea49aaf0cf1b39ccfbbef176924d1ba5db3e4135216cbe3c7"
-dependencies = [
- "base64 0.21.7",
- "serde",
-]
-
-[[package]]
 name = "base64ct"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -720,15 +710,6 @@ dependencies = [
  "crypto-mac 0.8.0",
  "digest 0.9.0",
  "opaque-debug 0.3.0",
-]
-
-[[package]]
-name = "blake2"
-version = "0.10.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46502ad458c9a52b69d4d4d32775c788b7a1b85e8bc9d482d92250fc0e3f8efe"
-dependencies = [
- "digest 0.10.7",
 ]
 
 [[package]]
@@ -897,20 +878,6 @@ name = "bytemuck"
 version = "1.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2ef034f05691a48569bd920a96c81b9d91bbad1ab5ac7c4616c1f6ef36cb79f"
-dependencies = [
- "bytemuck_derive",
-]
-
-[[package]]
-name = "bytemuck_derive"
-version = "1.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "965ab7eb5f8f97d2a083c799f3a1b994fc397b2fe2da5d1da1626ce15a39f2b1"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.50",
-]
 
 [[package]]
 name = "byteorder"
@@ -1478,15 +1445,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dirs"
-version = "5.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44c45a9d03d6676652bcb5e724c7e988de1acad23a711b5217ab9cbecbec2225"
-dependencies = [
- "dirs-sys",
-]
-
-[[package]]
 name = "dirs-next"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1494,18 +1452,6 @@ checksum = "b98cf8ebf19c3d1b223e151f99a4f9f0690dca41414773390fc824184ac833e1"
 dependencies = [
  "cfg-if",
  "dirs-sys-next",
-]
-
-[[package]]
-name = "dirs-sys"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "520f05a5cbd335fae5a99ff7a6ab8627577660ee5cfd6a94a6a929b52ff0321c"
-dependencies = [
- "libc",
- "option-ext",
- "redox_users",
- "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -1598,7 +1544,6 @@ dependencies = [
  "rand_core 0.6.4",
  "sec1",
  "subtle",
- "tap",
  "zeroize",
 ]
 
@@ -1953,7 +1898,7 @@ source = "git+https://github.com/matter-labs/franklin-crypto?branch=beta#9e3c2a1
 dependencies = [
  "bellman_ce",
  "bit-vec 0.6.3",
- "blake2 0.9.2",
+ "blake2",
  "blake2-rfc_bellman_edition",
  "blake2s_simd",
  "byteorder",
@@ -3110,17 +3055,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51d515d32fb182ee37cda2ccdcb92950d6a3c2893aa280e540671c2cd0f3b1d9"
 
 [[package]]
-name = "num-derive"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed3955f1a9c7c0c15e092f9c887db08b1fc683305fdf6eb6684f22555355e202"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.50",
-]
-
-[[package]]
 name = "num-integer"
 version = "0.1.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3319,12 +3253,6 @@ dependencies = [
  "pkg-config",
  "vcpkg",
 ]
-
-[[package]]
-name = "option-ext"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "overload"
@@ -4398,16 +4326,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
 
 [[package]]
-name = "raiko-guest"
-version = "0.1.0"
-dependencies = [
- "serde",
- "sp1-zkvm",
- "zeth-lib",
- "zeth-primitives",
-]
-
-[[package]]
 name = "raiko-host"
 version = "0.1.0"
 dependencies = [
@@ -4445,31 +4363,6 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
- "zeth-lib",
- "zeth-primitives",
-]
-
-[[package]]
-name = "raiko-sgx"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64 0.21.7",
- "base64-serde",
- "clap 4.5.1",
- "dirs",
- "ethers-core",
- "hex 0.4.3",
- "raiko-host",
- "rand 0.8.5",
- "rand_core 0.6.4",
- "risc0-zkvm",
- "secp256k1 0.27.0",
- "serde",
- "serde_json",
- "sgx-ra",
- "sha3 0.10.8",
- "tokio",
  "zeth-lib",
  "zeth-primitives",
 ]
@@ -4792,7 +4685,7 @@ dependencies = [
  "once_cell",
  "revm-primitives 1.3.0 (git+https://github.com/ceciliaz030/revm.git?branch=sync-taiko-v3.5)",
  "ripemd",
- "secp256k1 0.28.2",
+ "secp256k1",
  "sha2 0.10.8",
  "substrate-bn",
 ]
@@ -4877,105 +4770,6 @@ checksum = "bd124222d17ad93a644ed9d011a40f4fb64aa54275c08cc216524a9ea82fb09f"
 dependencies = [
  "digest 0.10.7",
 ]
-
-[[package]]
-name = "risc0"
-version = "0.1.0"
-dependencies = [
- "risc0-zkvm",
- "zeth-lib",
- "zeth-primitives",
-]
-
-[[package]]
-name = "risc0-binfmt"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ede27631e6b2a946a43db812063453c9701d5d2544d82f9abec2cc12574ebb8e"
-dependencies = [
- "anyhow",
- "elf",
- "log",
- "risc0-zkp",
- "risc0-zkvm-platform",
- "serde",
-]
-
-[[package]]
-name = "risc0-circuit-rv32im"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68e00222152fdc94cacc9b6682b5c0cbe8138f1ee82e80c24a64d9ad2c6d7415"
-dependencies = [
- "anyhow",
- "log",
- "risc0-core",
- "risc0-zkp",
- "risc0-zkvm-platform",
- "tracing",
-]
-
-[[package]]
-name = "risc0-core"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08605aec93ea22ed83f7f81f42e2d7287a5b0c749d8671f94de9d5994020045c"
-dependencies = [
- "bytemuck",
- "rand_core 0.6.4",
-]
-
-[[package]]
-name = "risc0-zkp"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28166926bb177824939f4e91083198f9f3da8137aeac32361bd34548c0526fa5"
-dependencies = [
- "anyhow",
- "blake2 0.10.6",
- "bytemuck",
- "digest 0.10.7",
- "hex 0.4.3",
- "log",
- "paste",
- "rand_core 0.6.4",
- "risc0-core",
- "risc0-zkvm-platform",
- "serde",
- "sha2 0.10.8",
- "tracing",
-]
-
-[[package]]
-name = "risc0-zkvm"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec972152bcaa1a2967e412e22a84f6e2984a95c701bcc7943ca8ca10126ee0a2"
-dependencies = [
- "anyhow",
- "bytemuck",
- "cfg-if",
- "getrandom 0.2.12",
- "hex 0.4.3",
- "libm",
- "log",
- "num-derive",
- "num-traits",
- "risc0-binfmt",
- "risc0-circuit-rv32im",
- "risc0-core",
- "risc0-zkp",
- "risc0-zkvm-platform",
- "serde",
- "tempfile",
- "tracing",
-]
-
-[[package]]
-name = "risc0-zkvm-platform"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8524b46783b58b00e9b2a4712e837093c975b23cf25bfaf99e1cf69e9011bf6b"
 
 [[package]]
 name = "rle-decode-fast"
@@ -5287,30 +5081,11 @@ dependencies = [
 
 [[package]]
 name = "secp256k1"
-version = "0.27.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25996b82292a7a57ed3508f052cfff8640d38d32018784acd714758b43da9c8f"
-dependencies = [
- "rand 0.8.5",
- "secp256k1-sys 0.8.1",
-]
-
-[[package]]
-name = "secp256k1"
 version = "0.28.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d24b59d129cdadea20aea4fb2352fa053712e5d713eee47d700cd4b2bc002f10"
 dependencies = [
- "secp256k1-sys 0.9.2",
-]
-
-[[package]]
-name = "secp256k1-sys"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70a129b9e9efbfb223753b9163c4ab3b13cff7fd9c7f010fbac25ab4099fa07e"
-dependencies = [
- "cc",
+ "secp256k1-sys",
 ]
 
 [[package]]
@@ -5768,35 +5543,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
-]
-
-[[package]]
-name = "sp1-precompiles"
-version = "0.1.0"
-source = "git+https://github.com/succinctlabs/sp1.git#cf58553c9ba6811d597b3871fbdbaa7849cdfee2"
-dependencies = [
- "anyhow",
- "bincode",
- "cfg-if",
- "getrandom 0.2.12",
- "k256",
- "rand 0.8.5",
- "serde",
-]
-
-[[package]]
-name = "sp1-zkvm"
-version = "0.1.0"
-source = "git+https://github.com/succinctlabs/sp1.git#cf58553c9ba6811d597b3871fbdbaa7849cdfee2"
-dependencies = [
- "anyhow",
- "bincode",
- "cfg-if",
- "getrandom 0.2.12",
- "k256",
- "rand 0.8.5",
- "serde",
- "sp1-precompiles",
 ]
 
 [[package]]

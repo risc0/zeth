@@ -1,4 +1,5 @@
 use alloc::string::String;
+use alloc::boxed::Box;
 use std::path::PathBuf;
 
 use alloy_primitives::Address;

@@ -6,10 +6,13 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-zeth-primitives = { path = "../../primitives", features = ["revm", "ethers"] }
-zeth-lib = { path = "../../lib", features = ["taiko", "std"] }
+zeth-primitives = { path = "../../primitives", features = ["revm"] }
+zeth-lib = { path = "../../lib", features = ["std", "taiko"] }
 sp1-zkvm = { git = "https://github.com/succinctlabs/sp1.git" }
 serde = { version = "1.0.195", features = ["derive"] }
 
 [patch.crates-io]
 tiny-keccak = { git = "https://github.com/succinctlabs/tiny-keccak-private.git", branch = "chris/test" }
+sha2 = { git = "https://github.com/succinctlabs/sp1-RustCrypto-hashes", package = "sha2", branch = "v0.10.8" }
+
+[workspace]

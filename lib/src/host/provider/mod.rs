@@ -24,8 +24,10 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "taiko")]
 use crate::taiko::BlockProposed;
 
-pub mod cached_rpc_provider;
 pub mod file_provider;
+#[cfg(feature = "rpc")]
+pub mod cached_rpc_provider;
+#[cfg(feature = "rpc")]
 pub mod rpc_provider;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -107,18 +109,21 @@ pub fn new_file_provider(file_path: PathBuf) -> Result<Box<dyn Provider>> {
     Ok(Box::new(provider))
 }
 
+#[cfg(feature = "rpc")]
 pub fn new_rpc_provider(rpc_url: String) -> Result<Box<dyn Provider>> {
     let provider = rpc_provider::RpcProvider::new(rpc_url)?;
 
     Ok(Box::new(provider))
 }
 
+#[cfg(feature = "rpc")]
 pub fn new_cached_rpc_provider(cache_path: PathBuf, rpc_url: String) -> Result<Box<dyn Provider>> {
     let provider = cached_rpc_provider::CachedRpcProvider::new(cache_path, rpc_url)?;
 
     Ok(Box::new(provider))
 }
 
+#[cfg(feature = "rpc")]
 pub fn new_provider(
     cache_path: Option<PathBuf>,
     rpc_url: Option<String>,
@@ -127,6 +132,19 @@ pub fn new_provider(
         (Some(cache_path), Some(rpc_url)) => new_cached_rpc_provider(cache_path, rpc_url),
         (Some(cache_path), None) => new_file_provider(cache_path),
         (None, Some(rpc_url)) => new_rpc_provider(rpc_url),
+        (None, None) => Err(anyhow!("No cache_path or rpc_url given")),
+    }
+}
+
+#[cfg(not(feature = "rpc"))]
+pub fn new_provider(
+    cache_path: Option<PathBuf>,
+    rpc_url: Option<String>,
+) -> Result<Box<dyn Provider>> {
+    match (cache_path, rpc_url) {
+        (Some(cache_path), Some(rpc_url)) => Err(anyhow!("RPC not supported")),
+        (Some(cache_path), None) => new_file_provider(cache_path),
+        (None, Some(rpc_url)) => Err(anyhow!("RPC not supported")),
         (None, None) => Err(anyhow!("No cache_path or rpc_url given")),
     }
 }

@@ -7,10 +7,12 @@ use serde::{Deserialize, Serialize};
 use zeth_primitives::{block::Header, transactions::TxEssence, withdrawal::Withdrawal};
 
 pub mod consts;
-#[cfg(all(feature = "std", not(target_os = "zkvm")))]
+// #[cfg(all(feature = "std", not(target_os = "zkvm")))]
+#[cfg(feature = "std")]
 pub mod host;
 pub mod protocol_instance;
-#[cfg(all(feature = "std", not(target_os = "zkvm")))]
+// #[cfg(all(feature = "std", not(target_os = "zkvm")))]
+#[cfg(feature = "std")]
 pub mod provider;
 
 sol! {

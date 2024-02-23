@@ -3,7 +3,9 @@ sp1_zkvm::entrypoint!(main);
 
 use::std::fmt::Debug;
 use zeth_lib::{builder::{BlockBuilderStrategy, TaikoStrategy}, 
-    consts::{ChainSpec, TKO_MAINNET_CHAIN_SPEC}, taiko::{host::{init_taiko, HostArgs}, protocol_instance::{assemble_protocol_instance, EvidenceType}}};
+    host::mpt::mpt_from_proof,
+    consts::{ChainSpec, TKO_MAINNET_CHAIN_SPEC}, 
+    taiko::{ host::{init_taiko, HostArgs}, protocol_instance::{assemble_protocol_instance, EvidenceType}}};
 use zeth_primitives::{Address, B256};
 
 pub fn main() {

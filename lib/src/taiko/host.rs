@@ -1,5 +1,4 @@
 use alloc::{string::String, vec::Vec};
-use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 use alloy_primitives::{Address, B256};
@@ -7,6 +6,7 @@ use anyhow::{bail, ensure, Context, Result};
 use ethers_core::types::Transaction as EthersTransaction;
 use log::info;
 use rlp::{Decodable, DecoderError, Rlp};
+use serde::{Deserialize, Serialize};
 use zeth_primitives::{
     block::Header, ethers::from_ethers_h256, transactions::ethereum::EthereumTxEssence,
 };
@@ -145,7 +145,9 @@ pub fn derive_sys_info(
             .map(|w| w.try_into().unwrap())
             .collect(),
         block_proposed: proposal_event,
-        l1_next_block: l1_next_block.try_into().expect("l1_next_block converstion failed"),
+        l1_next_block: l1_next_block
+            .try_into()
+            .expect("l1_next_block converstion failed"),
         l2_block: l2_block.try_into().expect("l2_block converstion failed"),
     };
 

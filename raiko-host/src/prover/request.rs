@@ -56,8 +56,6 @@ pub struct SgxResponse {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PseZkResponse {}
 
-
-
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SP1Response {
     pub proof: String,

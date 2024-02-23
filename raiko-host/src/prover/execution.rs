@@ -4,11 +4,14 @@ use super::{
     context::Context,
     error::Result,
     prepare_input::prepare_input,
-    proof::{cache::Cache, sgx::execute_sgx, powdr::execute_powdr},
+    proof::{cache::Cache, powdr::execute_powdr, sgx::execute_sgx},
     request::{ProofRequest, ProofResponse},
     utils::cache_file_path,
 };
-use crate::{metrics::{inc_sgx_success, observe_input, observe_sgx_gen}, prover::proof::succinct::execute_sp1};
+use crate::{
+    metrics::{inc_sgx_success, observe_input, observe_sgx_gen},
+    prover::proof::succinct::execute_sp1,
+};
 // use crate::rolling::prune_old_caches;
 
 pub async fn execute(
@@ -21,14 +24,14 @@ pub async fn execute(
             let l1_cache_file = cache_file_path(&ctx.cache_path, req.block, true);
             let l2_cache_file = cache_file_path(&ctx.cache_path, req.block, false);
             (l1_cache_file, l2_cache_file)
-        },
+        }
         ProofRequest::Powdr(_) => todo!(),
         ProofRequest::PseZk(_) => todo!(),
         ProofRequest::Succinct(req) => {
             let l1_cache_file = cache_file_path(&ctx.cache_path, req.block, true);
             let l2_cache_file = cache_file_path(&ctx.cache_path, req.block, false);
             (l1_cache_file, l2_cache_file)
-        },
+        }
     };
     // set cache file path to context
     ctx.l1_cache_file = Some(l1_cache_file);
@@ -57,7 +60,7 @@ pub async fn execute(
                 observe_sgx_gen(bid, time_elapsed);
                 inc_sgx_success(bid);
                 Ok(ProofResponse::Sgx(resp))
-            },
+            }
             ProofRequest::Powdr(req) => {
                 let start = Instant::now();
                 let bid = req.block;
@@ -72,7 +75,7 @@ pub async fn execute(
                 let resp = execute_sp1(ctx, req).await?;
                 let time_elapsed = Instant::now().duration_since(start).as_millis() as i64;
                 Ok(ProofResponse::SP1(resp))
-            },
+            }
         }
     }
     .await;

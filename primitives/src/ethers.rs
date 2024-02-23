@@ -49,7 +49,8 @@ use crate::{
     receipt::{Log, Receipt, ReceiptPayload},
     transactions::{
         ethereum::{
-            EthereumTxEssence, TransactionKind, TxEssenceEip1559, TxEssenceEip2930, TxEssenceEip4844, TxEssenceLegacy
+            EthereumTxEssence, TransactionKind, TxEssenceEip1559, TxEssenceEip2930,
+            TxEssenceEip4844, TxEssenceLegacy,
         },
         optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
         signature::TxSignature,

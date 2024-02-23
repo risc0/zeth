@@ -1,15 +1,18 @@
-use std::path::{Path, PathBuf};
-use std::str;
+use std::{
+    path::{Path, PathBuf},
+    str,
+};
 
+use powdr::{
+    pipeline::test_util::verify_pipeline,
+    riscv::{compile_rust, CoProcessors},
+    GoldilocksField, Pipeline,
+};
 use serde_json::Value;
 use tokio::process::Command;
 use tracing::{debug, info};
-use crate::prover::error::{Result, Error};
 
-
-use powdr::riscv::{compile_rust, CoProcessors};
-use powdr::GoldilocksField;
-use powdr::{pipeline::test_util::verify_pipeline, Pipeline};
+use crate::prover::error::{Error, Result};
 
 pub async fn execute_powdr() -> Result<(), Error> {
     println!("Compiling Rust...");
@@ -18,7 +21,8 @@ pub async fn execute_powdr() -> Result<(), Error> {
         Path::new("/tmp/test"),
         true,
         &CoProcessors::base().with_poseidon(),
-        /*use bootloader*/ false,
+        // use bootloader
+        false,
     )
     .ok_or_else(|| vec!["could not compile rust".to_string()])
     .unwrap();
@@ -33,5 +37,6 @@ pub async fn execute_powdr() -> Result<(), Error> {
     println!("Verification done.");
     Ok(())
 }
-// phoebe@cecilia-gz:~/projects/zeth$ 
-//  cargo +nightly build --release -Z build-std=core,alloc --target riscv32imac-unknown-none-elf --lib --manifest-path ./raiko-guest/Cargo.toml
+// phoebe@cecilia-gz:~/projects/zeth$
+//  cargo +nightly build --release -Z build-std=core,alloc --target
+// riscv32imac-unknown-none-elf --lib --manifest-path ./raiko-guest/Cargo.toml

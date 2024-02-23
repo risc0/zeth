@@ -15,13 +15,12 @@
 //! Constants for the Ethereum protocol.
 extern crate alloc;
 
-use core::cell::{SyncUnsafeCell, UnsafeCell};
-
 use alloc::{
     collections::BTreeMap,
     str::FromStr,
     string::{String, ToString},
 };
+use core::cell::{SyncUnsafeCell, UnsafeCell};
 
 use anyhow::bail;
 use once_cell::unsync::Lazy;

@@ -1,14 +1,10 @@
-use alloc::vec::Vec;
-use alloc::format;
+use alloc::{format, vec::Vec};
+
 use alloy_primitives::{Address, TxHash, B256};
 use alloy_sol_types::SolValue;
 use anyhow::{anyhow, ensure, Result};
 use revm::primitives::SpecId;
-use zeth_primitives::{
-    block::Header,
-    keccak::keccak,
-    transactions::EthereumTransaction,
-};
+use zeth_primitives::{block::Header, keccak::keccak, transactions::EthereumTransaction};
 
 use super::{consts::ANCHOR_GAS_LIMIT, BlockMetadata, EthDeposit, TaikoSystemInfo, Transition};
 use crate::consts::TKO_MAINNET_CHAIN_SPEC;
@@ -48,7 +44,8 @@ impl ProtocolInstance {
                     self.meta_hash(),
                 )
                     .abi_encode(),
-            ).into(),
+            )
+            .into(),
         }
     }
 }
@@ -129,11 +126,18 @@ pub fn verify(sys: &TaikoSystemInfo, header: &Header, pi: &mut ProtocolInstance)
     // check the block metadata
     ensure!(
         pi.block_metadata.abi_encode() == sys.block_proposed.meta.abi_encode(),
-        format!("block hash mismatch, expected: {:?}, got: {:?}",  sys.block_proposed.meta, pi.block_metadata)
+        format!(
+            "block hash mismatch, expected: {:?}, got: {:?}",
+            sys.block_proposed.meta, pi.block_metadata
+        )
     );
     ensure!(
         header.hash() == sys.l2_block.hash(),
-        format!("block hash mismatch, expected: {:?}, got: {:?}",  header.hash(), sys.l2_block.hash())
+        format!(
+            "block hash mismatch, expected: {:?}, got: {:?}",
+            header.hash(),
+            sys.l2_block.hash()
+        )
     );
 
     Ok(())

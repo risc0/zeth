@@ -22,10 +22,10 @@ use zeth_primitives::{
 
 #[cfg(feature = "optimism")]
 pub use self::execute::optimism::OpTxExecStrategy;
-#[cfg(feature = "optimism")]
-use crate::OptimismTxEssence;
 #[cfg(feature = "taiko")]
 pub use self::execute::taiko::TkoTxExecStrategy;
+#[cfg(feature = "optimism")]
+use crate::OptimismTxEssence;
 use crate::{
     builder::{
         execute::{ethereum::EthTxExecStrategy, TxExecStrategy},

@@ -2,9 +2,9 @@
 
 #[allow(dead_code)]
 pub mod cache;
+pub mod powdr;
 pub mod pse_zk;
 pub mod sgx;
-pub mod powdr;
 pub mod succinct;
 
 #[allow(dead_code)]

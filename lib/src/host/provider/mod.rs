@@ -24,9 +24,9 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "taiko")]
 use crate::taiko::BlockProposed;
 
-pub mod file_provider;
 #[cfg(feature = "rpc")]
 pub mod cached_rpc_provider;
+pub mod file_provider;
 #[cfg(feature = "rpc")]
 pub mod rpc_provider;
 

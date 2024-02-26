@@ -5,14 +5,11 @@ use serde::{Deserialize, Serialize};
 use sp1_core::{utils, SP1Prover, SP1Stdin, SP1Verifier};
 use zeth_lib::{consts::TKO_MAINNET_CHAIN_SPEC, taiko::host::HostArgs};
 
-use crate::{
-    metrics::inc_sgx_error,
-    prover::{
-        consts::*,
-        context::Context,
-        request::{SP1Response, SgxRequest, SgxResponse},
-        utils::guest_executable_path,
-    },
+use crate::prover::{
+    consts::*,
+    context::Context,
+    request::{SP1Response, SgxRequest, SgxResponse},
+    utils::guest_executable_path,
 };
 
 pub type SP1Proof = sp1_core::SP1ProofWithIO<utils::BabyBearBlake3>;

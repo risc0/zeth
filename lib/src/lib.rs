@@ -13,7 +13,7 @@
 // limitations under the License.
 // #![feature(path_file_prefix)]
 #![feature(sync_unsafe_cell)]
-#![cfg_attr(any(not(feature = "std"), target_os = "zkvm"), no_std)]
+#![cfg_attr(any(not(feature = "std")), no_std)]
 
 extern crate alloc;
 extern crate core;
@@ -29,7 +29,7 @@ pub mod optimism;
 #[cfg(feature = "taiko")]
 pub mod taiko;
 
-#[cfg(all(feature = "std", not(target_os = "zkvm")))]
+#[cfg(all(feature = "std"))]
 pub mod host;
 
 #[cfg(feature = "optimism")]
@@ -39,6 +39,6 @@ pub use zeth_primitives::transactions::{ethereum::EthereumTxEssence, optimism::O
 
 /// call forget only if running inside the guest
 pub fn guest_mem_forget<T>(_t: T) {
-    #[cfg(target_os = "zkvm")]
+    #[cfg(target_os = "zkvm")] // TODO: seperate for risc0
     core::mem::forget(_t)
 }

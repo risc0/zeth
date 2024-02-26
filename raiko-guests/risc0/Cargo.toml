@@ -10,3 +10,5 @@ risc0-build = { version = "0.20.1" }
 methods = ["bin"]
 
 [workspace]
+
+# cargo build

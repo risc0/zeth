@@ -4,6 +4,6 @@
         "./Cargo.toml",
         "./raiko-guests/succinct/Cargo.toml",
         "./raiko-guests/risc0/Cargo.toml",
-        // "./raiko-guests/risc0/bin/Cargo.toml",
+        "./raiko-guests/risc0/bin/Cargo.toml",
     ]
 }

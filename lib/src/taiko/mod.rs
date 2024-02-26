@@ -85,7 +85,7 @@ sol! {
     function proveBlock(uint64 blockId, bytes calldata input) {}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TaikoSystemInfo {
     pub l1_hash: B256,
     pub l1_height: u64,

@@ -51,7 +51,6 @@ pub struct TxEssenceOptimismDeposited {
     pub data: Bytes,
 }
 
-#[cfg(feature = "optimism")]
 /// Represents the core essence of an Optimism transaction, specifically the portion that
 /// gets signed.
 ///

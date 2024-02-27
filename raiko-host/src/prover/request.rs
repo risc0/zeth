@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use zeth_primitives::{Address, B256};
 
+#[cfg(feature = "succinct")]
 use super::proof::succinct::SP1Proof;
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -10,7 +11,9 @@ use super::proof::succinct::SP1Proof;
 pub enum ProofRequest {
     Sgx(SgxRequest),
     PseZk(PseZkRequest),
+    #[cfg(feature = "powdr")]
     Powdr(PowdrRequest),
+    #[cfg(feature = "succinct")]
     Succinct(SP1Request),
 }
 
@@ -42,6 +45,7 @@ pub struct PseZkRequest {}
 pub enum ProofResponse {
     Sgx(SgxResponse),
     PseZk(PseZkResponse),
+    #[cfg(feature = "succinct")]
     SP1(SP1Response),
 }
 
@@ -56,6 +60,7 @@ pub struct SgxResponse {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PseZkResponse {}
 
+#[cfg(feature = "succinct")]
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SP1Response {
     pub proof: String,

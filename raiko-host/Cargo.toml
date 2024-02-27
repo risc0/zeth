@@ -36,9 +36,14 @@ prometheus = "0.13.3"
 lazy_static = "1.4.0"
 once_cell = "1.8.0"
 thiserror = "1.0"
-powdr = { git = "https://github.com/ceciliaz030/powdr", branch = "+nightly" }
-sp1-core = { git = "https://github.com/succinctlabs/sp1.git" }
+powdr = { git = "https://github.com/ceciliaz030/powdr", branch = "+nightly", optional = true}
+sp1-core = { git = "https://github.com/succinctlabs/sp1.git", optional = true }
+
 
 [dev-dependencies]
 assert_cmd = "2.0"
 rstest = "0.18"
+
+[features]
+powdr = ["dep:powdr"]
+succinct = ["dep:sp1-core"]

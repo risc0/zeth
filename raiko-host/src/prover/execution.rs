@@ -4,13 +4,17 @@ use super::{
     context::Context,
     error::Result,
     prepare_input::prepare_input,
-    proof::{cache::Cache, powdr::execute_powdr, sgx::execute_sgx},
+    proof::{cache::Cache, sgx::execute_sgx},
     request::{ProofRequest, ProofResponse},
     utils::cache_file_path,
 };
+#[cfg(feature = "powdr")]
+use super::proof::succinct::execute_sp1;
+#[cfg(feature = "succinct")]
+use super::proof::powdr::execute_powdr;
+
 use crate::{
     metrics::{inc_sgx_success, observe_input, observe_sgx_gen},
-    prover::proof::succinct::execute_sp1,
 };
 // use crate::rolling::prune_old_caches;
 
@@ -25,8 +29,10 @@ pub async fn execute(
             let l2_cache_file = cache_file_path(&ctx.cache_path, req.block, false);
             (l1_cache_file, l2_cache_file)
         }
+        #[cfg(feature = "powdr")]
         ProofRequest::Powdr(_) => todo!(),
         ProofRequest::PseZk(_) => todo!(),
+        #[cfg(feature = "succinct")]
         ProofRequest::Succinct(req) => {
             let l1_cache_file = cache_file_path(&ctx.cache_path, req.block, true);
             let l2_cache_file = cache_file_path(&ctx.cache_path, req.block, false);
@@ -61,6 +67,7 @@ pub async fn execute(
                 inc_sgx_success(bid);
                 Ok(ProofResponse::Sgx(resp))
             }
+            #[cfg(feature = "powdr")]
             ProofRequest::Powdr(req) => {
                 let start = Instant::now();
                 let bid = req.block;
@@ -69,6 +76,7 @@ pub async fn execute(
                 todo!()
             }
             ProofRequest::PseZk(_) => todo!(),
+            #[cfg(feature = "succinct")]
             ProofRequest::Succinct(req) => {
                 let start = Instant::now();
                 let bid = req.block;

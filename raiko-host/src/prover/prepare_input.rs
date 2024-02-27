@@ -52,8 +52,10 @@ pub async fn prepare_input(
             .await
             .map_err(Into::<Error>::into)
         }
+        #[cfg(feature = "powdr")]
         ProofRequest::Powdr(_) => todo!(),
         ProofRequest::PseZk(PseZkRequest { .. }) => todo!(),
+        #[cfg(feature = "succinct")]
         ProofRequest::Succinct(SgxRequest {
             block,
             l1_rpc,

@@ -268,6 +268,7 @@ impl TryFrom<EthersTransaction> for EthereumTxEssence {
     }
 }
 
+#[cfg(feature = "optimism")]
 /// Conversion from `EthersTransaction` to the local [OptimismTxEssence].
 /// This conversion may fail if certain expected fields are missing.
 impl TryFrom<EthersTransaction> for OptimismTxEssence {

@@ -28,6 +28,11 @@ lazy_static! {
         "time taken for preparing input before proof generation"
     )
     .unwrap();
+    pub static ref PREPARE_OUTPUT_TIME: IntGauge = register_int_gauge!(
+        "prepare_output_time_gauge",
+        "time taken for preparing output before proof generation"
+    )
+    .unwrap();
 }
 
 pub fn observe_sgx_gen(block: u64, time: i64) {
@@ -56,4 +61,8 @@ pub fn inc_sgx_error(block: u64) {
 
 pub fn observe_input(time: i64) {
     PREPARE_INPUT_TIME.set(time);
+}
+
+pub fn observe_output(time: i64) {
+    PREPARE_OUTPUT_TIME.set(time);
 }

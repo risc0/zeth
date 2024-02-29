@@ -9,12 +9,12 @@ use crate::{
     prover::{
         consts::*,
         context::Context,
-        request::{SgxRequest, SgxResponse},
+        request::{ProofRequest, SgxInstance, SgxRequest, SgxResponse},
         utils::guest_executable_path,
     },
 };
 
-pub async fn execute_sgx(ctx: &mut Context, req: &SgxRequest) -> Result<SgxResponse, String> {
+pub async fn execute_sgx(ctx: &mut Context, req: &ProofRequest) -> Result<SgxResponse, String> {
     let guest_path = guest_executable_path(&ctx.guest_path, SGX_PARENT_DIR);
     debug!("Guest path: {:?}", guest_path);
     let mut cmd = {
@@ -31,6 +31,11 @@ pub async fn execute_sgx(ctx: &mut Context, req: &SgxRequest) -> Result<SgxRespo
             .arg("one-shot");
         cmd
     };
+
+    let instance_id = match req.proof_instance {
+        Sgx(SgxInstance{instance_id}) =>  instance_id,
+        _ => return Err("Wrong Proof Instance")
+    };
     let output = cmd
         .arg("--blocks-data-file")
         .arg(ctx.l2_cache_file.as_ref().unwrap())
@@ -41,9 +46,9 @@ pub async fn execute_sgx(ctx: &mut Context, req: &SgxRequest) -> Result<SgxRespo
         .arg("--graffiti")
         .arg(req.graffiti.to_string())
         .arg("--sgx-instance-id")
-        .arg(ctx.sgx_context.instance_id.to_string())
+        .arg(instance_id.to_string())
         .arg("--l2-chain")
-        .arg(&ctx.l2_chain)
+        .arg(&req.l2_contracts)
         .output()
         .await
         .map_err(|e| e.to_string())?;
@@ -51,7 +56,7 @@ pub async fn execute_sgx(ctx: &mut Context, req: &SgxRequest) -> Result<SgxRespo
     info!("Sgx execution stdout: {:?}", str::from_utf8(&output.stdout));
     if !output.status.success() {
         inc_sgx_error(req.block);
-        return Err(output.status.to_string());
+        return Err(output.status);
     }
     parse_sgx_result(output.stdout)
 }

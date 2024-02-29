@@ -1,19 +1,63 @@
-// Copyright 2024 RISC Zero, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+use std::path::PathBuf;
 
-pub mod build;
-pub mod rollups;
+use alloy_primitives::FixedBytes;
+use serde::{Deserialize, Serialize};
+use tracing::info;
+use zeth_lib::{consts::TKO_MAINNET_CHAIN_SPEC, input::Input, taiko::{host::HostArgs, TaikoSystemInfo}, 
+EthereumTxEssence};
+
+use crate::prover::{
+    consts::*, context::Context, proof::risc0::snarks::verify_groth16_snark, request::{ProofInstance, ProofRequest, Risc0Instance}, utils::guest_executable_path
+};
+
+// TODO: import from risc0_guest_method
+const RISC0_GUEST_ID: &str = "risc0";
+
+// TODO: merge Patar's PR
+/// The Input struct for every Taiko guest prover
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GuestInput {
+    /// The system info for the Taiko guest prover
+    pub sys_info: TaikoSystemInfo,
+    /// The initial data required to build a block
+    pub input: Input<EthereumTxEssence>,
+}
+
+pub async fn execute_risc0(
+    input: Input<EthereumTxEssence>, 
+    sys_info: TaikoSystemInfo,
+    ctx: &Context,
+    req: &ProofRequest,
+) -> Result<SgxResponse, String> {
+    let req = match req.proof_instance {
+        Risc0Instance(instance) => instance,
+        _ => return Err("Wrong Proof Instance")
+    };
+    let elf = include_bytes!(ctx.guest_executable_path(req.proof_instance));
+    let result = maybe_prove::<GuestInput>(
+        req, 
+        &GuestInput {sys_info, input}, 
+        elf, 
+        Default::default()
+    );
+
+    // Create/verify Groth16 SNARK
+    if req.snark {
+        let Some((stark_uuid, stark_receipt)) = result else {
+            panic!("No STARK data to snarkify!");
+        };
+        let image_id = Digest::from(RISC0_GUEST_ID);
+        let (snark_uuid, snark_receipt) = stark2snark(image_id, stark_uuid, stark_receipt).await?;
+
+        info!("Validating SNARK uuid: {}", snark_uuid);
+
+        verify_groth16_snark(&cli, image_id, snark_receipt).await?;
+    }
+}
+
+
+// pub mod build;
+// pub mod rollups;
 pub mod snarks;
 
 use std::fmt::Debug;
@@ -175,15 +219,12 @@ pub async fn verify_bonsai_receipt<O: Eq + Debug + DeserializeOwned>(
 }
 
 pub async fn maybe_prove<I: Serialize, O: Eq + Debug + Serialize + DeserializeOwned>(
-    cli: &Cli,
+    req: &Risc0Instance,
     input: &I,
     elf: &[u8],
-    expected_output: &O,
+    // expected_output: &O,
     assumptions: (Vec<Assumption>, Vec<String>),
 ) -> Option<(String, Receipt)> {
-    let Cli::Prove(prove_args) = cli else {
-        return None;
-    };
 
     let (assumption_instances, assumption_uuids) = assumptions;
     let encoded_input = to_vec(input).expect("Could not serialize proving input!");
@@ -203,13 +244,13 @@ pub async fn maybe_prove<I: Serialize, O: Eq + Debug + Serialize + DeserializeOw
         if let Ok(Some(cached_data)) = load_receipt(&receipt_label) {
             info!("Loaded locally cached receipt");
             (cached_data.0, cached_data.1, true)
-        } else if prove_args.submit_to_bonsai {
+        } else if req.bonsai {
             // query bonsai service until it works
             loop {
                 if let Ok(remote_proof) = prove_bonsai(
                     encoded_input.clone(),
                     elf,
-                    expected_output,
+                    // expected_output,
                     assumption_uuids.clone(),
                 )
                 .await
@@ -222,11 +263,11 @@ pub async fn maybe_prove<I: Serialize, O: Eq + Debug + Serialize + DeserializeOw
             (
                 Default::default(),
                 prove_locally(
-                    prove_args.run_args.execution_po2,
+                    req.execution_po2,
                     encoded_input,
                     elf,
                     assumption_instances,
-                    prove_args.run_args.profile,
+                    req.profile,
                     &cli.execution_tag(),
                 ),
                 false,
@@ -271,7 +312,7 @@ pub async fn upload_receipt(receipt: &Receipt) -> anyhow::Result<String> {
 pub async fn prove_bonsai<O: Eq + Debug + DeserializeOwned>(
     encoded_input: Vec<u32>,
     elf: &[u8],
-    expected_output: &O,
+    // expected_output: &O,
     assumption_uuids: Vec<String>,
 ) -> anyhow::Result<(String, Receipt)> {
     info!("Proving on Bonsai");
@@ -292,7 +333,7 @@ pub async fn prove_bonsai<O: Eq + Debug + DeserializeOwned>(
         assumption_uuids.clone(),
     )?;
 
-    verify_bonsai_receipt(image_id, expected_output, session.uuid.clone(), 8).await
+    // verify_bonsai_receipt(image_id, expected_output, session.uuid.clone(), 8).await
 }
 
 /// Prove the given ELF locally with the given input and assumptions. The segments are

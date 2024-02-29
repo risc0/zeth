@@ -60,7 +60,7 @@ struct Opt {
     max_log_days: usize,
 
     #[structopt(long, require_equals = true, default_value = "internal_devnet_a")]
-    l2_chain: String,
+    l2_contracts: String,
 
     #[structopt(long, require_equals = true, default_value = "20")]
     // WARNING: must large than concurrency_limit
@@ -112,7 +112,7 @@ async fn main() -> Result<()> {
         &opt.bind,
         &opt.guest,
         &opt.cache,
-        &opt.l2_chain,
+        &opt.l2_contracts,
         opt.sgx_instance_id,
         opt.proof_cache,
         opt.concurrency_limit,

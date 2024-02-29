@@ -1,11 +1,12 @@
 use std::time::Instant;
 
+use zeth_lib::{builder::{BlockBuilderStrategy, TaikoStrategy}, consts::TKO_MAINNET_CHAIN_SPEC};
+
 use super::{
     context::Context,
     error::Result,
-    prepare_input::prepare_input,
     proof::{cache::Cache, sgx::execute_sgx},
-    request::{ProofRequest, ProofResponse},
+    request::{ProofInstance, ProofRequest, ProofResponse},
     utils::cache_file_path,
 };
 #[cfg(feature = "powdr")]
@@ -14,7 +15,7 @@ use super::proof::succinct::execute_sp1;
 use super::proof::powdr::execute_powdr;
 
 use crate::{
-    metrics::{inc_sgx_success, observe_input, observe_sgx_gen},
+    metrics::{inc_sgx_success, observe_input, observe_sgx_gen}, prover::proof::risc0::execute_risc0,
 };
 // use crate::rolling::prune_old_caches;
 
@@ -23,42 +24,40 @@ pub async fn execute(
     ctx: &mut Context,
     req: &ProofRequest,
 ) -> Result<ProofResponse> {
-    let (l1_cache_file, l2_cache_file) = match req {
-        ProofRequest::Sgx(req) => {
-            let l1_cache_file = cache_file_path(&ctx.cache_path, req.block, true);
-            let l2_cache_file = cache_file_path(&ctx.cache_path, req.block, false);
-            (l1_cache_file, l2_cache_file)
-        }
-        #[cfg(feature = "powdr")]
-        ProofRequest::Powdr(_) => todo!(),
-        ProofRequest::PseZk(_) => todo!(),
-        #[cfg(feature = "succinct")]
-        ProofRequest::Succinct(req) => {
-            let l1_cache_file = cache_file_path(&ctx.cache_path, req.block, true);
-            let l2_cache_file = cache_file_path(&ctx.cache_path, req.block, false);
-            (l1_cache_file, l2_cache_file)
-        }
-    };
-    // set cache file path to context
-    ctx.l1_cache_file = Some(l1_cache_file);
-    ctx.l2_cache_file = Some(l2_cache_file);
+
+    ctx.update_cache_path(req.block);
     // try remove cache file anyway to avoid reorg error
     // because tokio::fs::remove_file haven't guarantee of execution. So, we need to remove
     // twice
     // > Runs the provided function on an executor dedicated to blocking operations.
     // > Tasks will be scheduled as non-mandatory, meaning they may not get executed
     // > in case of runtime shutdown.
-    remove_cache_file(ctx).await?;
+    ctx.remove_cache_file().await?;
     let result = async {
         // 1. load input data into cache path
         let start = Instant::now();
-        let _ = prepare_input(ctx, req.clone()).await?;
+        let (input, sys_info) = prepare_input(ctx, req.clone()).await?;
         let elapsed = Instant::now().duration_since(start).as_millis() as i64;
         observe_input(elapsed);
-        // 2. run proof
+        // 2. pre-build the block
+        let output = TaikoStrategy::build_from(&TKO_MAINNET_CHAIN_SPEC.clone(), input);
+        let elapsed = Instant::now().duration_since(elapsed).as_millis() as i64;
+        observe_output(elapsed);
+
+        // TODO: cherry-pick risc0 latest output
+        match &output {
+            Ok((header, mpt_node)) => {
+                info!("Verifying final state using provider data ...");    
+                info!("Final block hash derived successfully. {}", header.hash);
+            }
+            Err(_) => {
+                warn!("Proving bad block construction!")
+            }
+        }
+        // 3. run proof
         // prune_old_caches(&ctx.cache_path, ctx.max_caches);
-        match req {
-            ProofRequest::Sgx(req) => {
+        match req.proof_instance {
+            ProofInstance::Sgx(instance) => {
                 let start = Instant::now();
                 let bid = req.block;
                 let resp = execute_sgx(ctx, req).await?;
@@ -68,22 +67,26 @@ pub async fn execute(
                 Ok(ProofResponse::Sgx(resp))
             }
             #[cfg(feature = "powdr")]
-            ProofRequest::Powdr(req) => {
+            ProofInstance::Powdr => {
                 let start = Instant::now();
                 let bid = req.block;
                 let resp = execute_powdr().await?;
                 let time_elapsed = Instant::now().duration_since(start).as_millis() as i64;
                 todo!()
             }
-            ProofRequest::PseZk(_) => todo!(),
+            ProofInstance::PseZk => todo!(),
             #[cfg(feature = "succinct")]
-            ProofRequest::Succinct(req) => {
+            ProofInstance::Succinct => {
                 let start = Instant::now();
                 let bid = req.block;
                 let resp = execute_sp1(ctx, req).await?;
                 let time_elapsed = Instant::now().duration_since(start).as_millis() as i64;
                 Ok(ProofResponse::SP1(resp))
             }
+            ProofInstance::Risc0 => {
+                execute_risc0(input, sys_info).await?;
+                todo!()
+            },
         }
     }
     .await;
@@ -91,22 +94,35 @@ pub async fn execute(
     result
 }
 
-async fn remove_cache_file(ctx: &Context) -> Result<()> {
-    for file in [
-        ctx.l1_cache_file.as_ref().unwrap(),
-        ctx.l2_cache_file.as_ref().unwrap(),
-    ] {
-        tokio::fs::remove_file(file).await.or_else(|e| {
-            // ignore NotFound error
-            if e.kind() == ::std::io::ErrorKind::NotFound {
-                Ok(())
-            } else {
-                Err(e)
-            }
-        })?;
-    }
-    Ok(())
+/// prepare input data for guests
+pub async fn prepare_input(
+    ctx: &mut Context,
+    req: ProofInstance,
+) -> Result<(Input<EthereumTxEssence>, TaikoSystemInfo)> {
+    // Todo(Cecilia): should contract address as args, curently hardcode
+    let l1_cache = ctx.l1_cache_file.clone();
+    let l2_cache = ctx.l2_cache_file.clone();
+    let testnet = ctx.l2_contracts.clone();
+    tokio::task::spawn_blocking(move || {
+        init_taiko(
+            HostArgs {
+                l1_cache,
+                l1_rpc: Some(l1_rpc),
+                l2_cache,
+                l2_rpc: Some(l2_rpc),
+            },
+            TKO_MAINNET_CHAIN_SPEC.clone(),
+            &testnet,
+            block,
+            graffiti,
+            prover,
+        )
+        .expect("Init taiko failed")
+    })
+    .await
+    .map_err(Into::<Error>::into)
 }
+
 
 #[cfg(test)]
 mod tests {

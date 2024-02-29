@@ -5,41 +5,53 @@ use zeth_primitives::{Address, B256};
 #[cfg(feature = "succinct")]
 use super::proof::succinct::SP1Proof;
 
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
-#[allow(clippy::large_enum_variant)]
-pub enum ProofRequest {
-    Sgx(SgxRequest),
-    PseZk(PseZkRequest),
-    #[cfg(feature = "powdr")]
-    Powdr(PowdrRequest),
+#[allow(dead_code)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
+pub enum ProofInstance {
     #[cfg(feature = "succinct")]
-    Succinct(SP1Request),
+    Succinct,
+    PseZk,
+    #[cfg(feature = "powdr")]
+    Powdr,
+    Sgx(SgxInstance),
+    #[cfg(feature = "risc0")]
+    Risc0(Risc0Instance),
+}
+
+pub struct SgxInstance {
+    pub instance_id: u32,
+}
+
+pub struct Risc0Instance {
+    pub bonsai: bool,
+    pub snark: bool,
+    pub profile: bool,
+    pub execution_po2: u32,
 }
 
 #[serde_as]
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SgxRequest {
+pub struct ProofRequest {
     /// the l2 block number
     pub block: u64,
     /// l2 node for get block by number
     pub l2_rpc: String,
     /// l1 node for signal root verify and get txlist from proposed transaction.
     pub l1_rpc: String,
+    /// l2 contracts selection
+    pub l2_contracts: String,
+    // graffiti
+    pub graffiti: B256,
     /// the protocol instance data
     #[serde_as(as = "DisplayFromStr")]
     pub prover: Address,
-    pub graffiti: B256,
+
+    pub proof_instance: ProofInstance,
 }
 
-pub type PowdrRequest = SgxRequest;
 
-pub type SP1Request = SgxRequest;
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct PseZkRequest {}
-
+// Use Output type in Patar's Driver trait
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ProofResponse {

@@ -26,7 +26,7 @@ pub fn serve(
     addr: &str,
     guest_path: &Path,
     cache_path: &Path,
-    l2_chain: &str,
+    l2_contracts: &str,
     sgx_instance_id: u32,
     proof_cache: usize,
     concurrency_limit: usize,
@@ -37,12 +37,12 @@ pub fn serve(
         .expect("valid socket address");
     let guest_path = guest_path.to_owned();
     let cache_path = cache_path.to_owned();
-    let l2_chain = l2_chain.to_owned();
+    let l2_contracts = l2_contracts.to_owned();
     tokio::spawn(async move {
         let handler = Handler::new(
             guest_path.clone(),
             cache_path.clone(),
-            l2_chain.clone(),
+            l2_contracts.clone(),
             sgx_instance_id,
             proof_cache,
             max_caches,
@@ -95,7 +95,7 @@ impl Handler {
     fn new(
         guest_path: PathBuf,
         cache_path: PathBuf,
-        l2_chain: String,
+        l2_contracts: String,
         sgx_instance_id: u32,
         capacity: usize,
         max_caches: usize,
@@ -104,7 +104,7 @@ impl Handler {
             ctx: Context::new(
                 guest_path,
                 cache_path,
-                l2_chain,
+                l2_contracts,
                 sgx_instance_id,
                 max_caches,
             ),

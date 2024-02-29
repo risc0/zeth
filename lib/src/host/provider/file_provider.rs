@@ -28,11 +28,7 @@ use ethers_core::types::{
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-// #[cfg(feature = "taiko")]
-// use zeth_primitives::taiko::BlockProposed;
 use super::{AccountQuery, BlockQuery, MutProvider, ProofQuery, Provider, StorageQuery};
-#[cfg(feature = "taiko")]
-use super::{LogsQuery, TxQuery};
 
 #[serde_as]
 #[derive(Default, Deserialize, Serialize)]
@@ -63,8 +59,7 @@ pub struct FileProvider {
     #[serde_as(as = "Vec<(_, _)>")]
     logs: HashMap<LogsQuery, Vec<Log>>,
     #[cfg(feature = "taiko")]
-    #[serde_as(as = "Vec<(_, _)>")]
-    transactions: HashMap<TxQuery, Transaction>,
+    propose: Option<(Transaction, BlockProposed)>,
 }
 
 impl FileProvider {
@@ -81,9 +76,7 @@ impl FileProvider {
             code: HashMap::new(),
             storage: HashMap::new(),
             #[cfg(feature = "taiko")]
-            logs: HashMap::new(),
-            #[cfg(feature = "taiko")]
-            transactions: HashMap::new(),
+            propose: Default::default(),
         }
     }
 
@@ -175,6 +168,14 @@ impl Provider for FileProvider {
     }
 
     #[cfg(feature = "taiko")]
+    fn get_propose(&mut self, query: &super::ProposeQuery) -> Result<(Transaction, BlockProposed)> {
+        match self.propose {
+            Some(ref val) => Ok(val.clone()),
+            None => Err(anyhow!("No data for {:?}", query)),
+        }
+    }
+
+    #[cfg(feature = "taiko")]
     fn get_logs(&mut self, query: &LogsQuery) -> Result<Vec<Log>> {
         match self.logs.get(query) {
             Some(val) => Ok(val.clone()),
@@ -187,6 +188,14 @@ impl Provider for FileProvider {
         match self.transactions.get(query) {
             Some(val) => Ok(val.clone()),
             None => Err(anyhow!("No data for {query:?}")),
+        }
+    }
+
+    #[cfg(feature = "taiko")]
+    fn get_blob_data(&mut self, block_id: u64) -> Result<GetBlobsResponse> {
+        match self.blobs.get(&block_id) {
+            Some(val) => Ok(val.clone()),
+            None => Err(anyhow!("No data for block id: {block_id:?}")),
         }
     }
 }
@@ -241,6 +250,12 @@ impl MutProvider for FileProvider {
     #[cfg(feature = "taiko")]
     fn insert_transaction(&mut self, query: super::TxQuery, val: Transaction) {
         self.transactions.insert(query, val);
+        self.dirty = true;
+    }
+
+    #[cfg(feature = "taiko")]
+    fn insert_blob(&mut self, block_id: u64, val: GetBlobsResponse) {
+        self.blobs.insert(block_id, val);
         self.dirty = true;
     }
 }

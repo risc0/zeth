@@ -32,7 +32,7 @@ pub struct ProofRequest {
     pub block_number: u64,
     /// l2 node for get block by number
     pub l2_rpc: String,
-    /// l1 node for signal root verify and get txlist from proposed transaction.
+    /// l1 node for signal root verify and get txlist info from proposed transaction.
     pub l1_rpc: String,
     /// l2 contracts selection
     pub l2_contracts: String,

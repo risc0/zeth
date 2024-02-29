@@ -132,7 +132,7 @@ pub fn new_provider(
     match (cache_path, rpc_url) {
         (Some(cache_path), Some(rpc_url)) => new_cached_rpc_provider(cache_path, rpc_url),
         (Some(cache_path), None) => new_file_provider(cache_path),
-        (None, Some(rpc_url)) => new_rpc_provider(rpc_url),
+        (None, Some(rpc_url)) => new_rpc_provider(rpc_url, beacon_rpc_url),
         (None, None) => Err(anyhow!("No cache_path or rpc_url given")),
     }
 }

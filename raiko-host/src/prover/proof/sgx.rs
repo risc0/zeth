@@ -9,13 +9,15 @@ use crate::{
     prover::{
         consts::*,
         context::Context,
-        request::{ProofRequest, SgxInstance, SgxRequest, SgxResponse},
+        request::{ProofRequest, SgxInstance, SgxResponse},
         utils::guest_executable_path,
     },
 };
 
+pub static SGX_INSTANCE_ID: Lazy<u32> = Lazy::new(| id | { id });
+
 pub async fn execute_sgx(ctx: &mut Context, req: &ProofRequest) -> Result<SgxResponse, String> {
-    let guest_path = guest_executable_path(&ctx.guest_path, SGX_PARENT_DIR);
+    let guest_path = guest_executable_path(&ctx.guest_elf, SGX_PARENT_DIR);
     debug!("Guest path: {:?}", guest_path);
     let mut cmd = {
         let bin_directory = guest_path
@@ -56,7 +58,7 @@ pub async fn execute_sgx(ctx: &mut Context, req: &ProofRequest) -> Result<SgxRes
     info!("Sgx execution stdout: {:?}", str::from_utf8(&output.stdout));
     if !output.status.success() {
         inc_sgx_error(req.block);
-        return Err(output.status);
+        return Err(output.status.to_string());
     }
     parse_sgx_result(output.stdout)
 }

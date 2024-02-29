@@ -5,7 +5,8 @@ use zeth_primitives::{Address, B256};
 #[cfg(feature = "succinct")]
 use super::proof::succinct::SP1Proof;
 
-#[allow(dead_code)]
+#[serde_as]
+#[derive(Clone, Serialize, Deserialize)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum ProofInstance {
     #[cfg(feature = "succinct")]
@@ -13,15 +14,19 @@ pub enum ProofInstance {
     PseZk,
     #[cfg(feature = "powdr")]
     Powdr,
+    #[cfg(feature = "sgx")]
     Sgx(SgxInstance),
     #[cfg(feature = "risc0")]
     Risc0(Risc0Instance),
 }
 
+#[serde_as]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct SgxInstance {
     pub instance_id: u32,
 }
-
+#[serde_as]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Risc0Instance {
     pub bonsai: bool,
     pub snark: bool,

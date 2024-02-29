@@ -35,7 +35,7 @@ pub struct HostArgs {
 pub fn init_taiko(
     args: HostArgs,
     l2_chain_spec: ChainSpec,
-    testnet: &str,
+    l2_contracts: &str,
     l2_block_no: u64,
     graffiti: B256,
     prover: Address,
@@ -48,7 +48,7 @@ pub fn init_taiko(
     )?
     .with_prover(prover)
     .with_l2_spec(l2_chain_spec.clone())
-    .with_contracts(|| get_contracts(testnet));
+    .with_contracts(|| get_contracts(l2_contracts));
 
     let sys_info = derive_sys_info(&mut tp, l2_block_no, prover, graffiti)?;
     tp.save()?;

@@ -18,6 +18,8 @@ use crate::prover::{
     request::*,
 };
 
+use super::proof::sgx::SGX_INSTANCE_ID;
+
 /// Starts the proverd json-rpc server.
 /// Note: the server may not immediately listening after returning the
 /// `JoinHandle`.
@@ -38,12 +40,13 @@ pub fn serve(
     let guest_path = guest_path.to_owned();
     let cache_path = cache_path.to_owned();
     let l2_contracts = l2_contracts.to_owned();
+    SGX_INSTANCE_ID.set(sgx_instance_id);
     tokio::spawn(async move {
         let handler = Handler::new(
             guest_path.clone(),
             cache_path.clone(),
             l2_contracts.clone(),
-            sgx_instance_id,
+            // sgx_instance_id,
             proof_cache,
             max_caches,
         );
@@ -93,21 +96,14 @@ struct Handler {
 
 impl Handler {
     fn new(
-        guest_path: PathBuf,
-        cache_path: PathBuf,
+        guest_elf: PathBuf,
+        chain_cache: PathBuf,
         l2_contracts: String,
-        sgx_instance_id: u32,
         capacity: usize,
         max_caches: usize,
     ) -> Self {
         Self {
-            ctx: Context::new(
-                guest_path,
-                cache_path,
-                l2_contracts,
-                sgx_instance_id,
-                max_caches,
-            ),
+            ctx: Context::new(guest_elf, chain_cache, max_caches, None),
             cache: Cache::new(capacity),
         }
     }

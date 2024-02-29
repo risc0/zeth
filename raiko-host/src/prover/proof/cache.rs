@@ -3,14 +3,14 @@ use std::sync::{Arc, Mutex};
 use lru_time_cache::LruCache;
 use zeth_primitives::{Address, B256};
 
-use super::ProofType;
+use crate::prover::request::ProofInstance;
 pub struct CachedProof {
     proof: String,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct CacheKey {
-    pub proof_type: ProofType,
+    pub proof_type: ProofInstance,
     pub block: u64,
     pub prover: Address,
     pub graffiti: B256,

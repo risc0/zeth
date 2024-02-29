@@ -1,15 +1,17 @@
 use std::path::{absolute, PathBuf};
 
+use ethers_core::k256::elliptic_curve::rand_core::block;
 use tracing::debug;
+use anyhow::Result;
 
-use super::request::ProofInstance;
+use super::{consts::RAIKO_GUEST_EXECUTABLE, request::ProofInstance};
 
 #[derive(Debug, Default, Clone)]
 pub struct Context {
     /// guest executable path
-    pub guest_path: PathBuf,
+    pub guest_elf: PathBuf,
     /// cache for public input
-    pub cache_path: PathBuf,
+    pub chain_cache: PathBuf,
 
     pub max_caches: usize,
 
@@ -20,23 +22,46 @@ pub struct Context {
 }
 
 impl Context {
+    pub fn new(
+        guest_elf: PathBuf, 
+        chain_cache: PathBuf, 
+        max_caches: usize,
+        block_no: Option<u64>
+    ) -> Self {
+        let mut ctx = Self {
+            guest_elf,
+            chain_cache,
+            max_caches,
+            ..Default::default()
+        };
+        if let Some(block_no) = block_no {
+            ctx.update_cache_path(block_no);
+        }
+        ctx
+    }
+
+
     pub fn update_cache_path(&mut self, block_no: u64) {
         if self.l1_cache_file.is_none() {
             let file_name = format!("{}.l1.json.gz", block_no);
-            self.l1_cache_file = Some(cache_path.join(file_name));
+            self.l1_cache_file = Some(self.chain_cache.join(file_name));
         }
         if self.l2_cache_file.is_some() {
             let file_name = format!("{}.l2.json.gz", block_no);
-            self.l2_cache_file = Some(cache_path.join(file_name));
+            self.l2_cache_file = Some(self.chain_cache.join(file_name));
         }
     }
 
     pub fn guest_executable_path(&self, proof_instance: ProofInstance) -> PathBuf {
         match proof_instance {
+            #[cfg(feature = "succinct")]
             ProofInstance::Succinct => todo!(),
             ProofInstance::PseZk => todo!(),
+            #[cfg(feature = "powdr")]
             ProofInstance::Powdr => todo!(),
-            ProofInstance::Sgx(_) => self.guest_path.join("sgx").join(RAIKO_GUEST_EXECUTABLE),
+            #[cfg(feature = "sgx")]
+            ProofInstance::Sgx(_) => self.guest_elf.join("sgx").join(RAIKO_GUEST_EXECUTABLE),
+            #[cfg(feature = "risc0")]
             ProofInstance::Risc0 => todo!(),
         }
     }

@@ -67,17 +67,12 @@ impl Context {
     }
 
     pub async fn remove_cache_file(&self) -> Result<()> {
-        let remove = |file: PathBuf| {
-            tokio::fs::remove_file(file).await.or_else(|e| {
-                if e.kind() == ::std::io::ErrorKind::NotFound {
-                    Ok(())
-                } else {
-                    Err(e)
-                }
-            })
-        };
-        self.l1_cache_file.map_or(Ok(()), |f| remove(f))?;
-        self.l2_cache_file.map_or(Ok(()), |f| remove(f))?;
+        if let Some(file) = &self.l1_cache_file {
+            tokio::fs::remove_file(file).await?;
+        }
+        if let Some(file) = &self.l2_cache_file {
+            tokio::fs::remove_file(file).await?;
+        }
         Ok(())
     }
 

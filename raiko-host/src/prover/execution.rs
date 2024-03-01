@@ -17,7 +17,7 @@ use super::proof::powdr::execute_powdr;
 #[cfg(feature = "risc0")]
 use super::proof::powdr::execute_powdr;
 
-use crate::{metrics::{inc_sgx_success, observe_input, observe_output, observe_sgx_gen, PREPARE_INPUT_TIME}, prover::proof::risc0::execute_risc0};
+use crate::{metrics::{inc_sgx_success, observe_input, observe_sgx_gen, PREPARE_INPUT_TIME}, prover::proof::risc0::execute_risc0};
 // use crate::rolling::prune_old_caches;
 
 pub async fn execute(
@@ -42,8 +42,6 @@ pub async fn execute(
         observe_input(elapsed);
         // 2. pre-build the block
         let output = TaikoStrategy::build_from(&TKO_MAINNET_CHAIN_SPEC.clone(), input);
-        let elapsed = Instant::now().duration_since(PREPARE_INPUT_TIME).as_millis() as i64;
-        observe_output(elapsed);
 
         // TODO: cherry-pick risc0 latest output
         match &output {
@@ -115,14 +113,14 @@ pub async fn prepare_input(
             },
             TKO_MAINNET_CHAIN_SPEC.clone(),
             &req.l2_contracts,
-            block,
+            req.block,
             req.graffiti,
             req.prover,
         )
         .expect("Init taiko failed")
     })
     .await
-    .map_err(Into::<Error>::into)
+    .map_err(Into::<super::error::Error>::into)
 }
 
 

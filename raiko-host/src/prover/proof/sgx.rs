@@ -1,9 +1,9 @@
+#![feature(feature = "sgx")]
 use std::str;
-
 use serde_json::Value;
 use tokio::process::Command;
 use tracing::{debug, info};
-
+use once_cell::sync::Lazy;
 use crate::{
     metrics::inc_sgx_error,
     prover::{
@@ -36,7 +36,7 @@ pub async fn execute_sgx(ctx: &mut Context, req: &ProofRequest) -> Result<SgxRes
 
     let instance_id = match req.proof_instance {
         Sgx(SgxInstance{instance_id}) =>  instance_id,
-        _ => return Err("Wrong Proof Instance")
+        _ => return Err("Wrong Proof Instance".to_string())
     };
     let output = cmd
         .arg("--blocks-data-file")

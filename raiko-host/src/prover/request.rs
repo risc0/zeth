@@ -6,8 +6,7 @@ use zeth_primitives::{Address, B256};
 use super::proof::succinct::SP1Proof;
 
 #[serde_as]
-#[derive(Clone, Serialize, Deserialize)]
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ProofInstance {
     #[cfg(feature = "succinct")]
     Succinct,

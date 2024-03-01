@@ -1,7 +1,11 @@
 use std::time::Instant;
 
 use tracing::{info, warn};
-use zeth_lib::{builder::{BlockBuilderStrategy, TaikoStrategy}, consts::TKO_MAINNET_CHAIN_SPEC, input::Input, taiko::{host::{init_taiko, HostArgs}, TaikoSystemInfo}, EthereumTxEssence};
+use zeth_lib::{builder::{BlockBuilderStrategy, TaikoStrategy}, consts::TKO_MAINNET_CHAIN_SPEC, input::Input, 
+    taiko::{host::{init_taiko, HostArgs}, TaikoSystemInfo}, EthereumTxEssence
+};
+
+use crate::metrics::{inc_sgx_success, observe_input, observe_sgx_gen};
 
 use super::{
     context::Context,
@@ -10,15 +14,9 @@ use super::{
     request::{ProofInstance, ProofRequest, ProofResponse},
     utils::cache_file_path,
 };
-#[cfg(feature = "powdr")]
 use super::proof::succinct::execute_sp1;
-#[cfg(feature = "succinct")]
 use super::proof::powdr::execute_powdr;
-#[cfg(feature = "risc0")]
-use super::proof::powdr::execute_powdr;
-
-use crate::{metrics::{inc_sgx_success, observe_input, observe_sgx_gen, PREPARE_INPUT_TIME}, prover::proof::risc0::execute_risc0};
-// use crate::rolling::prune_old_caches;
+use super::proof::risc0::execute_risc0;
 
 pub async fn execute(
     _cache: &Cache,
@@ -41,7 +39,7 @@ pub async fn execute(
         let elapsed = Instant::now().duration_since(start).as_millis() as i64;
         observe_input(elapsed);
         // 2. pre-build the block
-        let output = TaikoStrategy::build_from(&TKO_MAINNET_CHAIN_SPEC.clone(), input);
+        let output = TaikoStrategy::build_from(&TKO_MAINNET_CHAIN_SPEC.clone(), input.clone());
 
         // TODO: cherry-pick risc0 latest output
         match &output {
@@ -55,9 +53,8 @@ pub async fn execute(
         }
         // 3. run proof
         // prune_old_caches(&ctx.cache_path, ctx.max_caches);
-        match req.proof_instance {
-            #[cfg(feature = "sgx")]
-            ProofInstance::Sgx(instance) => {
+        match &req.proof_instance {
+            ProofInstance::Sgx => {
                 let start = Instant::now();
                 let bid = req.block;
                 let resp = execute_sgx(ctx, req).await?;
@@ -66,7 +63,6 @@ pub async fn execute(
                 inc_sgx_success(bid);
                 Ok(ProofResponse::Sgx(resp))
             }
-            #[cfg(feature = "powdr")]
             ProofInstance::Powdr => {
                 let start = Instant::now();
                 let bid = req.block;
@@ -75,7 +71,6 @@ pub async fn execute(
                 todo!()
             }
             ProofInstance::PseZk => todo!(),
-            #[cfg(feature = "succinct")]
             ProofInstance::Succinct => {
                 let start = Instant::now();
                 let bid = req.block;
@@ -83,9 +78,8 @@ pub async fn execute(
                 let time_elapsed = Instant::now().duration_since(start).as_millis() as i64;
                 Ok(ProofResponse::SP1(resp))
             }
-            #[cfg(feature = "risc0")]
-            ProofInstance::Risc0 => {
-                execute_risc0(input, sys_info, ctx, req).await?;
+            ProofInstance::Risc0(instance) => {
+                execute_risc0(input, sys_info, ctx, instance).await?;
                 todo!()
             },
         }

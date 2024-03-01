@@ -27,7 +27,7 @@ pub async fn execute_risc0(
     input: Input<EthereumTxEssence>, 
     sys_info: TaikoSystemInfo,
     ctx: &Context,
-    req: &ProofRequest,
+    req: &Risc0Instance,
 ) -> Result<SgxResponse, String> {
     let req = match req.proof_instance {
         Risc0Instance(instance) => instance,

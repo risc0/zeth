@@ -49,3 +49,4 @@ rstest = "0.18"
 powdr = ["dep:powdr"]
 succinct = ["dep:sp1-core"]
 risc0 = ["dep:risc0-zkvm", "dep:bonsai-sdk"]
+sgx = []

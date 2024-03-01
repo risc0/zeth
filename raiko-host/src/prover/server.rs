@@ -6,6 +6,7 @@ use hyper::{
     service::{make_service_fn, service_fn},
     Body, Method, Request, Response, Server, StatusCode,
 };
+use once_cell::sync::{Lazy, OnceCell};
 use prometheus::{Encoder, TextEncoder};
 use tower::ServiceBuilder;
 use tracing::info;
@@ -18,7 +19,7 @@ use crate::prover::{
     request::*,
 };
 
-use super::proof::sgx::SGX_INSTANCE_ID;
+pub static SGX_INSTANCE_ID: OnceCell<u32> = OnceCell::new();
 
 /// Starts the proverd json-rpc server.
 /// Note: the server may not immediately listening after returning the

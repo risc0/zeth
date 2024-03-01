@@ -54,15 +54,11 @@ impl Context {
 
     pub fn guest_executable_path(&self, proof_instance: ProofInstance) -> PathBuf {
         match proof_instance {
-            #[cfg(feature = "succinct")]
             ProofInstance::Succinct => todo!(),
             ProofInstance::PseZk => todo!(),
-            #[cfg(feature = "powdr")]
             ProofInstance::Powdr => todo!(),
-            #[cfg(feature = "sgx")]
-            ProofInstance::Sgx(_) => self.guest_elf.join("sgx").join(RAIKO_GUEST_EXECUTABLE),
-            #[cfg(feature = "risc0")]
-            ProofInstance::Risc0 => todo!(),
+            ProofInstance::Sgx => self.guest_elf.join("sgx").join(RAIKO_GUEST_EXECUTABLE),
+            ProofInstance::Risc0(_) => todo!(),
         }
     }
 

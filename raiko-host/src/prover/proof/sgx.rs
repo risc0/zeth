@@ -7,14 +7,10 @@ use once_cell::sync::Lazy;
 use crate::{
     metrics::inc_sgx_error,
     prover::{
-        consts::*,
-        context::Context,
-        request::{ProofRequest, SgxInstance, SgxResponse},
-        utils::guest_executable_path,
+        consts::*, context::Context, request::{ProofRequest, SgxInstance, SgxResponse}, server::SGX_INSTANCE_ID, utils::guest_executable_path
     },
 };
 
-pub static SGX_INSTANCE_ID: Lazy<u32> = Lazy::new(| id | { id });
 
 pub async fn execute_sgx(ctx: &mut Context, req: &ProofRequest) -> Result<SgxResponse, String> {
     let guest_path = guest_executable_path(&ctx.guest_elf, SGX_PARENT_DIR);
@@ -34,10 +30,7 @@ pub async fn execute_sgx(ctx: &mut Context, req: &ProofRequest) -> Result<SgxRes
         cmd
     };
 
-    let instance_id = match req.proof_instance {
-        Sgx(SgxInstance{instance_id}) =>  instance_id,
-        _ => return Err("Wrong Proof Instance".to_string())
-    };
+    let instance_id = SGX_INSTANCE_ID.get().unwrap_or(0);
     let output = cmd
         .arg("--blocks-data-file")
         .arg(ctx.l2_cache_file.as_ref().unwrap())

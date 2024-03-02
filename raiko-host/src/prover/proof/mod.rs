@@ -1,6 +1,8 @@
 //! Generate different proofs for the taiko protocol.
 use crate::prover::{context::Context, request::{ProofRequest, Risc0Instance}};
 use crate::prover::request::SgxResponse;
+use alloy_primitives::FixedBytes;
+
 #[allow(dead_code)]
 pub mod cache;
 
@@ -57,6 +59,7 @@ pub mod risc0 {
 };
     pub async fn execute_risc0(
         input: Input<EthereumTxEssence>, 
+        output: FixedBytes<32>,
         sys_info: TaikoSystemInfo,
         ctx: &Context,
         req: &Risc0Instance,

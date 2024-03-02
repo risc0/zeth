@@ -11,9 +11,9 @@ use zeth_lib::{
         protocol_instance::{assemble_protocol_instance, EvidenceType}, TaikoSystemInfo,
     }
 };
-use zeth_primitives::{Address, B256};
+use zeth_primitives::{Address, B256, FixedBytes};
 
-fn main() {
+fn main() -> FixedBytes<32> {
 
     let input: Input<zeth_lib::EthereumTxEssence> = env::read();
     let sys_info: TaikoSystemInfo = env::read();
@@ -24,5 +24,6 @@ fn main() {
     let pi = assemble_protocol_instance(&sys_info, &header)
         .expect("Failed to assemble the protocol instance");
     let pi_hash = pi.instance_hash(EvidenceType::Succinct);
-
+    
+    pi_hash
 }

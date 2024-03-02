@@ -1,10 +1,12 @@
 use std::time::Instant;
 
+use alloy_primitives::FixedBytes;
 use tracing::{info, warn};
 use zeth_lib::{builder::{BlockBuilderStrategy, TaikoStrategy}, consts::TKO_MAINNET_CHAIN_SPEC, input::Input, 
     taiko::{host::{init_taiko, HostArgs}, TaikoSystemInfo}, EthereumTxEssence
 };
-
+use zeth_lib::taiko::protocol_instance::assemble_protocol_instance;
+use zeth_lib::taiko::protocol_instance::EvidenceType;
 use crate::metrics::{inc_sgx_success, observe_input, observe_sgx_gen};
 
 use super::{
@@ -35,7 +37,7 @@ pub async fn execute(
     let result = async {
         // 1. load input data into cache path
         let start = Instant::now();
-        let (input, sys_info) = prepare_input(ctx, req.clone()).await?;
+        let (input, sys_info, pi) = prepare_input(ctx, req.clone()).await?;
         let elapsed = Instant::now().duration_since(start).as_millis() as i64;
         observe_input(elapsed);
         // 2. pre-build the block
@@ -79,7 +81,7 @@ pub async fn execute(
                 Ok(ProofResponse::SP1(resp))
             }
             ProofInstance::Risc0(instance) => {
-                execute_risc0(input, sys_info, ctx, instance).await?;
+                execute_risc0(input, pi, sys_info, ctx, instance).await?;
                 todo!()
             },
         }
@@ -93,11 +95,11 @@ pub async fn execute(
 pub async fn prepare_input(
     ctx: &mut Context,
     req: ProofRequest,
-) -> Result<(Input<EthereumTxEssence>, TaikoSystemInfo)> {
+) -> Result<(Input<EthereumTxEssence>, TaikoSystemInfo, FixedBytes<32>)> {
     // Todo(Cecilia): should contract address as args, curently hardcode
     let l1_cache = ctx.l1_cache_file.clone();
     let l2_cache = ctx.l2_cache_file.clone();
-    tokio::task::spawn_blocking(move || {
+    let (input, sys_info) = tokio::task::spawn_blocking(move || {
         init_taiko(
             HostArgs {
                 l1_cache,
@@ -113,8 +115,15 @@ pub async fn prepare_input(
         )
         .expect("Init taiko failed")
     })
-    .await
-    .map_err(Into::<super::error::Error>::into)
+    .await?;
+
+    let (header, _mpt_node) = TaikoStrategy::build_from(&TKO_MAINNET_CHAIN_SPEC.clone(), input.clone())
+    .expect("Failed to build the resulting block");
+
+    let pi = assemble_protocol_instance(&sys_info, &header)
+        .expect("Failed to assemble the protocol instance")
+        .instance_hash(EvidenceType::Succinct /* TODO: diff guests diff type */);
+    Ok((input, sys_info, pi))
 }
 
 

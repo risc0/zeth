@@ -4,6 +4,8 @@ use crate::prover::request::SgxResponse;
 #[allow(dead_code)]
 pub mod cache;
 
+// TODO: driver trait
+
 #[cfg(feature = "powdr")]
 pub mod powdr;
 #[cfg(not(feature = "powdr"))]

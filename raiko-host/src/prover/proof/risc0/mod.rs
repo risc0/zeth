@@ -33,7 +33,7 @@ pub async fn execute_risc0(
         Risc0Instance(instance) => instance,
         _ => return Err("Wrong Proof Instance")
     };
-    let elf = include_bytes!(ctx.guest_executable_path(req.proof_instance));
+    let elf = include_bytes!(ctx.guest_executable_path(req.proof_instance).to_string());
     let result = maybe_prove::<GuestInput>(
         req, 
         &GuestInput {sys_info, input}, 
@@ -70,7 +70,7 @@ use risc0_zkvm::{
     sha::{Digest, Digestible},
     Assumption, ExecutorEnv, ExecutorImpl, FileSegmentRef, Receipt, Segment, SegmentRef,
 };
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{de::DeserializeOwned};
 use tempfile::tempdir;
 use zeth_primitives::keccak::keccak;
 

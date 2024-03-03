@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 zeth-primitives = { path = "../../../primitives", features = ["revm"] }
 zeth-lib = { path = "../../../lib", features = ["taiko", "std"] }
-
+raiko-host ={ path = "../../../raiko-host" }
 risc0-zkvm = { version = "0.20.1", default-features = false, features = ['std'] }
 
 

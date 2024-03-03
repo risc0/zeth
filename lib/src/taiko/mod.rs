@@ -4,7 +4,9 @@ use alloy_primitives::{Address, B256};
 use alloy_sol_types::{sol, SolCall};
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use zeth_primitives::{block::Header, transactions::TxEssence, withdrawal::Withdrawal};
+use zeth_primitives::{block::Header, transactions::{ethereum::EthereumTxEssence, TxEssence}, withdrawal::Withdrawal, FixedBytes};
+
+use crate::input::Input;
 
 pub mod consts;
 #[cfg(feature = "std")]
@@ -98,4 +100,21 @@ pub struct TaikoSystemInfo {
     pub block_proposed: BlockProposed,
     pub l1_next_block: Header,
     pub l2_block: Header,
+}
+
+
+// TODO: merge Patar's PR
+/// The Input struct for every Taiko guest prover
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GuestInput {
+    /// The system info for the Taiko guest prover
+    pub sys_info: TaikoSystemInfo,
+    /// The initial data required to build a block
+    pub input: Input<EthereumTxEssence>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum GuestOutput {
+    Success((Header, FixedBytes<32>)),
+    Failure,
 }

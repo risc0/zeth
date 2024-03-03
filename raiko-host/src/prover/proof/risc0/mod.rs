@@ -3,7 +3,7 @@ use std::{fs, path::{Path, PathBuf}};
 use alloy_primitives::FixedBytes;
 use serde::{Deserialize, Serialize};
 use tracing::info as traicing_info;
-use zeth_lib::{consts::TKO_MAINNET_CHAIN_SPEC, input::Input, taiko::{host::HostArgs, TaikoSystemInfo}, 
+use zeth_lib::{consts::TKO_MAINNET_CHAIN_SPEC, input::Input, taiko::{host::HostArgs, GuestInput, GuestOutput, TaikoSystemInfo}, 
 EthereumTxEssence};
 
 use crate::prover::{
@@ -13,25 +13,15 @@ use crate::prover::{
 // TODO: import from risc0_guest_method
 const RISC0_GUEST_ID: [u32; 8] = [1,2,3,4,5,6,7,8];
 
-// TODO: merge Patar's PR
-/// The Input struct for every Taiko guest prover
-#[derive(Debug, Serialize, Deserialize)]
-pub struct GuestInput {
-    /// The system info for the Taiko guest prover
-    pub sys_info: TaikoSystemInfo,
-    /// The initial data required to build a block
-    pub input: Input<EthereumTxEssence>,
-}
-
 pub async fn execute_risc0(
     input: Input<EthereumTxEssence>, 
-    output: FixedBytes<32>,
+    output: GuestOutput,
     sys_info: TaikoSystemInfo,
     ctx: &Context,
     req: &Risc0Instance,
 ) -> Result<SgxResponse, String> {
-    let elf = include_bytes!("../../../../../raiko-guests/succinct/elf/riscv32im-succinct-zkvm-elf");
-    let result = maybe_prove::<GuestInput, FixedBytes<32>>(
+    let elf = include_bytes!("../../../../elf/riscv32im-succinct-zkvm-elf");
+    let result = maybe_prove::<GuestInput, GuestOutput>(
         req, 
         &GuestInput {sys_info, input}, 
         elf, 

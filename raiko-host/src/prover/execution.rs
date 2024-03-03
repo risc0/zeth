@@ -1,12 +1,15 @@
 use std::time::Instant;
 
 use alloy_primitives::FixedBytes;
+use ethers_core::types::H160;
 use tracing::{info, warn};
 use zeth_lib::{builder::{BlockBuilderStrategy, TaikoStrategy}, consts::TKO_MAINNET_CHAIN_SPEC, input::Input, 
-    taiko::{host::{init_taiko, HostArgs}, TaikoSystemInfo}, EthereumTxEssence
+    taiko::{host::{init_taiko, HostArgs}, 
+    protocol_instance::{self, ProtocolInstance}, GuestOutput, TaikoSystemInfo}, EthereumTxEssence
 };
 use zeth_lib::taiko::protocol_instance::assemble_protocol_instance;
 use zeth_lib::taiko::protocol_instance::EvidenceType;
+use zeth_primitives::{keccak, Address, B256};
 use crate::metrics::{inc_sgx_success, observe_input, observe_sgx_gen};
 
 use super::{
@@ -19,6 +22,7 @@ use super::{
 use super::proof::succinct::execute_sp1;
 use super::proof::powdr::execute_powdr;
 use super::proof::risc0::execute_risc0;
+
 
 pub async fn execute(
     _cache: &Cache,
@@ -37,22 +41,45 @@ pub async fn execute(
     let result = async {
         // 1. load input data into cache path
         let start = Instant::now();
-        let (input, sys_info, pi) = prepare_input(ctx, req.clone()).await?;
-        let elapsed = Instant::now().duration_since(start).as_millis() as i64;
-        observe_input(elapsed);
+        // Todo(Cecilia): should contract address as args, curently hardcode
+        let l1_cache = ctx.l1_cache_file.clone();
+        let l2_cache = ctx.l2_cache_file.clone();
+        let req_ = req.clone();
+        let (input, sys_info) = tokio::task::spawn_blocking(move || {
+            init_taiko(
+                HostArgs {
+                    l1_cache,
+                    l1_rpc: Some(req_.l1_rpc),
+                    l2_cache,
+                    l2_rpc: Some(req_.l2_rpc),
+                },
+                TKO_MAINNET_CHAIN_SPEC.clone(),
+                &req_.l2_contracts,
+                req_.block,
+                req_.graffiti,
+                req_.prover,
+            )
+            .expect("Init taiko failed")
+        })
+        .await?;
         // 2. pre-build the block
-        let output = TaikoStrategy::build_from(&TKO_MAINNET_CHAIN_SPEC.clone(), input.clone());
-
+        let build_result = TaikoStrategy::build_from(&TKO_MAINNET_CHAIN_SPEC.clone(), input.clone());
         // TODO: cherry-pick risc0 latest output
-        match &output {
+        let output = match &build_result {
             Ok((header, mpt_node)) => {
                 info!("Verifying final state using provider data ...");    
                 info!("Final block hash derived successfully. {}", header.hash());
+                let pi = assemble_protocol_instance(&sys_info, &header)?
+                    .instance_hash(req.proof_instance.clone().into());
+                GuestOutput::Success((header.clone(), pi))
             }
             Err(_) => {
-                warn!("Proving bad block construction!")
+                warn!("Proving bad block construction!");
+                GuestOutput::Failure
             }
-        }
+        };
+        let elapsed = Instant::now().duration_since(start).as_millis() as i64;
+        observe_input(elapsed);
         // 3. run proof
         // prune_old_caches(&ctx.cache_path, ctx.max_caches);
         match &req.proof_instance {
@@ -81,8 +108,11 @@ pub async fn execute(
                 Ok(ProofResponse::SP1(resp))
             }
             ProofInstance::Risc0(instance) => {
-                execute_risc0(input, pi, sys_info, ctx, instance).await?;
+                execute_risc0(input, output, sys_info, ctx, instance).await?;
                 todo!()
+            },
+            ProofInstance::Native => {
+                Ok(ProofResponse::Native(output))
             },
         }
     }
@@ -91,39 +121,21 @@ pub async fn execute(
     result
 }
 
-/// prepare input data for guests
-pub async fn prepare_input(
-    ctx: &mut Context,
-    req: ProofRequest,
-) -> Result<(Input<EthereumTxEssence>, TaikoSystemInfo, FixedBytes<32>)> {
-    // Todo(Cecilia): should contract address as args, curently hardcode
-    let l1_cache = ctx.l1_cache_file.clone();
-    let l2_cache = ctx.l2_cache_file.clone();
-    let (input, sys_info) = tokio::task::spawn_blocking(move || {
-        init_taiko(
-            HostArgs {
-                l1_cache,
-                l1_rpc: Some(req.l1_rpc),
-                l2_cache,
-                l2_rpc: Some(req.l2_rpc),
+
+
+impl From<ProofInstance> for EvidenceType {
+    fn from(value: ProofInstance) -> Self {
+        match value {
+            ProofInstance::Succinct => EvidenceType::Succinct,
+            ProofInstance::PseZk => EvidenceType::PseZk,
+            ProofInstance::Powdr => EvidenceType::Powdr,
+            ProofInstance::Sgx => EvidenceType::Sgx{
+                new_pubkey: Address::default()
             },
-            TKO_MAINNET_CHAIN_SPEC.clone(),
-            &req.l2_contracts,
-            req.block,
-            req.graffiti,
-            req.prover,
-        )
-        .expect("Init taiko failed")
-    })
-    .await?;
-
-    let (header, _mpt_node) = TaikoStrategy::build_from(&TKO_MAINNET_CHAIN_SPEC.clone(), input.clone())
-    .expect("Failed to build the resulting block");
-
-    let pi = assemble_protocol_instance(&sys_info, &header)
-        .expect("Failed to assemble the protocol instance")
-        .instance_hash(EvidenceType::Succinct /* TODO: diff guests diff type */);
-    Ok((input, sys_info, pi))
+            ProofInstance::Risc0(_) => EvidenceType::Risc0,
+            ProofInstance::Native => EvidenceType::Native,
+        }
+    }
 }
 
 

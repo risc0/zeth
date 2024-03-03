@@ -34,7 +34,7 @@ impl ProtocolInstance {
                     .abi_encode(),
             )
             .into(),
-            EvidenceType::Pse => todo!(),
+            EvidenceType::PseZk => todo!(),
             EvidenceType::Powdr => todo!(),
             EvidenceType::Succinct => keccak(
                 (
@@ -46,6 +46,23 @@ impl ProtocolInstance {
                     .abi_encode(),
             )
             .into(),
+            EvidenceType::Risc0 => keccak(
+                (
+                    self.transition.clone(),
+                    self.prover,
+                    self.meta_hash(),
+                )
+                    .abi_encode(),
+            )
+            .into(),
+            EvidenceType::Native => keccak(
+                (
+                    self.transition.clone(),
+                    self.prover,
+                    self.meta_hash(),
+                )
+                    .abi_encode(),
+            ).into()
         }
     }
 }
@@ -55,9 +72,11 @@ pub enum EvidenceType {
     Sgx {
         new_pubkey: Address, // the evidence signature public key
     },
-    Pse,
+    PseZk,
     Powdr,
     Succinct,
+    Risc0,
+    Native,
 }
 
 // TODO(cecilia): rewrite

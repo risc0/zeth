@@ -7,13 +7,12 @@ use zeth_lib::{
     builder::{BlockBuilderStrategy, TaikoStrategy}, consts::{ChainSpec, TKO_MAINNET_CHAIN_SPEC}, 
     input::{self, Input}, 
     taiko::{
-        host::{init_taiko, HostArgs},
-        protocol_instance::{assemble_protocol_instance, EvidenceType}, TaikoSystemInfo,
+        host::{init_taiko, GuestInput, GuestOutput, HostArgs}, protocol_instance::{assemble_protocol_instance, EvidenceType}, GuestOutput, TaikoSystemInfo
     }
 };
 use zeth_primitives::{Address, B256, FixedBytes};
 
-fn main() -> FixedBytes<32> {
+fn main() -> GuestOutput<32> {
 
     let input: Input<zeth_lib::EthereumTxEssence> = env::read();
     let sys_info: TaikoSystemInfo = env::read();
@@ -25,5 +24,5 @@ fn main() -> FixedBytes<32> {
         .expect("Failed to assemble the protocol instance");
     let pi_hash = pi.instance_hash(EvidenceType::Succinct);
     
-    pi_hash
+    GuestOutput::Success((header, pi_hash))
 }

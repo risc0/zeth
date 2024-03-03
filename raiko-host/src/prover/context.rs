@@ -11,7 +11,7 @@ pub struct Context {
     /// guest executable path
     pub guest_elf: PathBuf,
     /// cache for public input
-    pub chain_cache: PathBuf,
+    pub host_cache: PathBuf,
 
     pub max_caches: usize,
 
@@ -24,13 +24,13 @@ pub struct Context {
 impl Context {
     pub fn new(
         guest_elf: PathBuf, 
-        chain_cache: PathBuf, 
+        host_cache: PathBuf, 
         max_caches: usize,
         block_no: Option<u64>
     ) -> Self {
         let mut ctx = Self {
             guest_elf,
-            chain_cache,
+            host_cache,
             max_caches,
             ..Default::default()
         };
@@ -44,11 +44,11 @@ impl Context {
     pub fn update_cache_path(&mut self, block_no: u64) {
         if self.l1_cache_file.is_none() {
             let file_name = format!("{}.l1.json.gz", block_no);
-            self.l1_cache_file = Some(self.chain_cache.join(file_name));
+            self.l1_cache_file = Some(self.host_cache.join(file_name));
         }
         if self.l2_cache_file.is_some() {
             let file_name = format!("{}.l2.json.gz", block_no);
-            self.l2_cache_file = Some(self.chain_cache.join(file_name));
+            self.l2_cache_file = Some(self.host_cache.join(file_name));
         }
     }
 
@@ -59,6 +59,7 @@ impl Context {
             ProofInstance::Powdr => todo!(),
             ProofInstance::Sgx => self.guest_elf.join("sgx").join(RAIKO_GUEST_EXECUTABLE),
             ProofInstance::Risc0(_) => todo!(),
+            ProofInstance::Native => todo!(),
         }
     }
 

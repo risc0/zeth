@@ -27,8 +27,8 @@ pub static SGX_INSTANCE_ID: OnceCell<u32> = OnceCell::new();
 #[allow(clippy::too_many_arguments)]
 pub fn serve(
     addr: &str,
-    guest_path: &Path,
-    cache_path: &Path,
+    guest_elf: &Path,
+    host_cache: &Path,
     l2_contracts: &str,
     sgx_instance_id: u32,
     proof_cache: usize,
@@ -38,14 +38,14 @@ pub fn serve(
     let addr = addr
         .parse::<std::net::SocketAddr>()
         .expect("valid socket address");
-    let guest_path = guest_path.to_owned();
-    let cache_path = cache_path.to_owned();
+    let guest_elf = guest_elf.to_owned();
+    let host_cache = host_cache.to_owned();
     let l2_contracts = l2_contracts.to_owned();
     SGX_INSTANCE_ID.set(sgx_instance_id);
     tokio::spawn(async move {
         let handler = Handler::new(
-            guest_path.clone(),
-            cache_path.clone(),
+            guest_elf.clone(),
+            host_cache.clone(),
             l2_contracts.clone(),
             // sgx_instance_id,
             proof_cache,
@@ -98,13 +98,13 @@ struct Handler {
 impl Handler {
     fn new(
         guest_elf: PathBuf,
-        chain_cache: PathBuf,
+        host_cache: PathBuf,
         l2_contracts: String,
         capacity: usize,
         max_caches: usize,
     ) -> Self {
         Self {
-            ctx: Context::new(guest_elf, chain_cache, max_caches, None),
+            ctx: Context::new(guest_elf, host_cache, max_caches, None),
             cache: Cache::new(capacity),
         }
     }

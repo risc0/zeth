@@ -1,42 +1,32 @@
-use std::path::PathBuf;
+use std::{fs, path::{Path, PathBuf}};
 
 use alloy_primitives::FixedBytes;
 use serde::{Deserialize, Serialize};
-use tracing::info;
-use zeth_lib::{consts::TKO_MAINNET_CHAIN_SPEC, input::Input, taiko::{host::HostArgs, TaikoSystemInfo},
+use tracing::info as traicing_info;
+use zeth_lib::{consts::TKO_MAINNET_CHAIN_SPEC, input::GuestInput, taiko::{host::HostArgs, GuestInput, GuestOutput, TaikoSystemInfo},
 EthereumTxEssence};
 
 use crate::prover::{
-    consts::*, context::Context, proof::risc0::snarks::verify_groth16_snark, request::{ProofInstance, ProofRequest, Risc0Instance}, utils::guest_executable_path
+    consts::*, context::Context, proof::risc0::snarks::verify_groth16_snark, request::{ProofInstance, ProofRequest, Risc0Instance, SgxResponse}, utils::guest_executable_path
 };
 
 // TODO: import from risc0_guest_method
-const RISC0_GUEST_ID: &str = "risc0";
-
-// TODO: merge Patar's PR
-/// The Input struct for every Taiko guest prover
-#[derive(Debug, Serialize, Deserialize)]
-pub struct GuestInput {
-    /// The initial data required to build a block
-    pub input: Input<EthereumTxEssence>,
-}
+const RISC0_GUEST_ID: [u32; 8] = [1,2,3,4,5,6,7,8];
 
 pub async fn execute_risc0(
-    input: Input<EthereumTxEssence>,
+    input: GuestInput<EthereumTxEssence>,
+    output: GuestOutput,
     ctx: &Context,
     req: &Risc0Instance,
 ) -> Result<SgxResponse, String> {
-    let req = match req.proof_instance {
-        Risc0Instance(instance) => instance,
-        _ => return Err("Wrong Proof Instance")
-    };
-    let elf = include_bytes!(ctx.guest_executable_path(req.proof_instance).to_string());
-    let result = maybe_prove::<GuestInput>(
+    let elf = include_bytes!("../../../../elf/riscv32im-succinct-zkvm-elf");
+    let result = maybe_prove::<GuestInput, GuestOutput>(
         req,
-        &GuestInput {input},
+        &GuestInput {sys_info, input},
         elf,
+        &output,
         Default::default()
-    );
+    ).await;
 
     // Create/verify Groth16 SNARK
     if req.snark {
@@ -44,12 +34,16 @@ pub async fn execute_risc0(
             panic!("No STARK data to snarkify!");
         };
         let image_id = Digest::from(RISC0_GUEST_ID);
-        let (snark_uuid, snark_receipt) = stark2snark(image_id, stark_uuid, stark_receipt).await?;
+        let (snark_uuid, snark_receipt) = stark2snark(image_id, stark_uuid, stark_receipt)
+            .await
+            .map_err(|err| format!("Failed to convert STARK to SNARK: {:?}", err))?;
 
-        info!("Validating SNARK uuid: {}", snark_uuid);
+        traicing_info!("Validating SNARK uuid: {}", snark_uuid);
 
-        verify_groth16_snark(&cli, image_id, snark_receipt).await?;
+        verify_groth16_snark(image_id, snark_receipt).await
+            .map_err(|err| format!("Failed to verify SNARK: {:?}", err))?;
     }
+    todo!()
 }
 
 
@@ -62,16 +56,13 @@ use std::fmt::Debug;
 use bonsai_sdk::alpha::responses::SnarkReceipt;
 use log::{debug, error, info, warn};
 use risc0_zkvm::{
-    compute_image_id,
-    serde::to_vec,
-    sha::{Digest, Digestible},
-    Assumption, ExecutorEnv, ExecutorImpl, FileSegmentRef, Receipt, Segment, SegmentRef,
+    compute_image_id, is_dev_mode, serde::to_vec, sha::{Digest, Digestible}, Assumption, ExecutorEnv, ExecutorImpl, FileSegmentRef, Receipt, Segment, SegmentRef
 };
 use serde::{de::DeserializeOwned};
 use tempfile::tempdir;
 use zeth_primitives::keccak::keccak;
 
-use crate::{cli::Cli, load_receipt, save_receipt};
+// use crate::{load_receipt, save_receipt};
 
 pub async fn stark2snark(
     image_id: Digest,
@@ -219,7 +210,7 @@ pub async fn maybe_prove<I: Serialize, O: Eq + Debug + Serialize + DeserializeOw
     req: &Risc0Instance,
     input: &I,
     elf: &[u8],
-    // expected_output: &O,
+    expected_output: &O,
     assumptions: (Vec<Assumption>, Vec<String>),
 ) -> Option<(String, Receipt)> {
 
@@ -247,7 +238,7 @@ pub async fn maybe_prove<I: Serialize, O: Eq + Debug + Serialize + DeserializeOw
                 if let Ok(remote_proof) = prove_bonsai(
                     encoded_input.clone(),
                     elf,
-                    // expected_output,
+                    expected_output,
                     assumption_uuids.clone(),
                 )
                 .await
@@ -265,7 +256,6 @@ pub async fn maybe_prove<I: Serialize, O: Eq + Debug + Serialize + DeserializeOw
                     elf,
                     assumption_instances,
                     req.profile,
-                    &cli.execution_tag(),
                 ),
                 false,
             )
@@ -283,7 +273,7 @@ pub async fn maybe_prove<I: Serialize, O: Eq + Debug + Serialize + DeserializeOw
     }
 
     // upload receipt to bonsai
-    if prove_args.submit_to_bonsai && receipt_uuid.is_empty() {
+    if req.bonsai && receipt_uuid.is_empty() {
         info!("Uploading cached receipt without UUID to Bonsai.");
         receipt_uuid = upload_receipt(&receipt)
             .await
@@ -309,7 +299,7 @@ pub async fn upload_receipt(receipt: &Receipt) -> anyhow::Result<String> {
 pub async fn prove_bonsai<O: Eq + Debug + DeserializeOwned>(
     encoded_input: Vec<u32>,
     elf: &[u8],
-    // expected_output: &O,
+    expected_output: &O,
     assumption_uuids: Vec<String>,
 ) -> anyhow::Result<(String, Receipt)> {
     info!("Proving on Bonsai");
@@ -330,7 +320,7 @@ pub async fn prove_bonsai<O: Eq + Debug + DeserializeOwned>(
         assumption_uuids.clone(),
     )?;
 
-    // verify_bonsai_receipt(image_id, expected_output, session.uuid.clone(), 8).await
+    verify_bonsai_receipt(image_id, expected_output, session.uuid.clone(), 8).await
 }
 
 /// Prove the given ELF locally with the given input and assumptions. The segments are
@@ -341,7 +331,6 @@ pub fn prove_locally(
     elf: &[u8],
     assumptions: Vec<Assumption>,
     profile: bool,
-    profile_reference: &String,
 ) -> Receipt {
     debug!("Proving with segment_limit_po2 = {:?}", segment_limit_po2);
     debug!(
@@ -360,7 +349,7 @@ pub fn prove_locally(
 
         if profile {
             info!("Profiling enabled.");
-            env_builder.enable_profiler(format!("profile_{}.pb", profile_reference));
+            env_builder.enable_profiler(format!("profile_r0_local.pb"));
         }
 
         for assumption in assumptions {
@@ -446,4 +435,43 @@ pub fn execute<T: Serialize, O: Eq + Debug + DeserializeOwned>(
             output_guest, expected_output,
         );
     }
+}
+
+
+pub fn load_receipt<T: serde::de::DeserializeOwned>(
+    file_name: &String,
+) -> anyhow::Result<Option<(String, T)>> {
+    if is_dev_mode() {
+        // Nothing to load
+        return Ok(None);
+    }
+
+    let receipt_serialized = match fs::read(zkp_cache_path(file_name)) {
+        Ok(receipt_serialized) => receipt_serialized,
+        Err(err) => {
+            debug!("Could not load cached receipt with label: {}", &file_name);
+            debug!("{:?}", err);
+            return Ok(None);
+        }
+    };
+
+    Ok(Some(bincode::deserialize(&receipt_serialized)?))
+}
+
+pub fn save_receipt<T: serde::Serialize>(receipt_label: &String, receipt_data: &(String, T)) {
+    if !is_dev_mode() {
+        fs::write(
+            zkp_cache_path(receipt_label),
+            bincode::serialize(receipt_data).expect("Failed to serialize receipt!"),
+        )
+        .expect("Failed to save receipt output file.");
+    }
+}
+
+fn zkp_cache_path(receipt_label: &String) -> String {
+    Path::new("cache_zkp")
+        .join(format!("{}.zkp", receipt_label))
+        .to_str()
+        .unwrap()
+        .to_string()
 }

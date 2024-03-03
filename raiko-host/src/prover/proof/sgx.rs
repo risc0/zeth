@@ -78,5 +78,5 @@ fn parse_sgx_result(output: Vec<u8>) -> Result<SgxResponse, String> {
     let proof = extract_field("proof");
     let quote = extract_field("quote");
 
-    Ok(SgxResponse { proof, quote })
+    Ok(SgxResponse { proof, quote})
 }

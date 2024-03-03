@@ -20,7 +20,7 @@ use ethers_core::types::Log;
 use ethers_core::types::{
     Block, Bytes, Transaction, TransactionReceipt, H256, U256,
 };
-
+use alloy_rpc_types::EIP1186AccountProofResponse;
 use super::{
     file_provider::FileProvider, rpc_provider::RpcProvider, AccountQuery, BlockQuery, MutProvider,
     ProofQuery, Provider, StorageQuery,

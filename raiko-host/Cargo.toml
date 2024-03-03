@@ -12,6 +12,7 @@ bytemuck = "1.13"
 clap = { version = "4.0", features = ["derive"] }
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
+ethers-contract = { version = "2.0", optional = true}
 ethers-core = { version = "2.0" }
 ethers-providers = { version = "2.0" }
 flate2 = "1.0.28"
@@ -21,7 +22,7 @@ serde = "1.0"
 serde_with = "3.4.0"
 tempfile = "3.6"
 tokio = { version = "1.23", features = ["full"] }
-zeth-lib = { path = "../lib", features = ["taiko", "std"] }
+zeth-lib = { path = "../lib", features = ["taiko", "std", "rpc"] }
 zeth-primitives = { path = "../primitives", features = ["taiko", "ethers", "revm"] }
 serde_json = "1.0"
 hyper = { version = "0.14.27", features = ["server"] }
@@ -39,6 +40,8 @@ powdr = { git = "https://github.com/ceciliaz030/powdr", branch = "+nightly", opt
 sp1-core = { git = "https://github.com/succinctlabs/sp1.git", optional = true }
 risc0-zkvm = { version = "0.20.1", features = ["prove"], optional = true }
 bonsai-sdk = { version = "0.6.0", features = ["async"],  optional = true }
+log = {version = "0.4", optional = true}
+typetag ={version = "0.2.15", optional = true}
 
 
 [dev-dependencies]
@@ -46,8 +49,8 @@ assert_cmd = "2.0"
 rstest = "0.18"
 
 [features]
-default = ["risc0"]
+# default = ["risc0"]
 powdr = ["dep:powdr"]
 succinct = ["dep:sp1-core"]
-risc0 = ["dep:risc0-zkvm", "dep:bonsai-sdk"]
+risc0 = ["dep:risc0-zkvm", "dep:bonsai-sdk", "dep:ethers-contract", "dep:alloy-sol-types", "dep:log", "dep:typetag"]
 sgx = []

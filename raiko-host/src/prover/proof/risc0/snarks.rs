@@ -19,12 +19,11 @@ use alloy_sol_types::{sol, SolValue};
 use anyhow::anyhow;
 use bonsai_sdk::alpha::responses::{Groth16Seal, SnarkReceipt};
 use ethers_contract::abigen;
+use ethers_core::types::H160;
 use ethers_providers::{Http, Provider, RetryClient};
 use risc0_zkvm::sha::{Digest, Digestible};
 
-use crate::cli::Cli;
-
-const RISC_ZERO_VERIFIER: &str = include_str!("risc0_verifier.abi");
+static RISC_ZERO_VERIFIER:  ethers_core::types::Address = H160::zero();
 
 sol!(
     /// A Groth16 seal over the claimed receipt claim.
@@ -86,22 +85,13 @@ pub async fn verify_groth16_snark(
     image_id: Digest,
     snark_receipt: SnarkReceipt,
 ) -> anyhow::Result<()> {
-    // Verify on chain
-    let verifier_contract_address = cli
-        .verifier_contract()
-        .ok_or(anyhow!("Missing verifier contract address parameter"))?;
-    let verifier_rpc_url = cli.verifier_or_eth_rpc_url().ok_or(anyhow!(
-        "Cannot reach verifier contract. No eth_rpc_url or verifier_rpc_url set."
-    ))?;
+    let verifier_rpc_url = "TODO: http://fuckBonsai:8545";
 
     let http_client = Arc::new(Provider::<RetryClient<Http>>::new_client(
         &verifier_rpc_url,
         3,
         500,
     )?);
-
-    let verifier_contract =
-        ethers_core::types::Address::from_str(verifier_contract_address.as_str())?;
 
     let seal = <Groth16Seal as Into<Seal>>::into(snark_receipt.snark).abi_encode();
     let journal_digest = snark_receipt.journal.digest();
@@ -113,7 +103,7 @@ pub async fn verify_groth16_snark(
         hex::encode(&snark_receipt.post_state_digest)
     );
     log::info!("Journal Digest: {}", hex::encode(journal_digest.as_bytes()));
-    let verification = IRiscZeroVerifier::new(verifier_contract, http_client)
+    let verification = IRiscZeroVerifier::new(RISC_ZERO_VERIFIER, http_client)
         .verify(
             seal.into(),
             image_id.as_bytes().try_into().unwrap(),
@@ -129,7 +119,7 @@ pub async fn verify_groth16_snark(
     if verification {
         log::info!(
             "SNARK verified successfully using {}!",
-            verifier_contract_address
+            RISC_ZERO_VERIFIER
         );
     } else {
         log::error!("SNARK verification failed!");

@@ -17,7 +17,7 @@ use crate::{
     host::{
         provider::BlockQuery, provider_db::ProviderDb, taiko_provider::TaikoProvider
     },
-    input::{Input, TaikoProverData, TaikoSystemInfo},
+    input::{GuestInput, TaikoProverData, TaikoSystemInfo},
     taiko_utils::{MAX_TX_LIST, MAX_TX_LIST_BYTES},
 };
 
@@ -36,14 +36,13 @@ pub fn taiko_run_preflight(
     l2_block_no: u64,
     l2_contracts: &str,
     prover_data: TaikoProverData,
-) -> Result<Input<EthereumTxEssence>> {
+) -> Result<GuestInput<EthereumTxEssence>> {
     let mut tp = TaikoProvider::new(
         None,
         l1_rpc_url.clone(),
         None,
         l2_rpc_url.clone(),
-    )?
-    .with_l2_spec(l2_chain_spec.clone());
+    )?;
 
     // Fetch the parent block
     let parent_block = tp.l2_provider.get_partial_block(&BlockQuery {
@@ -134,7 +133,7 @@ pub fn taiko_run_preflight(
         .collect::<Result<Vec<_>, _>>()?;
 
     // Create the input struct without the block data set
-    let input = Input {
+    let input = GuestInput {
         beneficiary: from_ethers_h160(block.author.context("author missing")?),
         gas_limit: from_ethers_u256(block.gas_limit),
         timestamp: from_ethers_u256(block.timestamp),
@@ -193,7 +192,7 @@ pub fn taiko_run_preflight(
 
     info!("Provider-backed execution is Done!");
 
-    Ok(Input {
+    Ok(GuestInput {
         parent_state_trie: state_trie,
         parent_storage: storage,
         contracts: contracts.into_iter().map(Bytes).collect(),

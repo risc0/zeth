@@ -35,3 +35,5 @@ pub fn guest_mem_forget<T>(_t: T) {
     #[cfg(target_os = "zkvm")] // TODO: seperate for risc0
     core::mem::forget(_t)
 }
+
+

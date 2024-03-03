@@ -14,7 +14,6 @@ use crate::{
 pub struct TaikoProvider {
     pub l1_provider: Box<dyn Provider>,
     pub l2_provider: Box<dyn Provider>,
-    pub l2_spec: Option<ChainSpec>,
 }
 
 impl TaikoProvider {
@@ -27,13 +26,7 @@ impl TaikoProvider {
         Ok(Self {
             l1_provider: new_provider(l1_cache, l1_rpc)?,
             l2_provider: new_provider(l2_cache, l2_rpc)?,
-            l2_spec: None,
         })
-    }
-
-    pub fn with_l2_spec(mut self, spec: ChainSpec) -> Self {
-        self.l2_spec = Some(spec);
-        self
     }
 
     pub fn save(&mut self) -> Result<()> {

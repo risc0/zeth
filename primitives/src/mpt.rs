@@ -137,10 +137,10 @@ pub fn keccak(data: impl AsRef<[u8]>) -> [u8; 32] {
 pub struct MptNode {
     /// The type and data of the node.
     data: MptNodeData,
-    /// Cache for a previously computed reference of this node. This is skipped during
-    /// serialization.
-    #[serde(skip)]
-    cached_reference: RefCell<Option<MptNodeReference>>,
+    // / Cache for a previously computed reference of this node. This is skipped during
+    // / serialization.
+    // #[serde(skip)]
+    // cached_reference: RefCell<Option<MptNodeReference>>,
 }
 
 /// Represents custom error types for the sparse Merkle Patricia Trie (MPT).
@@ -215,7 +215,7 @@ impl From<MptNodeData> for MptNode {
     fn from(value: MptNodeData) -> Self {
         Self {
             data: value,
-            cached_reference: RefCell::new(None),
+            // cached_reference: RefCell::new(None),
         }
     }
 }
@@ -377,10 +377,11 @@ impl MptNode {
     /// storage or transmission purposes.
     #[inline]
     pub fn reference(&self) -> MptNodeReference {
-        self.cached_reference
-            .borrow_mut()
-            .get_or_insert_with(|| self.calc_reference())
-            .clone()
+        // self.cached_reference
+        //     .borrow_mut()
+        //     .get_or_insert_with(|| self.calc_reference())
+        //     .clone()
+        self.calc_reference()
     }
 
     /// Computes and returns the 256-bit hash of the node.
@@ -390,12 +391,12 @@ impl MptNode {
     pub fn hash(&self) -> B256 {
         match self.data {
             MptNodeData::Null => EMPTY_ROOT,
-            _ => match self
-                .cached_reference
-                .borrow_mut()
-                .get_or_insert_with(|| self.calc_reference())
-            {
-                MptNodeReference::Digest(digest) => *digest,
+            // _ => match self
+            //     .cached_reference
+            //     .borrow_mut()
+            //     .get_or_insert_with(|| self.calc_reference())
+            _ => match self.calc_reference() {
+                MptNodeReference::Digest(digest) => digest,
                 MptNodeReference::Bytes(bytes) => keccak(bytes).into(),
             },
         }
@@ -403,13 +404,13 @@ impl MptNode {
 
     /// Encodes the [MptNodeReference] of this node into the `out` buffer.
     fn reference_encode(&self, out: &mut dyn alloy_rlp::BufMut) {
-        match self
-            .cached_reference
-            .borrow_mut()
-            .get_or_insert_with(|| self.calc_reference())
-        {
+        // match self
+        //     .cached_reference
+        //     .borrow_mut()
+        //     .get_or_insert_with(|| self.calc_reference())
+        match self.calc_reference() {
             // if the reference is an RLP-encoded byte slice, copy it directly
-            MptNodeReference::Bytes(bytes) => out.put_slice(bytes),
+            MptNodeReference::Bytes(bytes) => out.put_slice(&bytes),
             // if the reference is a digest, RLP-encode it with its fixed known length
             MptNodeReference::Digest(digest) => {
                 out.put_u8(alloy_rlp::EMPTY_STRING_CODE + 32);
@@ -420,11 +421,11 @@ impl MptNode {
 
     /// Returns the length of the encoded [MptNodeReference] of this node.
     fn reference_length(&self) -> usize {
-        match self
-            .cached_reference
-            .borrow_mut()
-            .get_or_insert_with(|| self.calc_reference())
-        {
+        // match self
+        //     .cached_reference
+        //     .borrow_mut()
+        //     .get_or_insert_with(|| self.calc_reference())
+        match self.calc_reference() {
             MptNodeReference::Bytes(bytes) => bytes.len(),
             MptNodeReference::Digest(_) => 1 + 32,
         }
@@ -779,7 +780,7 @@ impl MptNode {
     }
 
     fn invalidate_ref_cache(&mut self) {
-        self.cached_reference.borrow_mut().take();
+        // self.cached_reference.borrow_mut().take();
     }
 
     /// Returns the number of traversable nodes in the trie.

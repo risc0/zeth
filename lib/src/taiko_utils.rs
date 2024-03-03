@@ -6,7 +6,7 @@ use ethers_core::types::{Transaction, U64, U256 as EU256};
 use once_cell::unsync::Lazy;
 use zeth_primitives::{ethers::{from_ethers_h160, from_ethers_u256}, transactions::{ethereum::EthereumTxEssence, EthereumTransaction}};
 
-use crate::input::Input;
+use crate::input::GuestInput;
 
 pub const ANCHOR_GAS_LIMIT: u64 = 250_000;
 pub const MAX_TX_LIST: usize = 79;
@@ -144,7 +144,7 @@ fn check_anchor_signature(anchor: &EthereumTransaction) -> Result<()> {
 }
 
 pub fn check_anchor_tx(
-    input: Input<EthereumTxEssence>,
+    input: GuestInput<EthereumTxEssence>,
     anchor: &Transaction,
     chain_name: &str,
 ) -> Result<()> {

@@ -13,33 +13,42 @@
 // limitations under the License.
 
 use anyhow::{anyhow, Result};
-#[cfg(feature = "taiko")]
 use ethers_core::types::Log;
 use ethers_core::types::{
-    Block, Bytes, EIP1186ProofResponse, Filter, Transaction, TransactionReceipt, H256, U256,
+    Block, Bytes, Filter, Transaction, TransactionReceipt, H256, U256,
 };
-use ethers_providers::{Http, Middleware, RetryClient};
+use ethers_providers::{Http as ethers_Http, Middleware, RetryClient};
+use alloy_rpc_types::{BlockId, EIP1186AccountProofResponse};
+use alloy_providers::provider::HttpProvider;
+use alloy_providers::provider::TempProvider;
+use alloy_transport_http::Http;
+use hex::FromHex;
+use url::Url;
 use log::info;
 
-// #[cfg(feature = "taiko")]
-// use zeth_primitives::taiko::BlockProposed;
 use super::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery};
-#[cfg(feature = "taiko")]
 use crate::host::provider::LogsQuery;
 
 pub struct RpcProvider {
-    http_client: ethers_providers::Provider<RetryClient<Http>>,
+    ethers_provider: ethers_providers::Provider<RetryClient<ethers_Http>>,
+    alloy_provider: HttpProvider,
     tokio_handle: tokio::runtime::Handle,
 }
 
 impl RpcProvider {
     pub fn new(rpc_url: String) -> Result<Self> {
-        let http_client =
-            ethers_providers::Provider::<RetryClient<Http>>::new_client(&rpc_url, 3, 500)?;
+        //TODO(Brecht): switch to alloy provider for everything
+        let ethers_provider =
+            ethers_providers::Provider::<RetryClient<ethers_Http>>::new_client(&rpc_url, 3, 500)?;
+
+        let alloy_http = Http::new(Url::parse(&rpc_url).expect("invalid rpc url"));
+        let alloy_provider: HttpProvider = HttpProvider::new(alloy_http);
+
         let tokio_handle = tokio::runtime::Handle::current();
 
         Ok(RpcProvider {
-            http_client,
+            ethers_provider,
+            alloy_provider,
             tokio_handle,
         })
     }
@@ -55,7 +64,7 @@ impl Provider for RpcProvider {
 
         let response = self
             .tokio_handle
-            .block_on(async { self.http_client.get_block_with_txs(query.block_no).await })?;
+            .block_on(async { self.ethers_provider.get_block_with_txs(query.block_no).await })?;
 
         match response {
             Some(out) => Ok(out),
@@ -68,7 +77,7 @@ impl Provider for RpcProvider {
 
         let response = self
             .tokio_handle
-            .block_on(async { self.http_client.get_block(query.block_no).await })?;
+            .block_on(async { self.ethers_provider.get_block(query.block_no).await })?;
 
         match response {
             Some(out) => Ok(out),
@@ -81,20 +90,20 @@ impl Provider for RpcProvider {
 
         let response = self
             .tokio_handle
-            .block_on(async { self.http_client.get_block_receipts(query.block_no).await })?;
+            .block_on(async { self.ethers_provider.get_block_receipts(query.block_no).await })?;
 
         Ok(response)
     }
 
-    fn get_proof(&mut self, query: &ProofQuery) -> Result<EIP1186ProofResponse> {
+    fn get_proof(&mut self, query: &ProofQuery) -> Result<EIP1186AccountProofResponse> {
         info!("Querying RPC for inclusion proof: {query:?}");
 
-        let out = self.tokio_handle.block_on(async {
-            self.http_client
+        let out: EIP1186AccountProofResponse = self.tokio_handle.block_on(async {
+            self.alloy_provider
                 .get_proof(
-                    query.address,
-                    query.indices.iter().cloned().collect(),
-                    Some(query.block_no.into()),
+                    zeth_primitives::Address::from_slice(&query.address.as_bytes()),
+                    query.indices.iter().cloned().map(|v| alloy_primitives::FixedBytes(*v.as_fixed_bytes())).collect(),
+                    Some(BlockId::from(query.block_no)),
                 )
                 .await
         })?;
@@ -106,7 +115,7 @@ impl Provider for RpcProvider {
         info!("Querying RPC for transaction count: {query:?}");
 
         let out = self.tokio_handle.block_on(async {
-            self.http_client
+            self.ethers_provider
                 .get_transaction_count(query.address, Some(query.block_no.into()))
                 .await
         })?;
@@ -118,7 +127,7 @@ impl Provider for RpcProvider {
         info!("Querying RPC for balance: {query:?}");
 
         let out = self.tokio_handle.block_on(async {
-            self.http_client
+            self.ethers_provider
                 .get_balance(query.address, Some(query.block_no.into()))
                 .await
         })?;
@@ -130,7 +139,7 @@ impl Provider for RpcProvider {
         info!("Querying RPC for code: {query:?}");
 
         let out = self.tokio_handle.block_on(async {
-            self.http_client
+            self.ethers_provider
                 .get_code(query.address, Some(query.block_no.into()))
                 .await
         })?;
@@ -142,7 +151,7 @@ impl Provider for RpcProvider {
         info!("Querying RPC for storage: {query:?}");
 
         let out = self.tokio_handle.block_on(async {
-            self.http_client
+            self.ethers_provider
                 .get_storage_at(query.address, query.index, Some(query.block_no.into()))
                 .await
         })?;
@@ -155,7 +164,7 @@ impl Provider for RpcProvider {
         info!("Querying RPC for logs: {query:?}");
 
         let out = self.tokio_handle.block_on(async {
-            self.http_client
+            self.ethers_provider
                 .get_logs(
                     &Filter::new()
                         .address(query.address)
@@ -173,7 +182,7 @@ impl Provider for RpcProvider {
         info!("Querying RPC for tx: {query:?}");
         let out = self
             .tokio_handle
-            .block_on(async { self.http_client.get_transaction(query.tx_hash).await })?;
+            .block_on(async { self.ethers_provider.get_transaction(query.tx_hash).await })?;
         match out {
             Some(out) => Ok(out),
             None => Err(anyhow!("No data for {query:?}")),

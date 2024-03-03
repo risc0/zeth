@@ -26,7 +26,7 @@ use crate::{
         finalize::{BlockFinalizeStrategy, MemDbBlockFinalizeStrategy},
         initialize::{DbInitStrategy, MemDbInitStrategy},
         prepare::{EthHeaderPrepStrategy, HeaderPrepStrategy},
-    }, consts::ChainSpec, input::Input, mem_db::MemDb
+    }, consts::ChainSpec, input::GuestInput, mem_db::MemDb
 };
 
 mod execute;
@@ -38,7 +38,7 @@ pub mod prepare;
 #[derive(Clone, Debug)]
 pub struct BlockBuilder<'a, D, E: TxEssence> {
     pub(crate) chain_spec: &'a ChainSpec,
-    pub(crate) input: Input<E>,
+    pub(crate) input: GuestInput<E>,
     pub(crate) db: Option<D>,
     pub(crate) header: Option<Header>,
 }
@@ -50,7 +50,7 @@ where
     E: TxEssence,
 {
     /// Creates a new block builder.
-    pub fn new(chain_spec: &ChainSpec, input: Input<E>) -> BlockBuilder<'_, D, E> {
+    pub fn new(chain_spec: &ChainSpec, input: GuestInput<E>) -> BlockBuilder<'_, D, E> {
         BlockBuilder {
             chain_spec,
             db: None,
@@ -108,7 +108,7 @@ pub trait BlockBuilderStrategy {
     /// Builds a block from the given input.
     fn build_from(
         chain_spec: &ChainSpec,
-        input: Input<Self::TxEssence>,
+        input: GuestInput<Self::TxEssence>,
     ) -> Result<(Header, MptNode)> {
         BlockBuilder::<MemDb, Self::TxEssence>::new(chain_spec, input)
             .initialize_database::<Self::DbInitStrategy>()?

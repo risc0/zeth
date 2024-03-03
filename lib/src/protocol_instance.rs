@@ -4,7 +4,7 @@ use anyhow::{ensure, Result};
 use zeth_primitives::{block::Header, keccak::keccak, transactions::ethereum::EthereumTxEssence};
 
 use super::taiko_utils::ANCHOR_GAS_LIMIT;
-use crate::input::{Input, BlockMetadata, EthDeposit, Transition};
+use crate::input::{GuestInput, BlockMetadata, EthDeposit, Transition};
 
 #[derive(Debug)]
 pub struct ProtocolInstance {
@@ -31,7 +31,7 @@ impl ProtocolInstance {
                     .abi_encode(),
             )
             .into(),
-            EvidenceType::Pse => todo!(),
+            EvidenceType::PseZk => todo!(),
             EvidenceType::Powdr => todo!(),
             EvidenceType::Succinct => keccak(
                 (
@@ -43,6 +43,23 @@ impl ProtocolInstance {
                     .abi_encode(),
             )
             .into(),
+            EvidenceType::Risc0 => keccak(
+                (
+                    self.transition.clone(),
+                    self.prover,
+                    self.meta_hash(),
+                )
+                    .abi_encode(),
+            )
+            .into(),
+            EvidenceType::Native => keccak(
+                (
+                    self.transition.clone(),
+                    self.prover,
+                    self.meta_hash(),
+                )
+                    .abi_encode(),
+            ).into()
         }
     }
 }
@@ -52,14 +69,16 @@ pub enum EvidenceType {
     Sgx {
         new_pubkey: Address, // the evidence signature public key
     },
-    Pse,
+    PseZk,
     Powdr,
     Succinct,
+    Risc0,
+    Native,
 }
 
 // TODO(cecilia): rewrite
 pub fn assemble_protocol_instance(
-    input: &Input<EthereumTxEssence>,
+    input: &GuestInput<EthereumTxEssence>,
     header: &Header,
 ) -> Result<ProtocolInstance> {
     let tx_list_hash = TxHash::from(keccak(input.taiko.tx_list.as_slice()));

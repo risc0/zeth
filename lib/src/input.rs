@@ -16,7 +16,7 @@ use core::fmt::Debug;
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
-    block::Header, mpt::MptNode, transactions::{Transaction, TxEssence}, withdrawal::Withdrawal, Address, Bytes, B256, U256
+    block::Header, FixedBytes, mpt::MptNode, transactions::{Transaction, TxEssence}, withdrawal::Withdrawal, Address, Bytes, B256, U256
 };
 use alloy_sol_types::{sol, SolCall};
 use anyhow::{anyhow, Result};
@@ -28,7 +28,7 @@ pub type StorageEntry = (MptNode, Vec<U256>);
 
 /// External block input.
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
-pub struct Input<E: TxEssence> {
+pub struct GuestInput<E: TxEssence> {
     /// Previous block header
     pub parent_header: Header,
     /// Address to which all priority fees in this block are transferred.
@@ -146,6 +146,11 @@ pub struct TaikoSystemInfo {
     pub prover_data: TaikoProverData,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum GuestOutput {
+    Success((Header, FixedBytes<32>)),
+    Failure,
+}
 
 #[cfg(test)]
 mod tests {
@@ -157,7 +162,7 @@ mod tests {
 
     #[test]
     fn input_serde_roundtrip() {
-        let input = Input::<EthereumTxEssence> {
+        let input = GuestInput::<EthereumTxEssence> {
             parent_header: Default::default(),
             beneficiary: Default::default(),
             gas_limit: Default::default(),
@@ -173,7 +178,7 @@ mod tests {
             base_fee_per_gas: Default::default(),
             taiko: Default::default(),
         };
-        let _: Input<EthereumTxEssence> =
+        let _: GuestInput<EthereumTxEssence> =
             bincode::deserialize(&bincode::serialize(&input).unwrap()).unwrap();
     }
 }

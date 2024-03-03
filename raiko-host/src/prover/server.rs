@@ -222,6 +222,7 @@ impl Handler {
         match method {
             // enqueues a task for computating proof for any given block
             "proof" => {
+                println!("prodfasdfkasj;dkflja;sldk");
                 let options = params.first().ok_or("expected struct ProofRequest")?;
                 let req: ProofRequest =
                     serde_json::from_value(options.to_owned()).map_err(|e| e.to_string())?;
@@ -229,6 +230,8 @@ impl Handler {
                     .await
                     .and_then(|result| serde_json::to_value(result).map_err(Into::into))
                     .map_err(|e| e.to_string())
+                // Ok(serde_json::Value::Bool(false))
+
             }
             _ => todo!(),
         }

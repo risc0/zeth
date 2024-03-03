@@ -4445,6 +4445,7 @@ dependencies = [
  "bytes",
  "chrono",
  "ethers-core",
+ "ethers-providers",
  "flate2",
  "hashbrown 0.14.3",
  "hex",
@@ -4458,6 +4459,7 @@ dependencies = [
  "serde_with",
  "thiserror",
  "thiserror-no-std",
+ "tokio",
  "zeth-primitives",
 ]
 

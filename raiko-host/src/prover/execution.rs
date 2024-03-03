@@ -30,14 +30,14 @@ pub async fn execute(
     req: &ProofRequest,
 ) -> Result<ProofResponse> {
 
-    ctx.update_cache_path(req.block);
+    // ctx.update_cache_path(req.block);
     // try remove cache file anyway to avoid reorg error
     // because tokio::fs::remove_file haven't guarantee of execution. So, we need to remove
     // twice
     // > Runs the provided function on an executor dedicated to blocking operations.
     // > Tasks will be scheduled as non-mandatory, meaning they may not get executed
     // > in case of runtime shutdown.
-    ctx.remove_cache_file().await?;
+    // ctx.remove_cache_file().await?;
     let result = async {
         // 1. load input data into cache path
         let start = Instant::now();

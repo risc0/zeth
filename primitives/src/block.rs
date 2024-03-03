@@ -22,7 +22,7 @@ use alloy_primitives::{b256, Address, BlockHash, BlockNumber, Bloom, Bytes, B256
 use alloy_rlp_derive::RlpEncodable;
 use serde::{Deserialize, Serialize};
 
-use crate::{keccak::keccak, transactions::EthereumTransaction, trie::EMPTY_ROOT};
+use crate::{keccak::keccak, mpt::EMPTY_ROOT, transactions::EthereumTransaction};
 
 /// Keccak-256 hash of the RLP of an empty list.
 pub const EMPTY_LIST_HASH: B256 =

@@ -34,7 +34,6 @@ use zeth_lib::{
 use zeth_primitives::{
     block::Header,
     mmr::{MerkleMountainRange, MerkleProof},
-    transactions::optimism::OptimismTxEssence,
 };
 
 use crate::{

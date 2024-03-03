@@ -15,27 +15,18 @@
 use anyhow::Result;
 use revm::{Database, DatabaseCommit};
 use zeth_primitives::{
-    block::Header,
-    transactions::{ethereum::EthereumTxEssence, TxEssence},
-    trie::MptNode,
+    block::Header, mpt::MptNode, transactions::{ethereum::EthereumTxEssence, TxEssence}
 };
 
-#[cfg(feature = "optimism")]
-pub use self::execute::optimism::OpTxExecStrategy;
 #[cfg(feature = "taiko")]
 pub use self::execute::taiko::TkoTxExecStrategy;
-#[cfg(feature = "optimism")]
-use crate::OptimismTxEssence;
 use crate::{
     builder::{
-        execute::{ethereum::EthTxExecStrategy, TxExecStrategy},
+        execute::{TxExecStrategy},
         finalize::{BlockFinalizeStrategy, MemDbBlockFinalizeStrategy},
         initialize::{DbInitStrategy, MemDbInitStrategy},
         prepare::{EthHeaderPrepStrategy, HeaderPrepStrategy},
-    },
-    consts::ChainSpec,
-    input::Input,
-    mem_db::MemDb,
+    }, consts::ChainSpec, input::Input, mem_db::MemDb
 };
 
 mod execute;
@@ -125,29 +116,6 @@ pub trait BlockBuilderStrategy {
             .execute_transactions::<Self::TxExecStrategy>()?
             .finalize::<Self::BlockFinalizeStrategy>()
     }
-}
-
-/// The [BlockBuilderStrategy] for building an Ethereum block.
-pub struct EthereumStrategy {}
-
-impl BlockBuilderStrategy for EthereumStrategy {
-    type TxEssence = EthereumTxEssence;
-    type DbInitStrategy = MemDbInitStrategy;
-    type HeaderPrepStrategy = EthHeaderPrepStrategy;
-    type TxExecStrategy = EthTxExecStrategy;
-    type BlockFinalizeStrategy = MemDbBlockFinalizeStrategy;
-}
-
-/// The [BlockBuilderStrategy] for building an Optimism block.
-#[cfg(feature = "optimism")]
-pub struct OptimismStrategy {}
-#[cfg(feature = "optimism")]
-impl BlockBuilderStrategy for OptimismStrategy {
-    type TxEssence = OptimismTxEssence;
-    type DbInitStrategy = MemDbInitStrategy;
-    type HeaderPrepStrategy = EthHeaderPrepStrategy;
-    type TxExecStrategy = OpTxExecStrategy;
-    type BlockFinalizeStrategy = MemDbBlockFinalizeStrategy;
 }
 
 /// The [BlockBuilderStrategy] for building an Optimism block.

@@ -18,9 +18,7 @@ extern crate alloc;
 use alloc::{
     collections::BTreeMap,
     str::FromStr,
-    string::{String, ToString},
 };
-use core::cell::{SyncUnsafeCell, UnsafeCell};
 
 use anyhow::bail;
 use once_cell::unsync::Lazy;
@@ -88,26 +86,7 @@ pub const TKO_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| {
 });
 
 #[cfg(feature = "taiko")]
-pub use crate::taiko::consts::testnet::*;
-
-/// The Optimism mainnet specification.
-#[cfg(feature = "optimism")]
-pub const OP_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
-    chain_id: 10,
-    hard_forks: BTreeMap::from([
-        (SpecId::FRONTIER, ForkCondition::Block(0)),
-        // previous versions not supported
-        (SpecId::BEDROCK, ForkCondition::Block(105235063)),
-        // Regolith is activated from day 1 of Bedrock on mainnet
-        (SpecId::REGOLITH, ForkCondition::Block(105235063)),
-    ]),
-    eip_1559_constants: Eip1559Constants {
-        base_fee_change_denominator: uint!(50_U256),
-        base_fee_max_increase_denominator: uint!(10_U256),
-        base_fee_max_decrease_denominator: uint!(50_U256),
-        elasticity_multiplier: uint!(6_U256),
-    },
-});
+pub use crate::taiko_utils::testnet::*;
 
 /// The condition at which a fork is activated.
 #[derive(Debug, Clone, Serialize, Deserialize)]

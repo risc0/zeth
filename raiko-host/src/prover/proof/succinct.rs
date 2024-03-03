@@ -35,7 +35,7 @@ pub async fn execute_sp1(ctx: &mut Context, req: &ProofRequest) -> Result<SP1Res
     stdin.write(&host_args);
     stdin.write(&l2_contracts_spec);
     stdin.write(&req.l2_contracts);
-    stdin.write(&req.block);
+    stdin.write(&req.block_number);
     stdin.write(&req.graffiti);
     stdin.write(&req.prover);
 

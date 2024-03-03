@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use alloc::vec::Vec;
+use alloy_rpc_types::EIP1186AccountProofResponse;
 use std::{
     collections::HashMap,
     fs::File,
@@ -22,7 +23,7 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use ethers_core::types::{
-    Block, Bytes, EIP1186ProofResponse, Log, Transaction, TransactionReceipt, H256, U256,
+    Block, Bytes, Log, Transaction, TransactionReceipt, H256, U256,
 };
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -48,7 +49,7 @@ pub struct FileProvider {
     #[serde_as(as = "Vec<(_, _)>")]
     receipts: HashMap<BlockQuery, Vec<TransactionReceipt>>,
     #[serde_as(as = "Vec<(_, _)>")]
-    proofs: HashMap<ProofQuery, EIP1186ProofResponse>,
+    proofs: HashMap<ProofQuery, EIP1186AccountProofResponse>,
     #[serde_as(as = "Vec<(_, _)>")]
     transaction_count: HashMap<AccountQuery, U256>,
     #[serde_as(as = "Vec<(_, _)>")]
@@ -138,7 +139,7 @@ impl Provider for FileProvider {
         }
     }
 
-    fn get_proof(&mut self, query: &ProofQuery) -> Result<EIP1186ProofResponse> {
+    fn get_proof(&mut self, query: &ProofQuery) -> Result<EIP1186AccountProofResponse> {
         match self.proofs.get(query) {
             Some(val) => Ok(val.clone()),
             None => Err(anyhow!("No data for {query:?}")),
@@ -206,7 +207,7 @@ impl MutProvider for FileProvider {
         self.dirty = true;
     }
 
-    fn insert_proof(&mut self, query: ProofQuery, val: EIP1186ProofResponse) {
+    fn insert_proof(&mut self, query: ProofQuery, val: EIP1186AccountProofResponse) {
         self.proofs.insert(query, val);
         self.dirty = true;
     }

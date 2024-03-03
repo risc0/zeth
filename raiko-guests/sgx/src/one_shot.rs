@@ -15,7 +15,7 @@ use zeth_lib::{
     consts::TKO_MAINNET_CHAIN_SPEC,
     input::Input,
     taiko::{
-        host::{init_taiko, HostArgs},
+        host::{HostArgs},
         protocol_instance::{assemble_protocol_instance, EvidenceType},
         TaikoSystemInfo,
     },
@@ -127,6 +127,16 @@ pub async fn one_shot(global_opts: GlobalOpts, args: OneShotArgs) -> Result<()> 
     let new_pubkey = public_key(&prev_privkey);
     let new_instance = public_key_to_address(&new_pubkey);
 
+    // Get the input
+    let file = File::open(path_str).expect("unable to open file");
+    let input = bincode::deserialize_from(file).expect("unable to deserialize input");
+
+    // Process the block
+    let (header, _mpt_node) = TaikoStrategy::build_from(&TKO_MAINNET_CHAIN_SPEC.clone(), input)
+        .expect("Failed to build the resulting block");
+    let pi = assemble_protocol_instance(&input, &header)?;
+    let pi_hash = pi.instance_hash(EvidenceType::Sgx { new_pubkey });
+
     // fs::write(privkey_path, new_privkey.to_bytes())?;
     let pi_hash = get_data_to_sign(
         "testnet".to_string(),
@@ -166,59 +176,6 @@ pub async fn one_shot(global_opts: GlobalOpts, args: OneShotArgs) -> Result<()> 
 fn is_bootstrapped(secrets_dir: &Path) -> bool {
     let privkey_path = secrets_dir.join(PRIV_KEY_FILENAME);
     privkey_path.is_file() && !privkey_path.metadata().unwrap().permissions().readonly()
-}
-
-async fn get_data_to_sign(
-    testnet: String,
-    path_str: String,
-    l1_blocks_path: String,
-    prover: Address,
-    graffiti: B256,
-    block_no: u64,
-    new_pubkey: Address,
-) -> Result<B256> {
-    let (input, sys_info) = parse_to_init(
-        testnet,
-        path_str,
-        l1_blocks_path,
-        prover,
-        block_no,
-        graffiti,
-    )
-    .await?;
-    let (header, _mpt_node) = TaikoStrategy::build_from(&TKO_MAINNET_CHAIN_SPEC.clone(), input)
-        .expect("Failed to build the resulting block");
-    let pi = assemble_protocol_instance(&sys_info, &header)?;
-    let pi_hash = pi.instance_hash(EvidenceType::Sgx { new_pubkey });
-    Ok(pi_hash)
-}
-
-async fn parse_to_init(
-    testnet: String,
-    blocks_path: String,
-    l1_blocks_path: String,
-    prover: Address,
-    block_no: u64,
-    graffiti: B256,
-) -> Result<(Input<EthereumTxEssence>, TaikoSystemInfo), Error> {
-    let (input, sys_info) = tokio::task::spawn_blocking(move || {
-        init_taiko(
-            HostArgs {
-                l1_cache: PathBuf::from_str(&l1_blocks_path).ok(),
-                l1_rpc: None,
-                l2_cache: PathBuf::from_str(&blocks_path).ok(),
-                l2_rpc: None,
-            },
-            TKO_MAINNET_CHAIN_SPEC.clone(),
-            &testnet,
-            block_no,
-            graffiti,
-            prover,
-        )
-        .expect("Init taiko failed")
-    })
-    .await?;
-    Ok((input, sys_info))
 }
 
 fn save_attestation_user_report_data(pubkey: Address) -> Result<()> {

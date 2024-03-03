@@ -1,13 +1,10 @@
-use alloc::{format, vec::Vec};
-
 use alloy_primitives::{Address, TxHash, B256};
 use alloy_sol_types::SolValue;
-use anyhow::{anyhow, ensure, Result};
-use revm::primitives::SpecId;
-use zeth_primitives::{block::Header, keccak::keccak, transactions::EthereumTransaction};
+use anyhow::{ensure, Result};
+use zeth_primitives::{block::Header, keccak::keccak, transactions::ethereum::EthereumTxEssence};
 
-use super::{consts::ANCHOR_GAS_LIMIT, BlockMetadata, EthDeposit, TaikoSystemInfo, Transition};
-use crate::consts::TKO_MAINNET_CHAIN_SPEC;
+use super::taiko_utils::ANCHOR_GAS_LIMIT;
+use crate::input::{Input, BlockMetadata, EthDeposit, Transition};
 
 #[derive(Debug)]
 pub struct ProtocolInstance {
@@ -62,14 +59,13 @@ pub enum EvidenceType {
 
 // TODO(cecilia): rewrite
 pub fn assemble_protocol_instance(
-    sys: &TaikoSystemInfo,
+    input: &Input<EthereumTxEssence>,
     header: &Header,
 ) -> Result<ProtocolInstance> {
-    let tx_list_hash = TxHash::from(keccak(sys.l2_tx_list.as_slice()));
-    let block_hash: zeth_primitives::U256 = tx_list_hash.into();
+    let tx_list_hash = TxHash::from(keccak(input.taiko.tx_list.as_slice()));
 
-    let deposits = sys
-        .l2_withdrawals
+    let deposits = input
+        .withdrawals
         .iter()
         .map(|w| EthDeposit {
             recipient: w.address,
@@ -81,27 +77,17 @@ pub fn assemble_protocol_instance(
 
     let extra_data: B256 = bytes_to_bytes32(&header.extra_data).into();
 
-    let prevrandao = if TKO_MAINNET_CHAIN_SPEC.spec_id(header.number) >= SpecId::SHANGHAI {
-        sys.l1_next_block.mix_hash.into()
-    } else {
-        sys.l1_next_block.difficulty
-    };
-    let difficulty = block_hash
-        ^ (prevrandao
-            * zeth_primitives::U256::from(header.number)
-            * zeth_primitives::U256::from(sys.l1_next_block.number));
-
     let gas_limit: u64 = header.gas_limit.try_into().unwrap();
-    let mut pi = ProtocolInstance {
+    let pi = ProtocolInstance {
         transition: Transition {
             parentHash: header.parent_hash,
             blockHash: header.hash(),
-            signalRoot: sys.l2_signal_root,
-            graffiti: sys.graffiti,
+            signalRoot: input.taiko.l1_header.state_root,
+            graffiti: input.taiko.prover_data.graffiti,
         },
         block_metadata: BlockMetadata {
-            l1Hash: sys.l1_hash,
-            difficulty: difficulty.into(),
+            l1Hash: input.taiko.l1_header.hash(),
+            difficulty: input.taiko.block_proposed.meta.difficulty,
             blobHash: tx_list_hash,
             extraData: extra_data,
             depositsHash: deposits_hash,
@@ -109,38 +95,26 @@ pub fn assemble_protocol_instance(
             id: header.number,
             gasLimit: (gas_limit - ANCHOR_GAS_LIMIT) as u32,
             timestamp: header.timestamp.try_into().unwrap(),
-            l1Height: sys.l1_height,
+            l1Height: input.taiko.l1_header.number,
             txListByteOffset: 0u32,
-            txListByteSize: sys.l2_tx_list.len() as u32,
-            minTier: sys.block_proposed.meta.minTier,
-            blobUsed: sys.l2_tx_list.is_empty(),
-            parentMetaHash: sys.block_proposed.meta.parentMetaHash,
+            txListByteSize: input.taiko.tx_list.len() as u32,
+            minTier: input.taiko.block_proposed.meta.minTier,
+            blobUsed: input.taiko.tx_list.is_empty(),
+            parentMetaHash: input.taiko.block_proposed.meta.parentMetaHash,
         },
-        prover: sys.prover,
+        prover: input.taiko.prover_data.prover,
     };
-    verify(sys, header, &mut pi)?;
+
+    // Sanity check
+    ensure!(
+        pi.block_metadata.abi_encode() == input.taiko.block_proposed.meta.abi_encode(),
+        format!(
+            "block hash mismatch, expected: {:?}, got: {:?}",
+            input.taiko.block_proposed.meta, pi.block_metadata
+        )
+    );
+
     Ok(pi)
-}
-
-pub fn verify(sys: &TaikoSystemInfo, header: &Header, pi: &mut ProtocolInstance) -> Result<()> {
-    // check the block metadata
-    ensure!(
-        pi.block_metadata.abi_encode() == sys.block_proposed.meta.abi_encode(),
-        format!(
-            "block hash mismatch, expected: {:?}, got: {:?}",
-            sys.block_proposed.meta, pi.block_metadata
-        )
-    );
-    ensure!(
-        header.hash() == sys.l2_block.hash(),
-        format!(
-            "block hash mismatch, expected: {:?}, got: {:?}",
-            header.hash(),
-            sys.l2_block.hash()
-        )
-    );
-
-    Ok(())
 }
 
 fn bytes_to_bytes32(input: &[u8]) -> [u8; 32] {

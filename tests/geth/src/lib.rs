@@ -44,7 +44,7 @@ pub fn go_mtp_root(txs: &str) -> Result<MptResult, Error> {
 }
 
 use serde_json::from_str;
-use zeth_primitives::{transactions::EthereumTransaction, trie::MptNode, RlpBytes, B256};
+use zeth_primitives::{transactions::EthereumTransaction, mpt::MptNode, RlpBytes, B256};
 
 pub fn rust_mtp_root(txs: &str) -> Result<MptResult, Error> {
     let txs = from_str::<Vec<EthereumTransaction>>(txs).unwrap();

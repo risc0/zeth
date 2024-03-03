@@ -26,7 +26,7 @@ pub struct Risc0Instance {
 #[serde(rename_all = "camelCase")]
 pub struct ProofRequest {
     /// the l2 block number
-    pub block: u64,
+    pub block_number: u64,
     /// l2 node for get block by number
     pub l2_rpc: String,
     /// l1 node for signal root verify and get txlist from proposed transaction.

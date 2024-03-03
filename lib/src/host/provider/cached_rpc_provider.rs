@@ -18,7 +18,7 @@ use anyhow::Result;
 #[cfg(feature = "taiko")]
 use ethers_core::types::Log;
 use ethers_core::types::{
-    Block, Bytes, EIP1186ProofResponse, Transaction, TransactionReceipt, H256, U256,
+    Block, Bytes, Transaction, TransactionReceipt, H256, U256,
 };
 
 use super::{
@@ -86,7 +86,7 @@ impl Provider for CachedRpcProvider {
         Ok(out)
     }
 
-    fn get_proof(&mut self, query: &ProofQuery) -> Result<EIP1186ProofResponse> {
+    fn get_proof(&mut self, query: &ProofQuery) -> Result<EIP1186AccountProofResponse> {
         let cache_out = self.cache.get_proof(query);
         if cache_out.is_ok() {
             return cache_out;

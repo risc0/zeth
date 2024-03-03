@@ -37,7 +37,7 @@ use ethers_core::types::{
     transaction::eip2930::{
         AccessList as EthersAccessList, AccessListItem as EthersAccessListItem,
     },
-    Block as EthersBlock, Bytes as EthersBytes, EIP1186ProofResponse,
+    Block as EthersBlock, Bytes as EthersBytes,
     Transaction as EthersTransaction, TransactionReceipt as EthersReceipt,
     Withdrawal as EthersWithdrawal, H160 as EthersH160, H256 as EthersH256, U256 as EthersU256,
     U64,
@@ -52,11 +52,9 @@ use crate::{
             EthereumTxEssence, TransactionKind, TxEssenceEip1559, TxEssenceEip2930,
             TxEssenceEip4844, TxEssenceLegacy,
         },
-        optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
         signature::TxSignature,
         Transaction, TxEssence,
     },
-    trie::StateAccount,
     withdrawal::Withdrawal,
 };
 
@@ -268,30 +266,6 @@ impl TryFrom<EthersTransaction> for EthereumTxEssence {
     }
 }
 
-#[cfg(feature = "optimism")]
-/// Conversion from `EthersTransaction` to the local [OptimismTxEssence].
-/// This conversion may fail if certain expected fields are missing.
-impl TryFrom<EthersTransaction> for OptimismTxEssence {
-    type Error = anyhow::Error;
-
-    fn try_from(tx: EthersTransaction) -> Result<Self, Self::Error> {
-        let essence = match tx.transaction_type.map(|t| t.as_u64()) {
-            Some(0x7E) => OptimismTxEssence::OptimismDeposited(TxEssenceOptimismDeposited {
-                gas_limit: from_ethers_u256(tx.gas),
-                from: tx.from.0.into(),
-                to: tx.to.into(),
-                value: from_ethers_u256(tx.value),
-                data: tx.input.0.into(),
-                source_hash: from_ethers_h256(tx.source_hash),
-                mint: from_ethers_u256(tx.mint.context("mint missing")?),
-                is_system_tx: tx.is_system_tx,
-            }),
-            _ => OptimismTxEssence::Ethereum(tx.try_into()?),
-        };
-        Ok(essence)
-    }
-}
-
 /// Conversion from `EthersWithdrawal` to the local [Withdrawal].
 /// This conversion may fail if certain expected fields are missing.
 impl TryFrom<EthersWithdrawal> for Withdrawal {
@@ -341,17 +315,5 @@ impl TryFrom<EthersReceipt> for Receipt {
                     .collect(),
             },
         })
-    }
-}
-
-/// Conversion from `EIP1186ProofResponse` to the local [StateAccount].
-impl From<EIP1186ProofResponse> for StateAccount {
-    fn from(response: EIP1186ProofResponse) -> Self {
-        StateAccount {
-            nonce: response.nonce.as_u64(),
-            balance: from_ethers_u256(response.balance),
-            storage_root: from_ethers_h256(response.storage_hash),
-            code_hash: from_ethers_h256(response.code_hash),
-        }
     }
 }

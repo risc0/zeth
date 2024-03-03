@@ -24,6 +24,8 @@ use risc0_zkvm::sha::{Digest, Digestible};
 
 use crate::cli::Cli;
 
+const RISC_ZERO_VERIFIER: &str = include_str!("risc0_verifier.abi");
+
 sol!(
     /// A Groth16 seal over the claimed receipt claim.
     struct Seal {
@@ -81,7 +83,6 @@ impl From<Groth16Seal> for Seal {
 }
 
 pub async fn verify_groth16_snark(
-    cli: &Cli,
     image_id: Digest,
     snark_receipt: SnarkReceipt,
 ) -> anyhow::Result<()> {

@@ -50,7 +50,7 @@ pub async fn execute_sgx(ctx: &mut Context, req: &ProofRequest) -> Result<SgxRes
     info!("Sgx execution stderr: {:?}", str::from_utf8(&output.stderr));
     info!("Sgx execution stdout: {:?}", str::from_utf8(&output.stdout));
     if !output.status.success() {
-        inc_sgx_error(req.block);
+        inc_sgx_error(req.block_number);
         return Err(output.status.to_string());
     }
     parse_sgx_result(output.stdout)

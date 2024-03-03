@@ -1,8 +1,8 @@
 use std::time::Instant;
 
 use tracing::{info, warn};
-use zeth_lib::{builder::{BlockBuilderStrategy, TaikoStrategy}, consts::TKO_MAINNET_CHAIN_SPEC, input::Input, 
-    taiko::{host::{init_taiko, HostArgs}, TaikoSystemInfo}, EthereumTxEssence
+use zeth_lib::{builder::{BlockBuilderStrategy, TaikoStrategy}, consts::TKO_MAINNET_CHAIN_SPEC, input::{Input, TaikoSystemInfo, TaikoProverData},
+    host::host::{HostArgs, taiko_run_preflight}, EthereumTxEssence
 };
 
 use crate::metrics::{inc_sgx_success, observe_input, observe_sgx_gen};
@@ -24,7 +24,7 @@ pub async fn execute(
     req: &ProofRequest,
 ) -> Result<ProofResponse> {
 
-    ctx.update_cache_path(req.block);
+    ctx.update_cache_path(req.block_number);
     // try remove cache file anyway to avoid reorg error
     // because tokio::fs::remove_file haven't guarantee of execution. So, we need to remove
     // twice
@@ -35,7 +35,7 @@ pub async fn execute(
     let result = async {
         // 1. load input data into cache path
         let start = Instant::now();
-        let (input, sys_info) = prepare_input(ctx, req.clone()).await?;
+        let input = prepare_input(ctx, req.clone()).await?;
         let elapsed = Instant::now().duration_since(start).as_millis() as i64;
         observe_input(elapsed);
         // 2. pre-build the block
@@ -44,7 +44,7 @@ pub async fn execute(
         // TODO: cherry-pick risc0 latest output
         match &output {
             Ok((header, mpt_node)) => {
-                info!("Verifying final state using provider data ...");    
+                info!("Verifying final state using provider data ...");
                 info!("Final block hash derived successfully. {}", header.hash());
             }
             Err(_) => {
@@ -56,7 +56,7 @@ pub async fn execute(
         match &req.proof_instance {
             ProofInstance::Sgx => {
                 let start = Instant::now();
-                let bid = req.block;
+                let bid = req.block_number;
                 let resp = execute_sgx(ctx, req).await?;
                 let time_elapsed = Instant::now().duration_since(start).as_millis() as i64;
                 observe_sgx_gen(bid, time_elapsed);
@@ -65,7 +65,7 @@ pub async fn execute(
             }
             ProofInstance::Powdr => {
                 let start = Instant::now();
-                let bid = req.block;
+                let bid = req.block_number;
                 let resp = execute_powdr().await?;
                 let time_elapsed = Instant::now().duration_since(start).as_millis() as i64;
                 todo!()
@@ -73,13 +73,13 @@ pub async fn execute(
             ProofInstance::PseZk => todo!(),
             ProofInstance::Succinct => {
                 let start = Instant::now();
-                let bid = req.block;
+                let bid = req.block_number;
                 let resp = execute_sp1(ctx, req).await?;
                 let time_elapsed = Instant::now().duration_since(start).as_millis() as i64;
                 Ok(ProofResponse::SP1(resp))
             }
             ProofInstance::Risc0(instance) => {
-                execute_risc0(input, sys_info, ctx, instance).await?;
+                execute_risc0(input, ctx, instance).await?;
                 todo!()
             },
         }
@@ -93,30 +93,26 @@ pub async fn execute(
 pub async fn prepare_input(
     ctx: &mut Context,
     req: ProofRequest,
-) -> Result<(Input<EthereumTxEssence>, TaikoSystemInfo)> {
+) -> Result<Input<EthereumTxEssence>> {
     // Todo(Cecilia): should contract address as args, curently hardcode
     let l1_cache = ctx.l1_cache_file.clone();
     let l2_cache = ctx.l2_cache_file.clone();
     tokio::task::spawn_blocking(move || {
-        init_taiko(
-            HostArgs {
-                l1_cache,
-                l1_rpc: Some(req.l1_rpc),
-                l2_cache,
-                l2_rpc: Some(req.l2_rpc),
-            },
+        taiko_run_preflight(
+            Some(req.l1_rpc),
             TKO_MAINNET_CHAIN_SPEC.clone(),
+            Some(req.l2_rpc),
+            req.block_number,
             &req.l2_contracts,
-            req.block,
-            req.graffiti,
-            req.prover,
-        )
-        .expect("Init taiko failed")
+            TaikoProverData {
+                graffiti: req.graffiti,
+                prover: req.prover,
+            },
+        ).expect("Init taiko failed")
     })
     .await
     .map_err(Into::<super::error::Error>::into)
 }
-
 
 #[cfg(test)]
 mod tests {

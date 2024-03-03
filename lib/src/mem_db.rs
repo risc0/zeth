@@ -19,6 +19,7 @@ use revm::{
     primitives::{Account, AccountInfo, Bytecode},
     Database, DatabaseCommit,
 };
+use serde::{Deserialize, Serialize};
 use thiserror_no_std::Error as ThisError;
 use zeth_primitives::{Address, B256, U256};
 
@@ -45,7 +46,7 @@ impl From<DbError> for anyhow::Error {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AccountState {
     // Account can be cleared/removed from state.
     Deleted,
@@ -58,7 +59,7 @@ pub enum AccountState {
     None,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct DbAccount {
     pub info: AccountInfo,
     pub state: AccountState,
@@ -84,7 +85,7 @@ impl DbAccount {
 }
 
 /// In-memory EVM database.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct MemDb {
     /// Account info where None means it is not existing.
     pub accounts: HashMap<Address, DbAccount>,

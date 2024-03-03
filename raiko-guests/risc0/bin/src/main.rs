@@ -4,10 +4,10 @@ risc0_zkvm::guest::entry!(main);
 
 
 use zeth_lib::{
-    builder::{BlockBuilderStrategy, TaikoStrategy}, consts::{ChainSpec, TKO_MAINNET_CHAIN_SPEC}, 
-    input::{self, Input}, 
+    builder::{BlockBuilderStrategy, TaikoStrategy}, consts::{ChainSpec, TKO_MAINNET_CHAIN_SPEC},
+    input::{self, Input},
     taiko::{
-        host::{init_taiko, HostArgs},
+        host::{HostArgs},
         protocol_instance::{assemble_protocol_instance, EvidenceType}, TaikoSystemInfo,
     }
 };

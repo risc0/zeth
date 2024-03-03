@@ -22,20 +22,13 @@ pub mod builder;
 pub mod consts;
 pub mod input;
 pub mod mem_db;
-
-#[cfg(feature = "optimism")]
-pub mod optimism;
-
-#[cfg(feature = "taiko")]
-pub mod taiko;
+pub mod taiko_utils;
+pub mod protocol_instance;
 
 #[cfg(all(feature = "std"))]
 pub mod host;
 
-#[cfg(feature = "optimism")]
-mod utils;
-
-pub use zeth_primitives::transactions::{ethereum::EthereumTxEssence, optimism::OptimismTxEssence};
+pub use zeth_primitives::transactions::ethereum::EthereumTxEssence;
 
 /// call forget only if running inside the guest
 pub fn guest_mem_forget<T>(_t: T) {

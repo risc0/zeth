@@ -11,18 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use alloc::vec::Vec;
 use core::fmt::Debug;
 
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
-    block::Header,
-    transactions::{Transaction, TxEssence},
-    trie::MptNode,
-    withdrawal::Withdrawal,
-    Address, Bytes, B256, U256,
+    block::Header, mpt::MptNode, transactions::{Transaction, TxEssence}, withdrawal::Withdrawal, Address, Bytes, B256, U256
 };
+use alloy_sol_types::{sol, SolCall};
+use anyhow::{anyhow, Result};
 
 /// Represents the state of an account's storage.
 /// The storage trie together with the used storage slots allow us to reconstruct all the
@@ -58,7 +55,97 @@ pub struct Input<E: TxEssence> {
     pub ancestor_headers: Vec<Header>,
     /// Base fee per gas
     pub base_fee_per_gas: U256,
+    /// Taiko specific data
+    pub taiko: TaikoSystemInfo,
 }
+
+sol! {
+    function anchor(
+        bytes32 l1Hash,
+        bytes32 l1SignalRoot,
+        uint64 l1Height,
+        uint32 parentGasUsed
+    )
+        external
+    {}
+}
+
+#[inline]
+pub fn decode_anchor(bytes: &[u8]) -> Result<anchorCall> {
+    anchorCall::abi_decode(bytes, true).map_err(|e| anyhow!(e))
+    // .context("Invalid anchor call")
+}
+
+sol! {
+    #[derive(Debug, Default, Deserialize, Serialize)]
+    struct EthDeposit {
+        address recipient;
+        uint96 amount;
+        uint64 id;
+    }
+
+    #[derive(Debug, Default, Deserialize, Serialize)]
+    struct BlockMetadata {
+        bytes32 l1Hash; // slot 1
+        bytes32 difficulty; // slot 2
+        bytes32 blobHash; //or txListHash (if Blob not yet supported), // slot 3
+        bytes32 extraData; // slot 4
+        bytes32 depositsHash; // slot 5
+        address coinbase; // L2 coinbase, // slot 6
+        uint64 id;
+        uint32 gasLimit;
+        uint64 timestamp; // slot 7
+        uint64 l1Height;
+        uint24 txListByteOffset;
+        uint24 txListByteSize;
+        uint16 minTier;
+        bool blobUsed;
+        bytes32 parentMetaHash; // slot 8
+    }
+
+    #[derive(Debug)]
+    struct Transition {
+        bytes32 parentHash;
+        bytes32 blockHash;
+        bytes32 signalRoot;
+        bytes32 graffiti;
+    }
+
+    #[derive(Debug, Default, Clone, Deserialize, Serialize)]
+    event BlockProposed(
+        uint256 indexed blockId,
+        address indexed prover,
+        uint96 livenessBond,
+        BlockMetadata meta,
+        EthDeposit[] depositsProcessed
+    );
+
+    #[derive(Debug)]
+    struct TierProof {
+        uint16 tier;
+        bytes data;
+    }
+
+    function proposeBlock(bytes calldata params, bytes calldata txList) {}
+
+    function proveBlock(uint64 blockId, bytes calldata input) {}
+}
+
+
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+pub struct TaikoProverData {
+    pub prover: Address,
+    pub graffiti: B256,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct TaikoSystemInfo {
+    pub l1_header: Header,
+    pub tx_list: Vec<u8>,
+    pub block_proposed: BlockProposed,
+    pub prover_data: TaikoProverData,
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -84,6 +171,7 @@ mod tests {
             contracts: vec![],
             ancestor_headers: vec![],
             base_fee_per_gas: Default::default(),
+            taiko: Default::default(),
         };
         let _: Input<EthereumTxEssence> =
             bincode::deserialize(&bincode::serialize(&input).unwrap()).unwrap();

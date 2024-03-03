@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use alloy_primitives::FixedBytes;
 use serde::{Deserialize, Serialize};
 use tracing::info;
-use zeth_lib::{consts::TKO_MAINNET_CHAIN_SPEC, input::Input, taiko::{host::HostArgs, TaikoSystemInfo}, 
+use zeth_lib::{consts::TKO_MAINNET_CHAIN_SPEC, input::Input, taiko::{host::HostArgs, TaikoSystemInfo},
 EthereumTxEssence};
 
 use crate::prover::{
@@ -17,15 +17,12 @@ const RISC0_GUEST_ID: &str = "risc0";
 /// The Input struct for every Taiko guest prover
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GuestInput {
-    /// The system info for the Taiko guest prover
-    pub sys_info: TaikoSystemInfo,
     /// The initial data required to build a block
     pub input: Input<EthereumTxEssence>,
 }
 
 pub async fn execute_risc0(
-    input: Input<EthereumTxEssence>, 
-    sys_info: TaikoSystemInfo,
+    input: Input<EthereumTxEssence>,
     ctx: &Context,
     req: &Risc0Instance,
 ) -> Result<SgxResponse, String> {
@@ -33,11 +30,11 @@ pub async fn execute_risc0(
         Risc0Instance(instance) => instance,
         _ => return Err("Wrong Proof Instance")
     };
-    let elf = include_bytes!(ctx.guest_executable_path(req.proof_instance));
+    let elf = include_bytes!(ctx.guest_executable_path(req.proof_instance).to_string());
     let result = maybe_prove::<GuestInput>(
-        req, 
-        &GuestInput {sys_info, input}, 
-        elf, 
+        req,
+        &GuestInput {input},
+        elf,
         Default::default()
     );
 
@@ -70,7 +67,7 @@ use risc0_zkvm::{
     sha::{Digest, Digestible},
     Assumption, ExecutorEnv, ExecutorImpl, FileSegmentRef, Receipt, Segment, SegmentRef,
 };
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{de::DeserializeOwned};
 use tempfile::tempdir;
 use zeth_primitives::keccak::keccak;
 

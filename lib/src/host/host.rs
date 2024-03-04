@@ -63,6 +63,7 @@ pub fn taiko_run_preflight(
     let (anchor_tx, anchor_call) = tp.get_anchor(&block)?;
     println!("block.hash: {:?}", block.hash.unwrap());
     println!("block.parent_hash: {:?}", block.parent_hash);
+    println!("block: {:?}", block);
 
     println!("anchor L1 block id: {:?}", anchor_call.l1Height);
     println!("anchor L1 state root: {:?}", anchor_call.l1SignalRoot);
@@ -75,7 +76,7 @@ pub fn taiko_run_preflight(
     let l1_state_root_block = tp.l1_provider.get_partial_block(&BlockQuery {
         block_no: l1_state_block_no,
     })?;
-    println!("l1_state_root_block: {:?}", l1_state_root_block);
+    //println!("l1_state_root_block: {:?}", l1_state_root_block);
 
     // Get the block proposal data
     let (proposal_call, proposal_event) = tp.get_proposal(l1_inclusion_block_no, l2_block_no, l2_contracts)?;

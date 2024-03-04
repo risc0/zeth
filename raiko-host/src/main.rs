@@ -59,7 +59,7 @@ struct Opt {
     #[structopt(long, require_equals = true, default_value = "7")]
     max_log_days: usize,
 
-    #[structopt(long, require_equals = true, default_value = "internal_devnet_a")]
+    #[structopt(long, require_equals = true, default_value = "testnet")]
     l2_contracts: String,
 
     #[structopt(long, require_equals = true, default_value = "20")]

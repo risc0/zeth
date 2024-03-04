@@ -62,8 +62,10 @@ pub struct GuestInput<E: TxEssence> {
 sol! {
     function anchor(
         bytes32 l1Hash,
-        bytes32 l1StateRoot,
-        uint64 l1BlockId,
+        //bytes32 l1StateRoot,
+        //uint64 l1BlockId,
+        bytes32 l1SignalRoot,
+        uint64 l1Height,
         uint32 parentGasUsed
     )
         external
@@ -107,14 +109,15 @@ sol! {
     struct Transition {
         bytes32 parentHash;
         bytes32 blockHash;
-        bytes32 stateRoot;
+        bytes32 signalRoot;
+        //bytes32 stateRoot;
         bytes32 graffiti;
     }
 
     #[derive(Debug, Default, Clone, Deserialize, Serialize)]
     event BlockProposed(
         uint256 indexed blockId,
-        address indexed prover,
+        address indexed assignedProver,
         uint96 livenessBond,
         BlockMetadata meta,
         EthDeposit[] depositsProcessed
@@ -126,6 +129,7 @@ sol! {
         bytes data;
     }
 
+    #[derive(Debug)]
     function proposeBlock(
         bytes calldata params,
         bytes calldata txList

@@ -62,10 +62,10 @@ pub fn taiko_run_preflight(
     let mut block = tp.l2_provider.get_full_block(&BlockQuery { block_no: l2_block_no })?;
     let (anchor_tx, anchor_call) = tp.get_anchor(&block)?;
 
-    println!("anchor L1 block id: {:?}", anchor_call.l1BlockId);
-    println!("anchor L1 state root: {:?}", anchor_call.l1StateRoot);
+    println!("anchor L1 block id: {:?}", anchor_call.l1Height);
+    println!("anchor L1 state root: {:?}", anchor_call.l1SignalRoot);
 
-    let l1_state_block_no = anchor_call.l1BlockId;
+    let l1_state_block_no = anchor_call.l1Height;
     let l1_inclusion_block_no = l1_state_block_no + 1;
 
     println!("l1_state_block_no: {:?}", l1_state_block_no);

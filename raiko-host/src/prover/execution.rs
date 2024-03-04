@@ -50,6 +50,7 @@ pub async fn execute(
             Ok((header, mpt_node)) => {
                 info!("Verifying final state using provider data ...");
                 info!("Final block hash derived successfully. {}", header.hash());
+                info!("Final block hash derived successfully. {:?}", header);
                 let pi = assemble_protocol_instance(&input, &header)?
                     .instance_hash(req.proof_instance.clone().into());
                 GuestOutput::Success((header.clone(), pi))

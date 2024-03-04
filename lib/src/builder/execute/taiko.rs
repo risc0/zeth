@@ -19,7 +19,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use log::debug;
 use revm::{
     interpreter::Host,
-    primitives::{Address, ResultAndState, SpecId, TransactTo, TxEnv},
+    primitives::{Account, Address, ResultAndState, SpecId, TransactTo, TxEnv},
     taiko, Database, DatabaseCommit, Evm,
 };
 use ruint::aliases::U256;
@@ -30,7 +30,7 @@ use zeth_primitives::{
 use super::TxExecStrategy;
 use crate::{
     builder::BlockBuilder,
-    consts::{self, ChainSpec},
+    consts::{self, ChainSpec, GWEI_TO_WEI},
     guest_mem_forget,
 };
 
@@ -216,12 +216,43 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
             receipt_trie.insert_rlp(&trie_key, receipt)?;
         }
 
+        let mut db = &mut evm.context.evm.db;
+
+        // process withdrawals unconditionally after any transactions
+        let mut withdrawals_trie = MptNode::default();
+        for (i, withdrawal) in take(&mut block_builder.input.withdrawals)
+            .into_iter()
+            .enumerate()
+        {
+            // the withdrawal amount is given in Gwei
+            let amount_wei = GWEI_TO_WEI
+                .checked_mul(withdrawal.amount.try_into().unwrap())
+                .unwrap();
+
+            #[cfg(not(target_os = "zkvm"))]
+            {
+                debug!("Withdrawal no. {}", withdrawal.index);
+                debug!("  Recipient: {:?}", withdrawal.address);
+                debug!("  Value: {}", amount_wei);
+            }
+            // Credit withdrawal amount
+            increase_account_balance(&mut db, withdrawal.address, amount_wei)?;
+            // Add withdrawal to trie
+            withdrawals_trie
+                .insert_rlp(&i.to_rlp(), withdrawal)
+                .with_context(|| "failed to insert withdrawal")?;
+        }
+
         // Update result header with computed values
         header.transactions_root = tx_trie.hash();
         header.receipts_root = receipt_trie.hash();
         header.logs_bloom = logs_bloom;
         header.gas_used = cumulative_gas_used;
-        header.withdrawals_root = None;
+        header.withdrawals_root = if spec_id < SpecId::SHANGHAI {
+            None
+        } else {
+            Some(withdrawals_trie.hash())
+        };
 
         // Leak memory, save cycles
         guest_mem_forget([tx_trie, receipt_trie]);
@@ -308,4 +339,34 @@ pub fn fill_eth_tx_env(
             tx_env.access_list = tx.access_list.clone().into();
         }
     };
+}
+
+pub fn increase_account_balance<D>(
+    db: &mut D,
+    address: Address,
+    amount_wei: U256,
+) -> anyhow::Result<()>
+where
+    D: Database + DatabaseCommit,
+    <D as Database>::Error: Debug,
+{
+    // Read account from database
+    let mut account: Account = db
+        .basic(address)
+        .map_err(|db_err| {
+            anyhow!(
+                "Error increasing account balance for {}: {:?}",
+                address,
+                db_err
+            )
+        })?
+        .unwrap_or_default()
+        .into();
+    // Credit withdrawal amount
+    account.info.balance = account.info.balance.checked_add(amount_wei).unwrap();
+    account.mark_touch();
+    // Commit changes to database
+    db.commit([(address, account)].into());
+
+    Ok(())
 }

@@ -72,8 +72,6 @@ pub const TKO_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| {
         chain_id: 167008,
         hard_forks: BTreeMap::from([
             (SpecId::SHANGHAI, ForkCondition::Block(0)),
-            (SpecId::SHANGHAI /* change */, ForkCondition::Block(0)),
-            // previous versions not supported
             (SpecId::CANCUN, ForkCondition::TBD),
         ]),
         eip_1559_constants: Eip1559Constants {

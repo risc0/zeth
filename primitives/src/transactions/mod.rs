@@ -99,8 +99,7 @@ impl<E: TxEssence> Encodable for Transaction<E> {
     #[inline]
     fn length(&self) -> usize {
         let tx_type = self.essence.tx_type();
-        let payload_length = self.essence.payload_length()
-            + self.signature.payload_length();
+        let payload_length = self.essence.payload_length() + self.signature.payload_length();
 
         let length = payload_length + alloy_rlp::length_of_length(payload_length);
         // add the EIP-2718 transaction type for non-legacy transactions

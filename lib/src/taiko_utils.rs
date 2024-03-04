@@ -2,10 +2,13 @@ use core::str::FromStr;
 
 use alloy_primitives::{uint, Address, U256};
 use anyhow::{anyhow, bail, ensure, Context, Result};
-use ethers_core::types::{Transaction, U64, U256 as EU256};
+use ethers_core::types::{Transaction, U256 as EU256, U64};
 use once_cell::unsync::Lazy;
 use revm::primitives::TransactTo;
-use zeth_primitives::{ethers::{from_ethers_h160, from_ethers_u256}, transactions::{ethereum::{EthereumTxEssence, TransactionKind}, EthereumTransaction, TxEssence}, U8};
+use zeth_primitives::{
+    ethers::{from_ethers_h160, from_ethers_u256},
+    transactions::{ethereum::{EthereumTxEssence, TransactionKind}, EthereumTransaction, TxEssence}, U8,
+};
 
 use crate::input::{decode_anchor, GuestInput};
 

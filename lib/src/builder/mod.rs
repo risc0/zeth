@@ -15,7 +15,9 @@
 use anyhow::Result;
 use revm::{Database, DatabaseCommit};
 use zeth_primitives::{
-    block::Header, mpt::MptNode, transactions::{ethereum::EthereumTxEssence, TxEssence}
+    block::Header,
+    mpt::MptNode,
+    transactions::{ethereum::EthereumTxEssence, TxEssence},
 };
 
 #[cfg(feature = "taiko")]
@@ -23,10 +25,14 @@ pub use self::execute::taiko::TkoTxExecStrategy;
 use crate::{
     builder::{
         execute::TxExecStrategy,
+        execute::TxExecStrategy,
         finalize::{BlockFinalizeStrategy, MemDbBlockFinalizeStrategy},
         initialize::{DbInitStrategy, MemDbInitStrategy},
         prepare::{EthHeaderPrepStrategy, HeaderPrepStrategy},
-    }, consts::{get_chain_spec, ChainSpec}, input::GuestInput, mem_db::MemDb
+    },
+    consts::{get_chain_spec, ChainSpec},
+    input::GuestInput,
+    mem_db::MemDb,
 };
 
 mod execute;

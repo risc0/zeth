@@ -1,8 +1,8 @@
 use std::path::{absolute, PathBuf};
 
+use anyhow::Result;
 use ethers_core::k256::elliptic_curve::rand_core::block;
 use tracing::debug;
-use anyhow::Result;
 
 use super::{consts::RAIKO_GUEST_EXECUTABLE, request::ProofInstance};
 
@@ -19,6 +19,7 @@ pub struct Context {
 
     pub l1_cache_file: Option<PathBuf>,
 
+
     pub l2_cache_file: Option<PathBuf>,
 }
 
@@ -26,7 +27,10 @@ impl Context {
     pub fn new(
         guest_elf: PathBuf,
         host_cache: PathBuf,
+        guest_elf: PathBuf,
+        host_cache: PathBuf,
         max_caches: usize,
+        block_no: Option<u64>,
         block_no: Option<u64>,
     ) -> Self {
         let mut ctx = Self {
@@ -40,7 +44,6 @@ impl Context {
         }
         ctx
     }
-
 
     pub fn update_cache_path(&mut self, block_no: u64) {
         if self.l1_cache_file.is_none() {
@@ -73,10 +76,7 @@ impl Context {
         }
         Ok(())
     }
-
-
 }
-
 
 #[cfg(test)]
 mod tests {

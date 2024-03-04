@@ -15,10 +15,7 @@
 //! Constants for the Ethereum protocol.
 extern crate alloc;
 
-use alloc::{
-    collections::BTreeMap,
-    str::FromStr,
-};
+use alloc::{collections::BTreeMap, str::FromStr};
 
 use anyhow::bail;
 use once_cell::unsync::Lazy;

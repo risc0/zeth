@@ -37,10 +37,9 @@ use ethers_core::types::{
     transaction::eip2930::{
         AccessList as EthersAccessList, AccessListItem as EthersAccessListItem,
     },
-    Block as EthersBlock, Bytes as EthersBytes,
-    Transaction as EthersTransaction, TransactionReceipt as EthersReceipt,
-    Withdrawal as EthersWithdrawal, H160 as EthersH160, H256 as EthersH256, U256 as EthersU256,
-    U64,
+    Block as EthersBlock, Bytes as EthersBytes, Transaction as EthersTransaction,
+    TransactionReceipt as EthersReceipt, Withdrawal as EthersWithdrawal, H160 as EthersH160,
+    H256 as EthersH256, U256 as EthersU256, U64,
 };
 
 use crate::{

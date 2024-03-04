@@ -24,7 +24,13 @@ use revm::{
 };
 use ruint::aliases::U256;
 use zeth_primitives::{
-    mpt::MptNode, receipt::Receipt, transactions::{ethereum::{EthereumTxEssence, TransactionKind}, TxEssence}, Bloom, RlpBytes
+    mpt::MptNode,
+    receipt::Receipt,
+    transactions::{
+        ethereum::{EthereumTxEssence, TransactionKind},
+        TxEssence,
+    },
+    Bloom, RlpBytes,
 };
 
 use super::TxExecStrategy;

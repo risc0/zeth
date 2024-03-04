@@ -231,7 +231,6 @@ impl Handler {
                     .and_then(|result| serde_json::to_value(result).map_err(Into::into))
                     .map_err(|e| e.to_string())
                 // Ok(serde_json::Value::Bool(false))
-
             }
             _ => todo!(),
         }

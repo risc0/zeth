@@ -27,8 +27,8 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 use super::{
-    AccountQuery, BlockQuery, GetBlobsResponse, LogsQuery, MutProvider, ProofQuery,
-    Provider, StorageQuery, TxQuery,
+    AccountQuery, BlockQuery, GetBlobsResponse, LogsQuery, MutProvider, ProofQuery, Provider,
+    StorageQuery, TxQuery,
 };
 use crate::input::BlockProposed;
 

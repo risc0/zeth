@@ -1,7 +1,5 @@
 use std::path::PathBuf;
 
-
-
 use anyhow::{anyhow, bail, Context, Result};
 use ethers_core::types::{Block, Transaction};
 

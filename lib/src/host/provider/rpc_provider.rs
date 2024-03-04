@@ -18,14 +18,11 @@ use alloy_transport_http::Http;
 use anyhow::{anyhow, Result};
 use ethers_core::types::{Block, Bytes, Filter, Log, Transaction, TransactionReceipt, H256, U256};
 use ethers_providers::{Http as ethers_Http, Middleware, RetryClient};
-
 use log::info;
 use reqwest;
 use url::Url;
 
-use super::{
-    AccountQuery, BlockQuery, GetBlobsResponse, ProofQuery, Provider, StorageQuery,
-};
+use super::{AccountQuery, BlockQuery, GetBlobsResponse, ProofQuery, Provider, StorageQuery};
 use crate::host::provider::LogsQuery;
 
 pub struct RpcProvider {

@@ -12,7 +12,8 @@ use zeth_primitives::{
     block::Header,
     ethers::{from_ethers_h160, from_ethers_h256, from_ethers_u256},
     mpt::proofs_to_tries,
-    transactions::ethereum::EthereumTxEssence, Bytes,
+    transactions::ethereum::EthereumTxEssence,
+    Bytes,
 };
 
 use crate::{

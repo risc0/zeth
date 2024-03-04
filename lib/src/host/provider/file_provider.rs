@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use alloc::vec::Vec;
-use alloy_rpc_types::EIP1186AccountProofResponse;
 use std::{
     collections::HashMap,
     fs::File,
@@ -21,14 +20,17 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use alloy_rpc_types::EIP1186AccountProofResponse;
 use anyhow::{anyhow, Result};
-use ethers_core::types::{
-    Block, Bytes, Log, Transaction, TransactionReceipt, H256, U256,
-};
+use ethers_core::types::{Block, Bytes, Log, Transaction, TransactionReceipt, H256, U256};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use super::{AccountQuery, BlockQuery, MutProvider, ProofQuery, Provider, StorageQuery};
+use super::{
+    AccountQuery, BlockQuery, GetBlobsResponse, LogsQuery, MutProvider, ProofQuery,
+    Provider, StorageQuery, TxQuery,
+};
+use crate::input::BlockProposed;
 
 #[serde_as]
 #[derive(Default, Deserialize, Serialize)]
@@ -59,7 +61,12 @@ pub struct FileProvider {
     #[serde_as(as = "Vec<(_, _)>")]
     logs: HashMap<LogsQuery, Vec<Log>>,
     #[cfg(feature = "taiko")]
+    #[serde_as(as = "Vec<(_, _)>")]
+    transactions: HashMap<TxQuery, Transaction>,
+    #[cfg(feature = "taiko")]
     propose: Option<(Transaction, BlockProposed)>,
+    #[cfg(feature = "taiko")]
+    blobs: HashMap<u64, GetBlobsResponse>,
 }
 
 impl FileProvider {
@@ -76,7 +83,13 @@ impl FileProvider {
             code: HashMap::new(),
             storage: HashMap::new(),
             #[cfg(feature = "taiko")]
+            logs: Default::default(),
+            #[cfg(feature = "taiko")]
+            transactions: Default::default(),
+            #[cfg(feature = "taiko")]
             propose: Default::default(),
+            #[cfg(feature = "taiko")]
+            blobs: Default::default(),
         }
     }
 
@@ -168,14 +181,6 @@ impl Provider for FileProvider {
     }
 
     #[cfg(feature = "taiko")]
-    fn get_propose(&mut self, query: &super::ProposeQuery) -> Result<(Transaction, BlockProposed)> {
-        match self.propose {
-            Some(ref val) => Ok(val.clone()),
-            None => Err(anyhow!("No data for {:?}", query)),
-        }
-    }
-
-    #[cfg(feature = "taiko")]
     fn get_logs(&mut self, query: &LogsQuery) -> Result<Vec<Log>> {
         match self.logs.get(query) {
             Some(val) => Ok(val.clone()),
@@ -248,7 +253,7 @@ impl MutProvider for FileProvider {
     }
 
     #[cfg(feature = "taiko")]
-    fn insert_transaction(&mut self, query: super::TxQuery, val: Transaction) {
+    fn insert_transaction(&mut self, query: TxQuery, val: Transaction) {
         self.transactions.insert(query, val);
         self.dirty = true;
     }

@@ -13,14 +13,18 @@
 // limitations under the License.
 use core::fmt::Debug;
 
+use alloy_sol_types::{sol, SolCall, SolType};
+use anyhow::{anyhow, Result};
 use ethers_core::types::H256;
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
-    block::Header, FixedBytes, mpt::MptNode, transactions::{Transaction, TxEssence}, withdrawal::Withdrawal, Address, Bytes, B256, U256
+    block::Header,
+    mpt::MptNode,
+    transactions::{Transaction, TxEssence},
+    withdrawal::Withdrawal,
+    Address, Bytes, FixedBytes, B256, U256,
 };
-use alloy_sol_types::{sol, SolCall};
-use anyhow::{anyhow, Result};
 
 /// Represents the state of an account's storage.
 /// The storage trie together with the used storage slots allow us to reconstruct all the
@@ -142,7 +146,11 @@ sol! {
     function proveBlock(uint64 blockId, bytes calldata input) {}
 }
 
-
+pub fn decode_propose_block_call_params(data: &[u8]) -> Result<BlockMetadata> {
+    let propose_block_params = BlockMetadata::abi_decode(data, false)
+        .map_err(|e| anyhow!("failed to decode propose block call: {e}"))?;
+    Ok(propose_block_params)
+}
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct TaikoProverData {
@@ -157,6 +165,7 @@ pub struct TaikoSystemInfo {
     pub tx_list: Vec<u8>,
     pub block_proposed: BlockProposed,
     pub prover_data: TaikoProverData,
+    pub tx_blob_hash: Option<B256>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

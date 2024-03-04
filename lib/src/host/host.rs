@@ -1,22 +1,31 @@
 use std::path::PathBuf;
 
-use anyhow::{ensure, Context, Result};
-use ethers_core::types::{Transaction as EthersTransaction};
+use alloy_sol_types::SolCall;
+use anyhow::{anyhow, ensure, Context, Result};
+use ethers_core::types::Transaction as EthersTransaction;
+use hashbrown::HashSet;
 use log::info;
+use reth_primitives::eip4844::kzg_to_versioned_hash;
 use rlp::Rlp;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
-    block::Header, ethers::{from_ethers_h160, from_ethers_h256, from_ethers_u256}, mpt::proofs_to_tries, transactions::ethereum::EthereumTxEssence, Address, Bytes, B256, U256
+    block::Header,
+    ethers::{from_ethers_h160, from_ethers_h256, from_ethers_u256},
+    mpt::proofs_to_tries,
+    transactions::ethereum::EthereumTxEssence, Bytes,
 };
-use anyhow::anyhow;
-use hashbrown::HashSet;
 
 use crate::{
     builder::{prepare::EthHeaderPrepStrategy, BlockBuilder, TkoTxExecStrategy},
     host::{
-        provider::BlockQuery, provider_db::ProviderDb, taiko_provider::TaikoProvider
+        provider::{BlockQuery, GetBlobData},
+        provider_db::ProviderDb,
+        taiko_provider::TaikoProvider,
     },
-    input::{GuestInput, TaikoProverData, TaikoSystemInfo},
+    input::{
+        decode_propose_block_call_params, proposeBlockCall, BlockMetadata, GuestInput,
+        TaikoProverData, TaikoSystemInfo,
+    },
     taiko_utils::{MAX_TX_LIST, MAX_TX_LIST_BYTES},
 };
 
@@ -34,12 +43,14 @@ pub fn taiko_run_preflight(
     l2_block_no: u64,
     chain_spec_name: &str,
     prover_data: TaikoProverData,
+    beacon_rpc_url: Option<String>,
 ) -> Result<GuestInput<EthereumTxEssence>> {
     let mut tp = TaikoProvider::new(
         None,
         l1_rpc_url.clone(),
         None,
         l2_rpc_url.clone(),
+        beacon_rpc_url,
     )?;
 
     // Fetch the parent block
@@ -57,7 +68,9 @@ pub fn taiko_run_preflight(
     let parent_header: Header = parent_block.try_into().context("invalid parent block")?;
 
     // Fetch the target block
-    let mut block = tp.l2_provider.get_full_block(&BlockQuery { block_no: l2_block_no })?;
+    let mut block = tp.l2_provider.get_full_block(&BlockQuery {
+        block_no: l2_block_no,
+    })?;
     let (anchor_tx, anchor_call) = tp.get_anchor(&block)?;
     println!("block.hash: {:?}", block.hash.unwrap());
     println!("block.parent_hash: {:?}", block.parent_hash);
@@ -85,19 +98,57 @@ pub fn taiko_run_preflight(
     println!("l1_propose_block: {:?}", l1_propose_block);*/
 
     // Get the block proposal data
-    let (proposal_call, proposal_event) = tp.get_proposal(l1_inclusion_block_no, l2_block_no, chain_spec_name)?;
+    let (proposal_tx, proposal_event) =
+        tp.get_proposal(l1_inclusion_block_no, l2_block_no, chain_spec_name)?;
 
-    // Make sure to also do the preflight on the tx_list transactions so we have the necessary data
-    // for invalid transactions.
-    let mut l2_tx_list: Vec<EthersTransaction> = Rlp::new(&proposal_call.txList).as_list()?;
+    let proposal_call = proposeBlockCall::abi_decode(&proposal_tx.input, false).unwrap();
+    // .with_context(|| "failed to decode propose block call")?;
+
+    // Make sure to also do the preflight on the tx_list transactions so we have the necessary
+    // data for invalid transactions.
     ensure!(
         proposal_call.txList.len() <= MAX_TX_LIST_BYTES,
         "tx list bytes must be not more than MAX_TX_LIST_BYTES"
     );
+
+    let mut l2_tx_list: Vec<EthersTransaction> = Rlp::new(&proposal_call.txList).as_list()?;
     ensure!(
         l2_tx_list.len() <= MAX_TX_LIST,
         "tx list size must be not more than MAX_TX_LISTs"
     );
+
+    // blobUsed == (txList.length == 0) according to TaikoL1
+    let blob_used = proposal_call.txList.is_empty();
+    let (l2_tx_list_blob, tx_blob_hash) = if blob_used {
+        let BlockMetadata {
+            blobHash: _proposed_blob_hash,
+            txListByteOffset: offset,
+            txListByteSize: size,
+            ..
+        } = decode_propose_block_call_params(&proposal_call.params)
+            .expect("valid propose_block_call_params");
+
+        let blob_hashs = proposal_tx.blob_versioned_hashes.unwrap();
+        // TODO: multiple blob hash support
+        assert!(blob_hashs.len() == 1);
+        let blob_hash = blob_hashs[0];
+        // TODO: check _proposed_blob_hash with blob_hash if _proposed_blob_hash is not None
+
+        let blobs = tp.l1_provider.get_blob_data(l1_state_block_no + 1)?;
+        let tx_blobs: Vec<GetBlobData> = blobs
+            .data
+            .iter()
+            .filter(|blob| blob_hash.as_fixed_bytes() == &calc_blob_hash(&blob.kzg_commitment))
+            .cloned()
+            .collect::<Vec<GetBlobData>>();
+        let blob_data = decode_blob_data(&tx_blobs[0].blob);
+        (
+            blob_data.as_slice()[offset as usize..(offset + size) as usize].to_vec(),
+            Some(from_ethers_h256(blob_hash)),
+        )
+    } else {
+        (proposal_call.txList.clone(), None)
+    };
 
     // TODO(Cecilia): reset to empty necessary if wrong?
     // tracing::log for particular reason instead of uniform error handling?
@@ -119,8 +170,11 @@ pub fn taiko_run_preflight(
 
     let taiko_sys_info = TaikoSystemInfo {
         chain_spec_name: chain_spec_name.to_string(),
-        l1_header: l1_state_root_block.try_into().expect("Failed to convert ethers block to zeth block"),
-        tx_list: proposal_call.txList,
+        l1_header: l1_state_root_block
+            .try_into()
+            .expect("Failed to convert ethers block to zeth block"),
+        tx_list: l2_tx_list_blob,
+        tx_blob_hash,
         block_proposed: proposal_event,
         prover_data,
     };
@@ -207,7 +261,7 @@ pub fn taiko_run_preflight(
     info!("Saving provider cache ...");
 
     // Save the provider cache
-    //tp.save()?;
+    // tp.save()?;
 
     info!("Provider-backed execution is Done!");
 
@@ -218,4 +272,27 @@ pub fn taiko_run_preflight(
         ancestor_headers,
         ..input
     })
+}
+
+fn decode_blob_data(blob: &str) -> Vec<u8> {
+    let origin_blob = hex::decode(blob.to_lowercase().trim_start_matches("0x")).unwrap();
+    assert!(origin_blob.len() == 4096 * 32);
+    let mut chunk: Vec<Vec<u8>> = Vec::new();
+    let mut last_seg_found = false;
+    for i in (0..4096).rev() {
+        let segment = &origin_blob[i * 32 + 1..(i + 1) * 32];
+        if segment.iter().any(|&x| x != 0) || last_seg_found {
+            chunk.push(segment.to_vec());
+            last_seg_found = true;
+        }
+    }
+    chunk.reverse();
+    chunk.iter().flatten().cloned().collect()
+}
+
+fn calc_blob_hash(commitment: &str) -> [u8; 32] {
+    let commit_bytes = hex::decode(commitment.to_lowercase().trim_start_matches("0x")).unwrap();
+    let kzg_commit = c_kzg::KzgCommitment::from_bytes(&commit_bytes).unwrap();
+    let version_hash: [u8; 32] = kzg_to_versioned_hash(kzg_commit).0;
+    version_hash
 }

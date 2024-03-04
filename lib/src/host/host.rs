@@ -49,6 +49,8 @@ pub fn taiko_run_preflight(
         block_no: l2_block_no - 1,
     })?;
 
+    println!("parent_block: {:?}", parent_block);
+
     info!(
         "Initial block: {:?} ({:?})",
         parent_block.number.unwrap(),
@@ -60,8 +62,18 @@ pub fn taiko_run_preflight(
     let mut block = tp.l2_provider.get_full_block(&BlockQuery { block_no: l2_block_no })?;
     let (anchor_tx, anchor_call) = tp.get_anchor(&block)?;
 
-    let l1_state_block_no = anchor_call.l1Height;
+    println!("anchor L1 block id: {:?}", anchor_call.l1BlockId);
+    println!("anchor L1 state root: {:?}", anchor_call.l1StateRoot);
+
+    let l1_state_block_no = anchor_call.l1BlockId;
     let l1_inclusion_block_no = l1_state_block_no + 1;
+
+    println!("l1_state_block_no: {:?}", l1_state_block_no);
+
+    let l1_state_root_block = tp.l1_provider.get_partial_block(&BlockQuery {
+        block_no: l1_state_block_no,
+    })?;
+    println!("l1_state_root_block: {:?}", l1_state_root_block);
 
     // Get the block proposal data
     let (proposal_call, proposal_event) = tp.get_proposal(l1_inclusion_block_no, l2_block_no, l2_contracts)?;

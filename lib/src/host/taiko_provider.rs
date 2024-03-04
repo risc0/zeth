@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use alloy_primitives::Address;
 use alloy_sol_types::SolCall;
 use anyhow::{anyhow, bail, Context, Result};
-use ethers_core::types::{Block, Transaction};
+use ethers_core::types::{Block, Filter, Transaction, H160};
 
 use crate::{
     consts::ChainSpec,
@@ -14,6 +14,7 @@ use crate::{
 pub struct TaikoProvider {
     pub l1_provider: Box<dyn Provider>,
     pub l2_provider: Box<dyn Provider>,
+
 }
 
 impl TaikoProvider {
@@ -24,8 +25,8 @@ impl TaikoProvider {
         l2_rpc: Option<String>,
     ) -> Result<Self> {
         Ok(Self {
-            l1_provider: new_provider(l1_cache, l1_rpc)?,
-            l2_provider: new_provider(l2_cache, l2_rpc)?,
+            l1_provider: new_provider(None, l1_rpc)?,
+            l2_provider: new_provider(None, l2_rpc)?,
         })
     }
 
@@ -59,11 +60,25 @@ impl TaikoProvider {
         l2_block_no: u64,
         chain_name: &str,
     ) -> Result<(proposeBlockCall, BlockProposed)> {
+        let l1_address = get_contracts(chain_name).unwrap().0;
+        println!("l1_address: {:?}", l1_address);
+
         let logs = self.l1_provider.filter_event_log::<BlockProposed>(
-            get_contracts(chain_name).unwrap().0,
+            l1_address,
             l1_block_no,
             l2_block_no,
         )?;
+
+        /*let l1_contact = H160::from_slice(get_contracts(chain_name).unwrap().0.as_slice());
+        let filter = Filter::new()
+            .address(l1_contact)
+            .from_block(l1_block_no)
+            .to_block(l1_block_no);
+        let logs = self
+            .tokio_handle
+            .block_on(async { self.l1_provider.get_logs(&filter).await })?;*/
+
+        println!("logs: {:?}", logs);
         for (log, event) in logs {
             if event.blockId == zeth_primitives::U256::from(l2_block_no) {
                 let tx = self

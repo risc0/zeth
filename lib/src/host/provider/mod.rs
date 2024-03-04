@@ -166,6 +166,7 @@ impl dyn Provider {
             from_block: l1_block_no,
             to_block: l1_block_no,
         })?;
+        println!("raw logs: {:?}", logs);
         let res = logs
             .iter()
             .filter(|log| log.topics.len() == <<E as SolEvent>::TopicList as TopicList>::COUNT)

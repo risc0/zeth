@@ -62,8 +62,8 @@ pub struct GuestInput<E: TxEssence> {
 sol! {
     function anchor(
         bytes32 l1Hash,
-        bytes32 l1SignalRoot,
-        uint64 l1Height,
+        bytes32 l1StateRoot,
+        uint64 l1BlockId,
         uint32 parentGasUsed
     )
         external
@@ -107,7 +107,7 @@ sol! {
     struct Transition {
         bytes32 parentHash;
         bytes32 blockHash;
-        bytes32 signalRoot;
+        bytes32 stateRoot;
         bytes32 graffiti;
     }
 
@@ -126,10 +126,15 @@ sol! {
         bytes data;
     }
 
-    function proposeBlock(bytes calldata params, bytes calldata txList) {}
+    function proposeBlock(
+        bytes calldata params,
+        bytes calldata txList
+    )
+    {}
 
     function proveBlock(uint64 blockId, bytes calldata input) {}
 }
+
 
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]

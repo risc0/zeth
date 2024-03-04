@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use alloy_primitives::FixedBytes;
 use serde::{Deserialize, Serialize};
 use sp1_core::{utils, SP1Prover, SP1Stdin, SP1Verifier};
-use zeth_lib::{consts::TKO_MAINNET_CHAIN_SPEC, taiko::host::HostArgs};
+use zeth_lib::{consts::TKO_TESTNET_CHAIN_SPEC, taiko::host::HostArgs};
 
 use crate::prover::{
     consts::*,
@@ -30,7 +30,7 @@ pub async fn execute_sp1(ctx: &mut Context, req: &ProofRequest) -> Result<SP1Res
         l2_cache: ctx.l2_cache_file.clone(),
         l2_rpc: Some(req.l2_rpc.clone()),
     };
-    let l2_contracts_spec = TKO_MAINNET_CHAIN_SPEC.clone();
+    let l2_contracts_spec = TKO_TESTNET_CHAIN_SPEC.clone();
 
     stdin.write(&host_args);
     stdin.write(&l2_contracts_spec);

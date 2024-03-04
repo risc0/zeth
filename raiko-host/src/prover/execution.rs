@@ -1,9 +1,10 @@
 use std::time::Instant;
 
 use alloy_primitives::FixedBytes;
+use anyhow::bail;
 use ethers_core::types::H160;
 use tracing::{info, warn};
-use zeth_lib::{builder::{BlockBuilderStrategy, TaikoStrategy}, consts::TKO_MAINNET_CHAIN_SPEC, input::{GuestInput, GuestOutput, TaikoSystemInfo, TaikoProverData},
+use zeth_lib::{builder::{BlockBuilderStrategy, TaikoStrategy}, input::{GuestInput, GuestOutput, TaikoSystemInfo, TaikoProverData},
     host::host::{HostArgs, taiko_run_preflight}, EthereumTxEssence
 };
 use zeth_lib::protocol_instance::assemble_protocol_instance;
@@ -44,15 +45,18 @@ pub async fn execute(
         let elapsed = Instant::now().duration_since(start).as_millis() as i64;
         observe_input(elapsed);
         // 2. pre-build the block
-        let build_result = TaikoStrategy::build_from(&TKO_MAINNET_CHAIN_SPEC.clone(), input.clone());
+        let build_result = TaikoStrategy::build_from(input.clone());
         // TODO: cherry-pick risc0 latest output
         let output = match &build_result {
             Ok((header, mpt_node)) => {
                 info!("Verifying final state using provider data ...");
                 info!("Final block hash derived successfully. {}", header.hash());
-                info!("Final block hash derived successfully. {:?}", header);
+                info!("Final block header derived successfully. {:?}", header);
                 let pi = assemble_protocol_instance(&input, &header)?
                     .instance_hash(req.proof_instance.clone().into());
+
+                // Make sure the blockhash from the node matches the one from the builder
+                assert_eq!(header.hash().0, input.block_hash.to_fixed_bytes(), "block hash unexpected");
                 GuestOutput::Success((header.clone(), pi))
             }
             Err(_) => {
@@ -114,7 +118,6 @@ pub async fn prepare_input(
     tokio::task::spawn_blocking(move || {
         taiko_run_preflight(
             Some(req.l1_rpc),
-            TKO_MAINNET_CHAIN_SPEC.clone(),
             Some(req.l2_rpc),
             req.block_number,
             &req.l2_contracts,

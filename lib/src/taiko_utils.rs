@@ -66,7 +66,7 @@ pub mod internal_devnet_a {
     use super::*;
     pub const CHAIN_ID: u64 = 167001;
     pub const L1_CONTRACT: Lazy<Address> = Lazy::new(|| {
-        Address::from_str("0xbE71D121291517c85Ab4d3ac65d70F6b1FD57118")
+        Address::from_str("0xC069c3d2a9f2479F559AD34485698ad5199C555f")
             .expect("invalid l1 contract address")
     });
     pub const L1_SIGNAL_SERVICE: Lazy<Address> = Lazy::new(|| {

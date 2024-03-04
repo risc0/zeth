@@ -13,7 +13,6 @@ use hashbrown::HashSet;
 
 use crate::{
     builder::{prepare::EthHeaderPrepStrategy, BlockBuilder, TkoTxExecStrategy},
-    consts::ChainSpec,
     host::{
         provider::BlockQuery, provider_db::ProviderDb, taiko_provider::TaikoProvider
     },
@@ -31,10 +30,9 @@ pub struct HostArgs {
 
 pub fn taiko_run_preflight(
     l1_rpc_url: Option<String>,
-    l2_chain_spec: ChainSpec,
     l2_rpc_url: Option<String>,
     l2_block_no: u64,
-    l2_contracts: &str,
+    chain_spec_name: &str,
     prover_data: TaikoProverData,
 ) -> Result<GuestInput<EthereumTxEssence>> {
     let mut tp = TaikoProvider::new(
@@ -79,7 +77,7 @@ pub fn taiko_run_preflight(
     //println!("l1_state_root_block: {:?}", l1_state_root_block);
 
     // Get the block proposal data
-    let (proposal_call, proposal_event) = tp.get_proposal(l1_inclusion_block_no, l2_block_no, l2_contracts)?;
+    let (proposal_call, proposal_event) = tp.get_proposal(l1_inclusion_block_no, l2_block_no, chain_spec_name)?;
 
     // Make sure to also do the preflight on the tx_list transactions so we have the necessary data
     // for invalid transactions.
@@ -118,6 +116,7 @@ pub fn taiko_run_preflight(
     })?;
 
     let taiko_sys_info = TaikoSystemInfo {
+        chain_spec_name: chain_spec_name.to_string(),
         l1_header: l1_state_block.try_into().expect("Failed to convert ethers block to zeth block"),
         tx_list: proposal_call.txList,
         block_proposed: proposal_event,
@@ -149,6 +148,7 @@ pub fn taiko_run_preflight(
 
     // Create the input struct without the block data set
     let input = GuestInput {
+        block_hash: block.hash.unwrap(),
         beneficiary: from_ethers_h160(block.author.context("author missing")?),
         gas_limit: from_ethers_u256(block.gas_limit),
         timestamp: from_ethers_u256(block.timestamp),
@@ -171,10 +171,9 @@ pub fn taiko_run_preflight(
     let provider_db = ProviderDb::new(tp.l2_provider, parent_header.number);
 
     println!("execute block");
-    println!("l2_chain_spec: {:?}", l2_chain_spec);
 
     // Create the block builder, run the transactions and extract the DB
-    let mut builder = BlockBuilder::new(&l2_chain_spec, input.clone())
+    let mut builder = BlockBuilder::new(input.clone())
         .with_db(provider_db)
         .prepare_header::<EthHeaderPrepStrategy>()?
         .execute_transactions::<TkoTxExecStrategy>()?;

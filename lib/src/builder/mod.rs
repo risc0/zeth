@@ -22,11 +22,11 @@ use zeth_primitives::{
 pub use self::execute::taiko::TkoTxExecStrategy;
 use crate::{
     builder::{
-        execute::{TxExecStrategy},
+        execute::TxExecStrategy,
         finalize::{BlockFinalizeStrategy, MemDbBlockFinalizeStrategy},
         initialize::{DbInitStrategy, MemDbInitStrategy},
         prepare::{EthHeaderPrepStrategy, HeaderPrepStrategy},
-    }, consts::ChainSpec, input::GuestInput, mem_db::MemDb
+    }, consts::{get_chain_spec, ChainSpec}, input::GuestInput, mem_db::MemDb
 };
 
 mod execute;
@@ -36,23 +36,23 @@ pub mod prepare;
 
 /// A generic builder for building a block.
 #[derive(Clone, Debug)]
-pub struct BlockBuilder<'a, D, E: TxEssence> {
-    pub(crate) chain_spec: &'a ChainSpec,
+pub struct BlockBuilder<D, E: TxEssence> {
+    pub(crate) chain_spec: ChainSpec,
     pub(crate) input: GuestInput<E>,
     pub(crate) db: Option<D>,
     pub(crate) header: Option<Header>,
 }
 
-impl<D, E> BlockBuilder<'_, D, E>
+impl<D, E> BlockBuilder<D, E>
 where
     D: Database + DatabaseCommit,
     <D as Database>::Error: core::fmt::Debug,
     E: TxEssence,
 {
     /// Creates a new block builder.
-    pub fn new(chain_spec: &ChainSpec, input: GuestInput<E>) -> BlockBuilder<'_, D, E> {
+    pub fn new(input: GuestInput<E>) -> BlockBuilder<D, E> {
         BlockBuilder {
-            chain_spec,
+            chain_spec: get_chain_spec(&input.taiko.chain_spec_name),
             db: None,
             header: None,
             input,
@@ -107,10 +107,9 @@ pub trait BlockBuilderStrategy {
 
     /// Builds a block from the given input.
     fn build_from(
-        chain_spec: &ChainSpec,
         input: GuestInput<Self::TxEssence>,
     ) -> Result<(Header, MptNode)> {
-        BlockBuilder::<MemDb, Self::TxEssence>::new(chain_spec, input)
+        BlockBuilder::<MemDb, Self::TxEssence>::new(input)
             .initialize_database::<Self::DbInitStrategy>()?
             .prepare_header::<Self::HeaderPrepStrategy>()?
             .execute_transactions::<Self::TxExecStrategy>()?

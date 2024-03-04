@@ -54,7 +54,7 @@ pub mod risc0;
 #[cfg(not(feature = "risc0"))]
 pub mod risc0 {
     use super::*;
-    use zeth_lib::{builder::{BlockBuilderStrategy, TaikoStrategy}, consts::TKO_MAINNET_CHAIN_SPEC, input::GuestInput, EthereumTxEssence
+    use zeth_lib::{builder::{BlockBuilderStrategy, TaikoStrategy}, input::GuestInput, EthereumTxEssence
 };
     pub async fn execute_risc0(
         input: GuestInput<EthereumTxEssence>,

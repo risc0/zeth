@@ -6,6 +6,8 @@ use anyhow::Result;
 
 use super::{consts::RAIKO_GUEST_EXECUTABLE, request::ProofInstance};
 
+use zeth_lib::consts::ChainSpec;
+
 #[derive(Debug, Default, Clone)]
 pub struct Context {
     /// guest executable path
@@ -16,17 +18,16 @@ pub struct Context {
     pub max_caches: usize,
 
     pub l1_cache_file: Option<PathBuf>,
-    
-    pub l2_cache_file: Option<PathBuf>,
 
+    pub l2_cache_file: Option<PathBuf>,
 }
 
 impl Context {
     pub fn new(
-        guest_elf: PathBuf, 
-        host_cache: PathBuf, 
+        guest_elf: PathBuf,
+        host_cache: PathBuf,
         max_caches: usize,
-        block_no: Option<u64>
+        block_no: Option<u64>,
     ) -> Self {
         let mut ctx = Self {
             guest_elf,
@@ -73,7 +74,7 @@ impl Context {
         Ok(())
     }
 
-    
+
 }
 
 

@@ -13,6 +13,7 @@
 // limitations under the License.
 use core::fmt::Debug;
 
+use ethers_core::types::H256;
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
@@ -29,6 +30,8 @@ pub type StorageEntry = (MptNode, Vec<U256>);
 /// External block input.
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct GuestInput<E: TxEssence> {
+    /// Block hash - for reference!
+    pub block_hash: H256,
     /// Previous block header
     pub parent_header: Header,
     /// Address to which all priority fees in this block are transferred.
@@ -149,6 +152,7 @@ pub struct TaikoProverData {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TaikoSystemInfo {
+    pub chain_spec_name: String,
     pub l1_header: Header,
     pub tx_list: Vec<u8>,
     pub block_proposed: BlockProposed,
@@ -172,6 +176,7 @@ mod tests {
     #[test]
     fn input_serde_roundtrip() {
         let input = GuestInput::<EthereumTxEssence> {
+            block_hash: Default::default(),
             parent_header: Default::default(),
             beneficiary: Default::default(),
             gas_limit: Default::default(),

@@ -3,7 +3,7 @@ use std::{fs, path::{Path, PathBuf}};
 use alloy_primitives::FixedBytes;
 use serde::{Deserialize, Serialize};
 use tracing::info as traicing_info;
-use zeth_lib::{consts::TKO_MAINNET_CHAIN_SPEC, input::GuestInput, taiko::{host::HostArgs, GuestInput, GuestOutput, TaikoSystemInfo},
+use zeth_lib::{consts::TKO_TESTNET_CHAIN_SPEC, input::GuestInput, taiko::{host::HostArgs, GuestInput, GuestOutput, TaikoSystemInfo},
 EthereumTxEssence};
 
 use crate::prover::{

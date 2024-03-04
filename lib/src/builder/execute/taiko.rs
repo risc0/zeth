@@ -142,7 +142,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
             }
 
             fill_eth_tx_env(
-                block_builder.chain_spec,
+                &block_builder.chain_spec,
                 &mut evm.env().tx,
                 &tx.essence,
                 tx_from,

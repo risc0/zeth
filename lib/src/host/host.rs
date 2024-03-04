@@ -61,6 +61,8 @@ pub fn taiko_run_preflight(
     // Fetch the target block
     let mut block = tp.l2_provider.get_full_block(&BlockQuery { block_no: l2_block_no })?;
     let (anchor_tx, anchor_call) = tp.get_anchor(&block)?;
+    println!("block.hash: {:?}", block.hash.unwrap());
+    println!("block.parent_hash: {:?}", block.parent_hash);
 
     println!("anchor L1 block id: {:?}", anchor_call.l1Height);
     println!("anchor L1 state root: {:?}", anchor_call.l1SignalRoot);
@@ -166,6 +168,9 @@ pub fn taiko_run_preflight(
 
     // Create the provider DB
     let provider_db = ProviderDb::new(tp.l2_provider, parent_header.number);
+
+    println!("execute block");
+    println!("l2_chain_spec: {:?}", l2_chain_spec);
 
     // Create the block builder, run the transactions and extract the DB
     let mut builder = BlockBuilder::new(&l2_chain_spec, input.clone())

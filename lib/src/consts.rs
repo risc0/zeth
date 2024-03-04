@@ -69,7 +69,7 @@ pub const ETH_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| {
 #[cfg(feature = "taiko")]
 pub const TKO_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| {
     ChainSpec {
-        chain_id: 1,
+        chain_id: 167008,
         hard_forks: BTreeMap::from([
             (SpecId::SHANGHAI, ForkCondition::Block(0)),
             (SpecId::SHANGHAI /* change */, ForkCondition::Block(0)),

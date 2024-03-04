@@ -50,11 +50,17 @@ pub fn init_taiko(
     .with_l2_spec(l2_chain_spec.clone())
     .with_contracts(|| get_contracts(l2_contracts));
 
+    println!("contracts: {:?} {:?}", tp.l1_contract, tp.l2_contract);
+
     let sys_info = derive_sys_info(&mut tp, l2_block_no, prover, graffiti)?;
     tp.save()?;
 
+    println!("sys_info: {:?}", sys_info);
+
     let preflight_data =
         TaikoStrategy::run_preflight(l2_chain_spec, args.l2_cache, args.l2_rpc, l2_block_no)?;
+
+    println!("preflight_data done");
 
     // Create the guest input from [Init]
     let input: Input<EthereumTxEssence> = preflight_data
@@ -74,13 +80,21 @@ pub fn derive_sys_info(
     let l2_block = tp.get_l2_full_block(l2_block_no)?;
     let l2_parent_block = tp.get_l2_full_block(l2_block_no - 1)?;
 
+    
     let (anchor_tx, anchor_call) = tp.get_anchor(&l2_block)?;
 
-    let l1_block_no = anchor_call.l1Height;
+    println!("l2_block: {:?} {:?} \nanchor_call.l1Height {:?}", l2_block_no, l2_block.hash.unwrap(), anchor_call.l1Height);
+
+    let l1_block_no = anchor_call.l1Height + 1;
     let l1_block = tp.get_l1_full_block(l1_block_no)?;
     let l1_next_block = tp.get_l1_full_block(l1_block_no + 1)?;
 
+    println!("l1_block: {:?} {:?}", l1_block_no, l1_block.hash.unwrap());
+
     let (proposal_call, proposal_event) = tp.get_proposal(l1_block_no, l2_block_no)?;
+
+    // println!("proposal_call: {:?} {:?}", proposal_call, proposal_event);
+
 
     // 0. check anchor Tx
     tp.check_anchor_tx(&anchor_tx, &l2_block)?;

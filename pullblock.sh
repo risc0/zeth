@@ -10,10 +10,10 @@ do
          \"method\": \"proof\",
          \"params\": [
            {
-             \"type\": \"Sgx\",
-             \"l2Rpc\": \"https://rpc.internal.taiko.xyz\",
+             \"type\": \"native\",
+             \"l2Rpc\": \"https://rpc.katla.taiko.xyz\",
              \"l1Rpc\": \"https://l1rpc.internal.taiko.xyz\",
-             \"l2Contracts\": \"internal_devnet_a\",
+             \"l2Contracts\": \"testnet\",
              \"proofInstance\": \"native\",
              \"block\": $block,
              \"prover\": \"0x70997970C51812dc3A010C7d01b50e0d17dc79C8\",

@@ -70,7 +70,7 @@ sol! {
     #[derive(Debug, Default, Clone, Deserialize, Serialize)]
     event BlockProposed(
         uint256 indexed blockId,
-        address indexed prover,
+        address indexed assignedProver,
         uint96 livenessBond,
         BlockMetadata meta,
         EthDeposit[] depositsProcessed
@@ -82,6 +82,7 @@ sol! {
         bytes data;
     }
 
+    #[derive(Debug)]
     function proposeBlock(bytes calldata params, bytes calldata txList) {}
 
     function proveBlock(uint64 blockId, bytes calldata input) {}

@@ -183,7 +183,7 @@ impl TaikoProvider {
             "anchor transaction from mismatch"
         );
         ensure!(
-            from_ethers_h160(anchor.to.unwrap()) == self.l1_contract.unwrap(),
+            from_ethers_h160(anchor.to.unwrap()) == self.l2_contract.unwrap(),
             "anchor transaction to mismatch"
         );
         ensure!(

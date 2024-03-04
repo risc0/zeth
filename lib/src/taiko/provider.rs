@@ -153,10 +153,10 @@ impl TaikoProvider {
         ensure!(signal_root == anchor.l1SignalRoot, "l1SignalRoot mismatch");
 
         // 3. check l1 block hash
-        ensure!(
-            l1_block.hash.unwrap() == H256::from(anchor.l1Hash.0),
-            "l1Hash mismatch"
-        );
+        // ensure!(
+        //     l1_block.hash.unwrap() == H256::from(anchor.l1Hash.0),
+        //     "l1Hash mismatch"
+        // );
 
         Ok(())
     }

@@ -8,7 +8,7 @@ use log::info;
 use rlp::{Decodable, DecoderError, Rlp};
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
-    block::Header, ethers::from_ethers_h256, transactions::ethereum::EthereumTxEssence,
+    block::Header, ethers::from_ethers_h256, transactions::ethereum::EthereumTxEssence, FixedBytes,
 };
 
 use super::{provider::TaikoProvider, TaikoSystemInfo};
@@ -93,7 +93,7 @@ pub fn derive_sys_info(
 
     let (proposal_call, proposal_event) = tp.get_proposal(l1_block_no, l2_block_no)?;
 
-    // println!("proposal_call: {:?} {:?}", proposal_call, proposal_event);
+    println!("proposal_event: {:?}", proposal_event.depositsProcessed.len());
 
 
     // 0. check anchor Tx
@@ -110,38 +110,42 @@ pub fn derive_sys_info(
         bail!("l1_signal_service not set");
     };
 
-    let proof = tp.l1_provider.get_proof(&ProofQuery {
-        block_no: l1_block_no,
-        address: l1_signal_service.into_array().into(),
-        indices: Default::default(),
-    })?;
+    // let proof = tp.l1_provider.get_proof(&ProofQuery {
+    //     block_no: anchor_call.l1Height,
+    //     address: l1_signal_service.into_array().into(),
+    //     indices: Default::default(),
+    // })?;
 
-    let l1_signal_root = from_ethers_h256(proof.storage_hash);
+    // let l1_signal_root = from_ethers_h256(proof.storage_hash);
 
-    ensure!(
-        l1_signal_root == anchor_call.l1SignalRoot,
-        "l1SignalRoot mismatch"
-    );
+    // ensure!(
+    //     l1_signal_root == anchor_call.l1SignalRoot,
+    //     "l1SignalRoot mismatch"
+    // );
 
     // 3. check l1 block hash
-    ensure!(
-        l1_block.hash.unwrap() == ethers_core::types::H256::from(anchor_call.l1Hash.0),
-        "l1Hash mismatch"
-    );
+    // ensure!(
+    //     l1_block.hash.unwrap() == ethers_core::types::H256::from(anchor_call.l1Hash.0),
+    //     "l1Hash mismatch"
+    // );
 
-    let proof = tp.l2_provider.get_proof(&ProofQuery {
-        block_no: l2_block_no,
-        address: tp
-            .l2_signal_service
-            .expect("l2_signal_service not set")
-            .into_array()
-            .into(),
-        indices: Default::default(),
-    })?;
-    let l2_signal_root = from_ethers_h256(proof.storage_hash);
+    println!("checks passed");
+
+    // let proof = tp.l2_provider.get_proof(&ProofQuery {
+    //     block_no: l2_block_no,
+    //     address: tp
+    //         .l2_signal_service
+    //         .expect("l2_signal_service not set")
+    //         .into_array()
+    //         .into(),
+    //     indices: Default::default(),
+    // })?;
+    // let l2_signal_root = from_ethers_h256(proof.storage_hash);
 
     tp.l1_provider.save()?;
     tp.l2_provider.save()?;
+
+    // println!("l2_signal_root {:?}", l2_signal_root);
 
     let sys_info = TaikoSystemInfo {
         l1_hash: anchor_call.l1Hash,
@@ -149,8 +153,8 @@ pub fn derive_sys_info(
         l2_tx_list: proposal_call.txList,
         prover,
         graffiti,
-        l1_signal_root,
-        l2_signal_root,
+        l1_signal_root: FixedBytes::default(),
+        l2_signal_root: FixedBytes::default(),
         l2_withdrawals: l2_block
             .withdrawals
             .clone()

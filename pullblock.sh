@@ -12,7 +12,7 @@ do
            {
              \"type\": \"native\",
              \"l2Rpc\": \"https://rpc.katla.taiko.xyz\",
-             \"l1Rpc\": \"https://l1rpc.internal.taiko.xyz\",
+             \"l1Rpc\": \"https://ethereum-holesky-rpc.publicnode.com\",
              \"l2Contracts\": \"testnet\",
              \"proofInstance\": \"native\",
              \"block\": $block,
@@ -22,3 +22,6 @@ do
          ]
        }"
 done
+
+
+# https://ethereum-holesky-rpc.publicnode.com 🉑️

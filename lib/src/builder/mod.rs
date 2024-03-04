@@ -15,27 +15,18 @@
 use anyhow::Result;
 use revm::{Database, DatabaseCommit};
 use zeth_primitives::{
-    block::Header,
-    transactions::{ethereum::EthereumTxEssence, TxEssence},
-    trie::MptNode,
+    block::Header, mpt::MptNode, transactions::{ethereum::EthereumTxEssence, TxEssence}
 };
 
-#[cfg(feature = "optimism")]
-pub use self::execute::optimism::OpTxExecStrategy;
 #[cfg(feature = "taiko")]
 pub use self::execute::taiko::TkoTxExecStrategy;
-#[cfg(feature = "optimism")]
-use crate::OptimismTxEssence;
 use crate::{
     builder::{
-        execute::{ethereum::EthTxExecStrategy, TxExecStrategy},
+        execute::{TxExecStrategy},
         finalize::{BlockFinalizeStrategy, MemDbBlockFinalizeStrategy},
         initialize::{DbInitStrategy, MemDbInitStrategy},
         prepare::{EthHeaderPrepStrategy, HeaderPrepStrategy},
-    },
-    consts::ChainSpec,
-    input::Input,
-    mem_db::MemDb,
+    }, consts::ChainSpec, input::GuestInput, mem_db::MemDb
 };
 
 mod execute;
@@ -47,7 +38,7 @@ pub mod prepare;
 #[derive(Clone, Debug)]
 pub struct BlockBuilder<'a, D, E: TxEssence> {
     pub(crate) chain_spec: &'a ChainSpec,
-    pub(crate) input: Input<E>,
+    pub(crate) input: GuestInput<E>,
     pub(crate) db: Option<D>,
     pub(crate) header: Option<Header>,
 }
@@ -59,7 +50,7 @@ where
     E: TxEssence,
 {
     /// Creates a new block builder.
-    pub fn new(chain_spec: &ChainSpec, input: Input<E>) -> BlockBuilder<'_, D, E> {
+    pub fn new(chain_spec: &ChainSpec, input: GuestInput<E>) -> BlockBuilder<'_, D, E> {
         BlockBuilder {
             chain_spec,
             db: None,
@@ -117,7 +108,7 @@ pub trait BlockBuilderStrategy {
     /// Builds a block from the given input.
     fn build_from(
         chain_spec: &ChainSpec,
-        input: Input<Self::TxEssence>,
+        input: GuestInput<Self::TxEssence>,
     ) -> Result<(Header, MptNode)> {
         BlockBuilder::<MemDb, Self::TxEssence>::new(chain_spec, input)
             .initialize_database::<Self::DbInitStrategy>()?
@@ -125,29 +116,6 @@ pub trait BlockBuilderStrategy {
             .execute_transactions::<Self::TxExecStrategy>()?
             .finalize::<Self::BlockFinalizeStrategy>()
     }
-}
-
-/// The [BlockBuilderStrategy] for building an Ethereum block.
-pub struct EthereumStrategy {}
-
-impl BlockBuilderStrategy for EthereumStrategy {
-    type TxEssence = EthereumTxEssence;
-    type DbInitStrategy = MemDbInitStrategy;
-    type HeaderPrepStrategy = EthHeaderPrepStrategy;
-    type TxExecStrategy = EthTxExecStrategy;
-    type BlockFinalizeStrategy = MemDbBlockFinalizeStrategy;
-}
-
-/// The [BlockBuilderStrategy] for building an Optimism block.
-#[cfg(feature = "optimism")]
-pub struct OptimismStrategy {}
-#[cfg(feature = "optimism")]
-impl BlockBuilderStrategy for OptimismStrategy {
-    type TxEssence = OptimismTxEssence;
-    type DbInitStrategy = MemDbInitStrategy;
-    type HeaderPrepStrategy = EthHeaderPrepStrategy;
-    type TxExecStrategy = OpTxExecStrategy;
-    type BlockFinalizeStrategy = MemDbBlockFinalizeStrategy;
 }
 
 /// The [BlockBuilderStrategy] for building an Optimism block.

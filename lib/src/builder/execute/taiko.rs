@@ -19,18 +19,15 @@ use anyhow::{anyhow, bail, Context, Result};
 use log::debug;
 use revm::{
     interpreter::Host,
-    primitives::{Address, ResultAndState, SpecId, TxEnv},
+    primitives::{Address, ResultAndState, SpecId, TransactTo, TxEnv},
     taiko, Database, DatabaseCommit, Evm,
 };
 use ruint::aliases::U256;
 use zeth_primitives::{
-    receipt::Receipt,
-    transactions::{ethereum::EthereumTxEssence, TxEssence},
-    trie::MptNode,
-    Bloom, RlpBytes,
+    mpt::MptNode, receipt::Receipt, transactions::{ethereum::{EthereumTxEssence, TransactionKind}, TxEssence}, Bloom, RlpBytes
 };
 
-use super::{ethereum, TxExecStrategy};
+use super::TxExecStrategy;
 use crate::{
     builder::BlockBuilder,
     consts::{self, ChainSpec},
@@ -243,7 +240,72 @@ pub fn fill_eth_tx_env(
     // claim the anchor
     tx_env.taiko.is_anchor = is_anchor;
     // set the treasury address
-    tx_env.taiko.treasury = *crate::taiko::consts::testnet::L2_CONTRACT;
+    tx_env.taiko.treasury = *crate::taiko_utils::testnet::L2_CONTRACT;
 
-    ethereum::fill_eth_tx_env(tx_env, essence, caller);
+    match essence {
+        EthereumTxEssence::Legacy(tx) => {
+            tx_env.caller = caller;
+            tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
+            tx_env.gas_price = tx.gas_price;
+            tx_env.gas_priority_fee = None;
+            tx_env.transact_to = if let TransactionKind::Call(to_addr) = tx.to {
+                TransactTo::Call(to_addr)
+            } else {
+                TransactTo::create()
+            };
+            tx_env.value = tx.value;
+            tx_env.data = tx.data.clone();
+            tx_env.chain_id = tx.chain_id;
+            tx_env.nonce = Some(tx.nonce);
+            tx_env.access_list.clear();
+        }
+        EthereumTxEssence::Eip2930(tx) => {
+            tx_env.caller = caller;
+            tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
+            tx_env.gas_price = tx.gas_price;
+            tx_env.gas_priority_fee = None;
+            tx_env.transact_to = if let TransactionKind::Call(to_addr) = tx.to {
+                TransactTo::Call(to_addr)
+            } else {
+                TransactTo::create()
+            };
+            tx_env.value = tx.value;
+            tx_env.data = tx.data.clone();
+            tx_env.chain_id = Some(tx.chain_id);
+            tx_env.nonce = Some(tx.nonce);
+            tx_env.access_list = tx.access_list.clone().into();
+        }
+        EthereumTxEssence::Eip1559(tx) => {
+            tx_env.caller = caller;
+            tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
+            tx_env.gas_price = tx.max_fee_per_gas;
+            tx_env.gas_priority_fee = Some(tx.max_priority_fee_per_gas);
+            tx_env.transact_to = if let TransactionKind::Call(to_addr) = tx.to {
+                TransactTo::Call(to_addr)
+            } else {
+                TransactTo::create()
+            };
+            tx_env.value = tx.value;
+            tx_env.data = tx.data.clone();
+            tx_env.chain_id = Some(tx.chain_id);
+            tx_env.nonce = Some(tx.nonce);
+            tx_env.access_list = tx.access_list.clone().into();
+        }
+        EthereumTxEssence::Eip4844(tx) => {
+            tx_env.caller = caller;
+            tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
+            tx_env.gas_price = tx.max_fee_per_gas;
+            tx_env.gas_priority_fee = Some(tx.max_priority_fee_per_gas);
+            tx_env.transact_to = if let TransactionKind::Call(to_addr) = tx.to {
+                TransactTo::Call(to_addr)
+            } else {
+                TransactTo::create()
+            };
+            tx_env.value = tx.value;
+            tx_env.data = tx.data.clone();
+            tx_env.chain_id = Some(tx.chain_id);
+            tx_env.nonce = Some(tx.nonce);
+            tx_env.access_list = tx.access_list.clone().into();
+        }
+    };
 }

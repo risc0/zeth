@@ -20,9 +20,6 @@ use zeth_primitives::transactions::TxEssence;
 
 use super::BlockBuilder;
 
-pub(super) mod ethereum;
-#[cfg(feature = "optimism")]
-pub(super) mod optimism;
 #[cfg(feature = "taiko")]
 pub(super) mod taiko;
 

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
-use zeth_lib::taiko::GuestOutput;
+use zeth_lib::input::GuestOutput;
 use zeth_primitives::{block::Header, Address, B256};
 
 #[serde_as]
@@ -29,7 +29,7 @@ pub struct Risc0Instance {
 #[serde(rename_all = "camelCase")]
 pub struct ProofRequest {
     /// the l2 block number
-    pub block: u64,
+    pub block_number: u64,
     /// l2 node for get block by number
     pub l2_rpc: String,
     /// l1 node for signal root verify and get txlist from proposed transaction.
@@ -45,7 +45,7 @@ pub struct ProofRequest {
     pub proof_instance: ProofInstance,
 }
 
-/* 
+/*
 curl --location --request POST 'http://localhost:8080' --header 'Content-Type: application/json' --data-raw '{
      "jsonrpc": "2.0",
      "id": 1,

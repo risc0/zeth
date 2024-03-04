@@ -11,24 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use core::{clone::Clone, option::Option};
+use core::clone::Clone;
 
 use alloy_primitives::{Address, Bytes, TxHash};
 use alloy_rlp::Encodable;
 use serde::{Deserialize, Serialize};
 
-use self::{
-    optimism::{OptimismTxEssence, OPTIMISM_DEPOSITED_TX_TYPE},
-    signature::TxSignature,
-};
+use self::signature::TxSignature;
 use crate::{keccak::keccak, transactions::ethereum::EthereumTxEssence, U256};
 
 pub mod ethereum;
-pub mod optimism;
 pub mod signature;
 
 pub type EthereumTransaction = Transaction<EthereumTxEssence>;
-pub type OptimismTransaction = Transaction<OptimismTxEssence>;
 
 /// Represents a complete transaction, encompassing its core essence and the associated
 /// signature.
@@ -90,11 +85,6 @@ impl<E: TxEssence> Encodable for Transaction<E> {
         if tx_type != 0 {
             out.put_u8(tx_type);
         }
-        if tx_type == OPTIMISM_DEPOSITED_TX_TYPE {
-            // optimism deposited transactions have no signature
-            self.essence.encode(out);
-            return;
-        }
 
         // join the essence lists and the signature list into one
         // this allows to reuse as much of the generated RLP code as possible
@@ -110,12 +100,7 @@ impl<E: TxEssence> Encodable for Transaction<E> {
     fn length(&self) -> usize {
         let tx_type = self.essence.tx_type();
         let payload_length = self.essence.payload_length()
-            + if tx_type == OPTIMISM_DEPOSITED_TX_TYPE {
-                // optimism deposited transactions have no signature
-                0
-            } else {
-                self.signature.payload_length()
-            };
+            + self.signature.payload_length();
 
         let length = payload_length + alloy_rlp::length_of_length(payload_length);
         // add the EIP-2718 transaction type for non-legacy transactions

@@ -15,7 +15,7 @@ do
              \"l1Rpc\": \"https://ethereum-holesky-rpc.publicnode.com\",
              \"l2Contracts\": \"testnet\",
              \"proofInstance\": \"native\",
-             \"block\": $block,
+             \"blockNumber\": $block,
              \"prover\": \"0x70997970C51812dc3A010C7d01b50e0d17dc79C8\",
              \"graffiti\": \"0000000000000000000000000000000000000000000000000000000000000000\"
            }

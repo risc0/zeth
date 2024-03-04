@@ -17,10 +17,7 @@ use core::mem;
 use anyhow::Result;
 use revm::{Database, DatabaseCommit};
 use zeth_primitives::{
-    block::Header,
-    keccak::keccak,
-    transactions::TxEssence,
-    trie::{MptNode, StateAccount},
+    block::Header, keccak::keccak, mpt::{MptNode, StateAccount}, transactions::TxEssence
 };
 
 use crate::{

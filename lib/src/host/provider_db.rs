@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use alloc::vec::Vec;
+use alloy_rpc_types::EIP1186AccountProofResponse;
 use std::collections::BTreeSet;
 
-use ethers_core::types::{EIP1186ProofResponse, H160, H256};
+use ethers_core::types::{H160, H256};
 use hashbrown::HashMap;
 use revm::{
     primitives::{Account, AccountInfo, Bytecode},
@@ -62,7 +63,7 @@ impl ProviderDb {
         &mut self,
         block_no: u64,
         storage_keys: HashMap<Address, Vec<U256>>,
-    ) -> Result<HashMap<Address, EIP1186ProofResponse>, anyhow::Error> {
+    ) -> Result<HashMap<Address, EIP1186AccountProofResponse>, anyhow::Error> {
         let mut out = HashMap::new();
 
         for (address, indices) in storage_keys {
@@ -86,13 +87,13 @@ impl ProviderDb {
 
     pub fn get_initial_proofs(
         &mut self,
-    ) -> Result<HashMap<Address, EIP1186ProofResponse>, anyhow::Error> {
+    ) -> Result<HashMap<Address, EIP1186AccountProofResponse>, anyhow::Error> {
         self.get_proofs(self.block_no, self.initial_db.storage_keys())
     }
 
     pub fn get_latest_proofs(
         &mut self,
-    ) -> Result<HashMap<Address, EIP1186ProofResponse>, anyhow::Error> {
+    ) -> Result<HashMap<Address, EIP1186AccountProofResponse>, anyhow::Error> {
         let mut storage_keys = self.initial_db.storage_keys();
 
         for (address, mut indices) in self.latest_db.storage_keys() {

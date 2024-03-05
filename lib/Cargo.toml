@@ -46,7 +46,6 @@ bincode = "1.3"
 serde_with = "3.1"
 
 [features]
-default = ["taiko", "std", "rpc"]
 std = [
   "revm/std",
   "dep:ethers-core",

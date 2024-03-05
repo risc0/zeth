@@ -19,8 +19,7 @@ use ethers_core::types::{
 };
 use ethers_providers::{Http as ethers_Http, Middleware, RetryClient};
 use alloy_rpc_types::{BlockId, EIP1186AccountProofResponse};
-use alloy_providers::provider::HttpProvider;
-use alloy_providers::provider::TempProvider;
+use alloy_providers::tmp::{TempProvider, HttpProvider};
 use alloy_transport_http::Http;
 use hex::FromHex;
 use url::Url;

@@ -14,6 +14,7 @@
 
 use alloc::boxed::Box;
 use alloy_primitives::{b256, B256};
+use revm_primitives::Address;
 use core::{
     cell::RefCell,
     cmp,
@@ -33,7 +34,6 @@ use alloy_rlp_derive::{RlpDecodable, RlpEncodable, RlpMaxEncodedLen};
 use alloy_rpc_types::EIP1186AccountProofResponse;
 use anyhow::Context;
 use anyhow::Result;
-use reth_primitives::Address;
 
 pub type StorageEntry = (MptNode, Vec<U256>);
 

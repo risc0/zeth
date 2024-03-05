@@ -15,6 +15,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91429305e9f0a25f6205c5b8e0d2db09e0708a7a6df0f42212bb56c32c8ac97a"
 dependencies = [
  "cfg-if",
+ "getrandom",
  "once_cell",
  "version_check",
  "zerocopy",
@@ -1801,15 +1802,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "risc0-bin"
-version = "0.1.0"
-dependencies = [
- "risc0-zkvm",
- "zeth-lib",
- "zeth-primitives",
-]
-
-[[package]]
 name = "risc0-binfmt"
 version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1858,6 +1850,16 @@ checksum = "be79c89bcd18886b376073e3da22f8b7963247a42dce7b49cf3d09853f51641e"
 dependencies = [
  "bytemuck",
  "rand_core",
+]
+
+[[package]]
+name = "risc0-methods"
+version = "0.1.0"
+dependencies = [
+ "ahash",
+ "risc0-zkvm",
+ "zeth-lib",
+ "zeth-primitives",
 ]
 
 [[package]]

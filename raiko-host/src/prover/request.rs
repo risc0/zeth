@@ -90,5 +90,5 @@ pub struct PseZkResponse {}
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SP1Response {
     pub proof: String,
-    pub pi_hash: String,
+    pub output: GuestOutput,
 }

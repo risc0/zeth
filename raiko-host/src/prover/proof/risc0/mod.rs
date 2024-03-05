@@ -9,8 +9,10 @@ use crate::prover::{
     consts::*, context::Context, proof::risc0::snarks::verify_groth16_snark, request::{ProofInstance, ProofRequest, Risc0Instance, SgxResponse}, utils::guest_executable_path
 };
 
+use risc0_guest_method::{RISC0_METHODS_ID, RISC0_METHODS_ELF}
+
 // TODO: import from risc0_guest_method
-const RISC0_GUEST_ID: [u32; 8] = [1,2,3,4,5,6,7,8];
+// const RISC0_GUEST_ID: [u32; 8] = [1,2,3,4,5,6,7,8];
 
 pub async fn execute_risc0(
     input: GuestInput<EthereumTxEssence>,
@@ -32,7 +34,7 @@ pub async fn execute_risc0(
         let Some((stark_uuid, stark_receipt)) = result else {
             panic!("No STARK data to snarkify!");
         };
-        let image_id = Digest::from(RISC0_GUEST_ID);
+        let image_id = Digest::from(RISC0_METHODS_ID);
         let (snark_uuid, snark_receipt) = stark2snark(image_id, stark_uuid, stark_receipt)
             .await
             .map_err(|err| format!("Failed to convert STARK to SNARK: {:?}", err))?;

@@ -123,7 +123,7 @@ pub async fn prepare_input(
                 graffiti: req.graffiti,
                 prover: req.prover,
             },
-            None,
+            Some(req.beacon_rpc),
         )
         .expect("Init taiko failed")
     })

@@ -34,6 +34,8 @@ pub struct ProofRequest {
     pub l2_rpc: String,
     /// l1 node for signal root verify and get txlist info from proposed transaction.
     pub l1_rpc: String,
+    /// beacon node for data blobs
+    pub beacon_rpc: String,
     /// l2 contracts selection
     pub l2_contracts: String,
     // graffiti

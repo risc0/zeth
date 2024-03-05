@@ -112,6 +112,25 @@ sol! {
         bytes32 parentMetaHash; // slot 8
     }
 
+    #[derive(Debug, Default, Deserialize, Serialize)]
+    struct BlockParams {
+        address assignedProver;
+        address coinbase;
+        bytes32 extraData;
+        bytes32 blobHash;
+        uint24 txListByteOffset;
+        uint24 txListByteSize;
+        bool cacheBlobForReuse;
+        bytes32 parentMetaHash;
+        HookCall[] hookCalls;
+    }
+
+    #[derive(Debug, Default, Deserialize, Serialize)]
+    struct HookCall {
+        address hook;
+        bytes data;
+    }
+
     #[derive(Debug)]
     struct Transition {
         bytes32 parentHash;
@@ -146,8 +165,8 @@ sol! {
     function proveBlock(uint64 blockId, bytes calldata input) {}
 }
 
-pub fn decode_propose_block_call_params(data: &[u8]) -> Result<BlockMetadata> {
-    let propose_block_params = BlockMetadata::abi_decode(data, false)
+pub fn decode_propose_block_call_params(data: &[u8]) -> Result<BlockParams> {
+    let propose_block_params = BlockParams::abi_decode(data, false)
         .map_err(|e| anyhow!("failed to decode propose block call: {e}"))?;
     Ok(propose_block_params)
 }

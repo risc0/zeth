@@ -155,7 +155,7 @@ pub struct TaikoSystemInfo {
     pub prover_data: TaikoProverData,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GuestOutput {
     Success((Header, FixedBytes<32>)),
     Failure,

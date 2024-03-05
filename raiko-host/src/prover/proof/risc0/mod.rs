@@ -3,8 +3,7 @@ use std::{fs, path::{Path, PathBuf}};
 use alloy_primitives::FixedBytes;
 use serde::{Deserialize, Serialize};
 use tracing::info as traicing_info;
-use zeth_lib::{consts::TKO_MAINNET_CHAIN_SPEC, input::GuestInput, taiko::{host::HostArgs, GuestInput, GuestOutput, TaikoSystemInfo},
-EthereumTxEssence};
+use zeth_lib::{consts::TKO_MAINNET_CHAIN_SPEC, input::{GuestInput, GuestOutput}, EthereumTxEssence};
 
 use crate::prover::{
     consts::*, context::Context, proof::risc0::snarks::verify_groth16_snark, request::{ProofInstance, ProofRequest, Risc0Instance, SgxResponse}, utils::guest_executable_path
@@ -20,9 +19,9 @@ pub async fn execute_risc0(
     req: &Risc0Instance,
 ) -> Result<SgxResponse, String> {
     let elf = include_bytes!("../../../../elf/riscv32im-succinct-zkvm-elf");
-    let result = maybe_prove::<GuestInput, GuestOutput>(
+    let result = maybe_prove::<GuestInput<EthereumTxEssence>, GuestOutput>(
         req,
-        &GuestInput {sys_info, input},
+        &input,
         elf,
         &output,
         Default::default()

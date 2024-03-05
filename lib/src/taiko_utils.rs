@@ -4,9 +4,10 @@ use alloy_primitives::{uint, Address, U256};
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use ethers_core::types::{Transaction, U64, U256 as EU256};
 use once_cell::unsync::Lazy;
-use zeth_primitives::{ethers::{from_ethers_h160, from_ethers_u256}, transactions::{ethereum::EthereumTxEssence, EthereumTransaction}};
+use revm::primitives::TransactTo;
+use zeth_primitives::{ethers::{from_ethers_h160, from_ethers_u256}, transactions::{ethereum::{EthereumTxEssence, TransactionKind}, EthereumTransaction, TxEssence}, U8};
 
-use crate::input::GuestInput;
+use crate::input::{decode_anchor, GuestInput};
 
 pub const ANCHOR_GAS_LIMIT: u64 = 250_000;
 pub const MAX_TX_LIST: usize = 79;
@@ -80,7 +81,7 @@ pub mod internal_devnet_a {
     });
 
     pub const L2_SIGNAL_SERVICE: Lazy<Address> = Lazy::new(|| {
-        Address::from_str("0x1670010000000000000000000000000000000005")
+        Address::from_str("0x1670010000000000000000000000000000010001")
             .expect("invalid l2 signal service")
     });
 }
@@ -144,73 +145,83 @@ fn check_anchor_signature(anchor: &EthereumTransaction) -> Result<()> {
 }
 
 pub fn check_anchor_tx(
-    input: GuestInput<EthereumTxEssence>,
-    anchor: &Transaction,
+    input: &GuestInput<EthereumTxEssence>,
+    anchor: &EthereumTransaction,
+    from: &Address,
     chain_name: &str,
 ) -> Result<()> {
-    let tx1559_type = U64::from(0x2);
-    ensure!(
-        anchor.transaction_type == Some(tx1559_type),
-        "anchor transaction type mismatch"
-    );
+    // Check the signature
+    check_anchor_signature(anchor).context(anyhow!("failed to check anchor signature"))?;
 
-    let tx: EthereumTransaction = anchor
-        .clone()
-        .try_into()
-        .context(anyhow!("failed to decode anchor transaction: {:?}", anchor))?;
-    check_anchor_signature(&tx).context(anyhow!("failed to check anchor signature"))?;
+    // Check the data
+    match &anchor.essence {
+        EthereumTxEssence::Eip1559(tx) => {
+            // Extract the `to` address
+            let to = if let TransactionKind::Call(to_addr) = tx.to {
+                to_addr
+            } else {
+                panic!("anchor tx not a smart contract call")
+            };
+            // Check that it's from the golden touch address
+            ensure!(
+                *from == GOLDEN_TOUCH_ACCOUNT.clone(),
+                "anchor transaction from mismatch"
+            );
+            // Check that the L2 contract is being called
+            ensure!(
+                to == get_contracts(chain_name).unwrap().1,
+                "anchor transaction to mismatch"
+            );
+            // Tx can't have any ETH attached
+            ensure!(
+                tx.value == U256::from(0),
+                "anchor transaction value mismatch"
+            );
+            // Tx needs to have the expected gas limit
+            ensure!(
+                tx.gas_limit == U256::from(ANCHOR_GAS_LIMIT),
+                "anchor transaction gas price mismatch"
+            );
+            // Check needs to have the base fee set to the block base fee
+            ensure!(
+                tx.max_fee_per_gas == input.base_fee_per_gas,
+                "anchor transaction gas mismatch"
+            );
 
-    ensure!(
-        from_ethers_h160(anchor.from) == *GOLDEN_TOUCH_ACCOUNT,
-        "anchor transaction from mismatch"
-    );
-    ensure!(
-        from_ethers_h160(anchor.to.unwrap()) == get_contracts(chain_name).unwrap().0,
-        "anchor transaction to mismatch"
-    );
-    ensure!(
-        anchor.value == EU256::from(0),
-        "anchor transaction value mismatch"
-    );
-    ensure!(
-        anchor.gas == EU256::from(ANCHOR_GAS_LIMIT),
-        "anchor transaction gas price mismatch"
-    );
-    ensure!(
-        from_ethers_u256(anchor.max_fee_per_gas.unwrap()) == input.base_fee_per_gas,
-        "anchor transaction gas mismatch"
-    );
+            // Okay now let's decode the anchor tx to verify the inputs
+            let anchor_call = decode_anchor(anchor.essence.data())?;
 
-    //TODO(Brecht)
-    // 1. check l2 parent gas used
-    /*ensure!(
-        l2_parent_block.gas_used == ethers_core::types::U256::from(anchor_call.parentGasUsed),
-        "parentGasUsed mismatch"
-    );
-
-    // 2. check l1 signal root
-    let Some(l1_signal_service) = tp.l1_signal_service else {
-        bail!("l1_signal_service not set");
-    };
-
-    let proof = tp.l1_provider.get_proof(&ProofQuery {
-        block_no: l1_block_no,
-        address: l1_signal_service.into_array().into(),
-        indices: Default::default(),
-    })?;
-
-    let l1_signal_root = from_ethers_h256(proof.storage_hash);
-
-    ensure!(
-        l1_signal_root == anchor_call.l1SignalRoot,
-        "l1SignalRoot mismatch"
-    );
-
-    // 3. check l1 block hash
-    ensure!(
-        l1_block.hash.unwrap() == ethers_core::types::H256::from(anchor_call.l1Hash.0),
-        "l1Hash mismatch"
-    );*/
+            // TODO(Brecht): somehow l1_header.hash() return the incorrect hash on devnets
+            // maybe because those are on cancun but shouldn't have an impact on block hash calculation?
+            println!("anchor: {:?}", anchor_call.l1Hash);
+            println!("expected: {:?}", input.taiko.l1_header.hash());
+            if chain_name == "testnet" {
+                // The L1 blockhash needs to match the expected value
+                ensure!(
+                    anchor_call.l1Hash == input.taiko.l1_header.hash(),
+                    "L1 hash mismatch"
+                );
+            }
+            if chain_name != "testnet" {
+                ensure!(
+                    anchor_call.l1SignalRoot == input.taiko.l1_header.state_root,
+                    "L1 state root mismatch"
+                );
+            }
+            ensure!(
+                anchor_call.l1Height == input.taiko.l1_header.number,
+                "L1 block number mismatch"
+            );
+            // The parent gas used input needs to match the gas used value of the parent block
+            ensure!(
+                U256::from(anchor_call.parentGasUsed) == input.parent_header.gas_used,
+                "parentGasUsed mismatch"
+            );
+        }
+        _ => {
+            panic!("invalid anchor tx type");
+        }
+    }
 
     Ok(())
 }

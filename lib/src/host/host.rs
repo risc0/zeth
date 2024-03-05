@@ -71,10 +71,18 @@ pub fn taiko_run_preflight(
 
     println!("l1_state_block_no: {:?}", l1_state_block_no);
 
+    // Get the L1 state block header so that we can prove the L1 state root
+    // Fetch the parent block
     let l1_state_root_block = tp.l1_provider.get_partial_block(&BlockQuery {
         block_no: l1_state_block_no,
     })?;
-    //println!("l1_state_root_block: {:?}", l1_state_root_block);
+    println!("l1_state_root_block: {:?}", l1_state_root_block);
+    println!("l1_state_root_block hash: {:?}", l1_state_root_block.hash.unwrap());
+
+    /*let l1_propose_block = tp.l1_provider.get_partial_block(&BlockQuery {
+        block_no: l1_inclusion_block_no,
+    })?;
+    println!("l1_propose_block: {:?}", l1_propose_block);*/
 
     // Get the block proposal data
     let (proposal_call, proposal_event) = tp.get_proposal(l1_inclusion_block_no, l2_block_no, chain_spec_name)?;
@@ -109,15 +117,9 @@ pub fn taiko_run_preflight(
     );
     info!("Transaction count: {:?}", block.transactions.len());
 
-    // Get the L1 state block header so that we can prove the L1 state root
-    // Fetch the parent block
-    let l1_state_block = tp.l1_provider.get_partial_block(&BlockQuery {
-        block_no: l1_state_block_no,
-    })?;
-
     let taiko_sys_info = TaikoSystemInfo {
         chain_spec_name: chain_spec_name.to_string(),
-        l1_header: l1_state_block.try_into().expect("Failed to convert ethers block to zeth block"),
+        l1_header: l1_state_root_block.try_into().expect("Failed to convert ethers block to zeth block"),
         tx_list: proposal_call.txList,
         block_proposed: proposal_event,
         prover_data,

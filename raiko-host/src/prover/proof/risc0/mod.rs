@@ -1,17 +1,28 @@
-use std::{fs, path::{Path, PathBuf}};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use alloy_primitives::FixedBytes;
 use serde::{Deserialize, Serialize};
 use tracing::info as traicing_info;
-use zeth_lib::{consts::TKO_TESTNET_CHAIN_SPEC, input::GuestInput, taiko::{host::HostArgs, GuestInput, GuestOutput, TaikoSystemInfo},
-EthereumTxEssence};
+use zeth_lib::{
+    consts::TKO_TESTNET_CHAIN_SPEC,
+    input::GuestInput,
+    taiko::{host::HostArgs, GuestInput, GuestOutput, TaikoSystemInfo},
+    EthereumTxEssence,
+};
 
 use crate::prover::{
-    consts::*, context::Context, proof::risc0::snarks::verify_groth16_snark, request::{ProofInstance, ProofRequest, Risc0Instance, SgxResponse}, utils::guest_executable_path
+    consts::*,
+    context::Context,
+    proof::risc0::snarks::verify_groth16_snark,
+    request::{ProofInstance, ProofRequest, Risc0Instance, SgxResponse},
+    utils::guest_executable_path,
 };
 
 // TODO: import from risc0_guest_method
-const RISC0_GUEST_ID: [u32; 8] = [1,2,3,4,5,6,7,8];
+const RISC0_GUEST_ID: [u32; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
 
 pub async fn execute_risc0(
     input: GuestInput<EthereumTxEssence>,
@@ -22,11 +33,12 @@ pub async fn execute_risc0(
     let elf = include_bytes!("../../../../elf/riscv32im-succinct-zkvm-elf");
     let result = maybe_prove::<GuestInput, GuestOutput>(
         req,
-        &GuestInput {sys_info, input},
+        &GuestInput { sys_info, input },
         elf,
         &output,
-        Default::default()
-    ).await;
+        Default::default(),
+    )
+    .await;
 
     // Create/verify Groth16 SNARK
     if req.snark {
@@ -40,12 +52,12 @@ pub async fn execute_risc0(
 
         traicing_info!("Validating SNARK uuid: {}", snark_uuid);
 
-        verify_groth16_snark(image_id, snark_receipt).await
+        verify_groth16_snark(image_id, snark_receipt)
+            .await
             .map_err(|err| format!("Failed to verify SNARK: {:?}", err))?;
     }
     todo!()
 }
-
 
 // pub mod build;
 // pub mod rollups;
@@ -56,9 +68,12 @@ use std::fmt::Debug;
 use bonsai_sdk::alpha::responses::SnarkReceipt;
 use log::{debug, error, info, warn};
 use risc0_zkvm::{
-    compute_image_id, is_dev_mode, serde::to_vec, sha::{Digest, Digestible}, Assumption, ExecutorEnv, ExecutorImpl, FileSegmentRef, Receipt, Segment, SegmentRef
+    compute_image_id, is_dev_mode,
+    serde::to_vec,
+    sha::{Digest, Digestible},
+    Assumption, ExecutorEnv, ExecutorImpl, FileSegmentRef, Receipt, Segment, SegmentRef,
 };
-use serde::{de::DeserializeOwned};
+use serde::de::DeserializeOwned;
 use tempfile::tempdir;
 use zeth_primitives::keccak::keccak;
 
@@ -213,7 +228,6 @@ pub async fn maybe_prove<I: Serialize, O: Eq + Debug + Serialize + DeserializeOw
     expected_output: &O,
     assumptions: (Vec<Assumption>, Vec<String>),
 ) -> Option<(String, Receipt)> {
-
     let (assumption_instances, assumption_uuids) = assumptions;
     let encoded_input = to_vec(input).expect("Could not serialize proving input!");
 
@@ -436,7 +450,6 @@ pub fn execute<T: Serialize, O: Eq + Debug + DeserializeOwned>(
         );
     }
 }
-
 
 pub fn load_receipt<T: serde::de::DeserializeOwned>(
     file_name: &String,

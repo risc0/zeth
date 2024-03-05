@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use alloc::vec::Vec;
-use alloy_rpc_types::EIP1186AccountProofResponse;
 use std::collections::BTreeSet;
 
+use alloy_rpc_types::EIP1186AccountProofResponse;
 use ethers_core::types::{H160, H256};
 use hashbrown::HashMap;
 use revm::{

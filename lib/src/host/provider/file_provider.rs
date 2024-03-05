@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use alloc::vec::Vec;
-use alloy_rpc_types::EIP1186AccountProofResponse;
 use std::{
     collections::HashMap,
     fs::File,
@@ -21,18 +20,17 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use alloy_rpc_types::EIP1186AccountProofResponse;
 use anyhow::{anyhow, Result};
-use ethers_core::types::{
-    Block, Bytes, Log, Transaction, TransactionReceipt, H256, U256,
-};
+use ethers_core::types::{Block, Bytes, Log, Transaction, TransactionReceipt, H256, U256};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-// #[cfg(feature = "taiko")]
-// use zeth_primitives::taiko::BlockProposed;
-use super::{AccountQuery, BlockQuery, MutProvider, ProofQuery, Provider, StorageQuery};
-#[cfg(feature = "taiko")]
-use super::{LogsQuery, TxQuery};
+use super::{
+    AccountQuery, BlockQuery, GetBlobsResponse, LogsQuery, MutProvider, ProofQuery, Provider,
+    StorageQuery, TxQuery,
+};
+use crate::input::BlockProposed;
 
 #[serde_as]
 #[derive(Default, Deserialize, Serialize)]
@@ -65,6 +63,10 @@ pub struct FileProvider {
     #[cfg(feature = "taiko")]
     #[serde_as(as = "Vec<(_, _)>")]
     transactions: HashMap<TxQuery, Transaction>,
+    #[cfg(feature = "taiko")]
+    propose: Option<(Transaction, BlockProposed)>,
+    #[cfg(feature = "taiko")]
+    blobs: HashMap<u64, GetBlobsResponse>,
 }
 
 impl FileProvider {
@@ -81,9 +83,13 @@ impl FileProvider {
             code: HashMap::new(),
             storage: HashMap::new(),
             #[cfg(feature = "taiko")]
-            logs: HashMap::new(),
+            logs: Default::default(),
             #[cfg(feature = "taiko")]
-            transactions: HashMap::new(),
+            transactions: Default::default(),
+            #[cfg(feature = "taiko")]
+            propose: Default::default(),
+            #[cfg(feature = "taiko")]
+            blobs: Default::default(),
         }
     }
 
@@ -189,6 +195,14 @@ impl Provider for FileProvider {
             None => Err(anyhow!("No data for {query:?}")),
         }
     }
+
+    #[cfg(feature = "taiko")]
+    fn get_blob_data(&mut self, block_id: u64) -> Result<GetBlobsResponse> {
+        match self.blobs.get(&block_id) {
+            Some(val) => Ok(val.clone()),
+            None => Err(anyhow!("No data for block id: {block_id:?}")),
+        }
+    }
 }
 
 impl MutProvider for FileProvider {
@@ -239,8 +253,14 @@ impl MutProvider for FileProvider {
     }
 
     #[cfg(feature = "taiko")]
-    fn insert_transaction(&mut self, query: super::TxQuery, val: Transaction) {
+    fn insert_transaction(&mut self, query: TxQuery, val: Transaction) {
         self.transactions.insert(query, val);
+        self.dirty = true;
+    }
+
+    #[cfg(feature = "taiko")]
+    fn insert_blob(&mut self, block_id: u64, val: GetBlobsResponse) {
+        self.blobs.insert(block_id, val);
         self.dirty = true;
     }
 }

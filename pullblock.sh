@@ -13,6 +13,7 @@ do
              \"type\": \"native\",
              \"l2Rpc\": \"https://rpc.katla.taiko.xyz\",
              \"l1Rpc\": \"https://l1rpc.katla.taiko.xyz\",
+             \"beaconRpc\": \"https://l1beacon.internal.taiko.xyz\",
              \"l2Contracts\": \"testnet\",
              \"proofInstance\": \"native\",
              \"blockNumber\": $block,

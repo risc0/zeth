@@ -39,8 +39,7 @@ pub const PRIV_KEY_FILENAME: &str = "priv.key";
 struct BootstrapData {
     public_key: String,
     new_instance: Address,
-    #[serde(with = "Base64Standard")]
-    quote: Vec<u8>,
+    quote: String,
 }
 
 fn save_priv_key(key_pair: &KeyPair, privkey_path: &PathBuf) -> Result<()> {
@@ -74,7 +73,7 @@ fn save_bootstrap_details(
     let bootstrap_details = BootstrapData {
         public_key: format!("0x{}", key_pair.public_key()),
         new_instance,
-        quote,
+        quote: hex::encode(quote),
     };
     let json = serde_json::to_string_pretty(&bootstrap_details)?;
     fs::write(bootstrap_details_file_path, json).context(format!(

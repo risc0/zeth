@@ -23,7 +23,7 @@ use ethers_core::types::H160;
 use ethers_providers::{Http, Provider, RetryClient};
 use risc0_zkvm::sha::{Digest, Digestible};
 
-static RISC_ZERO_VERIFIER:  ethers_core::types::Address = H160::zero();
+static RISC_ZERO_VERIFIER: ethers_core::types::Address = H160::zero();
 
 sol!(
     /// A Groth16 seal over the claimed receipt claim.
@@ -117,10 +117,7 @@ pub async fn verify_groth16_snark(
         .await?;
 
     if verification {
-        log::info!(
-            "SNARK verified successfully using {}!",
-            RISC_ZERO_VERIFIER
-        );
+        log::info!("SNARK verified successfully using {}!", RISC_ZERO_VERIFIER);
     } else {
         log::error!("SNARK verification failed!");
     }

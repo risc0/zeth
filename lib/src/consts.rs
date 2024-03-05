@@ -15,10 +15,7 @@
 //! Constants for the Ethereum protocol.
 extern crate alloc;
 
-use alloc::{
-    collections::BTreeMap,
-    str::FromStr,
-};
+use alloc::{collections::BTreeMap, str::FromStr};
 
 use anyhow::bail;
 use once_cell::unsync::Lazy;
@@ -66,37 +63,33 @@ pub const ETH_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| {
 });
 
 /// The Taiko testnet specification.
-const TKO_TESTNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| {
-    ChainSpec {
-        chain_id: 167008,
-        hard_forks: BTreeMap::from([
-            (SpecId::SHANGHAI, ForkCondition::Block(0)),
-            (SpecId::CANCUN, ForkCondition::TBD),
-        ]),
-        eip_1559_constants: Eip1559Constants {
-            base_fee_change_denominator: uint!(8_U256),
-            base_fee_max_increase_denominator: uint!(8_U256),
-            base_fee_max_decrease_denominator: uint!(8_U256),
-            elasticity_multiplier: uint!(2_U256),
-        },
-    }
+pub const TKO_TESTNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
+    chain_id: 167008,
+    hard_forks: BTreeMap::from([
+        (SpecId::SHANGHAI, ForkCondition::Block(0)),
+        (SpecId::CANCUN, ForkCondition::TBD),
+    ]),
+    eip_1559_constants: Eip1559Constants {
+        base_fee_change_denominator: uint!(8_U256),
+        base_fee_max_increase_denominator: uint!(8_U256),
+        base_fee_max_decrease_denominator: uint!(8_U256),
+        elasticity_multiplier: uint!(2_U256),
+    },
 });
 
 /// The Taiko testnet specification.
-const TKO_DEVNETA_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| {
-    ChainSpec {
-        chain_id: 167001,
-        hard_forks: BTreeMap::from([
-            (SpecId::SHANGHAI, ForkCondition::Block(0)),
-            (SpecId::CANCUN, ForkCondition::TBD),
-        ]),
-        eip_1559_constants: Eip1559Constants {
-            base_fee_change_denominator: uint!(8_U256),
-            base_fee_max_increase_denominator: uint!(8_U256),
-            base_fee_max_decrease_denominator: uint!(8_U256),
-            elasticity_multiplier: uint!(2_U256),
-        },
-    }
+pub const TKO_DEVNETA_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
+    chain_id: 167001,
+    hard_forks: BTreeMap::from([
+        (SpecId::SHANGHAI, ForkCondition::Block(0)),
+        (SpecId::CANCUN, ForkCondition::TBD),
+    ]),
+    eip_1559_constants: Eip1559Constants {
+        base_fee_change_denominator: uint!(8_U256),
+        base_fee_max_increase_denominator: uint!(8_U256),
+        base_fee_max_decrease_denominator: uint!(8_U256),
+        elasticity_multiplier: uint!(2_U256),
+    },
 });
 
 pub fn get_chain_spec(name: &str) -> ChainSpec {

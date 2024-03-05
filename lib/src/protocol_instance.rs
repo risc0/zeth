@@ -4,7 +4,7 @@ use anyhow::{ensure, Result};
 use zeth_primitives::{block::Header, keccak::keccak, transactions::ethereum::EthereumTxEssence};
 
 use super::taiko_utils::ANCHOR_GAS_LIMIT;
-use crate::input::{GuestInput, BlockMetadata, EthDeposit, Transition};
+use crate::input::{BlockMetadata, EthDeposit, GuestInput, Transition};
 
 #[derive(Debug)]
 pub struct ProtocolInstance {
@@ -43,23 +43,12 @@ impl ProtocolInstance {
                     .abi_encode(),
             )
             .into(),
-            EvidenceType::Risc0 => keccak(
-                (
-                    self.transition.clone(),
-                    self.prover,
-                    self.meta_hash(),
-                )
-                    .abi_encode(),
-            )
-            .into(),
-            EvidenceType::Native => keccak(
-                (
-                    self.transition.clone(),
-                    self.prover,
-                    self.meta_hash(),
-                )
-                    .abi_encode(),
-            ).into()
+            EvidenceType::Risc0 => {
+                keccak((self.transition.clone(), self.prover, self.meta_hash()).abi_encode()).into()
+            }
+            EvidenceType::Native => {
+                keccak((self.transition.clone(), self.prover, self.meta_hash()).abi_encode()).into()
+            }
         }
     }
 }

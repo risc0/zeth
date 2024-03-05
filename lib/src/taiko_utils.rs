@@ -2,10 +2,17 @@ use core::str::FromStr;
 
 use alloy_primitives::{uint, Address, U256};
 use anyhow::{anyhow, bail, ensure, Context, Result};
-use ethers_core::types::{Transaction, U64, U256 as EU256};
+use ethers_core::types::{Transaction, U256 as EU256, U64};
 use once_cell::unsync::Lazy;
 use revm::primitives::TransactTo;
-use zeth_primitives::{ethers::{from_ethers_h160, from_ethers_u256}, transactions::{ethereum::{EthereumTxEssence, TransactionKind}, EthereumTransaction, TxEssence}, U8};
+use zeth_primitives::{
+    ethers::{from_ethers_h160, from_ethers_u256},
+    transactions::{
+        ethereum::{EthereumTxEssence, TransactionKind},
+        EthereumTransaction, TxEssence,
+    },
+    U8,
+};
 
 use crate::input::{decode_anchor, GuestInput};
 
@@ -192,7 +199,8 @@ pub fn check_anchor_tx(
             let anchor_call = decode_anchor(anchor.essence.data())?;
 
             // TODO(Brecht): somehow l1_header.hash() return the incorrect hash on devnets
-            // maybe because those are on cancun but shouldn't have an impact on block hash calculation?
+            // maybe because those are on cancun but shouldn't have an impact on block hash
+            // calculation?
             println!("anchor: {:?}", anchor_call.l1Hash);
             println!("expected: {:?}", input.taiko.l1_header.hash());
             if chain_name == "testnet" {

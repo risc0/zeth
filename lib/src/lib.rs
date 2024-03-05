@@ -22,8 +22,8 @@ pub mod builder;
 pub mod consts;
 pub mod input;
 pub mod mem_db;
-pub mod taiko_utils;
 pub mod protocol_instance;
+pub mod taiko_utils;
 
 #[cfg(all(feature = "std"))]
 pub mod host;
@@ -35,5 +35,3 @@ pub fn guest_mem_forget<T>(_t: T) {
     #[cfg(target_os = "zkvm")] // TODO: seperate for risc0
     core::mem::forget(_t)
 }
-
-

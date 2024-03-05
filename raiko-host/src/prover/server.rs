@@ -6,7 +6,7 @@ use hyper::{
     service::{make_service_fn, service_fn},
     Body, Method, Request, Response, Server, StatusCode,
 };
-use once_cell::sync::{Lazy, OnceCell};
+use once_cell::sync::OnceCell;
 use prometheus::{Encoder, TextEncoder};
 use tower::ServiceBuilder;
 use tracing::info;
@@ -231,7 +231,6 @@ impl Handler {
                     .and_then(|result| serde_json::to_value(result).map_err(Into::into))
                     .map_err(|e| e.to_string())
                 // Ok(serde_json::Value::Bool(false))
-
             }
             _ => todo!(),
         }

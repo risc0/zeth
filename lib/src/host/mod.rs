@@ -13,7 +13,7 @@
 // limitations under the License.
 extern crate std;
 
+pub mod host;
 pub mod provider;
 pub mod provider_db;
-pub mod host;
 pub mod taiko_provider;

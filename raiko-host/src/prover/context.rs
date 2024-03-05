@@ -1,12 +1,8 @@
-use std::path::{absolute, PathBuf};
+use std::path::PathBuf;
 
-use ethers_core::k256::elliptic_curve::rand_core::block;
-use tracing::debug;
 use anyhow::Result;
 
 use super::{consts::RAIKO_GUEST_EXECUTABLE, request::ProofInstance};
-
-use zeth_lib::consts::ChainSpec;
 
 #[derive(Debug, Default, Clone)]
 pub struct Context {
@@ -41,7 +37,6 @@ impl Context {
         ctx
     }
 
-
     pub fn update_cache_path(&mut self, block_no: u64) {
         if self.l1_cache_file.is_none() {
             let file_name = format!("{}.l1.json.gz", block_no);
@@ -73,10 +68,7 @@ impl Context {
         }
         Ok(())
     }
-
-
 }
-
 
 #[cfg(test)]
 mod tests {

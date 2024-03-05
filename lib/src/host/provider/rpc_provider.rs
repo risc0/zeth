@@ -12,32 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use anyhow::{anyhow, Result};
-use ethers_core::types::Log;
-use ethers_core::types::{
-    Block, Bytes, Filter, Transaction, TransactionReceipt, H256, U256,
-};
-use ethers_providers::{Http as ethers_Http, Middleware, RetryClient};
+use alloy_providers::tmp::{HttpProvider, TempProvider};
 use alloy_rpc_types::{BlockId, EIP1186AccountProofResponse};
-use alloy_providers::provider::HttpProvider;
-use alloy_providers::provider::TempProvider;
 use alloy_transport_http::Http;
-use hex::FromHex;
-use url::Url;
+use anyhow::{anyhow, Result};
+use ethers_core::types::{Block, Bytes, Filter, Log, Transaction, TransactionReceipt, H256, U256};
+use ethers_providers::{Http as ethers_Http, Middleware, RetryClient};
 use log::info;
+use reqwest;
+use url::Url;
 
-use super::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery};
+use super::{AccountQuery, BlockQuery, GetBlobsResponse, ProofQuery, Provider, StorageQuery};
 use crate::host::provider::LogsQuery;
 
 pub struct RpcProvider {
     ethers_provider: ethers_providers::Provider<RetryClient<ethers_Http>>,
     alloy_provider: HttpProvider,
+    beacon_rpc_url: Option<String>,
     tokio_handle: tokio::runtime::Handle,
 }
 
 impl RpcProvider {
-    pub fn new(rpc_url: String) -> Result<Self> {
-        //TODO(Brecht): switch to alloy provider for everything
+    pub fn new(rpc_url: String, beacon_rpc_url: Option<String>) -> Result<Self> {
+        // TODO(Brecht): switch to alloy provider for everything
         let ethers_provider =
             ethers_providers::Provider::<RetryClient<ethers_Http>>::new_client(&rpc_url, 3, 500)?;
 
@@ -49,6 +46,7 @@ impl RpcProvider {
         Ok(RpcProvider {
             ethers_provider,
             alloy_provider,
+            beacon_rpc_url,
             tokio_handle,
         })
     }
@@ -62,9 +60,11 @@ impl Provider for RpcProvider {
     fn get_full_block(&mut self, query: &BlockQuery) -> Result<Block<Transaction>> {
         info!("Querying RPC for full block: {query:?}");
 
-        let response = self
-            .tokio_handle
-            .block_on(async { self.ethers_provider.get_block_with_txs(query.block_no).await })?;
+        let response = self.tokio_handle.block_on(async {
+            self.ethers_provider
+                .get_block_with_txs(query.block_no)
+                .await
+        })?;
 
         match response {
             Some(out) => Ok(out),
@@ -88,9 +88,11 @@ impl Provider for RpcProvider {
     fn get_block_receipts(&mut self, query: &BlockQuery) -> Result<Vec<TransactionReceipt>> {
         info!("Querying RPC for block receipts: {query:?}");
 
-        let response = self
-            .tokio_handle
-            .block_on(async { self.ethers_provider.get_block_receipts(query.block_no).await })?;
+        let response = self.tokio_handle.block_on(async {
+            self.ethers_provider
+                .get_block_receipts(query.block_no)
+                .await
+        })?;
 
         Ok(response)
     }
@@ -102,7 +104,12 @@ impl Provider for RpcProvider {
             self.alloy_provider
                 .get_proof(
                     zeth_primitives::Address::from_slice(&query.address.as_bytes()),
-                    query.indices.iter().cloned().map(|v| alloy_primitives::FixedBytes(*v.as_fixed_bytes())).collect(),
+                    query
+                        .indices
+                        .iter()
+                        .cloned()
+                        .map(|v| alloy_primitives::FixedBytes(*v.as_fixed_bytes()))
+                        .collect(),
                     Some(BlockId::from(query.block_no)),
                 )
                 .await
@@ -186,6 +193,26 @@ impl Provider for RpcProvider {
         match out {
             Some(out) => Ok(out),
             None => Err(anyhow!("No data for {query:?}")),
+        }
+    }
+
+    #[cfg(feature = "taiko")]
+    fn get_blob_data(&mut self, block_id: u64) -> Result<GetBlobsResponse> {
+        match self.beacon_rpc_url {
+            Some(ref url) => self.tokio_handle.block_on(async {
+                let url = format!("{}/eth/v1/beacon/blob_sidecars/{}", url, block_id);
+                let response = reqwest::get(url.clone()).await?;
+                if response.status().is_success() {
+                    let blob_response: GetBlobsResponse = response.json().await?;
+                    Ok(blob_response)
+                } else {
+                    Err(anyhow::anyhow!(
+                        "Request failed with status code: {}",
+                        response.status()
+                    ))
+                }
+            }),
+            None => Err(anyhow!("No beacon_rpc_url given")),
         }
     }
 }

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use zeth_lib::input::GuestOutput;
-use zeth_primitives::{block::Header, Address, B256};
+use zeth_primitives::{Address, B256};
 
 #[serde_as]
 #[derive(Clone, Serialize, Deserialize)]
@@ -32,8 +32,10 @@ pub struct ProofRequest {
     pub block_number: u64,
     /// l2 node for get block by number
     pub l2_rpc: String,
-    /// l1 node for signal root verify and get txlist from proposed transaction.
+    /// l1 node for signal root verify and get txlist info from proposed transaction.
     pub l1_rpc: String,
+    /// beacon node for data blobs
+    pub beacon_rpc: String,
     /// l2 contracts selection
     pub l2_contracts: String,
     // graffiti
@@ -45,26 +47,24 @@ pub struct ProofRequest {
     pub proof_instance: ProofInstance,
 }
 
-/*
-curl --location --request POST 'http://localhost:8080' --header 'Content-Type: application/json' --data-raw '{
-     "jsonrpc": "2.0",
-     "id": 1,
-     "method": "proof",
-     "params": [
-       {
-         "type": "Sgx",
-         "l2Rpc": "https://rpc.internal.taiko.xyz",
-         "l1Rpc": "https://l1rpc.internal.taiko.xyz",
-         "l2Contracts": "internal_devnet_a",
-         "proofInstance": "native",
-         "block": 2,
-         "prover": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-         "graffiti": "0000000000000000000000000000000000000000000000000000000000000000"
-       }
-     ]
-   }'
-
-*/
+// curl --location --request POST 'http://localhost:8080' --header 'Content-Type: application/json' --data-raw '{
+// "jsonrpc": "2.0",
+// "id": 1,
+// "method": "proof",
+// "params": [
+// {
+// "type": "Sgx",
+// "l2Rpc": "https://rpc.internal.taiko.xyz",
+// "l1Rpc": "https://l1rpc.internal.taiko.xyz",
+// "l2Contracts": "internal_devnet_a",
+// "proofInstance": "native",
+// "block": 2,
+// "prover": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+// "graffiti": "0000000000000000000000000000000000000000000000000000000000000000"
+// }
+// ]
+// }'
+//
 
 // Use Output type in Patar's Driver trait
 #[derive(Clone, Serialize, Deserialize)]

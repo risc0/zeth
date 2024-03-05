@@ -15,7 +15,9 @@
 use anyhow::Result;
 use revm::{Database, DatabaseCommit};
 use zeth_primitives::{
-    block::Header, mpt::MptNode, transactions::{ethereum::EthereumTxEssence, TxEssence}
+    block::Header,
+    mpt::MptNode,
+    transactions::{ethereum::EthereumTxEssence, TxEssence},
 };
 
 #[cfg(feature = "taiko")]
@@ -26,7 +28,10 @@ use crate::{
         finalize::{BlockFinalizeStrategy, MemDbBlockFinalizeStrategy},
         initialize::{DbInitStrategy, MemDbInitStrategy},
         prepare::{EthHeaderPrepStrategy, HeaderPrepStrategy},
-    }, consts::{get_chain_spec, ChainSpec}, input::GuestInput, mem_db::MemDb
+    },
+    consts::{get_chain_spec, ChainSpec},
+    input::GuestInput,
+    mem_db::MemDb,
 };
 
 mod execute;
@@ -106,9 +111,7 @@ pub trait BlockBuilderStrategy {
     type BlockFinalizeStrategy: BlockFinalizeStrategy<MemDb>;
 
     /// Builds a block from the given input.
-    fn build_from(
-        input: GuestInput<Self::TxEssence>,
-    ) -> Result<(Header, MptNode)> {
+    fn build_from(input: GuestInput<Self::TxEssence>) -> Result<(Header, MptNode)> {
         BlockBuilder::<MemDb, Self::TxEssence>::new(input)
             .initialize_database::<Self::DbInitStrategy>()?
             .prepare_header::<Self::HeaderPrepStrategy>()?

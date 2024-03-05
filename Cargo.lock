@@ -1393,9 +1393,9 @@ dependencies = [
 
 [[package]]
 name = "cargo_metadata"
-version = "0.18.1"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d886547e41f740c616ae73108f6eb70afe6d940c7bc697cb30f13daec073037"
+checksum = "e7daec1a2a2129eeba1644b220b4647ec537b0b5d4bfd6876fcc5a540056b592"
 dependencies = [
  "camino",
  "cargo-platform",
@@ -2247,13 +2247,12 @@ dependencies = [
 [[package]]
 name = "ethers-contract"
 version = "2.0.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d79269278125006bb0552349c03593ffa9702112ca88bc7046cc669f148fb47c"
+source = "git+https://github.com/smtmfft/ethers-rs?branch=ethers-core-2.0.10#37493be6cd912dfe64a9036932dd6da8e13679ce"
 dependencies = [
  "const-hex",
  "ethers-contract-abigen",
  "ethers-contract-derive",
- "ethers-core 2.0.10",
+ "ethers-core",
  "ethers-providers",
  "futures-util",
  "once_cell",
@@ -2265,14 +2264,13 @@ dependencies = [
 
 [[package]]
 name = "ethers-contract-abigen"
-version = "2.0.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9f96502317bf34f6d71a3e3d270defaa9485d754d789e15a8e04a84161c95eb"
+version = "2.0.10"
+source = "git+https://github.com/smtmfft/ethers-rs?branch=ethers-core-2.0.10#37493be6cd912dfe64a9036932dd6da8e13679ce"
 dependencies = [
  "Inflector",
  "const-hex",
  "dunce",
- "ethers-core 2.0.13",
+ "ethers-core",
  "eyre",
  "prettyplease",
  "proc-macro2",
@@ -2281,20 +2279,19 @@ dependencies = [
  "serde",
  "serde_json",
  "syn 2.0.52",
- "toml 0.8.10",
+ "toml 0.7.8",
  "walkdir",
 ]
 
 [[package]]
 name = "ethers-contract-derive"
-version = "2.0.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "452ff6b0a64507ce8d67ffd48b1da3b42f03680dcf5382244e9c93822cbbf5de"
+version = "2.0.10"
+source = "git+https://github.com/smtmfft/ethers-rs?branch=ethers-core-2.0.10#37493be6cd912dfe64a9036932dd6da8e13679ce"
 dependencies = [
  "Inflector",
  "const-hex",
  "ethers-contract-abigen",
- "ethers-core 2.0.13",
+ "ethers-core",
  "proc-macro2",
  "quote",
  "serde_json",
@@ -2308,34 +2305,7 @@ source = "git+https://github.com/smtmfft/ethers-rs?branch=ethers-core-2.0.10#374
 dependencies = [
  "arrayvec 0.7.4",
  "bytes",
- "chrono",
- "const-hex",
- "elliptic-curve",
- "ethabi",
- "generic-array 0.14.7",
- "k256",
- "num_enum 0.7.2",
- "open-fastrlp",
- "rand 0.8.5",
- "rlp",
- "serde",
- "serde_json",
- "strum 0.25.0",
- "tempfile",
- "thiserror",
- "tiny-keccak 2.0.2",
- "unicode-xid",
-]
-
-[[package]]
-name = "ethers-core"
-version = "2.0.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aab3cef6cc1c9fd7f787043c81ad3052eff2b96a3878ef1526aa446311bdbfc9"
-dependencies = [
- "arrayvec 0.7.4",
- "bytes",
- "cargo_metadata 0.18.1",
+ "cargo_metadata 0.17.0",
  "chrono",
  "const-hex",
  "elliptic-curve",
@@ -2368,7 +2338,7 @@ dependencies = [
  "bytes",
  "const-hex",
  "enr",
- "ethers-core 2.0.10",
+ "ethers-core",
  "futures-channel",
  "futures-core",
  "futures-timer",
@@ -5264,7 +5234,7 @@ dependencies = [
  "bytemuck",
  "clap 4.5.1",
  "ethers-contract",
- "ethers-core 2.0.10",
+ "ethers-core",
  "ethers-providers",
  "flate2",
  "hashbrown 0.14.3",
@@ -7622,14 +7592,14 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "0.8.10"
+version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a9aad4a3066010876e8dcf5a8a06e70a558751117a145c6ce2b82c2e2054290"
+checksum = "dd79e69d3b627db300ff956027cc6c3798cef26d22526befdfcd12feeb6d2257"
 dependencies = [
  "serde",
  "serde_spanned",
  "toml_datetime",
- "toml_edit 0.22.6",
+ "toml_edit 0.19.15",
 ]
 
 [[package]]
@@ -7648,6 +7618,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b5bb770da30e5cbfde35a2d7b9b8a2c4b8ef89548a7a6aeab5c9a576e3e7421"
 dependencies = [
  "indexmap 2.2.5",
+ "serde",
+ "serde_spanned",
  "toml_datetime",
  "winnow 0.5.40",
 ]
@@ -7672,19 +7644,6 @@ dependencies = [
  "indexmap 2.2.5",
  "toml_datetime",
  "winnow 0.5.40",
-]
-
-[[package]]
-name = "toml_edit"
-version = "0.22.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c1b5fd4128cc8d3e0cb74d4ed9a9cc7c7284becd4df68f5f940e1ad123606f6"
-dependencies = [
- "indexmap 2.2.5",
- "serde",
- "serde_spanned",
- "toml_datetime",
- "winnow 0.6.5",
 ]
 
 [[package]]
@@ -8365,9 +8324,6 @@ name = "winnow"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dffa400e67ed5a4dd237983829e66475f0a4a26938c4b04c21baede6262215b8"
-dependencies = [
- "memchr",
-]
 
 [[package]]
 name = "winreg"
@@ -8479,7 +8435,7 @@ dependencies = [
  "bytes",
  "c-kzg",
  "chrono",
- "ethers-core 2.0.10",
+ "ethers-core",
  "ethers-providers",
  "flate2",
  "hashbrown 0.14.3",
@@ -8517,7 +8473,7 @@ dependencies = [
  "anyhow",
  "bincode",
  "bytes",
- "ethers-core 2.0.10",
+ "ethers-core",
  "hashbrown 0.14.3",
  "hex 0.4.3",
  "hex-literal",

@@ -25,7 +25,6 @@ pub use self::execute::taiko::TkoTxExecStrategy;
 use crate::{
     builder::{
         execute::TxExecStrategy,
-        execute::TxExecStrategy,
         finalize::{BlockFinalizeStrategy, MemDbBlockFinalizeStrategy},
         initialize::{DbInitStrategy, MemDbInitStrategy},
         prepare::{EthHeaderPrepStrategy, HeaderPrepStrategy},
@@ -112,9 +111,7 @@ pub trait BlockBuilderStrategy {
     type BlockFinalizeStrategy: BlockFinalizeStrategy<MemDb>;
 
     /// Builds a block from the given input.
-    fn build_from(
-        input: GuestInput<Self::TxEssence>,
-    ) -> Result<(Header, MptNode)> {
+    fn build_from(input: GuestInput<Self::TxEssence>) -> Result<(Header, MptNode)> {
         BlockBuilder::<MemDb, Self::TxEssence>::new(input)
             .initialize_database::<Self::DbInitStrategy>()?
             .prepare_header::<Self::HeaderPrepStrategy>()?

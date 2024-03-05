@@ -37,7 +37,8 @@ use super::TxExecStrategy;
 use crate::{
     builder::BlockBuilder,
     consts::{self, ChainSpec, GWEI_TO_WEI},
-    guest_mem_forget, taiko_utils::check_anchor_tx,
+    guest_mem_forget,
+    taiko_utils::check_anchor_tx,
 };
 
 /// Minimum supported protocol version: Bedrock (Block no. 105235063).
@@ -134,7 +135,13 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
                 .with_context(|| anyhow!("Error recovering address for transaction {tx_no}"))?;
 
             if is_anchor {
-                check_anchor_tx(&block_builder.input, &tx, &tx_from,&block_builder.input.taiko.chain_spec_name).expect("invalid anchor tx");
+                check_anchor_tx(
+                    &block_builder.input,
+                    &tx,
+                    &tx_from,
+                    &block_builder.input.taiko.chain_spec_name,
+                )
+                .expect("invalid anchor tx");
             }
 
             #[cfg(feature = "std")]

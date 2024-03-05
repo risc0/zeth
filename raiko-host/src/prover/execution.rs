@@ -1,18 +1,14 @@
 use std::time::Instant;
 
-use alloy_primitives::FixedBytes;
-use anyhow::bail;
-use ethers_core::types::H160;
 use tracing::{info, warn};
 use zeth_lib::{
     builder::{BlockBuilderStrategy, TaikoStrategy},
-   
-    host::host::{taiko_run_preflight, HostArgs},
-    input::{GuestInput, GuestOutput, TaikoProverData, TaikoSystemInfo},
+    host::host::taiko_run_preflight,
+    input::{GuestInput, GuestOutput, TaikoProverData},
     protocol_instance::{assemble_protocol_instance, EvidenceType},
     EthereumTxEssence,
 };
-use zeth_primitives::{keccak, Address, B256};
+use zeth_primitives::Address;
 
 use super::{
     context::Context,
@@ -22,7 +18,6 @@ use super::{
         succinct::execute_sp1,
     },
     request::{ProofInstance, ProofRequest, ProofResponse},
-    utils::cache_file_path,
 };
 use crate::metrics::{inc_sgx_success, observe_input, observe_sgx_gen};
 
@@ -57,7 +52,11 @@ pub async fn execute(
                     .instance_hash(req.proof_instance.clone().into());
 
                 // Make sure the blockhash from the node matches the one from the builder
-                assert_eq!(header.hash().0, input.block_hash.to_fixed_bytes(), "block hash unexpected");
+                assert_eq!(
+                    header.hash().0,
+                    input.block_hash.to_fixed_bytes(),
+                    "block hash unexpected"
+                );
                 GuestOutput::Success((header.clone(), pi))
             }
             Err(_) => {

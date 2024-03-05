@@ -1,12 +1,8 @@
-use std::path::{absolute, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::Result;
-use ethers_core::k256::elliptic_curve::rand_core::block;
-use tracing::debug;
 
 use super::{consts::RAIKO_GUEST_EXECUTABLE, request::ProofInstance};
-
-use zeth_lib::consts::ChainSpec;
 
 #[derive(Debug, Default, Clone)]
 pub struct Context {
@@ -19,7 +15,6 @@ pub struct Context {
 
     pub l1_cache_file: Option<PathBuf>,
 
-
     pub l2_cache_file: Option<PathBuf>,
 }
 
@@ -27,10 +22,7 @@ impl Context {
     pub fn new(
         guest_elf: PathBuf,
         host_cache: PathBuf,
-        guest_elf: PathBuf,
-        host_cache: PathBuf,
         max_caches: usize,
-        block_no: Option<u64>,
         block_no: Option<u64>,
     ) -> Self {
         let mut ctx = Self {

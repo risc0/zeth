@@ -91,12 +91,15 @@ pub fn taiko_run_preflight(
         block_no: l1_state_block_no,
     })?;
     println!("l1_state_root_block: {:?}", l1_state_root_block);
-    println!("l1_state_root_block hash: {:?}", l1_state_root_block.hash.unwrap());
+    println!(
+        "l1_state_root_block hash: {:?}",
+        l1_state_root_block.hash.unwrap()
+    );
 
-    /*let l1_propose_block = tp.l1_provider.get_partial_block(&BlockQuery {
-        block_no: l1_inclusion_block_no,
-    })?;
-    println!("l1_propose_block: {:?}", l1_propose_block);*/
+    // let l1_propose_block = tp.l1_provider.get_partial_block(&BlockQuery {
+    // block_no: l1_inclusion_block_no,
+    // })?;
+    // println!("l1_propose_block: {:?}", l1_propose_block);
 
     // Get the block proposal data
     let (proposal_tx, proposal_event) =

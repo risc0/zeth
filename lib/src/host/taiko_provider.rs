@@ -76,7 +76,7 @@ impl TaikoProvider {
         // .tokio_handle
         // .block_on(async { self.l1_provider.get_logs(&filter).await })?;
 
-        //println!("logs: {:?}", logs);
+        // println!("logs: {:?}", logs);
         for (log, event) in logs {
             if event.blockId == zeth_primitives::U256::from(l2_block_no) {
                 let tx = self

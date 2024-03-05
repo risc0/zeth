@@ -12,7 +12,7 @@ alloy-sol-types = { version = "0.6", default-features = false, optional = true }
 alloy-dyn-abi = { version = "0.6",default-features = false, optional = true }
 alloy-rlp = { version = "0.3", default-features = false }
 alloy-rlp-derive = { version = "0.3", default-features = false }
-alloy-rpc-types = { git = "https://github.com/alloy-rs/alloy", rev = "48f1c0fbf6e22f09c1b3f297955f5acea0b0f99d" }
+alloy-rpc-types = { git = "https://github.com/brechtpd/alloy", branch = "r170", version = "0.1.0" }
 anyhow = { version = "1.0", default-features = false }
 bytes = { version = "1.5", default-features = false }
 ethers-core = { version = "2.0", optional = true }

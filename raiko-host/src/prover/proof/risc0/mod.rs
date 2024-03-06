@@ -9,7 +9,7 @@ use crate::prover::{
     consts::*, context::Context, proof::risc0::snarks::verify_groth16_snark, request::{ProofInstance, ProofRequest, Risc0Instance, SgxResponse}, utils::guest_executable_path
 };
 
-use risc0_guest_method::{RISC0_METHODS_ID, RISC0_METHODS_ELF}
+use risc0_guest::{RISC0_METHODS_ID, RISC0_METHODS_ELF};
 
 // TODO: import from risc0_guest_method
 // const RISC0_GUEST_ID: [u32; 8] = [1,2,3,4,5,6,7,8];
@@ -20,11 +20,10 @@ pub async fn execute_risc0(
     ctx: &Context,
     req: &Risc0Instance,
 ) -> Result<SgxResponse, String> {
-    let elf = include_bytes!("../../../../elf/riscv32im-succinct-zkvm-elf");
     let result = maybe_prove::<GuestInput<EthereumTxEssence>, GuestOutput>(
         req,
         &input,
-        elf,
+        RISC0_METHODS_ELF,
         &output,
         Default::default()
     ).await;

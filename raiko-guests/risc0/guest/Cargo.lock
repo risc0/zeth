@@ -83,7 +83,7 @@ dependencies = [
 [[package]]
 name = "alloy-rpc-types"
 version = "0.1.0"
-source = "git+https://github.com/alloy-rs/alloy?rev=48f1c0fbf6e22f09c1b3f297955f5acea0b0f99d#48f1c0fbf6e22f09c1b3f297955f5acea0b0f99d"
+source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",

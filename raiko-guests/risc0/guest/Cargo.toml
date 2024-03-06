@@ -3,6 +3,8 @@ name = "risc0-methods"
 version = "0.1.0"
 edition = "2021"
 
+[workspace]
+
 [dependencies]
 zeth-primitives = { path = "../../../primitives", features = ["revm"] }
 zeth-lib = { path = "../../../lib", features = ["taiko", "std"] }
@@ -17,5 +19,6 @@ sha2 = { git = "https://github.com/risc0/RustCrypto-hashes", tag = "sha2-v0.10.6
 
 # DONT do `cargo update` in this package!!! might break r0 build mostly due to compiler requirements on 1.70
 # Documented version patch in Carto.toml:
-#     - ahash = { version = "0.8.6" }
-#     - alloy = { rev = "48f1c0fbf6e22f09c1b3f297955f5acea0b0f99d" }
+#     - ahash = { version = "0.8.6" }   --> cargo update -p ahash --precise 0.8.6
+#     - alloy = { brecht's version }
+#     - cargo update bumpalo@3.15.1 --precise 3.14.0

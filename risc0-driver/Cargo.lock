@@ -74,7 +74,7 @@ checksum = "0942ffc6dcaadf03badf6e6a2d0228460359d5e34b57ccdc720b7382dfbd5ec5"
 [[package]]
 name = "alloy-eips"
 version = "0.1.0"
-source = "git+https://github.com/alloy-rs/alloy?rev=48f1c0fbf6e22f09c1b3f297955f5acea0b0f99d#48f1c0fbf6e22f09c1b3f297955f5acea0b0f99d"
+source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -85,7 +85,7 @@ dependencies = [
 [[package]]
 name = "alloy-json-rpc"
 version = "0.1.0"
-source = "git+https://github.com/alloy-rs/alloy?rev=48f1c0fbf6e22f09c1b3f297955f5acea0b0f99d#48f1c0fbf6e22f09c1b3f297955f5acea0b0f99d"
+source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
 dependencies = [
  "alloy-primitives",
  "serde",
@@ -96,7 +96,7 @@ dependencies = [
 [[package]]
 name = "alloy-network"
 version = "0.1.0"
-source = "git+https://github.com/alloy-rs/alloy?rev=48f1c0fbf6e22f09c1b3f297955f5acea0b0f99d#48f1c0fbf6e22f09c1b3f297955f5acea0b0f99d"
+source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
 dependencies = [
  "alloy-eips",
  "alloy-json-rpc",
@@ -130,7 +130,7 @@ dependencies = [
 [[package]]
 name = "alloy-providers"
 version = "0.1.0"
-source = "git+https://github.com/alloy-rs/alloy?rev=48f1c0fbf6e22f09c1b3f297955f5acea0b0f99d#48f1c0fbf6e22f09c1b3f297955f5acea0b0f99d"
+source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
 dependencies = [
  "alloy-network",
  "alloy-primitives",
@@ -139,11 +139,16 @@ dependencies = [
  "alloy-rpc-types",
  "alloy-transport",
  "alloy-transport-http",
+ "async-stream",
  "async-trait",
  "auto_impl",
+ "futures",
+ "lru",
  "reqwest",
  "serde",
  "thiserror",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -171,7 +176,7 @@ dependencies = [
 [[package]]
 name = "alloy-rpc-client"
 version = "0.1.0"
-source = "git+https://github.com/alloy-rs/alloy?rev=48f1c0fbf6e22f09c1b3f297955f5acea0b0f99d#48f1c0fbf6e22f09c1b3f297955f5acea0b0f99d"
+source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
 dependencies = [
  "alloy-json-rpc",
  "alloy-transport",
@@ -179,7 +184,10 @@ dependencies = [
  "futures",
  "pin-project",
  "reqwest",
+ "serde",
  "serde_json",
+ "tokio",
+ "tokio-stream",
  "tower",
  "tracing",
  "url",
@@ -188,7 +196,7 @@ dependencies = [
 [[package]]
 name = "alloy-rpc-trace-types"
 version = "0.1.0"
-source = "git+https://github.com/alloy-rs/alloy?rev=48f1c0fbf6e22f09c1b3f297955f5acea0b0f99d#48f1c0fbf6e22f09c1b3f297955f5acea0b0f99d"
+source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types",
@@ -199,7 +207,7 @@ dependencies = [
 [[package]]
 name = "alloy-rpc-types"
 version = "0.1.0"
-source = "git+https://github.com/alloy-rs/alloy?rev=48f1c0fbf6e22f09c1b3f297955f5acea0b0f99d#48f1c0fbf6e22f09c1b3f297955f5acea0b0f99d"
+source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -242,7 +250,7 @@ dependencies = [
 [[package]]
 name = "alloy-transport"
 version = "0.1.0"
-source = "git+https://github.com/alloy-rs/alloy?rev=48f1c0fbf6e22f09c1b3f297955f5acea0b0f99d#48f1c0fbf6e22f09c1b3f297955f5acea0b0f99d"
+source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
 dependencies = [
  "alloy-json-rpc",
  "base64 0.21.7",
@@ -258,7 +266,7 @@ dependencies = [
 [[package]]
 name = "alloy-transport-http"
 version = "0.1.0"
-source = "git+https://github.com/alloy-rs/alloy?rev=48f1c0fbf6e22f09c1b3f297955f5acea0b0f99d#48f1c0fbf6e22f09c1b3f297955f5acea0b0f99d"
+source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
 dependencies = [
  "alloy-json-rpc",
  "alloy-transport",
@@ -590,6 +598,28 @@ dependencies = [
  "predicates-core",
  "predicates-tree",
  "wait-timeout",
+]
+
+[[package]]
+name = "async-stream"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd56dd203fef61ac097dd65721a419ddccb106b2d2b70ba60a6b529f03961a51"
+dependencies = [
+ "async-stream-impl",
+ "futures-core",
+ "pin-project-lite",
+]
+
+[[package]]
+name = "async-stream-impl"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16e62a023e7c117e27523144c5d2459f4397fcc3cab0085af8e2224f643a0193"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.51",
 ]
 
 [[package]]
@@ -2379,6 +2409,15 @@ name = "log"
 version = "0.4.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5e6163cb8c49088c2c36f57875e58ccd8c87c7427f7fbd50ea6710b2f3f2e8f"
+
+[[package]]
+name = "lru"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3262e75e648fce39813cb56ac41f3c3e3f65217ebf3844d818d1f9398cfb0dc"
+dependencies = [
+ "hashbrown 0.14.3",
+]
 
 [[package]]
 name = "malloc_buf"
@@ -4397,6 +4436,18 @@ checksum = "c28327cf380ac148141087fbfb9de9d7bd4e84ab5d2c28fbc911d753de8a7081"
 dependencies = [
  "rustls",
  "tokio",
+]
+
+[[package]]
+name = "tokio-stream"
+version = "0.1.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "397c988d37662c7dda6d2208364a706264bf3d6138b11d436cbac0ad38832842"
+dependencies = [
+ "futures-core",
+ "pin-project-lite",
+ "tokio",
+ "tokio-util",
 ]
 
 [[package]]

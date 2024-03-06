@@ -1,12 +1,13 @@
 use std::{fs, path::{Path, PathBuf}};
 
 use alloy_primitives::FixedBytes;
+use hex::ToHex;
 use serde::{Deserialize, Serialize};
 use tracing::info as traicing_info;
 use zeth_lib::{consts::TKO_MAINNET_CHAIN_SPEC, input::{GuestInput, GuestOutput}, EthereumTxEssence};
 
 use crate::prover::{
-    consts::*, context::Context, proof::risc0::snarks::verify_groth16_snark, request::{ProofInstance, ProofRequest, Risc0Instance, SgxResponse}, utils::guest_executable_path
+    consts::*, context::Context, proof::risc0::snarks::verify_groth16_snark, request::{ProofInstance, ProofRequest, Risc0Instance, Risc0Response}, utils::guest_executable_path
 };
 
 use risc0_guest::{RISC0_METHODS_ID, RISC0_METHODS_ELF};
@@ -19,7 +20,9 @@ pub async fn execute_risc0(
     output: GuestOutput,
     ctx: &Context,
     req: &Risc0Instance,
-) -> Result<SgxResponse, String> {
+) -> Result<Risc0Response, String> {
+    println!("elf code length: {}", RISC0_METHODS_ELF.len());
+
     let result = maybe_prove::<GuestInput<EthereumTxEssence>, GuestOutput>(
         req,
         &input,
@@ -27,6 +30,8 @@ pub async fn execute_risc0(
         &output,
         Default::default()
     ).await;
+
+    let journal: String = result.clone().unwrap().1.journal.encode_hex();
 
     // Create/verify Groth16 SNARK
     if req.snark {
@@ -43,7 +48,10 @@ pub async fn execute_risc0(
         verify_groth16_snark(image_id, snark_receipt).await
             .map_err(|err| format!("Failed to verify SNARK: {:?}", err))?;
     }
-    todo!()
+
+    Ok(Risc0Response {
+        journal,
+    })
 }
 
 
@@ -260,6 +268,9 @@ pub async fn maybe_prove<I: Serialize, O: Eq + Debug + Serialize + DeserializeOw
                 false,
             )
         };
+
+    println!("receipt: {:?}", receipt);
+    println!("journal: {:?}", receipt.journal);
 
     // verify output
     let output_guest: O = receipt.journal.decode().unwrap();

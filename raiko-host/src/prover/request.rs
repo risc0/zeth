@@ -74,6 +74,7 @@ pub enum ProofResponse {
     PseZk(PseZkResponse),
     SP1(SP1Response),
     Native(GuestOutput),
+    Risc0(Risc0Response),
 }
 
 #[derive(Default, Clone, Serialize, Deserialize)]
@@ -91,4 +92,9 @@ pub struct PseZkResponse {}
 pub struct SP1Response {
     pub proof: String,
     pub output: GuestOutput,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct Risc0Response {
+    pub journal: String,
 }

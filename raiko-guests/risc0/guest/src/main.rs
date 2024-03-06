@@ -4,8 +4,8 @@ risc0_zkvm::guest::entry!(main);
 
 
 use zeth_lib::{
-    builder::{BlockBuilderStrategy, TaikoStrategy}, 
-    consts::TKO_MAINNET_CHAIN_SPEC, 
+    builder::{BlockBuilderStrategy, TaikoStrategy},
+    consts::TKO_MAINNET_CHAIN_SPEC,
     input::{GuestInput, GuestOutput, TaikoSystemInfo, TaikoProverData},
     host::host::{HostArgs, taiko_run_preflight}, EthereumTxEssence
 };
@@ -30,5 +30,6 @@ fn main(){
             GuestOutput::Failure
         }
     };
-    env::write(&output);
+
+    env::commit(&output);
 }

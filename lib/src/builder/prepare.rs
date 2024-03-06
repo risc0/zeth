@@ -16,11 +16,11 @@ use core::fmt::Debug;
 
 use anyhow::{bail, Context, Result};
 use revm::{Database, DatabaseCommit};
-use zeth_primitives::{block::Header, transactions::TxEssence, U256};
+use zeth_primitives::{block::Header, transactions::TxEssence};
 
 use crate::{
     builder::BlockBuilder,
-    consts::{Eip1559Constants, GAS_LIMIT_BOUND_DIVISOR, MAX_EXTRA_DATA_BYTES, MIN_GAS_LIMIT, ONE},
+    consts::MAX_EXTRA_DATA_BYTES, taiko_utils::BLOCK_GAS_LIMIT,
 };
 
 pub trait HeaderPrepStrategy {
@@ -31,9 +31,9 @@ pub trait HeaderPrepStrategy {
         E: TxEssence;
 }
 
-pub struct EthHeaderPrepStrategy {}
+pub struct TaikoHeaderPrepStrategy {}
 
-impl HeaderPrepStrategy for EthHeaderPrepStrategy {
+impl HeaderPrepStrategy for TaikoHeaderPrepStrategy {
     fn prepare_header<D, E>(mut block_builder: BlockBuilder<D, E>) -> Result<BlockBuilder<D, E>>
     where
         D: Database + DatabaseCommit,
@@ -41,29 +41,17 @@ impl HeaderPrepStrategy for EthHeaderPrepStrategy {
         E: TxEssence,
     {
         // Validate gas limit
-        let diff = block_builder
-            .input
-            .parent_header
-            .gas_limit
-            .abs_diff(block_builder.input.gas_limit);
-        let limit = block_builder.input.parent_header.gas_limit / GAS_LIMIT_BOUND_DIVISOR;
-        if diff >= limit {
+        if block_builder.input.gas_limit != *BLOCK_GAS_LIMIT {
             bail!(
-                "Invalid gas limit: expected {} +- {limit}, got {}",
-                block_builder.input.parent_header.gas_limit,
-                block_builder.input.gas_limit,
-            );
-        }
-        if block_builder.input.gas_limit < MIN_GAS_LIMIT {
-            bail!(
-                "Invalid gas limit: expected >= {MIN_GAS_LIMIT}, got {}",
+                "Invalid gas limit: expected == {}, got {}",
+                *BLOCK_GAS_LIMIT,
                 block_builder.input.gas_limit,
             );
         }
         // Validate timestamp
-        if block_builder.input.timestamp <= block_builder.input.parent_header.timestamp {
+        if block_builder.input.timestamp < block_builder.input.parent_header.timestamp {
             bail!(
-                "Invalid timestamp: expected > {}, got {}",
+                "Invalid timestamp: expected >= {}, got {}",
                 block_builder.input.parent_header.timestamp,
                 block_builder.input.timestamp,
             );
@@ -71,7 +59,11 @@ impl HeaderPrepStrategy for EthHeaderPrepStrategy {
         // Validate extra data
         let extra_data_bytes = block_builder.input.extra_data.len();
         if extra_data_bytes > MAX_EXTRA_DATA_BYTES {
-            bail!("Invalid extra data: expected <= {MAX_EXTRA_DATA_BYTES}, got {extra_data_bytes}");
+            bail!(
+                "Invalid extra data: expected <= {}, got {}",
+                MAX_EXTRA_DATA_BYTES,
+                extra_data_bytes,
+            )
         }
         // Derive header
         block_builder.header = Some(Header {
@@ -82,11 +74,8 @@ impl HeaderPrepStrategy for EthHeaderPrepStrategy {
                 .parent_header
                 .number
                 .checked_add(1)
-                .context("Invalid block number: too large")?,
-            base_fee_per_gas: derive_base_fee(
-                &block_builder.input.parent_header,
-                block_builder.chain_spec.gas_constants(),
-            )?,
+                .with_context(|| "Invalid block number: too large")?,
+            base_fee_per_gas: block_builder.input.base_fee_per_gas,
             // Initialize metadata from input
             beneficiary: block_builder.input.beneficiary,
             gas_limit: block_builder.input.gas_limit,
@@ -97,39 +86,5 @@ impl HeaderPrepStrategy for EthHeaderPrepStrategy {
             ..Default::default()
         });
         Ok(block_builder)
-    }
-}
-
-/// Base fee for next block. [EIP-1559](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1559.md) spec
-fn derive_base_fee(parent: &Header, eip_1559_constants: &Eip1559Constants) -> Result<U256> {
-    let parent_gas_target = parent.gas_limit / eip_1559_constants.elasticity_multiplier;
-
-    match parent.gas_used.cmp(&parent_gas_target) {
-        core::cmp::Ordering::Equal => Ok(parent.base_fee_per_gas),
-
-        core::cmp::Ordering::Greater => {
-            let gas_used_delta = parent.gas_used - parent_gas_target;
-            let base_fee_delta = ONE
-                .max(
-                    parent.base_fee_per_gas * gas_used_delta
-                        / parent_gas_target
-                        / eip_1559_constants.base_fee_change_denominator,
-                )
-                .min(
-                    parent.base_fee_per_gas / eip_1559_constants.base_fee_max_increase_denominator,
-                );
-            Ok(parent.base_fee_per_gas + base_fee_delta)
-        }
-
-        core::cmp::Ordering::Less => {
-            let gas_used_delta = parent_gas_target - parent.gas_used;
-            let base_fee_delta = (parent.base_fee_per_gas * gas_used_delta
-                / parent_gas_target
-                / eip_1559_constants.base_fee_change_denominator)
-                .min(
-                    parent.base_fee_per_gas / eip_1559_constants.base_fee_max_decrease_denominator,
-                );
-            Ok(parent.base_fee_per_gas - base_fee_delta)
-        }
     }
 }

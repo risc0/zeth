@@ -9,7 +9,6 @@ edition = "2021"
 zeth-primitives = { path = "../../../primitives", features = ["revm"] }
 zeth-lib = { path = "../../../lib", features = ["taiko", "std"] }
 risc0-zkvm = { version = "0.20.1", default-features = false, features = ['std', "getrandom"] }
-ahash = "0.8.6"
 
 [patch.crates-io]
 # use optimized risc0 circuit

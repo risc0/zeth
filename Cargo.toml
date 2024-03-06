@@ -29,7 +29,9 @@ opt-level = 3
 
 [patch.crates-io]
 # use optimized risc0 circuit
-#revm = { git = "https://github.com/johntaiko/revm", branch = "feat/taiko" }
+#revm = { git = "https://github.com/johntaiko/revm", branch = "feat/taiko", features = [
+#  "c-kzg",
+#] }
 #revm-primitives = { git = "https://github.com/johntaiko/revm", branch = "feat/taiko" }
 
 [workspace.dependencies]

@@ -26,7 +26,7 @@ use crate::{
         execute::TxExecStrategy,
         finalize::{BlockFinalizeStrategy, MemDbBlockFinalizeStrategy},
         initialize::{DbInitStrategy, MemDbInitStrategy},
-        prepare::{EthHeaderPrepStrategy, HeaderPrepStrategy},
+        prepare::{TaikoHeaderPrepStrategy, HeaderPrepStrategy},
     },
     consts::{get_chain_spec, ChainSpec},
     input::GuestInput,
@@ -124,7 +124,7 @@ pub struct TaikoStrategy {}
 impl BlockBuilderStrategy for TaikoStrategy {
     type TxEssence = EthereumTxEssence;
     type DbInitStrategy = MemDbInitStrategy;
-    type HeaderPrepStrategy = EthHeaderPrepStrategy;
+    type HeaderPrepStrategy = TaikoHeaderPrepStrategy;
     type TxExecStrategy = TkoTxExecStrategy;
     type BlockFinalizeStrategy = MemDbBlockFinalizeStrategy;
 }

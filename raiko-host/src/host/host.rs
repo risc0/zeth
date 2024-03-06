@@ -17,7 +17,7 @@ use zeth_primitives::{
 };
 
 use zeth_lib::{
-    builder::{prepare::EthHeaderPrepStrategy, BlockBuilder, TkoTxExecStrategy},
+    builder::{prepare::TaikoHeaderPrepStrategy, BlockBuilder, TkoTxExecStrategy},
     input::{
         decode_propose_block_call_params, proposeBlockCall, BlockMetadata, GuestInput,
         TaikoProverData, TaikoSystemInfo,
@@ -160,7 +160,7 @@ pub fn taiko_run_preflight(
     println!("Block valid transactions: {:?}", block.transactions.len());
     assert!(transactions.len() >= block.transactions.len(), "unexpected number of transactions");
 
-    //
+    // Set the original transactions on the block
     block.transactions = transactions;
 
     info!(
@@ -233,7 +233,7 @@ pub fn taiko_run_preflight(
     // Create the block builder, run the transactions and extract the DB
     let mut builder = BlockBuilder::new(&input)
         .with_db(provider_db)
-        .prepare_header::<EthHeaderPrepStrategy>()?
+        .prepare_header::<TaikoHeaderPrepStrategy>()?
         .execute_transactions::<TkoTxExecStrategy>()?;
     let provider_db: &mut ProviderDb = builder.mut_db().unwrap();
 

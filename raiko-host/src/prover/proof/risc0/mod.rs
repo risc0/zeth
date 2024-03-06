@@ -5,6 +5,7 @@ use hex::ToHex;
 use serde::{Deserialize, Serialize};
 use tracing::info as traicing_info;
 use zeth_lib::{consts::TKO_MAINNET_CHAIN_SPEC, input::{GuestInput, GuestOutput}, EthereumTxEssence};
+use std::env;
 
 use crate::prover::{
     consts::*, context::Context, proof::risc0::snarks::verify_groth16_snark, request::{ProofInstance, ProofRequest, Risc0Instance, Risc0Response}, utils::guest_executable_path
@@ -370,10 +371,12 @@ pub fn prove_locally(
         let env = env_builder.build().unwrap();
         let mut exec = ExecutorImpl::from_elf(env, elf).unwrap();
 
-        let segment_dir = tempdir().unwrap();
+        //let segment_dir = tempdir().unwrap();
+        let segment_dir = env::current_dir().expect("dir error");
 
         exec.run_with_callback(|segment| {
-            Ok(Box::new(FileSegmentRef::new(&segment, segment_dir.path())?))
+            let path = segment_dir.as_path().join(format!("{}.bincode", segment.index));
+            Ok(Box::new(FileSegmentRef::new(&segment, segment_dir.as_path())?))
         })
         .unwrap()
     };
@@ -480,7 +483,8 @@ pub fn save_receipt<T: serde::Serialize>(receipt_label: &String, receipt_data: &
 }
 
 fn zkp_cache_path(receipt_label: &String) -> String {
-    Path::new("cache_zkp")
+    //Path::new("cache_zkp")
+    env::current_dir().expect("dir error").as_path()
         .join(format!("{}.zkp", receipt_label))
         .to_str()
         .unwrap()

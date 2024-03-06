@@ -1,7 +1,10 @@
 //! Generate different proofs for the taiko protocol.
-use crate::prover::{context::Context, request::{ProofRequest, Risc0Instance}};
-use crate::prover::request::SgxResponse;
 use zeth_lib::input::GuestOutput;
+
+use crate::prover::{
+    context::Context,
+    request::{ProofRequest, Risc0Instance, SgxResponse},
+};
 
 #[allow(dead_code)]
 pub mod cache;
@@ -53,15 +56,21 @@ pub mod succinct {
 pub mod risc0;
 #[cfg(not(feature = "risc0"))]
 pub mod risc0 {
+    use zeth_lib::{
+        builder::{BlockBuilderStrategy, TaikoStrategy},
+        consts::TKO_MAINNET_CHAIN_SPEC,
+        input::GuestInput,
+        EthereumTxEssence,
+    };
+
     use super::*;
-    use zeth_lib::{builder::{BlockBuilderStrategy, TaikoStrategy}, consts::TKO_MAINNET_CHAIN_SPEC, input::GuestInput, EthereumTxEssence
-};
+    use crate::prover::request::Risc0Response;
     pub async fn execute_risc0(
         input: GuestInput<EthereumTxEssence>,
         output: GuestOutput,
         ctx: &Context,
         req: &Risc0Instance,
-    ) -> Result<Risc0Response, String>  {
+    ) -> Result<Risc0Response, String> {
         Err("Feature not risc0 is enabled".to_string())
     }
 }

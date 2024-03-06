@@ -24,12 +24,12 @@ use anyhow::{anyhow, Result};
 use ethers_core::types::{Block, Bytes, Log, Transaction, TransactionReceipt, H256, U256};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use zeth_lib::input::BlockProposed;
 
 use super::{
     AccountQuery, BlockQuery, GetBlobsResponse, LogsQuery, MutProvider, ProofQuery, Provider,
     StorageQuery, TxQuery,
 };
-use zeth_lib::input::BlockProposed;
 
 #[serde_as]
 #[derive(Default, Deserialize, Serialize)]

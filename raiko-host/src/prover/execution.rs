@@ -8,7 +8,6 @@ use zeth_lib::{
     EthereumTxEssence,
 };
 use zeth_primitives::Address;
-use crate::host::host::taiko_run_preflight;
 
 use super::{
     context::Context,
@@ -19,7 +18,10 @@ use super::{
     },
     request::{ProofInstance, ProofRequest, ProofResponse},
 };
-use crate::metrics::{inc_sgx_success, observe_input, observe_sgx_gen};
+use crate::{
+    host::host::taiko_run_preflight,
+    metrics::{inc_sgx_success, observe_input, observe_sgx_gen},
+};
 
 pub async fn execute(
     _cache: &Cache,
@@ -96,10 +98,8 @@ pub async fn execute(
             ProofInstance::Risc0(instance) => {
                 let resp = execute_risc0(input, output, ctx, instance).await?;
                 Ok(ProofResponse::Risc0(resp))
-            },
-            ProofInstance::Native => {
-                Ok(ProofResponse::Native(output))
-            },
+            }
+            ProofInstance::Native => Ok(ProofResponse::Native(output)),
         }
     }
     .await;

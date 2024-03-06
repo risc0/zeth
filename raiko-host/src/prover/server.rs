@@ -41,7 +41,9 @@ pub fn serve(
     let guest_elf = guest_elf.to_owned();
     let host_cache = host_cache.to_owned();
     let l2_contracts = l2_contracts.to_owned();
-    SGX_INSTANCE_ID.set(sgx_instance_id).expect("cannot set sgx instance id");
+    SGX_INSTANCE_ID
+        .set(sgx_instance_id)
+        .expect("cannot set sgx instance id");
     tokio::spawn(async move {
         let handler = Handler::new(
             guest_elf.clone(),

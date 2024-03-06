@@ -1,19 +1,24 @@
 use std::{
-    fs,
+    env, fs,
     path::{Path, PathBuf},
 };
 
 use hex::ToHex;
+use risc0_guest::{RISC0_METHODS_ELF, RISC0_METHODS_ID};
 use serde::{Deserialize, Serialize};
 use tracing::info as traicing_info;
-use zeth_lib::{input::{GuestInput, GuestOutput}, EthereumTxEssence};
-use std::env;
-
-use crate::prover::{
-    consts::*, context::Context, proof::risc0::snarks::verify_groth16_snark, request::{ProofInstance, ProofRequest, Risc0Instance, Risc0Response}, utils::guest_executable_path
+use zeth_lib::{
+    input::{GuestInput, GuestOutput},
+    EthereumTxEssence,
 };
 
-use risc0_guest::{RISC0_METHODS_ID, RISC0_METHODS_ELF};
+use crate::prover::{
+    consts::*,
+    context::Context,
+    proof::risc0::snarks::verify_groth16_snark,
+    request::{ProofInstance, ProofRequest, Risc0Instance, Risc0Response},
+    utils::guest_executable_path,
+};
 
 // TODO: import from risc0_guest_method
 // const RISC0_GUEST_ID: [u32; 8] = [1,2,3,4,5,6,7,8];
@@ -54,9 +59,7 @@ pub async fn execute_risc0(
             .map_err(|err| format!("Failed to verify SNARK: {:?}", err))?;
     }
 
-    Ok(Risc0Response {
-        journal,
-    })
+    Ok(Risc0Response { journal })
 }
 
 // pub mod build;
@@ -376,12 +379,17 @@ pub fn prove_locally(
         let env = env_builder.build().unwrap();
         let mut exec = ExecutorImpl::from_elf(env, elf).unwrap();
 
-        //let segment_dir = tempdir().unwrap();
+        // let segment_dir = tempdir().unwrap();
         let segment_dir = env::current_dir().expect("dir error");
 
         exec.run_with_callback(|segment| {
-            let path = segment_dir.as_path().join(format!("{}.bincode", segment.index));
-            Ok(Box::new(FileSegmentRef::new(&segment, segment_dir.as_path())?))
+            let path = segment_dir
+                .as_path()
+                .join(format!("{}.bincode", segment.index));
+            Ok(Box::new(FileSegmentRef::new(
+                &segment,
+                segment_dir.as_path(),
+            )?))
         })
         .unwrap()
     };
@@ -487,8 +495,10 @@ pub fn save_receipt<T: serde::Serialize>(receipt_label: &String, receipt_data: &
 }
 
 fn zkp_cache_path(receipt_label: &String) -> String {
-    //Path::new("cache_zkp")
-    env::current_dir().expect("dir error").as_path()
+    // Path::new("cache_zkp")
+    env::current_dir()
+        .expect("dir error")
+        .as_path()
         .join(format!("{}.zkp", receipt_label))
         .to_str()
         .unwrap()

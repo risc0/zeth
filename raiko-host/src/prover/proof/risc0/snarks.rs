@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+
 use alloy_primitives::U256;
 use alloy_sol_types::{sol, SolValue};
 use anyhow::anyhow;

@@ -21,7 +21,7 @@ pub async fn execute_sp1(
     input: GuestInput<EthereumTxEssence>,
     output: GuestOutput,
     ctx: &mut Context,
-    req: &ProofRequest
+    req: &ProofRequest,
 ) -> Result<SP1Response, String> {
     // Setup a tracer for logging.
     utils::setup_tracer();
@@ -39,7 +39,6 @@ pub async fn execute_sp1(
 
     // Save the proof.
     proof.save(SP1_PROOF).expect("saving proof failed");
-
 
     println!("succesfully generated and verified proof for the program!");
     Ok(SP1Response {

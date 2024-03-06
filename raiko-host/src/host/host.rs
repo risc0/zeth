@@ -8,14 +8,6 @@ use log::info;
 use reth_primitives::eip4844::kzg_to_versioned_hash;
 use rlp::Rlp;
 use serde::{Deserialize, Serialize};
-use zeth_primitives::{
-    block::Header,
-    ethers::{from_ethers_h160, from_ethers_h256, from_ethers_u256},
-    mpt::proofs_to_tries,
-    transactions::ethereum::EthereumTxEssence,
-    Bytes,
-};
-
 use zeth_lib::{
     builder::{prepare::TaikoHeaderPrepStrategy, BlockBuilder, TkoTxExecStrategy},
     input::{
@@ -24,10 +16,16 @@ use zeth_lib::{
     },
     taiko_utils::MAX_TX_LIST_BYTES,
 };
-use crate::host::taiko_provider::TaikoProvider;
-use crate::host::provider::GetBlobData;
-use crate::host::provider_db::ProviderDb;
+use zeth_primitives::{
+    block::Header,
+    ethers::{from_ethers_h160, from_ethers_h256, from_ethers_u256},
+    mpt::proofs_to_tries,
+    transactions::ethereum::EthereumTxEssence,
+    Bytes,
+};
+
 use super::provider::BlockQuery;
+use crate::host::{provider::GetBlobData, provider_db::ProviderDb, taiko_provider::TaikoProvider};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HostArgs {
@@ -89,7 +87,7 @@ pub fn taiko_run_preflight(
     let l1_state_root_block = tp.l1_provider.get_partial_block(&BlockQuery {
         block_no: l1_state_block_no,
     })?;
-    //println!("l1_state_root_block: {:?}", l1_state_root_block);
+    // println!("l1_state_root_block: {:?}", l1_state_root_block);
     println!(
         "l1_state_root_block hash: {:?}",
         l1_state_root_block.hash.unwrap()
@@ -149,7 +147,7 @@ pub fn taiko_run_preflight(
         (proposal_call.txList.clone(), None)
     };
 
-    //println!("tx_list: {:?}", tx_list);
+    // println!("tx_list: {:?}", tx_list);
 
     // Create the transactions for the proposed tx list
     let mut transactions: Vec<EthersTransaction> = Rlp::new(&tx_list).as_list()?;
@@ -158,7 +156,10 @@ pub fn taiko_run_preflight(
     transactions.insert(0, anchor_tx);
 
     println!("Block valid transactions: {:?}", block.transactions.len());
-    assert!(transactions.len() >= block.transactions.len(), "unexpected number of transactions");
+    assert!(
+        transactions.len() >= block.transactions.len(),
+        "unexpected number of transactions"
+    );
 
     // Set the original transactions on the block
     block.transactions = transactions;

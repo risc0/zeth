@@ -19,7 +19,6 @@ use alloy_sol_types::SolEvent;
 use anyhow::{anyhow, Context, Result};
 use ethers_core::types::{Block, Bytes, Log, Transaction, TransactionReceipt, H160, H256, U256};
 use serde::{Deserialize, Serialize};
-
 use zeth_lib::input::BlockProposed;
 
 pub mod cached_rpc_provider;

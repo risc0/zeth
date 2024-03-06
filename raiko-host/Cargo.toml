@@ -38,7 +38,7 @@ once_cell = "1.8.0"
 thiserror = "1.0"
 powdr = { git = "https://github.com/ceciliaz030/powdr", branch = "+nightly", optional = true}
 sp1-core = { git = "https://github.com/succinctlabs/sp1.git", optional = true }
-risc0-zkvm = { version = "0.20.1", features = ["prove"], optional = true }
+risc0-zkvm = { version = "0.20.1", features = ["prove", "getrandom"], optional = true }
 bonsai-sdk = { version = "0.6.0", features = ["async"],  optional = true }
 risc0-guest = { path = "../raiko-guests/risc0", optional = true}
 log = {version = "0.4", optional = true}

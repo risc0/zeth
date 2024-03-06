@@ -65,7 +65,7 @@ pub mod risc0 {
         output: GuestOutput,
         ctx: &Context,
         req: &Risc0Instance,
-    ) -> Result<SgxResponse, String> {
+    ) -> Result<Risc0Response, String>  {
         Err("Feature not risc0 is enabled".to_string())
     }
 }

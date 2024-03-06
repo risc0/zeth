@@ -59,7 +59,6 @@ impl TaikoProvider {
         chain_name: &str,
     ) -> Result<(Transaction, BlockProposed)> {
         let l1_address = get_contracts(chain_name).unwrap().0;
-        println!("l1_address: {:?}", l1_address);
 
         let logs = self.l1_provider.filter_event_log::<BlockProposed>(
             l1_address,
@@ -67,16 +66,6 @@ impl TaikoProvider {
             l2_block_no,
         )?;
 
-        // let l1_contact = H160::from_slice(get_contracts(chain_name).unwrap().0.as_slice());
-        // let filter = Filter::new()
-        // .address(l1_contact)
-        // .from_block(l1_block_no)
-        // .to_block(l1_block_no);
-        // let logs = self
-        // .tokio_handle
-        // .block_on(async { self.l1_provider.get_logs(&filter).await })?;
-
-        // println!("logs: {:?}", logs);
         for (log, event) in logs {
             if event.blockId == zeth_primitives::U256::from(l2_block_no) {
                 let tx = self

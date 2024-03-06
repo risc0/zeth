@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloc::{
+/*use alloc::{
     boxed::Box,
     format,
     string::{String, ToString},
     vec,
     vec::Vec,
-};
+};*/
+use revm_primitives::Address;
 use core::{
     cell::RefCell,
     cmp,
@@ -32,7 +33,6 @@ use alloy_rlp_derive::{RlpDecodable, RlpEncodable, RlpMaxEncodedLen};
 use alloy_rpc_types::EIP1186AccountProofResponse;
 use anyhow::{Context, Result};
 use hashbrown::HashMap;
-use reth_primitives::Address;
 use rlp::{Decodable, DecoderError, Prototype, Rlp};
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;

@@ -94,10 +94,12 @@ pub async fn execute(
                 Ok(ProofResponse::SP1(resp))
             }
             ProofInstance::Risc0(instance) => {
-                execute_risc0(input, output, ctx, instance).await?;
-                todo!()
-            }
-            ProofInstance::Native => Ok(ProofResponse::Native(output)),
+                let resp = execute_risc0(input, output, ctx, instance).await?;
+                Ok(ProofResponse::Risc0(resp))
+            },
+            ProofInstance::Native => {
+                Ok(ProofResponse::Native(output))
+            },
         }
     }
     .await;

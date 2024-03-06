@@ -4,7 +4,7 @@ members = [
     "lib",
     "primitives",
     # "raiko-guests/sgx",
-    # "raiko-guests/risc0",
+    "raiko-guests/risc0",
     # "raiko-guests/powdr",
     # "raiko-guests/succinct",
     "raiko-host",
@@ -29,11 +29,11 @@ opt-level = 3
 
 [patch.crates-io]
 # use optimized risc0 circuit
-revm = { git = "https://github.com/johntaiko/revm", branch = "feat/taiko" }
-revm-primitives = { git = "https://github.com/johntaiko/revm", branch = "feat/taiko" }
-ethers-core = { git = "https://github.com/smtmfft/ethers-rs", branch = "ethers-core-2.0.10" }
-ethers-providers = { git = "https://github.com/smtmfft/ethers-rs", branch = "ethers-core-2.0.10" }
-ethers-contract = { git = "https://github.com/smtmfft/ethers-rs", branch = "ethers-core-2.0.10" }
+#revm = { git = "https://github.com/johntaiko/revm", branch = "feat/taiko" }
+#revm-primitives = { git = "https://github.com/johntaiko/revm", branch = "feat/taiko" }
+#ethers-core = { git = "https://github.com/smtmfft/ethers-rs", branch = "ethers-core-2.0.10" }
+#ethers-providers = { git = "https://github.com/smtmfft/ethers-rs", branch = "ethers-core-2.0.10" }
+#ethers-contract = { git = "https://github.com/smtmfft/ethers-rs", branch = "ethers-core-2.0.10" }
 
 
 [workspace.dependencies]

@@ -5,7 +5,7 @@ use anyhow::{anyhow, ensure, Context, Result};
 use ethers_core::types::Transaction as EthersTransaction;
 use hashbrown::HashSet;
 use log::info;
-use reth_primitives::eip4844::kzg_to_versioned_hash;
+//use reth_primitives::eip4844::kzg_to_versioned_hash;
 use rlp::Rlp;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{

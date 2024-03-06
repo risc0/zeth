@@ -7,8 +7,6 @@ edition = "2021"
 risc0-build = { version = "0.20.1" }
 
 [package.metadata.risc0]
-methods = ["bin"]
-
-[workspace]
+methods = ["guest"]
 
 # cargo build

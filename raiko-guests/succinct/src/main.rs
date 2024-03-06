@@ -2,18 +2,27 @@
 sp1_zkvm::entrypoint!(main);
 
 use zeth_lib::{
-    builder::{BlockBuilderStrategy, TaikoStrategy}, consts::get_chain_spec, protocol_instance::{assemble_protocol_instance, EvidenceType}, EthereumTxEssence
+    builder::{BlockBuilderStrategy, TaikoStrategy}, protocol_instance::{assemble_protocol_instance, EvidenceType}, EthereumTxEssence
 };
+use zeth_lib::protocol_instance::assemble_protocol_instance;
+use zeth_lib::protocol_instance::EvidenceType;
+use zeth_primitives::{keccak, Address, B256};
 
 pub fn main() {
-    let input = sp1_zkvm::io::read::<Input<EthereumTxEssence>>();
 
-    let (header, _mpt_node) = TaikoStrategy::build_from(&get_chain_spec(&input.chain_spec_name), input.clone())
+    let (header, _mpt_node) = TaikoStrategy::build_from(&input)
         .expect("Failed to build the resulting block");
 
-    let pi = assemble_protocol_instance(&input, &header)
-        .expect("Failed to assemble the protocol instance");
-    let pi_hash = pi.instance_hash(EvidenceType::Succinct);
-
-    sp1_zkvm::io::write(&pi_hash);
+    let output = match &build_result {
+        Ok((header, mpt_node)) => {
+            let pi = assemble_protocol_instance(&input, &header)
+                .expect("Failed to assemble protocol instance")
+                .instance_hash(EvidenceType::Risc0);
+            GuestOutput::Success((header.clone(), pi))
+        }
+        Err(_) => {
+            GuestOutput::Failure
+        }
+    };
+    sp1_zkvm::io::write(&output);
 }

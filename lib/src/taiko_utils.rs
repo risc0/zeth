@@ -2,22 +2,15 @@ use core::str::FromStr;
 
 use alloy_primitives::{uint, Address, U256};
 use anyhow::{anyhow, bail, ensure, Context, Result};
-use ethers_core::types::{Transaction, U256 as EU256, U64};
 use once_cell::unsync::Lazy;
-use revm::primitives::TransactTo;
-use zeth_primitives::{
-    ethers::{from_ethers_h160, from_ethers_u256},
-    transactions::{
-        ethereum::{EthereumTxEssence, TransactionKind},
-        EthereumTransaction, TxEssence,
-    },
-    U8,
+use zeth_primitives::transactions::{
+    ethereum::{EthereumTxEssence, TransactionKind},
+    EthereumTransaction, TxEssence,
 };
 
 use crate::input::{decode_anchor, GuestInput};
 
 pub const ANCHOR_GAS_LIMIT: u64 = 250_000;
-pub const MAX_TX_LIST: usize = 79;
 pub const MAX_TX_LIST_BYTES: usize = 120_000;
 pub const BLOCK_GAS_LIMIT: Lazy<U256> = Lazy::new(|| uint!(15250000_U256));
 pub const GOLDEN_TOUCH_ACCOUNT: Lazy<Address> = Lazy::new(|| {

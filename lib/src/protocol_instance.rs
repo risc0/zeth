@@ -70,7 +70,12 @@ pub fn assemble_protocol_instance(
     input: &GuestInput<EthereumTxEssence>,
     header: &Header,
 ) -> Result<ProtocolInstance> {
-    let tx_list_hash = TxHash::from(keccak(input.taiko.tx_list.as_slice()));
+    let blob_used = input.taiko.block_proposed.meta.blobUsed;
+    let tx_list_hash = if blob_used {
+        input.taiko.tx_blob_hash.unwrap()
+    } else {
+        TxHash::from(keccak(input.taiko.tx_list.as_slice()))
+    };
 
     let deposits = input
         .withdrawals
@@ -81,9 +86,6 @@ pub fn assemble_protocol_instance(
             id: w.index,
         })
         .collect::<Vec<_>>();
-    let deposits_hash: B256 = keccak(deposits.abi_encode()).into();
-
-    let extra_data: B256 = bytes_to_bytes32(&header.extra_data).into();
 
     let gas_limit: u64 = header.gas_limit.try_into().unwrap();
     let pi = ProtocolInstance {
@@ -94,11 +96,12 @@ pub fn assemble_protocol_instance(
             graffiti: input.taiko.prover_data.graffiti,
         },
         block_metadata: BlockMetadata {
-            l1Hash: input.taiko.l1_header.hash(),
+            // TODO(Brecht): fix L1 block hash calculation in cancun
+            l1Hash: if input.taiko.chain_spec_name == "testnet" { input.taiko.l1_header.hash() } else { input.taiko.block_proposed.meta.l1Hash },
             difficulty: input.taiko.block_proposed.meta.difficulty,
             blobHash: tx_list_hash,
-            extraData: extra_data,
-            depositsHash: deposits_hash,
+            extraData: bytes_to_bytes32(&header.extra_data).into(),
+            depositsHash: keccak(deposits.abi_encode()).into(),
             coinbase: header.beneficiary,
             id: header.number,
             gasLimit: (gas_limit - ANCHOR_GAS_LIMIT) as u32,
@@ -107,7 +110,7 @@ pub fn assemble_protocol_instance(
             txListByteOffset: 0u32,
             txListByteSize: input.taiko.tx_list.len() as u32,
             minTier: input.taiko.block_proposed.meta.minTier,
-            blobUsed: input.taiko.tx_list.is_empty(),
+            blobUsed: blob_used,
             parentMetaHash: input.taiko.block_proposed.meta.parentMetaHash,
         },
         prover: input.taiko.prover_data.prover,

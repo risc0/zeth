@@ -17,6 +17,8 @@
 
 mod metrics;
 mod prover;
+pub mod host;
+
 #[allow(dead_code)]
 mod rolling;
 use std::{fmt::Debug, path::PathBuf};

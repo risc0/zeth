@@ -73,7 +73,7 @@ where
 
     // Verify that the transactions run correctly
     info!("Running from memory ...");
-    let output = N::build_from(chain_spec, input.clone()).context("Error while building block")?;
+    let output = N::build_from(&input).context("Error while building block")?;
 
     match &output {
         BlockBuildOutput::SUCCESS {

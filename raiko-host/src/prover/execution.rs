@@ -3,12 +3,12 @@ use std::time::Instant;
 use tracing::{info, warn};
 use zeth_lib::{
     builder::{BlockBuilderStrategy, TaikoStrategy},
-    host::host::taiko_run_preflight,
     input::{GuestInput, GuestOutput, TaikoProverData},
     protocol_instance::{assemble_protocol_instance, EvidenceType},
     EthereumTxEssence,
 };
 use zeth_primitives::Address;
+use crate::host::host::taiko_run_preflight;
 
 use super::{
     context::Context,
@@ -41,7 +41,7 @@ pub async fn execute(
         let elapsed = Instant::now().duration_since(start).as_millis() as i64;
         observe_input(elapsed);
         // 2. pre-build the block
-        let build_result = TaikoStrategy::build_from(input.clone());
+        let build_result = TaikoStrategy::build_from(&input);
         // TODO: cherry-pick risc0 latest output
         let output = match &build_result {
             Ok((header, mpt_node)) => {

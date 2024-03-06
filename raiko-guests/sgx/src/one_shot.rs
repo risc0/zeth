@@ -131,7 +131,7 @@ pub async fn one_shot(global_opts: GlobalOpts, args: OneShotArgs) -> Result<()> 
     let input = bincode::deserialize_from(file).expect("unable to deserialize input");
 
     // Process the block
-    let (header, _mpt_node) = TaikoStrategy::build_from(&TKO_MAINNET_CHAIN_SPEC.clone(), input)
+    let (header, _mpt_node) = TaikoStrategy::build_from(&input)
         .expect("Failed to build the resulting block");
     let pi = assemble_protocol_instance(&input, &header)?;
     let pi_hash = pi.instance_hash(EvidenceType::Sgx { new_pubkey });

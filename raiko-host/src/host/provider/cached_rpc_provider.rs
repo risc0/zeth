@@ -16,7 +16,6 @@ use std::path::PathBuf;
 
 use alloy_rpc_types::EIP1186AccountProofResponse;
 use anyhow::Result;
-#[cfg(feature = "taiko")]
 use ethers_core::types::Log;
 use ethers_core::types::{Block, Bytes, Transaction, TransactionReceipt, H256, U256};
 
@@ -24,7 +23,6 @@ use super::{
     file_provider::FileProvider, rpc_provider::RpcProvider, AccountQuery, BlockQuery,
     GetBlobsResponse, MutProvider, ProofQuery, Provider, StorageQuery,
 };
-#[cfg(feature = "taiko")]
 use crate::host::provider::LogsQuery;
 
 pub struct CachedRpcProvider {
@@ -149,7 +147,6 @@ impl Provider for CachedRpcProvider {
         Ok(out)
     }
 
-    #[cfg(feature = "taiko")]
     fn get_logs(&mut self, query: &LogsQuery) -> Result<Vec<Log>> {
         let cache_out = self.cache.get_logs(query);
         if cache_out.is_ok() {
@@ -162,7 +159,6 @@ impl Provider for CachedRpcProvider {
         Ok(out)
     }
 
-    #[cfg(feature = "taiko")]
     fn get_transaction(&mut self, query: &super::TxQuery) -> Result<Transaction> {
         let cache_out = self.cache.get_transaction(query);
         if cache_out.is_ok() {
@@ -186,7 +182,6 @@ impl Provider for CachedRpcProvider {
         Ok(out)
     }
 
-    #[cfg(feature = "taiko")]
     fn get_blob_data(&mut self, block_id: u64) -> Result<GetBlobsResponse> {
         let cache_out = self.cache.get_blob_data(block_id);
         if cache_out.is_ok() {

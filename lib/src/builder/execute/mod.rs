@@ -20,7 +20,6 @@ use zeth_primitives::transactions::TxEssence;
 
 use super::BlockBuilder;
 
-#[cfg(feature = "taiko")]
 pub(super) mod taiko;
 
 pub trait TxExecStrategy<E: TxEssence> {

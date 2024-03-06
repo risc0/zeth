@@ -72,40 +72,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0942ffc6dcaadf03badf6e6a2d0228460359d5e34b57ccdc720b7382dfbd5ec5"
 
 [[package]]
-name = "alloy-eips"
-version = "0.1.0"
-source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
-dependencies = [
- "alloy-primitives",
- "alloy-rlp",
- "serde",
- "thiserror",
-]
-
-[[package]]
-name = "alloy-json-rpc"
-version = "0.1.0"
-source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
-dependencies = [
- "alloy-primitives",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "alloy-network"
-version = "0.1.0"
-source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
-dependencies = [
- "alloy-eips",
- "alloy-json-rpc",
- "alloy-primitives",
- "alloy-rlp",
- "serde",
-]
-
-[[package]]
 name = "alloy-primitives"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -128,30 +94,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "alloy-providers"
-version = "0.1.0"
-source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
-dependencies = [
- "alloy-network",
- "alloy-primitives",
- "alloy-rpc-client",
- "alloy-rpc-trace-types",
- "alloy-rpc-types",
- "alloy-transport",
- "alloy-transport-http",
- "async-stream",
- "async-trait",
- "auto_impl",
- "futures",
- "lru",
- "reqwest",
- "serde",
- "thiserror",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "alloy-rlp"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -171,37 +113,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.51",
-]
-
-[[package]]
-name = "alloy-rpc-client"
-version = "0.1.0"
-source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
-dependencies = [
- "alloy-json-rpc",
- "alloy-transport",
- "alloy-transport-http",
- "futures",
- "pin-project",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "tokio-stream",
- "tower",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "alloy-rpc-trace-types"
-version = "0.1.0"
-source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
-dependencies = [
- "alloy-primitives",
- "alloy-rpc-types",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -245,35 +156,6 @@ dependencies = [
  "alloy-sol-macro",
  "const-hex",
  "serde",
-]
-
-[[package]]
-name = "alloy-transport"
-version = "0.1.0"
-source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
-dependencies = [
- "alloy-json-rpc",
- "base64 0.21.7",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "tower",
- "url",
- "wasm-bindgen-futures",
-]
-
-[[package]]
-name = "alloy-transport-http"
-version = "0.1.0"
-source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
-dependencies = [
- "alloy-json-rpc",
- "alloy-transport",
- "reqwest",
- "serde_json",
- "tower",
- "url",
 ]
 
 [[package]]
@@ -598,28 +480,6 @@ dependencies = [
  "predicates-core",
  "predicates-tree",
  "wait-timeout",
-]
-
-[[package]]
-name = "async-stream"
-version = "0.3.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd56dd203fef61ac097dd65721a419ddccb106b2d2b70ba60a6b529f03961a51"
-dependencies = [
- "async-stream-impl",
- "futures-core",
- "pin-project-lite",
-]
-
-[[package]]
-name = "async-stream-impl"
-version = "0.3.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16e62a023e7c117e27523144c5d2459f4397fcc3cab0085af8e2224f643a0193"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.51",
 ]
 
 [[package]]
@@ -2409,15 +2269,6 @@ name = "log"
 version = "0.4.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5e6163cb8c49088c2c36f57875e58ccd8c87c7427f7fbd50ea6710b2f3f2e8f"
-
-[[package]]
-name = "lru"
-version = "0.12.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3262e75e648fce39813cb56ac41f3c3e3f65217ebf3844d818d1f9398cfb0dc"
-dependencies = [
- "hashbrown 0.14.3",
-]
 
 [[package]]
 name = "malloc_buf"
@@ -4439,18 +4290,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tokio-stream"
-version = "0.1.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "397c988d37662c7dda6d2208364a706264bf3d6138b11d436cbac0ad38832842"
-dependencies = [
- "futures-core",
- "pin-project-lite",
- "tokio",
- "tokio-util",
-]
-
-[[package]]
 name = "tokio-tungstenite"
 version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4545,27 +4384,6 @@ dependencies = [
  "toml_datetime",
  "winnow 0.6.2",
 ]
-
-[[package]]
-name = "tower"
-version = "0.4.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8fa9be0de6cf49e536ce1851f987bd21a43b771b09473c3549a6c853db37c1c"
-dependencies = [
- "futures-core",
- "futures-util",
- "pin-project",
- "pin-project-lite",
- "tower-layer",
- "tower-service",
- "tracing",
-]
-
-[[package]]
-name = "tower-layer"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c20c8dbed6283a09604c3e69b4b7eeb54e298b8a600d4d5ecb5ad39de609f1d0"
 
 [[package]]
 name = "tower-service"
@@ -5190,17 +5008,13 @@ name = "zeth-lib"
 version = "0.1.0"
 dependencies = [
  "alloy-primitives",
- "alloy-providers",
  "alloy-rlp",
  "alloy-rlp-derive",
- "alloy-rpc-types",
  "alloy-sol-types",
- "alloy-transport-http",
  "anyhow",
  "bytes",
  "chrono",
  "ethers-core",
- "ethers-providers",
  "flate2",
  "hashbrown 0.14.3",
  "hex",
@@ -5214,7 +5028,6 @@ dependencies = [
  "serde_with",
  "thiserror",
  "thiserror-no-std",
- "tokio",
  "url",
  "zeth-primitives",
 ]

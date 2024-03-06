@@ -1,7 +1,7 @@
 //! Generate different proofs for the taiko protocol.
 use crate::prover::{
     context::Context,
-    request::{ProofRequest, Risc0Instance, SgxResponse},
+    request::{ProofRequest, SgxResponse},
 };
 
 #[allow(dead_code)]
@@ -60,6 +60,7 @@ pub mod risc0 {
     };
 
     use super::*;
+    use crate::prover::request::Risc0Instance;
     pub async fn execute_risc0(
         input: GuestInput<EthereumTxEssence>,
         output: GuestOutput,

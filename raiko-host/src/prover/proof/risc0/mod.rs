@@ -3,11 +3,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use alloy_primitives::FixedBytes;
 use hex::ToHex;
 use serde::{Deserialize, Serialize};
 use tracing::info as traicing_info;
-use zeth_lib::{consts::TKO_MAINNET_CHAIN_SPEC, input::{GuestInput, GuestOutput}, EthereumTxEssence};
+use zeth_lib::{input::{GuestInput, GuestOutput}, EthereumTxEssence};
 use std::env;
 
 use crate::prover::{

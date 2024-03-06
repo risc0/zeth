@@ -20,7 +20,6 @@ use zeth_primitives::{
     transactions::{ethereum::EthereumTxEssence, TxEssence},
 };
 
-#[cfg(feature = "taiko")]
 pub use self::execute::taiko::TkoTxExecStrategy;
 use crate::{
     builder::{
@@ -55,12 +54,12 @@ where
     E: TxEssence,
 {
     /// Creates a new block builder.
-    pub fn new(input: GuestInput<E>) -> BlockBuilder<D, E> {
+    pub fn new(input: &GuestInput<E>) -> BlockBuilder<D, E> {
         BlockBuilder {
             chain_spec: get_chain_spec(&input.taiko.chain_spec_name),
             db: None,
             header: None,
-            input,
+            input: input.clone(),
         }
     }
 
@@ -111,7 +110,7 @@ pub trait BlockBuilderStrategy {
     type BlockFinalizeStrategy: BlockFinalizeStrategy<MemDb>;
 
     /// Builds a block from the given input.
-    fn build_from(input: GuestInput<Self::TxEssence>) -> Result<(Header, MptNode)> {
+    fn build_from(input: &GuestInput<Self::TxEssence>) -> Result<(Header, MptNode)> {
         BlockBuilder::<MemDb, Self::TxEssence>::new(input)
             .initialize_database::<Self::DbInitStrategy>()?
             .prepare_header::<Self::HeaderPrepStrategy>()?
@@ -120,10 +119,8 @@ pub trait BlockBuilderStrategy {
     }
 }
 
-/// The [BlockBuilderStrategy] for building an Optimism block.
-#[cfg(feature = "taiko")]
+/// The [BlockBuilderStrategy] for building a Taiko block.
 pub struct TaikoStrategy {}
-#[cfg(feature = "taiko")]
 impl BlockBuilderStrategy for TaikoStrategy {
     type TxEssence = EthereumTxEssence;
     type DbInitStrategy = MemDbInitStrategy;

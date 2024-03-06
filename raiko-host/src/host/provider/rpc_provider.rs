@@ -166,7 +166,6 @@ impl Provider for RpcProvider {
         Ok(out)
     }
 
-    #[cfg(feature = "taiko")]
     fn get_logs(&mut self, query: &LogsQuery) -> Result<Vec<Log>> {
         info!("Querying RPC for logs: {query:?}");
 
@@ -184,7 +183,6 @@ impl Provider for RpcProvider {
         Ok(out)
     }
 
-    #[cfg(feature = "taiko")]
     fn get_transaction(&mut self, query: &super::TxQuery) -> Result<Transaction> {
         info!("Querying RPC for tx: {query:?}");
         let out = self
@@ -196,7 +194,6 @@ impl Provider for RpcProvider {
         }
     }
 
-    #[cfg(feature = "taiko")]
     fn get_blob_data(&mut self, block_id: u64) -> Result<GetBlobsResponse> {
         match self.beacon_rpc_url {
             Some(ref url) => self.tokio_handle.block_on(async {

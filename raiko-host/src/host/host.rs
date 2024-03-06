@@ -5,7 +5,7 @@ use anyhow::{anyhow, ensure, Context, Result};
 use ethers_core::types::Transaction as EthersTransaction;
 use hashbrown::HashSet;
 use log::info;
-//use reth_primitives::eip4844::kzg_to_versioned_hash;
+use reth_primitives::eip4844::kzg_to_versioned_hash;
 use rlp::Rlp;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
@@ -16,19 +16,18 @@ use zeth_primitives::{
     Bytes,
 };
 
-use crate::{
+use zeth_lib::{
     builder::{prepare::EthHeaderPrepStrategy, BlockBuilder, TkoTxExecStrategy},
-    host::{
-        provider::{BlockQuery, GetBlobData},
-        provider_db::ProviderDb,
-        taiko_provider::TaikoProvider,
-    },
     input::{
         decode_propose_block_call_params, proposeBlockCall, BlockMetadata, GuestInput,
         TaikoProverData, TaikoSystemInfo,
     },
-    taiko_utils::{MAX_TX_LIST, MAX_TX_LIST_BYTES},
+    taiko_utils::MAX_TX_LIST_BYTES,
 };
+use crate::host::taiko_provider::TaikoProvider;
+use crate::host::provider::GetBlobData;
+use crate::host::provider_db::ProviderDb;
+use super::provider::BlockQuery;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HostArgs {
@@ -105,6 +104,8 @@ pub fn taiko_run_preflight(
     let (proposal_tx, proposal_event) =
         tp.get_proposal(l1_inclusion_block_no, l2_block_no, chain_spec_name)?;
 
+    println!("proposal: {:?}", proposal_event);
+
     let proposal_call = proposeBlockCall::abi_decode(&proposal_tx.input, false).unwrap();
     // .with_context(|| "failed to decode propose block call")?;
 
@@ -130,6 +131,7 @@ pub fn taiko_run_preflight(
         // TODO: check _proposed_blob_hash with blob_hash if _proposed_blob_hash is not None
 
         let blobs = tp.l1_provider.get_blob_data(l1_inclusion_block_no)?;
+        assert!(blobs.data.len() > 0, "blob data not available anymore");
         let tx_blobs: Vec<GetBlobData> = blobs
             .data
             .iter()
@@ -229,7 +231,7 @@ pub fn taiko_run_preflight(
     println!("execute block");
 
     // Create the block builder, run the transactions and extract the DB
-    let mut builder = BlockBuilder::new(input.clone())
+    let mut builder = BlockBuilder::new(&input)
         .with_db(provider_db)
         .prepare_header::<EthHeaderPrepStrategy>()?
         .execute_transactions::<TkoTxExecStrategy>()?;

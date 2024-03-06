@@ -12,21 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/*use alloc::{
-    boxed::Box,
-    format,
-    string::{String, ToString},
-    vec,
-    vec::Vec,
-};*/
 use revm_primitives::Address;
 use core::{
-    cell::RefCell,
     cmp,
     fmt::{Debug, Write},
     iter, mem,
 };
-
 use alloy_primitives::{b256, TxNumber, B256, U256};
 use alloy_rlp::Encodable;
 use alloy_rlp_derive::{RlpDecodable, RlpEncodable, RlpMaxEncodedLen};

@@ -187,8 +187,8 @@ pub enum Network {
     /// The Ethereum Mainnet
     #[default]
     Ethereum,
-    /// The Optimism Mainnet
-    Optimism,
+    /// The Taiko Mainnet
+    Taiko,
 }
 
 impl FromStr for Network {
@@ -197,7 +197,7 @@ impl FromStr for Network {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "ethereum" => Ok(Network::Ethereum),
-            "optimism" => Ok(Network::Optimism),
+            "taiko" => Ok(Network::Taiko),
             #[allow(clippy::needless_return)]
             _ => bail!("Unknown network"),
         }
@@ -208,7 +208,7 @@ impl ToString for Network {
     fn to_string(&self) -> String {
         match self {
             Network::Ethereum => String::from("ethereum"),
-            Network::Optimism => String::from("optimism"),
+            Network::Taiko => String::from("taiko"),
         }
     }
 }

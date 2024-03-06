@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use anyhow::{anyhow, bail, Context, Result};
 use ethers_core::types::{Block, Transaction};
 
-use crate::{
-    host::provider::{new_provider, BlockQuery, Provider, TxQuery},
+use crate::host::provider::{new_provider, BlockQuery, Provider, TxQuery};
+use zeth_lib::{
     input::{anchorCall, decode_anchor, BlockProposed},
     taiko_utils::get_contracts,
 };

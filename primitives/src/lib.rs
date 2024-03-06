@@ -25,8 +25,6 @@ pub mod mpt;
 pub mod receipt;
 pub mod transactions;
 pub mod withdrawal;
-
-#[cfg(feature = "ethers")]
 pub mod ethers;
 
 #[cfg(feature = "revm")]

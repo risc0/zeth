@@ -26,9 +26,6 @@ pub mod mem_db;
 pub mod protocol_instance;
 pub mod taiko_utils;
 
-#[cfg(all(feature = "std"))]
-pub mod host;
-
 pub use zeth_primitives::transactions::ethereum::EthereumTxEssence;
 
 /// call forget only if running inside the guest

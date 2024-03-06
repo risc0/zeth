@@ -11,7 +11,6 @@ use risc0_driver::{
 use risc0_guest::*;
 use zeth_lib::{
     builder::{EthereumStrategy, TaikoStrategy},
-    consts::{ETH_MAINNET_CHAIN_SPEC, TKO_MAINNET_CHAIN_SPEC},
 };
 
 #[tokio::main]

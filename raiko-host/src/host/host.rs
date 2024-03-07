@@ -12,7 +12,7 @@ use zeth_lib::{
     builder::{prepare::TaikoHeaderPrepStrategy, BlockBuilder, TkoTxExecStrategy},
     input::{
         decode_propose_block_call_params, proposeBlockCall, BlockMetadata, GuestInput,
-        TaikoProverData, TaikoSystemInfo,
+        TaikoProverData, TaikoGuestInput,
     },
     taiko_utils::MAX_TX_LIST_BYTES,
 };
@@ -171,7 +171,7 @@ pub fn taiko_run_preflight(
     );
     println!("Transaction count: {:?}", block.transactions.len());
 
-    let taiko_sys_info = TaikoSystemInfo {
+    let taiko_guest_input = TaikoGuestInput {
         chain_spec_name: chain_spec_name.to_string(),
         l1_header: l1_state_root_block
             .try_into()
@@ -223,7 +223,7 @@ pub fn taiko_run_preflight(
         base_fee_per_gas: from_ethers_u256(
             block.base_fee_per_gas.context("base_fee_per_gas missing")?,
         ),
-        taiko: taiko_sys_info,
+        taiko: taiko_guest_input,
     };
 
     // Create the provider DB

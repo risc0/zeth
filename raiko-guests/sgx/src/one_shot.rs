@@ -17,7 +17,7 @@ use zeth_lib::{
     taiko::{
         host::{HostArgs},
         protocol_instance::{assemble_protocol_instance, EvidenceType},
-        TaikoSystemInfo,
+        TaikoGuestInput,
     },
     EthereumTxEssence,
 };

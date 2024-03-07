@@ -63,7 +63,7 @@ pub struct GuestInput<E: TxEssence> {
     /// Base fee per gas
     pub base_fee_per_gas: U256,
     /// Taiko specific data
-    pub taiko: TaikoSystemInfo,
+    pub taiko: TaikoGuestInput,
 }
 
 sol! {
@@ -178,7 +178,7 @@ pub struct TaikoProverData {
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct TaikoSystemInfo {
+pub struct TaikoGuestInput {
     pub chain_spec_name: String,
     pub l1_header: Header,
     pub tx_list: Vec<u8>,

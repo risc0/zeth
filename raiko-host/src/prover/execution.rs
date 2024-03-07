@@ -71,18 +71,17 @@ pub async fn execute(
         observe_input(elapsed);
         // 3. run proof
         // prune_old_caches(&ctx.cache_path, ctx.max_caches);
-        match &req.proof_type {
+        let start = Instant::now();
+        let proof = match &req.proof_type {
             ProofType::Sgx => {
-                let start = Instant::now();
                 let bid = req.block_number;
                 let resp = execute_sgx(ctx, req).await?;
                 let time_elapsed = Instant::now().duration_since(start).as_millis() as i64;
                 observe_sgx_gen(bid, time_elapsed);
                 inc_sgx_success(bid);
-                Ok(ProofResponse::Sgx(resp))
+                ProofResponse::Sgx(resp)
             }
             ProofType::Powdr => {
-                let start = Instant::now();
                 let bid = req.block_number;
                 let resp = execute_powdr().await?;
                 let time_elapsed = Instant::now().duration_since(start).as_millis() as i64;
@@ -90,18 +89,20 @@ pub async fn execute(
             }
             ProofType::PseZk => todo!(),
             ProofType::Succinct => {
-                let start = Instant::now();
                 let bid = req.block_number;
                 let resp = execute_sp1(input, output, ctx, req).await?;
                 let time_elapsed = Instant::now().duration_since(start).as_millis() as i64;
-                Ok(ProofResponse::SP1(resp))
+                ProofResponse::SP1(resp)
             }
             ProofType::Risc0(instance) => {
                 let resp = execute_risc0(input, output, ctx, instance).await?;
-                Ok(ProofResponse::Risc0(resp))
+                ProofResponse::Risc0(resp)
             }
-            ProofType::Native => Ok(ProofResponse::Native(output)),
-        }
+            ProofType::Native => ProofResponse::Native(output),
+        };
+        let time_elapsed = Instant::now().duration_since(start);
+        println!("Proof generated in {}.{} seconds", time_elapsed.as_secs(), time_elapsed.subsec_millis());
+        return Ok(proof);
     }
     .await;
     ctx.remove_cache_file().await?;

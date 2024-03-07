@@ -14,11 +14,11 @@ use crate::prover::{
     utils::guest_executable_path,
 };
 use zeth_lib::input::GuestOutput;
+use std::env;
 
 pub type SP1Proof = sp1_core::SP1ProofWithIO<utils::BabyBearBlake3>;
 
 const ELF: &[u8] = include_bytes!("../../../../raiko-guests/succinct/elf/riscv32im-succinct-zkvm-elf");
-const SP1_PROOF: &'static str = "../../../../raiko-guests/succinct/elf/proof-with-pis.json";
 
 pub async fn execute_sp1(
     input: GuestInput<EthereumTxEssence>,
@@ -37,10 +37,11 @@ pub async fn execute_sp1(
     let output = proof.stdout.read::<GuestOutput>();
 
     // Verify proof.
-    // SP1Verifier::verify(ELF, &proof).expect("verification failed");
+    SP1Verifier::verify(ELF, &proof).expect("verification failed");
 
     // Save the proof.
-    proof.save(SP1_PROOF).expect("saving proof failed");
+    let proof_dir = env::current_dir().expect("dir error");
+    proof.save(proof_dir.as_path().join(format!("proof-with-pis.json")).to_str().unwrap()).expect("saving proof failed");
 
     println!("succesfully generated and verified proof for the program!");
     Ok(SP1Response {

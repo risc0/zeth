@@ -26,7 +26,7 @@ use crate::{
         execute::TxExecStrategy,
         finalize::{BlockFinalizeStrategy, MemDbBlockFinalizeStrategy},
         initialize::{DbInitStrategy, MemDbInitStrategy},
-        prepare::{TaikoHeaderPrepStrategy, HeaderPrepStrategy},
+        prepare::{HeaderPrepStrategy, TaikoHeaderPrepStrategy},
     },
     consts::{get_chain_spec, ChainSpec},
     input::GuestInput,

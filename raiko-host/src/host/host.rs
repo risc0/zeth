@@ -12,7 +12,7 @@ use zeth_lib::{
     builder::{prepare::TaikoHeaderPrepStrategy, BlockBuilder, TkoTxExecStrategy},
     input::{
         decode_propose_block_call_params, proposeBlockCall, BlockMetadata, GuestInput,
-        TaikoProverData, TaikoGuestInput,
+        TaikoGuestInput, TaikoProverData,
     },
     taiko_utils::MAX_TX_LIST_BYTES,
 };

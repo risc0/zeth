@@ -18,10 +18,7 @@ use anyhow::{bail, Context, Result};
 use revm::{Database, DatabaseCommit};
 use zeth_primitives::{block::Header, transactions::TxEssence};
 
-use crate::{
-    builder::BlockBuilder,
-    consts::MAX_EXTRA_DATA_BYTES, taiko_utils::BLOCK_GAS_LIMIT,
-};
+use crate::{builder::BlockBuilder, consts::MAX_EXTRA_DATA_BYTES, taiko_utils::BLOCK_GAS_LIMIT};
 
 pub trait HeaderPrepStrategy {
     fn prepare_header<D, E>(block_builder: BlockBuilder<D, E>) -> Result<BlockBuilder<D, E>>

@@ -16,7 +16,7 @@ use super::{
         cache::Cache, powdr::execute_powdr, risc0::execute_risc0, sgx::execute_sgx,
         succinct::execute_sp1,
     },
-    request::{ProofType, ProofRequest, ProofResponse},
+    request::{ProofRequest, ProofResponse, ProofType},
 };
 use crate::{
     host::host::taiko_run_preflight,

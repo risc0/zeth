@@ -12,18 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use revm_primitives::Address;
 use core::{
     cmp,
     fmt::{Debug, Write},
     iter, mem,
 };
+
 use alloy_primitives::{b256, TxNumber, B256, U256};
 use alloy_rlp::Encodable;
 use alloy_rlp_derive::{RlpDecodable, RlpEncodable, RlpMaxEncodedLen};
 use alloy_rpc_types::EIP1186AccountProofResponse;
 use anyhow::{Context, Result};
 use hashbrown::HashMap;
+use revm_primitives::Address;
 use rlp::{Decodable, DecoderError, Prototype, Rlp};
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;

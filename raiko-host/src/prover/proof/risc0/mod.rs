@@ -16,7 +16,7 @@ use crate::prover::{
     consts::*,
     context::Context,
     proof::risc0::snarks::verify_groth16_snark,
-    request::{ProofType, ProofRequest, Risc0ProofParams, Risc0Response},
+    request::{ProofRequest, ProofType, Risc0ProofParams, Risc0Response},
     utils::guest_executable_path,
 };
 

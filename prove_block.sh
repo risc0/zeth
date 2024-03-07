@@ -22,6 +22,8 @@ fi
 
 if [ "$proof" == "native" ]; then
   proofType='"native"'
+elif [ "$proof" == "succinct" ]; then
+  proofType='"succinct"'
 elif [ "$proof" == "risc0" ]; then
   proofType='{
     "risc0": {

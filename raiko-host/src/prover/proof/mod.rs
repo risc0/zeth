@@ -4,6 +4,11 @@ use crate::prover::{
     request::{ProofRequest, SgxResponse},
 };
 
+use zeth_lib::{
+    input::{GuestInput, GuestOutput},
+    EthereumTxEssence,
+};
+
 #[allow(dead_code)]
 pub mod cache;
 
@@ -45,7 +50,12 @@ pub mod succinct;
 pub mod succinct {
     use super::*;
     use crate::prover::request::SP1Response;
-    pub async fn execute_sp1(ctx: &mut Context, req: &ProofRequest) -> Result<SP1Response, String> {
+    pub async fn execute_sp1(
+        input: GuestInput<EthereumTxEssence>,
+        output: GuestOutput,
+        ctx: &mut Context,
+        req: &ProofRequest,
+    ) -> Result<SP1Response, String> {
         Err("Feature not succinct is enabled".to_string())
     }
 }
@@ -54,12 +64,8 @@ pub mod succinct {
 pub mod risc0;
 #[cfg(not(feature = "risc0"))]
 pub mod risc0 {
-    use zeth_lib::{
-        input::{GuestInput, GuestOutput},
-        EthereumTxEssence,
-    };
-
     use super::*;
+    use crate::prover::request::Risc0Response;
     use crate::prover::request::Risc0ProofParams;
     pub async fn execute_risc0(
         input: GuestInput<EthereumTxEssence>,

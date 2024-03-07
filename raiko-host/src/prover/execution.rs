@@ -92,7 +92,7 @@ pub async fn execute(
             ProofType::Succinct => {
                 let start = Instant::now();
                 let bid = req.block_number;
-                let resp = execute_sp1(ctx, req).await?;
+                let resp = execute_sp1(input, output, ctx, req).await?;
                 let time_elapsed = Instant::now().duration_since(start).as_millis() as i64;
                 Ok(ProofResponse::SP1(resp))
             }

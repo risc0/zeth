@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 
-use super::{consts::RAIKO_GUEST_EXECUTABLE, request::ProofInstance};
+use super::{consts::RAIKO_GUEST_EXECUTABLE, request::ProofType};
 
 #[derive(Debug, Default, Clone)]
 pub struct Context {
@@ -48,14 +48,14 @@ impl Context {
         }
     }
 
-    pub fn guest_executable_path(&self, proof_instance: ProofInstance) -> PathBuf {
+    pub fn guest_executable_path(&self, proof_instance: ProofType) -> PathBuf {
         match proof_instance {
-            ProofInstance::Succinct => todo!(),
-            ProofInstance::PseZk => todo!(),
-            ProofInstance::Powdr => todo!(),
-            ProofInstance::Sgx => self.guest_elf.join("sgx").join(RAIKO_GUEST_EXECUTABLE),
-            ProofInstance::Risc0(_) => todo!(),
-            ProofInstance::Native => todo!(),
+            ProofType::Succinct => todo!(),
+            ProofType::PseZk => todo!(),
+            ProofType::Powdr => todo!(),
+            ProofType::Sgx => self.guest_elf.join("sgx").join(RAIKO_GUEST_EXECUTABLE),
+            ProofType::Risc0(_) => todo!(),
+            ProofType::Native => todo!(),
         }
     }
 

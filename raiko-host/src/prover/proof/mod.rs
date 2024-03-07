@@ -60,12 +60,12 @@ pub mod risc0 {
     };
 
     use super::*;
-    use crate::prover::request::Risc0Instance;
+    use crate::prover::request::Risc0ProofParams;
     pub async fn execute_risc0(
         input: GuestInput<EthereumTxEssence>,
         output: GuestOutput,
         ctx: &Context,
-        req: &Risc0Instance,
+        req: &Risc0ProofParams,
     ) -> Result<Risc0Response, String> {
         Err("Feature not risc0 is enabled".to_string())
     }

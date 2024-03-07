@@ -48,7 +48,7 @@ pub async fn execute_sgx(ctx: &mut Context, req: &ProofRequest) -> Result<SgxRes
         .arg("--sgx-instance-id")
         .arg(instance_id.to_string())
         .arg("--l2-chain")
-        .arg(&req.l2_contracts)
+        .arg(&req.chain)
         .output()
         .await
         .map_err(|e| e.to_string())?;

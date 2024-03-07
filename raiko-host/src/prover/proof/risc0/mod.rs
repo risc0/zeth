@@ -16,7 +16,7 @@ use crate::prover::{
     consts::*,
     context::Context,
     proof::risc0::snarks::verify_groth16_snark,
-    request::{ProofInstance, ProofRequest, Risc0Instance, Risc0Response},
+    request::{ProofType, ProofRequest, Risc0ProofParams, Risc0Response},
     utils::guest_executable_path,
 };
 
@@ -27,7 +27,7 @@ pub async fn execute_risc0(
     input: GuestInput<EthereumTxEssence>,
     output: GuestOutput,
     ctx: &Context,
-    req: &Risc0Instance,
+    req: &Risc0ProofParams,
 ) -> Result<Risc0Response, String> {
     println!("elf code length: {}", RISC0_METHODS_ELF.len());
 
@@ -225,7 +225,7 @@ pub async fn verify_bonsai_receipt<O: Eq + Debug + DeserializeOwned>(
 }
 
 pub async fn maybe_prove<I: Serialize, O: Eq + Debug + Serialize + DeserializeOwned>(
-    req: &Risc0Instance,
+    req: &Risc0ProofParams,
     input: &I,
     elf: &[u8],
     expected_output: &O,

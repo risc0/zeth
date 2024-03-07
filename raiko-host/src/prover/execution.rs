@@ -16,7 +16,7 @@ use super::{
         cache::Cache, powdr::execute_powdr, risc0::execute_risc0, sgx::execute_sgx,
         succinct::execute_sp1,
     },
-    request::{ProofInstance, ProofRequest, ProofResponse},
+    request::{ProofType, ProofRequest, ProofResponse},
 };
 use crate::{
     host::host::taiko_run_preflight,
@@ -37,6 +37,7 @@ pub async fn execute(
     // > in case of runtime shutdown.
     // ctx.remove_cache_file().await?;
     let result = async {
+        println!("- {:?}", req);
         // 1. load input data into cache path
         let start = Instant::now();
         let input = prepare_input(ctx, req.clone()).await?;
@@ -51,7 +52,7 @@ pub async fn execute(
                 info!("Final block hash derived successfully. {}", header.hash());
                 info!("Final block header derived successfully. {:?}", header);
                 let pi = assemble_protocol_instance(&input, &header)?
-                    .instance_hash(req.proof_instance.clone().into());
+                    .instance_hash(req.proof_type.clone().into());
 
                 // Make sure the blockhash from the node matches the one from the builder
                 assert_eq!(
@@ -70,8 +71,8 @@ pub async fn execute(
         observe_input(elapsed);
         // 3. run proof
         // prune_old_caches(&ctx.cache_path, ctx.max_caches);
-        match &req.proof_instance {
-            ProofInstance::Sgx => {
+        match &req.proof_type {
+            ProofType::Sgx => {
                 let start = Instant::now();
                 let bid = req.block_number;
                 let resp = execute_sgx(ctx, req).await?;
@@ -80,26 +81,26 @@ pub async fn execute(
                 inc_sgx_success(bid);
                 Ok(ProofResponse::Sgx(resp))
             }
-            ProofInstance::Powdr => {
+            ProofType::Powdr => {
                 let start = Instant::now();
                 let bid = req.block_number;
                 let resp = execute_powdr().await?;
                 let time_elapsed = Instant::now().duration_since(start).as_millis() as i64;
                 todo!()
             }
-            ProofInstance::PseZk => todo!(),
-            ProofInstance::Succinct => {
+            ProofType::PseZk => todo!(),
+            ProofType::Succinct => {
                 let start = Instant::now();
                 let bid = req.block_number;
                 let resp = execute_sp1(ctx, req).await?;
                 let time_elapsed = Instant::now().duration_since(start).as_millis() as i64;
                 Ok(ProofResponse::SP1(resp))
             }
-            ProofInstance::Risc0(instance) => {
+            ProofType::Risc0(instance) => {
                 let resp = execute_risc0(input, output, ctx, instance).await?;
                 Ok(ProofResponse::Risc0(resp))
             }
-            ProofInstance::Native => Ok(ProofResponse::Native(output)),
+            ProofType::Native => Ok(ProofResponse::Native(output)),
         }
     }
     .await;
@@ -120,7 +121,7 @@ pub async fn prepare_input(
             Some(req.l1_rpc),
             Some(req.l2_rpc),
             req.block_number,
-            &req.l2_contracts,
+            &req.chain,
             TaikoProverData {
                 graffiti: req.graffiti,
                 prover: req.prover,
@@ -133,17 +134,17 @@ pub async fn prepare_input(
     .map_err(Into::<super::error::Error>::into)
 }
 
-impl From<ProofInstance> for EvidenceType {
-    fn from(value: ProofInstance) -> Self {
+impl From<ProofType> for EvidenceType {
+    fn from(value: ProofType) -> Self {
         match value {
-            ProofInstance::Succinct => EvidenceType::Succinct,
-            ProofInstance::PseZk => EvidenceType::PseZk,
-            ProofInstance::Powdr => EvidenceType::Powdr,
-            ProofInstance::Sgx => EvidenceType::Sgx {
+            ProofType::Succinct => EvidenceType::Succinct,
+            ProofType::PseZk => EvidenceType::PseZk,
+            ProofType::Powdr => EvidenceType::Powdr,
+            ProofType::Sgx => EvidenceType::Sgx {
                 new_pubkey: Address::default(),
             },
-            ProofInstance::Risc0(_) => EvidenceType::Risc0,
-            ProofInstance::Native => EvidenceType::Native,
+            ProofType::Risc0(_) => EvidenceType::Risc0,
+            ProofType::Native => EvidenceType::Native,
         }
     }
 }

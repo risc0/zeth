@@ -1,3 +1,5 @@
+
+
 #![no_main]
 sp1_zkvm::entrypoint!(main);
 
@@ -27,5 +29,6 @@ pub fn main() {
             GuestOutput::Failure
         }
     };
+    
     sp1_zkvm::io::write(&output);
 }

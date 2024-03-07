@@ -47,7 +47,12 @@ pub mod succinct;
 pub mod succinct {
     use super::*;
     use crate::prover::request::SP1Response;
-    pub async fn execute_sp1(ctx: &mut Context, req: &ProofRequest) -> Result<SP1Response, String> {
+    pub async fn execute_sp1(
+        input: GuestInput<EthereumTxEssence>,
+        output: GuestOutput,
+        ctx: &mut Context,
+        req: &ProofRequest,
+    ) -> Result<SP1Response, String> {
         Err("Feature not succinct is enabled".to_string())
     }
 }

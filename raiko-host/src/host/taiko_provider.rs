@@ -3,7 +3,10 @@ use std::path::PathBuf;
 use anyhow::{anyhow, bail, Context, Result};
 use ethers_core::types::{Block, Transaction};
 use zeth_lib::{
-    input::{anchorCall, decode_anchor, BlockProposed},
+    input::{
+        anchorCall, decode_anchor, protocol_testnet::BlockProposed as TestnetBlockProposed,
+        BlockProposed,
+    },
     taiko_utils::get_contracts,
 };
 
@@ -60,11 +63,19 @@ impl TaikoProvider {
     ) -> Result<(Transaction, BlockProposed)> {
         let l1_address = get_contracts(chain_name).unwrap().0;
 
-        let logs = self.l1_provider.filter_event_log::<BlockProposed>(
-            l1_address,
-            l1_block_no,
-            l2_block_no,
-        )?;
+        let logs = if chain_name == "testnet" {
+            self.l1_provider
+                .filter_event_log::<TestnetBlockProposed>(l1_address, l1_block_no, l2_block_no)?
+                .iter()
+                .map(|(log, event)| (log.clone(), event.clone().into()))
+                .collect()
+        } else {
+            self.l1_provider.filter_event_log::<BlockProposed>(
+                l1_address,
+                l1_block_no,
+                l2_block_no,
+            )?
+        };
 
         for (log, event) in logs {
             if event.blockId == zeth_primitives::U256::from(l2_block_no) {

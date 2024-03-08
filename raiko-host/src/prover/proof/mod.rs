@@ -1,12 +1,12 @@
 //! Generate different proofs for the taiko protocol.
-use crate::prover::{
-    context::Context,
-    request::{ProofRequest, SgxResponse},
-};
-
 use zeth_lib::{
     input::{GuestInput, GuestOutput},
     EthereumTxEssence,
+};
+
+use crate::prover::{
+    context::Context,
+    request::{ProofRequest, SgxResponse},
 };
 
 #[allow(dead_code)]
@@ -65,8 +65,7 @@ pub mod risc0;
 #[cfg(not(feature = "risc0"))]
 pub mod risc0 {
     use super::*;
-    use crate::prover::request::Risc0Response;
-    use crate::prover::request::Risc0ProofParams;
+    use crate::prover::request::{Risc0ProofParams, Risc0Response};
     pub async fn execute_risc0(
         input: GuestInput<EthereumTxEssence>,
         output: GuestOutput,

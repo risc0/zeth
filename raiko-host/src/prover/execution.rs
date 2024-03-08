@@ -101,8 +101,12 @@ pub async fn execute(
             ProofType::Native => ProofResponse::Native(output),
         };
         let time_elapsed = Instant::now().duration_since(start);
-        println!("Proof generated in {}.{} seconds", time_elapsed.as_secs(), time_elapsed.subsec_millis());
-        return Ok(proof);
+        println!(
+            "Proof generated in {}.{} seconds",
+            time_elapsed.as_secs(),
+            time_elapsed.subsec_millis()
+        );
+        Ok(proof)
     }
     .await;
     ctx.remove_cache_file().await?;

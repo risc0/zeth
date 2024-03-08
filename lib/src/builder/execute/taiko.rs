@@ -38,7 +38,7 @@ use crate::{
     builder::BlockBuilder,
     consts::{self, ChainSpec, GWEI_TO_WEI},
     guest_mem_forget,
-    taiko_utils::check_anchor_tx,
+    taiko_utils::{check_anchor_tx, get_contracts},
 };
 
 /// Minimum supported protocol version: Bedrock (Block no. 105235063).
@@ -160,7 +160,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
             }
 
             fill_eth_tx_env(
-                &block_builder.chain_spec,
+                &block_builder.input.taiko.chain_spec_name,
                 &mut evm.env().tx,
                 &tx.essence,
                 tx_from,
@@ -280,7 +280,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
 }
 
 pub fn fill_eth_tx_env(
-    _l2_chain_spec: &ChainSpec,
+    chain_name: &str,
     tx_env: &mut TxEnv,
     essence: &EthereumTxEssence,
     caller: Address,
@@ -289,7 +289,7 @@ pub fn fill_eth_tx_env(
     // claim the anchor
     tx_env.taiko.is_anchor = is_anchor;
     // set the treasury address
-    tx_env.taiko.treasury = *crate::taiko_utils::testnet::L2_CONTRACT;
+    tx_env.taiko.treasury = get_contracts(chain_name).unwrap().1;
 
     match essence {
         EthereumTxEssence::Legacy(tx) => {

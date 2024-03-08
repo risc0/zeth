@@ -116,6 +116,7 @@ pub fn assemble_protocol_instance(
             minTier: input.taiko.block_proposed.meta.minTier,
             blobUsed: blob_used,
             parentMetaHash: input.taiko.block_proposed.meta.parentMetaHash,
+            sender: input.taiko.block_proposed.meta.sender,
         },
         prover: input.taiko.prover_data.prover,
     };

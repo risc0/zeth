@@ -110,6 +110,7 @@ sol! {
         uint16 minTier;
         bool blobUsed;
         bytes32 parentMetaHash; // slot 8
+        address sender;
     }
 
     #[derive(Debug, Default, Deserialize, Serialize)]
@@ -165,10 +166,138 @@ sol! {
     function proveBlock(uint64 blockId, bytes calldata input) {}
 }
 
+pub mod protocol_testnet {
+    use alloy_sol_types::sol;
+    use serde::{Deserialize, Serialize};
+
+    sol! {
+        #[derive(Debug, Default, Deserialize, Serialize)]
+        struct EthDeposit {
+            address recipient;
+            uint96 amount;
+            uint64 id;
+        }
+
+        #[derive(Debug, Default, Deserialize, Serialize)]
+        struct BlockMetadata {
+            bytes32 l1Hash; // slot 1
+            bytes32 difficulty; // slot 2
+            bytes32 blobHash; //or txListHash (if Blob not yet supported), // slot 3
+            bytes32 extraData; // slot 4
+            bytes32 depositsHash; // slot 5
+            address coinbase; // L2 coinbase, // slot 6
+            uint64 id;
+            uint32 gasLimit;
+            uint64 timestamp; // slot 7
+            uint64 l1Height;
+            uint24 txListByteOffset;
+            uint24 txListByteSize;
+            uint16 minTier;
+            bool blobUsed;
+            bytes32 parentMetaHash; // slot 8
+        }
+
+        #[derive(Debug, Default, Deserialize, Serialize)]
+        struct BlockParams {
+            address assignedProver;
+            address coinbase;
+            bytes32 extraData;
+            bytes32 blobHash;
+            uint24 txListByteOffset;
+            uint24 txListByteSize;
+            bool cacheBlobForReuse;
+            bytes32 parentMetaHash;
+            HookCall[] hookCalls;
+        }
+
+        #[derive(Debug, Default, Deserialize, Serialize)]
+        struct HookCall {
+            address hook;
+            bytes data;
+        }
+
+        #[derive(Debug)]
+        struct Transition {
+            bytes32 parentHash;
+            bytes32 blockHash;
+            bytes32 signalRoot;
+            //bytes32 stateRoot;
+            bytes32 graffiti;
+        }
+
+        #[derive(Debug, Default, Clone, Deserialize, Serialize)]
+        event BlockProposed(
+            uint256 indexed blockId,
+            address indexed assignedProver,
+            uint96 livenessBond,
+            BlockMetadata meta,
+            EthDeposit[] depositsProcessed
+        );
+
+        #[derive(Debug)]
+        struct TierProof {
+            uint16 tier;
+            bytes data;
+        }
+
+        #[derive(Debug)]
+        function proposeBlock(
+            bytes calldata params,
+            bytes calldata txList
+        )
+        {}
+
+        function proveBlock(uint64 blockId, bytes calldata input) {}
+    }
+}
+
 pub fn decode_propose_block_call_params(data: &[u8]) -> Result<BlockParams> {
     let propose_block_params = BlockParams::abi_decode(data, false)
         .map_err(|e| anyhow!("failed to decode propose block call: {e}"))?;
     Ok(propose_block_params)
+}
+
+impl From<protocol_testnet::EthDeposit> for EthDeposit {
+    fn from(item: protocol_testnet::EthDeposit) -> Self {
+        EthDeposit {
+            recipient: item.recipient,
+            amount: item.amount,
+            id: item.id,
+        }
+    }
+}
+
+impl From<protocol_testnet::BlockProposed> for BlockProposed {
+    fn from(item: protocol_testnet::BlockProposed) -> Self {
+        BlockProposed {
+            blockId: item.blockId,
+            assignedProver: item.assignedProver,
+            livenessBond: item.livenessBond,
+            meta: BlockMetadata {
+                l1Hash: item.meta.l1Hash,
+                difficulty: item.meta.difficulty,
+                blobHash: item.meta.blobHash,
+                extraData: item.meta.extraData,
+                depositsHash: item.meta.depositsHash,
+                coinbase: item.meta.coinbase,
+                id: item.meta.id,
+                gasLimit: item.meta.gasLimit,
+                timestamp: item.meta.timestamp,
+                l1Height: item.meta.l1Height,
+                txListByteOffset: item.meta.txListByteOffset,
+                txListByteSize: item.meta.txListByteSize,
+                minTier: item.meta.minTier,
+                blobUsed: item.meta.blobUsed,
+                parentMetaHash: item.meta.parentMetaHash,
+                ..Default::default()
+            },
+            depositsProcessed: item
+                .depositsProcessed
+                .iter()
+                .map(|v| v.clone().into())
+                .collect(),
+        }
+    }
 }
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]

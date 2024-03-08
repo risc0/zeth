@@ -97,11 +97,8 @@ pub fn assemble_protocol_instance(
         },
         block_metadata: BlockMetadata {
             // TODO(Brecht): fix L1 block hash calculation in cancun
-            l1Hash: if input.taiko.chain_spec_name == "testnet" {
-                input.taiko.l1_header.hash()
-            } else {
-                input.taiko.block_proposed.meta.l1Hash
-            },
+            // l1Hash: input.taiko.l1_header.hash(),
+            l1Hash: input.taiko.block_proposed.meta.l1Hash,
             difficulty: input.taiko.block_proposed.meta.difficulty,
             blobHash: tx_list_hash,
             extraData: bytes_to_bytes32(&header.extra_data).into(),

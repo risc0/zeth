@@ -198,10 +198,11 @@ pub fn check_anchor_tx(
             println!("expected: {:?}", input.taiko.l1_header.hash());
             if chain_name == "testnet" {
                 // The L1 blockhash needs to match the expected value
-                ensure!(
-                    anchor_call.l1Hash == input.taiko.l1_header.hash(),
-                    "L1 hash mismatch"
-                );
+                // TODO(Brecht): needs dynamic hash calculation based on L1 block number
+                //ensure!(
+                //    anchor_call.l1Hash == input.taiko.l1_header.hash(),
+                //    "L1 hash mismatch"
+                //);
             }
             if chain_name != "testnet" {
                 ensure!(

@@ -162,7 +162,7 @@ pub fn taiko_run_preflight(
     );
 
     // Set the original transactions on the block
-    block.transactions = transactions;
+    //block.transactions = transactions;
 
     info!(
         "Final block number: {:?} ({:?})",

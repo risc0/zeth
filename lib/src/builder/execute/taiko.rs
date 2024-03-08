@@ -19,7 +19,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use log::debug;
 use revm::{
     interpreter::Host,
-    primitives::{Account, Address, ResultAndState, SpecId, TransactTo, TxEnv},
+    primitives::{Account, Address, EVMError, InvalidTransaction, ResultAndState, SpecId, TransactTo, TxEnv},
     taiko, Database, DatabaseCommit, Evm,
 };
 use ruint::aliases::U256;
@@ -38,7 +38,7 @@ use crate::{
     builder::BlockBuilder,
     consts::{self, ChainSpec, GWEI_TO_WEI},
     guest_mem_forget,
-    taiko_utils::{check_anchor_tx, get_contracts},
+    taiko_utils::{check_anchor_tx, generate_transactions, generate_transactions_2, get_contracts},
 };
 
 /// Minimum supported protocol version: Bedrock (Block no. 105235063).
@@ -65,6 +65,9 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
         }
         let chain_id = block_builder.chain_spec.chain_id();
 
+        // generate the transactions from the tx list
+        let mut transactions = generate_transactions_2(&block_builder.input.taiko.tx_list, block_builder.input.taiko.anchor_tx.clone().unwrap());
+
         #[cfg(feature = "std")]
         {
             use chrono::{TimeZone, Utc};
@@ -75,7 +78,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
                         .input
                         .timestamp
                         .try_into()
-                        .expect("Timestamp could not fit into i64"),
+                        .unwrap(),
                     0,
                 )
                 .unwrap();
@@ -83,7 +86,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
             info!("Block no. {}", header.number);
             info!("  EVM spec ID: {spec_id:?}");
             info!("  Timestamp: {dt}");
-            info!("  Transactions: {}", block_builder.input.transactions.len());
+            info!("  Transactions: {}", transactions.len());
             info!("  Fee Recipient: {:?}", block_builder.input.beneficiary);
             info!("  Gas limit: {}", block_builder.input.gas_limit);
             info!("  Base fee per gas: {}", header.base_fee_per_gas);
@@ -119,10 +122,9 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
         // process all the transactions
         let mut tx_trie = MptNode::default();
         let mut receipt_trie = MptNode::default();
-        #[allow(unused_variables)]
+        // track the actual tx number to use in the tx/receipt trees as the key
         let mut actual_tx_no = 0usize;
-
-        for (tx_no, tx) in take(&mut block_builder.input.transactions)
+        for (tx_no, tx) in take(&mut transactions)
             .into_iter()
             .enumerate()
         {
@@ -130,10 +132,23 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
             let is_anchor = tx_no == 0;
 
             // verify the transaction signature
-            let tx_from = tx
-                .recover_from()
-                .with_context(|| anyhow!("Error recovering address for transaction {tx_no}"))?;
+            let tx_from = match tx.recover_from() {
+                Ok(tx_from) => tx_from,
+                Err(err) => {
+                    if is_anchor {
+                        bail!("Error recovering anchor signature: {}", err);
+                    }
+                    #[cfg(not(target_os = "zkvm"))]
+                    debug!(
+                        "Error recovering address for transaction {}, error: {}",
+                        tx_no, err
+                    );
+                    // If the signature is not valid, skip the transaction
+                    continue;
+                }
+            };
 
+            // verify the anchor tx
             if is_anchor {
                 check_anchor_tx(
                     &block_builder.input,
@@ -159,6 +174,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
                 bail!("Error at transaction {tx_no}: gas exceeds block limit");
             }
 
+            // setup the transaction
             fill_eth_tx_env(
                 &block_builder.input.taiko.chain_spec_name,
                 &mut evm.env().tx,
@@ -166,12 +182,31 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
                 tx_from,
                 is_anchor,
             );
-
             // process the transaction
-            let ResultAndState { result, state } = evm
-                .transact()
-                .map_err(|evm_err| anyhow!("Error at transaction {tx_no}: {evm_err:?}"))?;
+            let ResultAndState { result, state } = match evm.transact() {
+                Ok(result) => result,
+                Err(err) => {
+                    if is_anchor {
+                        bail!("Error at transaction {}: {:?}", tx_no, err);
+                    }
+                    // only continue for invalid tx errors, not db errors (because those can be manipulated by the prover)
+                    match err {
+                        EVMError::Transaction(invalid_transaction) => {
+                            #[cfg(not(target_os = "zkvm"))]
+                            debug!("Invalid tx at {}: {:?}", tx_no, invalid_transaction);
+                            println!("Invalid tx at {}: {:?}", tx_no, invalid_transaction);
+                            // skip the tx
+                            continue;
+                        }
+                        _ => {
+                            // any other error is not allowed
+                            bail!("Invalid tx at {}: {:?}", tx_no, err);
+                        }
+                    }
+                }
+            };
 
+            // anchor tx needs to succeed
             if is_anchor && !result.is_success() {
                 bail!(
                     "Error at transaction {tx_no}: execute anchor failed {result:?}, output {:?}",
@@ -221,17 +256,17 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
                 }
             }
 
-            actual_tx_no += 1;
-
+            // update the state
             evm.context.evm.db.commit(state);
 
             // accumulate logs to the block bloom filter
             logs_bloom.accrue_bloom(&receipt.payload.logs_bloom);
 
             // Add receipt and tx to tries
-            let trie_key = tx_no.to_rlp();
+            let trie_key = actual_tx_no.to_rlp();
             tx_trie.insert_rlp(&trie_key, tx)?;
             receipt_trie.insert_rlp(&trie_key, receipt)?;
+            actual_tx_no += 1;
         }
 
         let mut db = &mut evm.context.evm.db;
@@ -273,7 +308,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
         };
 
         // Leak memory, save cycles
-        guest_mem_forget([tx_trie, receipt_trie]);
+        guest_mem_forget([tx_trie, receipt_trie, withdrawals_trie]);
         // Return block builder with updated database
         Ok(block_builder.with_db(evm.context.evm.db))
     }

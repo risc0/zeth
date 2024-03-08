@@ -63,7 +63,30 @@ pub struct GuestInput<E: TxEssence> {
     /// Base fee per gas
     pub base_fee_per_gas: U256,
     /// Taiko specific data
-    pub taiko: TaikoGuestInput,
+    pub taiko: TaikoGuestInput<E>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct TaikoGuestInput<E: TxEssence> {
+    pub chain_spec_name: String,
+    pub l1_header: Header,
+    pub tx_list: Vec<u8>,
+    pub anchor_tx: Option<Transaction<E>>,
+    pub block_proposed: BlockProposed,
+    pub prover_data: TaikoProverData,
+    pub tx_blob_hash: Option<B256>,
+}
+
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+pub struct TaikoProverData {
+    pub prover: Address,
+    pub graffiti: B256,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GuestOutput {
+    Success((Header, FixedBytes<32>)),
+    Failure,
 }
 
 sol! {
@@ -298,28 +321,6 @@ impl From<protocol_testnet::BlockProposed> for BlockProposed {
                 .collect(),
         }
     }
-}
-
-#[derive(Clone, Default, Debug, Serialize, Deserialize)]
-pub struct TaikoProverData {
-    pub prover: Address,
-    pub graffiti: B256,
-}
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct TaikoGuestInput {
-    pub chain_spec_name: String,
-    pub l1_header: Header,
-    pub tx_list: Vec<u8>,
-    pub block_proposed: BlockProposed,
-    pub prover_data: TaikoProverData,
-    pub tx_blob_hash: Option<B256>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum GuestOutput {
-    Success((Header, FixedBytes<32>)),
-    Failure,
 }
 
 #[cfg(test)]

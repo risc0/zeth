@@ -25,13 +25,11 @@ macro_rules! taiko_contracts {
         Ok((
             *L1_CONTRACT,
             *L2_CONTRACT,
-            *L1_SIGNAL_SERVICE,
-            *L2_SIGNAL_SERVICE,
         ))
     }};
 }
 
-pub fn get_contracts(name: &str) -> Result<(Address, Address, Address, Address)> {
+pub fn get_contracts(name: &str) -> Result<(Address, Address)> {
     match name {
         "testnet" => taiko_contracts!(testnet),
         "internal_devnet_a" => taiko_contracts!(internal_devnet_a),
@@ -48,19 +46,9 @@ pub mod testnet {
         Address::from_str("0xB20BB9105e007Bd3E0F73d63D4D3dA2c8f736b77")
             .expect("invalid l1 contract address")
     });
-
-    pub const L1_SIGNAL_SERVICE: Lazy<Address> = Lazy::new(|| {
-        Address::from_str("0x08a3f537c4bbe8B6176420f4Cd0C84b02172dC65")
-            .expect("invalid l1 signal service")
-    });
     pub const L2_CONTRACT: Lazy<Address> = Lazy::new(|| {
         Address::from_str("0x1670080000000000000000000000000000010001")
             .expect("invalid l2 contract address")
-    });
-
-    pub const L2_SIGNAL_SERVICE: Lazy<Address> = Lazy::new(|| {
-        Address::from_str("0x1670080000000000000000000000000000000005")
-            .expect("invalid l2 signal service")
     });
 }
 
@@ -71,19 +59,9 @@ pub mod internal_devnet_a {
         Address::from_str("0xC069c3d2a9f2479F559AD34485698ad5199C555f")
             .expect("invalid l1 contract address")
     });
-    pub const L1_SIGNAL_SERVICE: Lazy<Address> = Lazy::new(|| {
-        Address::from_str("0x83e383dec6E3C2CD167E3bF6aA8c36F0e55Ad910")
-            .expect("invalid l1 signal service")
-    });
-
     pub const L2_CONTRACT: Lazy<Address> = Lazy::new(|| {
         Address::from_str("0x1670010000000000000000000000000000010001")
             .expect("invalid l2 contract address")
-    });
-
-    pub const L2_SIGNAL_SERVICE: Lazy<Address> = Lazy::new(|| {
-        Address::from_str("0x1670010000000000000000000000000000010001")
-            .expect("invalid l2 signal service")
     });
 }
 
@@ -94,18 +72,9 @@ pub mod internal_devnet_b {
         Address::from_str("0x674313F932cc0cE272154a288cf3De474D44e14F")
             .expect("invalid l1 contract address")
     });
-    pub const L1_SIGNAL_SERVICE: Lazy<Address> = Lazy::new(|| {
-        Address::from_str("0x83e383dec6E3C2CD167E3bF6aA8c36F0e55Ad910")
-            .expect("invalid l1 signal service")
-    });
-
     pub const L2_CONTRACT: Lazy<Address> = Lazy::new(|| {
         Address::from_str("0x1670020000000000000000000000000000010001")
             .expect("invalid l2 contract address")
-    });
-    pub const L2_SIGNAL_SERVICE: Lazy<Address> = Lazy::new(|| {
-        Address::from_str("0x1670020000000000000000000000000000000005")
-            .expect("invalid l2 signal service")
     });
 }
 

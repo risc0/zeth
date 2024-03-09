@@ -60,6 +60,9 @@ url = "2.5.0"
 assert_cmd = "2.0"
 rstest = "0.18"
 
+[build-dependencies]
+sp1-helper = { git = "https://github.com/succinctlabs/sp1.git" }
+
 [features]
 # default = ["risc0"]
 # powdr = ["dep:powdr"]

@@ -194,7 +194,6 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
                         EVMError::Transaction(invalid_transaction) => {
                             #[cfg(not(target_os = "zkvm"))]
                             debug!("Invalid tx at {}: {:?}", tx_no, invalid_transaction);
-                            println!("Invalid tx at {}: {:?}", tx_no, invalid_transaction);
                             // skip the tx
                             continue;
                         }

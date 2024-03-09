@@ -45,7 +45,7 @@ cargo run --release --features "risc0 succinct"
 ### risc zero
 #### Testing
 ```
-RISC0_DEV_MODE=1 cargo run--release --features risc0
+RISC0_DEV_MODE=1 cargo run --release --features risc0
 ```
 
 #### CPU

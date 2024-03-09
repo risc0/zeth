@@ -29,7 +29,7 @@ cargo run
 Then in another terminal you can do requests like this:
 
 ```
-./prove_block.sh testnet risc0 10
+./prove_block.sh testnet native 10
 ```
 
 Look into `prove_block.sh` for the available options or run the script without inputs and it will tell you.

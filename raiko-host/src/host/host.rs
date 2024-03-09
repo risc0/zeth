@@ -14,7 +14,7 @@ use zeth_lib::{
         decode_propose_block_call_params, proposeBlockCall, BlockMetadata, GuestInput,
         TaikoGuestInput, TaikoProverData,
     },
-    taiko_utils::{MAX_TX_LIST_BYTES, generate_transactions},
+    taiko_utils::{generate_transactions, MAX_TX_LIST_BYTES},
 };
 use zeth_primitives::{
     block::Header,
@@ -23,6 +23,7 @@ use zeth_primitives::{
     transactions::ethereum::EthereumTxEssence,
     Bytes,
 };
+
 use super::provider::BlockQuery;
 use crate::host::{provider::GetBlobData, provider_db::ProviderDb, taiko_provider::TaikoProvider};
 

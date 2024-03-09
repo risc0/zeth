@@ -19,7 +19,9 @@ use anyhow::{anyhow, bail, Context, Result};
 use log::debug;
 use revm::{
     interpreter::Host,
-    primitives::{Account, Address, EVMError, InvalidTransaction, ResultAndState, SpecId, TransactTo, TxEnv},
+    primitives::{
+        Account, Address, EVMError, InvalidTransaction, ResultAndState, SpecId, TransactTo, TxEnv,
+    },
     taiko, Database, DatabaseCommit, Evm,
 };
 use ruint::aliases::U256;
@@ -66,21 +68,17 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
         let chain_id = block_builder.chain_spec.chain_id();
 
         // generate the transactions from the tx list
-        let mut transactions = generate_transactions_2(&block_builder.input.taiko.tx_list, block_builder.input.taiko.anchor_tx.clone().unwrap());
+        let mut transactions = generate_transactions_2(
+            &block_builder.input.taiko.tx_list,
+            block_builder.input.taiko.anchor_tx.clone().unwrap(),
+        );
 
         #[cfg(feature = "std")]
         {
             use chrono::{TimeZone, Utc};
             use log::info;
             let dt = Utc
-                .timestamp_opt(
-                    block_builder
-                        .input
-                        .timestamp
-                        .try_into()
-                        .unwrap(),
-                    0,
-                )
+                .timestamp_opt(block_builder.input.timestamp.try_into().unwrap(), 0)
                 .unwrap();
 
             info!("Block no. {}", header.number);
@@ -124,10 +122,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
         let mut receipt_trie = MptNode::default();
         // track the actual tx number to use in the tx/receipt trees as the key
         let mut actual_tx_no = 0usize;
-        for (tx_no, tx) in take(&mut transactions)
-            .into_iter()
-            .enumerate()
-        {
+        for (tx_no, tx) in take(&mut transactions).into_iter().enumerate() {
             // anchor transaction must be executed successfully
             let is_anchor = tx_no == 0;
 
@@ -189,7 +184,8 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
                     if is_anchor {
                         bail!("Error at transaction {}: {:?}", tx_no, err);
                     }
-                    // only continue for invalid tx errors, not db errors (because those can be manipulated by the prover)
+                    // only continue for invalid tx errors, not db errors (because those can be
+                    // manipulated by the prover)
                     match err {
                         EVMError::Transaction(invalid_transaction) => {
                             #[cfg(not(target_os = "zkvm"))]

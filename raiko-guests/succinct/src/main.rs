@@ -27,6 +27,6 @@ pub fn main() {
             GuestOutput::Failure
         }
     };
-    
+
     sp1_zkvm::io::write(&output);
 }

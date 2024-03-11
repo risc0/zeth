@@ -20,14 +20,12 @@ pub use alloc::{vec, vec::Vec};
 
 pub mod access_list;
 pub mod block;
+pub mod ethers;
 pub mod keccak;
+pub mod mpt;
 pub mod receipt;
 pub mod transactions;
 pub mod withdrawal;
-pub mod mpt;
-
-#[cfg(feature = "ethers")]
-pub mod ethers;
 
 #[cfg(feature = "revm")]
 pub mod revm;

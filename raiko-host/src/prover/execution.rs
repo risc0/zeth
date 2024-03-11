@@ -1,17 +1,13 @@
 use std::time::Instant;
 
-use alloy_primitives::FixedBytes;
-use ethers_core::types::H160;
 use tracing::{info, warn};
 use zeth_lib::{
     builder::{BlockBuilderStrategy, TaikoStrategy},
-    consts::TKO_MAINNET_CHAIN_SPEC,
-    host::host::{taiko_run_preflight, HostArgs},
-    input::{GuestInput, GuestOutput, TaikoProverData, TaikoSystemInfo},
+    input::{GuestInput, GuestOutput, TaikoProverData},
     protocol_instance::{assemble_protocol_instance, EvidenceType},
     EthereumTxEssence,
 };
-use zeth_primitives::{keccak, Address, B256};
+use zeth_primitives::Address;
 
 use super::{
     context::Context,
@@ -20,10 +16,12 @@ use super::{
         cache::Cache, powdr::execute_powdr, risc0::execute_risc0, sgx::execute_sgx,
         succinct::execute_sp1,
     },
-    request::{ProofInstance, ProofRequest, ProofResponse},
-    utils::cache_file_path,
+    request::{ProofRequest, ProofResponse, ProofType},
 };
-use crate::metrics::{inc_sgx_success, observe_input, observe_sgx_gen};
+use crate::{
+    host::host::taiko_run_preflight,
+    metrics::{inc_sgx_success, observe_input, observe_sgx_gen},
+};
 
 pub async fn execute(
     _cache: &Cache,
@@ -39,22 +37,29 @@ pub async fn execute(
     // > in case of runtime shutdown.
     // ctx.remove_cache_file().await?;
     let result = async {
+        println!("- {:?}", req);
         // 1. load input data into cache path
         let start = Instant::now();
         let input = prepare_input(ctx, req.clone()).await?;
         let elapsed = Instant::now().duration_since(start).as_millis() as i64;
         observe_input(elapsed);
         // 2. pre-build the block
-        let build_result =
-            TaikoStrategy::build_from(&TKO_MAINNET_CHAIN_SPEC.clone(), input.clone());
+        let build_result = TaikoStrategy::build_from(&input);
         // TODO: cherry-pick risc0 latest output
         let output = match &build_result {
             Ok((header, mpt_node)) => {
                 info!("Verifying final state using provider data ...");
                 info!("Final block hash derived successfully. {}", header.hash());
-                info!("Final block hash derived successfully. {:?}", header);
+                info!("Final block header derived successfully. {:?}", header);
                 let pi = assemble_protocol_instance(&input, &header)?
-                    .instance_hash(req.proof_instance.clone().into());
+                    .instance_hash(req.proof_type.clone().into());
+
+                // Make sure the blockhash from the node matches the one from the builder
+                assert_eq!(
+                    header.hash().0,
+                    input.block_hash.to_fixed_bytes(),
+                    "block hash unexpected"
+                );
                 GuestOutput::Success((header.clone(), pi))
             }
             Err(_) => {
@@ -66,37 +71,42 @@ pub async fn execute(
         observe_input(elapsed);
         // 3. run proof
         // prune_old_caches(&ctx.cache_path, ctx.max_caches);
-        match &req.proof_instance {
-            ProofInstance::Sgx => {
-                let start = Instant::now();
+        let start = Instant::now();
+        let proof = match &req.proof_type {
+            ProofType::Sgx => {
                 let bid = req.block_number;
                 let resp = execute_sgx(ctx, req).await?;
                 let time_elapsed = Instant::now().duration_since(start).as_millis() as i64;
                 observe_sgx_gen(bid, time_elapsed);
                 inc_sgx_success(bid);
-                Ok(ProofResponse::Sgx(resp))
+                ProofResponse::Sgx(resp)
             }
-            ProofInstance::Powdr => {
-                let start = Instant::now();
+            ProofType::Powdr => {
                 let bid = req.block_number;
                 let resp = execute_powdr().await?;
                 let time_elapsed = Instant::now().duration_since(start).as_millis() as i64;
                 todo!()
             }
-            ProofInstance::PseZk => todo!(),
-            ProofInstance::Succinct => {
-                let start = Instant::now();
+            ProofType::PseZk => todo!(),
+            ProofType::Succinct => {
                 let bid = req.block_number;
                 let resp = execute_sp1(input, output, ctx, req).await?;
                 let time_elapsed = Instant::now().duration_since(start).as_millis() as i64;
-                Ok(ProofResponse::SP1(resp))
+                ProofResponse::SP1(resp)
             }
-            ProofInstance::Risc0(instance) => {
+            ProofType::Risc0(instance) => {
                 let resp = execute_risc0(input, output, ctx, instance).await?;
-                Ok(ProofResponse::Risc0(resp))
+                ProofResponse::Risc0(resp)
             }
-            ProofInstance::Native => Ok(ProofResponse::Native(output)),
-        }
+            ProofType::Native => ProofResponse::Native(output),
+        };
+        let time_elapsed = Instant::now().duration_since(start);
+        println!(
+            "Proof generated in {}.{} seconds",
+            time_elapsed.as_secs(),
+            time_elapsed.subsec_millis()
+        );
+        Ok(proof)
     }
     .await;
     ctx.remove_cache_file().await?;
@@ -114,14 +124,14 @@ pub async fn prepare_input(
     tokio::task::spawn_blocking(move || {
         taiko_run_preflight(
             Some(req.l1_rpc),
-            TKO_MAINNET_CHAIN_SPEC.clone(),
             Some(req.l2_rpc),
             req.block_number,
-            &req.l2_contracts,
+            &req.chain,
             TaikoProverData {
                 graffiti: req.graffiti,
                 prover: req.prover,
             },
+            Some(req.beacon_rpc),
         )
         .expect("Init taiko failed")
     })
@@ -129,17 +139,17 @@ pub async fn prepare_input(
     .map_err(Into::<super::error::Error>::into)
 }
 
-impl From<ProofInstance> for EvidenceType {
-    fn from(value: ProofInstance) -> Self {
+impl From<ProofType> for EvidenceType {
+    fn from(value: ProofType) -> Self {
         match value {
-            ProofInstance::Succinct => EvidenceType::Succinct,
-            ProofInstance::PseZk => EvidenceType::PseZk,
-            ProofInstance::Powdr => EvidenceType::Powdr,
-            ProofInstance::Sgx => EvidenceType::Sgx {
+            ProofType::Succinct => EvidenceType::Succinct,
+            ProofType::PseZk => EvidenceType::PseZk,
+            ProofType::Powdr => EvidenceType::Powdr,
+            ProofType::Sgx => EvidenceType::Sgx {
                 new_pubkey: Address::default(),
             },
-            ProofInstance::Risc0(_) => EvidenceType::Risc0,
-            ProofInstance::Native => EvidenceType::Native,
+            ProofType::Risc0(_) => EvidenceType::Risc0,
+            ProofType::Native => EvidenceType::Native,
         }
     }
 }

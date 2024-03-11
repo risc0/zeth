@@ -17,7 +17,7 @@ use zeth_lib::{
     taiko::{
         host::{HostArgs},
         protocol_instance::{assemble_protocol_instance, EvidenceType},
-        TaikoSystemInfo,
+        TaikoGuestInput,
     },
     EthereumTxEssence,
 };
@@ -39,8 +39,7 @@ pub const PRIV_KEY_FILENAME: &str = "priv.key";
 struct BootstrapData {
     public_key: String,
     new_instance: Address,
-    #[serde(with = "Base64Standard")]
-    quote: Vec<u8>,
+    quote: String,
 }
 
 fn save_priv_key(key_pair: &KeyPair, privkey_path: &PathBuf) -> Result<()> {
@@ -74,7 +73,7 @@ fn save_bootstrap_details(
     let bootstrap_details = BootstrapData {
         public_key: format!("0x{}", key_pair.public_key()),
         new_instance,
-        quote,
+        quote: hex::encode(quote),
     };
     let json = serde_json::to_string_pretty(&bootstrap_details)?;
     fs::write(bootstrap_details_file_path, json).context(format!(
@@ -132,7 +131,7 @@ pub async fn one_shot(global_opts: GlobalOpts, args: OneShotArgs) -> Result<()> 
     let input = bincode::deserialize_from(file).expect("unable to deserialize input");
 
     // Process the block
-    let (header, _mpt_node) = TaikoStrategy::build_from(&TKO_MAINNET_CHAIN_SPEC.clone(), input)
+    let (header, _mpt_node) = TaikoStrategy::build_from(&input)
         .expect("Failed to build the resulting block");
     let pi = assemble_protocol_instance(&input, &header)?;
     let pi_hash = pi.instance_hash(EvidenceType::Sgx { new_pubkey });

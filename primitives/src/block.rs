@@ -12,11 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloc::vec::Vec;
-use core::{
-    default::Default,
-    option::{Option, Option::*},
-};
+use core::option::Option::*;
 
 use alloy_primitives::{b256, Address, BlockHash, BlockNumber, Bloom, Bytes, B256, B64, U256};
 use alloy_rlp_derive::RlpEncodable;

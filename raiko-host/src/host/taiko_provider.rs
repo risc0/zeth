@@ -1,20 +1,20 @@
 use std::path::PathBuf;
 
-use alloy_primitives::Address;
-use alloy_sol_types::SolCall;
 use anyhow::{anyhow, bail, Context, Result};
-use ethers_core::types::{Block, Filter, Transaction, H160};
-
-use crate::{
-    consts::ChainSpec,
-    host::provider::{new_provider, BlockQuery, Provider, TxQuery},
-    input::{anchorCall, decode_anchor, proposeBlockCall, BlockProposed}, taiko_utils::get_contracts,
+use ethers_core::types::{Block, Transaction};
+use zeth_lib::{
+    input::{
+        anchorCall, decode_anchor, protocol_testnet::BlockProposed as TestnetBlockProposed,
+        BlockProposed,
+    },
+    taiko_utils::get_contracts,
 };
+
+use crate::host::provider::{new_provider, BlockQuery, Provider, TxQuery};
 
 pub struct TaikoProvider {
     pub l1_provider: Box<dyn Provider>,
     pub l2_provider: Box<dyn Provider>,
-
 }
 
 impl TaikoProvider {
@@ -23,10 +23,11 @@ impl TaikoProvider {
         l1_rpc: Option<String>,
         l2_cache: Option<PathBuf>,
         l2_rpc: Option<String>,
+        beacon_rpc_url: Option<String>,
     ) -> Result<Self> {
         Ok(Self {
-            l1_provider: new_provider(None, l1_rpc)?,
-            l2_provider: new_provider(None, l2_rpc)?,
+            l1_provider: new_provider(None, l1_rpc, beacon_rpc_url.clone())?,
+            l2_provider: new_provider(None, l2_rpc, beacon_rpc_url)?,
         })
     }
 
@@ -59,26 +60,23 @@ impl TaikoProvider {
         l1_block_no: u64,
         l2_block_no: u64,
         chain_name: &str,
-    ) -> Result<(proposeBlockCall, BlockProposed)> {
+    ) -> Result<(Transaction, BlockProposed)> {
         let l1_address = get_contracts(chain_name).unwrap().0;
-        println!("l1_address: {:?}", l1_address);
 
-        let logs = self.l1_provider.filter_event_log::<BlockProposed>(
-            l1_address,
-            l1_block_no,
-            l2_block_no,
-        )?;
+        let logs = if chain_name == "testnet" {
+            self.l1_provider
+                .filter_event_log::<TestnetBlockProposed>(l1_address, l1_block_no, l2_block_no)?
+                .iter()
+                .map(|(log, event)| (log.clone(), event.clone().into()))
+                .collect()
+        } else {
+            self.l1_provider.filter_event_log::<BlockProposed>(
+                l1_address,
+                l1_block_no,
+                l2_block_no,
+            )?
+        };
 
-        /*let l1_contact = H160::from_slice(get_contracts(chain_name).unwrap().0.as_slice());
-        let filter = Filter::new()
-            .address(l1_contact)
-            .from_block(l1_block_no)
-            .to_block(l1_block_no);
-        let logs = self
-            .tokio_handle
-            .block_on(async { self.l1_provider.get_logs(&filter).await })?;*/
-
-        //println!("logs: {:?}", logs);
         for (log, event) in logs {
             if event.blockId == zeth_primitives::U256::from(l2_block_no) {
                 let tx = self
@@ -93,9 +91,7 @@ impl TaikoProvider {
                             log.transaction_hash.unwrap()
                         )
                     })?;
-                let call = proposeBlockCall::abi_decode(&tx.input, false).unwrap();
-                // .with_context(|| "failed to decode propose block call")?;
-                return Ok((call, event));
+                return Ok((tx, event));
             }
         }
         bail!("No BlockProposed event found for block {l2_block_no}");

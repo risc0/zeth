@@ -11,16 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use alloc::vec::Vec;
-use alloy_rpc_types::EIP1186AccountProofResponse;
 use std::collections::BTreeSet;
 
+use alloy_rpc_types::EIP1186AccountProofResponse;
 use ethers_core::types::{H160, H256};
 use hashbrown::HashMap;
 use revm::{
     primitives::{Account, AccountInfo, Bytecode},
     Database, DatabaseCommit,
 };
+use zeth_lib::mem_db::{DbError, MemDb};
 use zeth_primitives::{
     block::Header,
     ethers::{from_ethers_bytes, from_ethers_u256},
@@ -28,7 +28,6 @@ use zeth_primitives::{
 };
 
 use super::provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery};
-use crate::mem_db::{DbError, MemDb};
 
 pub struct ProviderDb {
     pub provider: Box<dyn Provider>,

@@ -4,9 +4,12 @@
 # profile = "minimal"
 
 [toolchain]
-# gotta use this for succinct, and explicitly run
-#   $cargo +nightly-2024-01-25  build --features succinct
-# cuz +nightly overrides the rust-toolchain with the latest nightly,
-# but u have to specify nightly otherwise the nightly features required by lib complaints
 channel = "nightly-2024-01-25"
-components = ["llvm-tools", "rustc-dev"]
+components = ["clippy", "rustfmt", "rust-src"]
+profile = "minimal"
+
+
+# sp1: cargo +nightly-2024-01-25 run --features succinct
+# [toolchain]
+# channel = "nightly-2024-01-25"
+# components = ["llvm-tools", "rustc-dev"]

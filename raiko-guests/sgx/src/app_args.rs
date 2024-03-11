@@ -16,6 +16,7 @@ pub struct App {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
+    #[cfg(feature = "sgx")]
     Server(ServerArgs),
     OneShot(OneShotArgs),
     /// Bootstrap the application and exit. Bootstraping process creates the first

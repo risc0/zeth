@@ -8,7 +8,7 @@ ef-tests = []
 
 [dependencies]
 anyhow = "1.0"
-ethers-core = { version = "2.0", features = ["optimism"] }
+ethers-core = { git = "https://github.com/smtmfft/ethers-rs", branch = "ethers-core-2.0.10" }
 hashbrown = { workspace = true }
 revm = { workspace = true }
 serde = "1.0"

@@ -21,7 +21,10 @@ use revm::{
     Database, DatabaseCommit,
 };
 use zeth_primitives::{
-    keccak::{keccak, KECCAK_EMPTY}, mpt::StateAccount, transactions::TxEssence, Bytes
+    keccak::{keccak, KECCAK_EMPTY},
+    mpt::StateAccount,
+    transactions::TxEssence,
+    Bytes,
 };
 
 use crate::{

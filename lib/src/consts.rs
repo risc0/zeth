@@ -15,10 +15,7 @@
 //! Constants for the Ethereum protocol.
 extern crate alloc;
 
-use alloc::{
-    collections::BTreeMap,
-    str::FromStr,
-};
+use alloc::{collections::BTreeMap, str::FromStr};
 
 use anyhow::bail;
 use once_cell::unsync::Lazy;
@@ -65,25 +62,44 @@ pub const ETH_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| {
     }
 });
 
-/// The Taiko mainnet specification.
-#[cfg(feature = "taiko")]
-pub const TKO_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| {
-    ChainSpec {
-        chain_id: 167008,
-        hard_forks: BTreeMap::from([
-            (SpecId::SHANGHAI, ForkCondition::Block(0)),
-            (SpecId::CANCUN, ForkCondition::TBD),
-        ]),
-        eip_1559_constants: Eip1559Constants {
-            base_fee_change_denominator: uint!(8_U256),
-            base_fee_max_increase_denominator: uint!(8_U256),
-            base_fee_max_decrease_denominator: uint!(8_U256),
-            elasticity_multiplier: uint!(2_U256),
-        },
-    }
+/// The Taiko testnet specification.
+pub const TKO_TESTNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
+    chain_id: 167008,
+    hard_forks: BTreeMap::from([
+        (SpecId::SHANGHAI, ForkCondition::Block(0)),
+        (SpecId::CANCUN, ForkCondition::TBD),
+    ]),
+    eip_1559_constants: Eip1559Constants {
+        base_fee_change_denominator: uint!(8_U256),
+        base_fee_max_increase_denominator: uint!(8_U256),
+        base_fee_max_decrease_denominator: uint!(8_U256),
+        elasticity_multiplier: uint!(2_U256),
+    },
 });
 
-#[cfg(feature = "taiko")]
+/// The Taiko testnet specification.
+pub const TKO_DEVNETA_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
+    chain_id: 167001,
+    hard_forks: BTreeMap::from([
+        (SpecId::SHANGHAI, ForkCondition::Block(0)),
+        (SpecId::CANCUN, ForkCondition::TBD),
+    ]),
+    eip_1559_constants: Eip1559Constants {
+        base_fee_change_denominator: uint!(8_U256),
+        base_fee_max_increase_denominator: uint!(8_U256),
+        base_fee_max_decrease_denominator: uint!(8_U256),
+        elasticity_multiplier: uint!(2_U256),
+    },
+});
+
+pub fn get_chain_spec(name: &str) -> ChainSpec {
+    match name {
+        "testnet" => TKO_TESTNET_CHAIN_SPEC.clone(),
+        "internal_devnet_a" => TKO_DEVNETA_CHAIN_SPEC.clone(),
+        _ => unimplemented!("invalid chain name: {name}"),
+    }
+}
+
 pub use crate::taiko_utils::testnet::*;
 
 /// The condition at which a fork is activated.
@@ -171,8 +187,8 @@ pub enum Network {
     /// The Ethereum Mainnet
     #[default]
     Ethereum,
-    /// The Optimism Mainnet
-    Optimism,
+    /// The Taiko Mainnet
+    Taiko,
 }
 
 impl FromStr for Network {
@@ -181,7 +197,7 @@ impl FromStr for Network {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "ethereum" => Ok(Network::Ethereum),
-            "optimism" => Ok(Network::Optimism),
+            "taiko" => Ok(Network::Taiko),
             #[allow(clippy::needless_return)]
             _ => bail!("Unknown network"),
         }
@@ -192,7 +208,7 @@ impl ToString for Network {
     fn to_string(&self) -> String {
         match self {
             Network::Ethereum => String::from("ethereum"),
-            Network::Optimism => String::from("optimism"),
+            Network::Taiko => String::from("taiko"),
         }
     }
 }

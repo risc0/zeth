@@ -9,7 +9,6 @@ use std::{
 
 use hex::ToHex;
 use risc0_guest::{RISC0_METHODS_ELF, RISC0_METHODS_ID};
-use risc0_guest::{RISC0_METHODS_ELF, RISC0_METHODS_ID};
 use serde::{Deserialize, Serialize};
 use tracing::info as traicing_info;
 use zeth_lib::{

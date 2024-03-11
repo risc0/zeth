@@ -10,6 +10,14 @@
 $ cargo install cargo-risczero
 $ cargo risczero install
 ```
+- Install the `cargo prove` tool and the `succinct` toolchain:
+
+```console
+$ curl -L https://sp1.succinct.xyz | bash
+$ sp1up
+$ cargo prove --version
+```
+
 
 - Clone the repository and build with `cargo`:
 

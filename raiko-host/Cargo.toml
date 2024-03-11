@@ -1,0 +1,78 @@
+[package]
+name = "raiko-host"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+alloy-sol-types = { version = "0.6" }
+alloy-primitives = { version = "0.6", default-features = false }
+alloy-rpc-types = { git = "https://github.com/brechtpd/alloy", branch = "r170", version = "0.1.0" }
+alloy-providers = { git = "https://github.com/brechtpd/alloy", branch = "r170", version = "0.1.0" }
+alloy-transport-http = { git = "https://github.com/brechtpd/alloy", branch = "r170", version = "0.1.0" }
+bincode = "1.3.3"
+bytemuck = "1.13"
+clap = { version = "4.0", features = ["derive"] }
+structopt = "0.3.26"
+structopt-toml = "0.5.1"
+ethers-contract = { git = "https://github.com/smtmfft/ethers-rs", branch = "ethers-core-2.0.10" }
+ethers-core = { git = "https://github.com/smtmfft/ethers-rs", branch = "ethers-core-2.0.10" }
+ethers-providers = { git = "https://github.com/smtmfft/ethers-rs", branch = "ethers-core-2.0.10" }
+flate2 = "1.0.28"
+hex = "0.4.3"
+revm = { workspace = true }
+serde = "1.0"
+serde_with = "3.4.0"
+tempfile = "3.6"
+tokio = { version = "^1.23", features = ["full"] }
+zeth-lib = { path = "../lib", features = ["taiko", "std"] }
+zeth-primitives = { path = "../primitives", features = ["taiko", "revm"] }
+serde_json = "1.0"
+hyper = { version = "0.14.27", features = ["server"] }
+hashbrown = { workspace = true }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-appender = "0.2"
+tower = { version = "0.4.13", features = ["full"] }
+lru_time_cache = "0.11.11"
+prometheus = "0.13.3"
+lazy_static = "1.4.0"
+once_cell = "1.8.0"
+thiserror = "1.0"
+# powdr = { git = "https://github.com/ceciliaz030/powdr", branch = "+nightly", optional = true}
+sp1-core = { git = "https://github.com/succinctlabs/sp1.git", optional = true }
+risc0-zkvm = { version = "0.20.1", features = ["prove", "getrandom"], optional = true }
+bonsai-sdk = { version = "0.6.0", features = ["async"],  optional = true }
+risc0-guest = { path = "../raiko-guests/risc0", optional = true}
+log = {version = "0.4"}
+typetag ={version = "0.2.15", optional = true}
+reth-primitives = { git = "https://github.com/paradigmxyz/reth.git", branch = "main", features = [
+  "c-kzg",
+] }
+reqwest = "0.11.22"
+sha2 = "0.10.8"
+proptest = "1.4.0"
+c-kzg = "0.4.0"
+rlp = "0.5.2"
+url = "2.5.0"
+
+[dev-dependencies]
+assert_cmd = "2.0"
+rstest = "0.18"
+
+[build-dependencies]
+sp1-helper = { git = "https://github.com/succinctlabs/sp1.git" }
+
+[features]
+# default = ["risc0"]
+# powdr = ["dep:powdr"]
+succinct = ["dep:sp1-core"]
+risc0 = [
+  "dep:risc0-guest",
+  "dep:risc0-zkvm",
+  "dep:bonsai-sdk",
+  "dep:typetag"
+]
+cuda = ["risc0-zkvm/cuda"]
+metal = ["risc0-zkvm/metal"]
+sgx = []

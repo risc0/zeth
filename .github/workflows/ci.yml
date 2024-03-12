@@ -63,7 +63,7 @@ jobs:
           toolchain: nightly-2024-01-25
           override: true
       - uses: actions-rs/cargo@v1
-        with:
+        with: 
           command: check
 
   clippy:

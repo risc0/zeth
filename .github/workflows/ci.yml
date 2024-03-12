@@ -26,7 +26,7 @@ jobs:
         submodules: recursive
     - uses: risc0/risc0/.github/actions/rustup@release-0.19
     - uses: risc0/risc0/.github/actions/sccache@release-0.19
-    - uses: risc0/cargo-install@v1
+    - uses: risc0/cargo-install@v1x
       with:
         crate: cargo-binstall
     - run: cargo binstall -y --force cargo-risczero@${{ env.RISC0_VERSION }}

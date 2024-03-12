@@ -378,9 +378,9 @@ pub fn prove_locally(
 
         let segment_dir = PathBuf::from("/tmp/risc0-cache");
         if segment_dir.exists() {
-            fs::remove_dir_all(segment_dir)?;
+            fs::remove_dir_all(segment_dir.clone()).unwrap();
         }
-        fs::create_dir(segment_dir)?;
+        fs::create_dir(segment_dir.clone()).unwrap();
 
         exec.run_with_callback(|segment| {
             let path = segment_dir
@@ -495,10 +495,7 @@ pub fn save_receipt<T: serde::Serialize>(receipt_label: &String, receipt_data: &
 }
 
 fn zkp_cache_path(receipt_label: &String) -> String {
-    // Path::new("cache_zkp")
     Path::new("/tmp/risc0-cache")
-        .expect("dir error")
-        .as_path()
         .join(format!("{}.zkp", receipt_label))
         .to_str()
         .unwrap()

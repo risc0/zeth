@@ -46,8 +46,7 @@ jobs:
           override: true
           components: clippy, rustfmt, rust-src
       - run: |
-          curl -L https://sp1.succinct.xyz | bash
-      - run: source /home/runner/.bashrc; sp1up
+          curl -L https://sp1.succinct.xyz | bash ; source /home/runner/.bashrc ; sp1up
       - run: cargo build -p raiko-host --features succinct
 
   test:

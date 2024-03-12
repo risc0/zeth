@@ -38,7 +38,7 @@ use zeth_primitives::{
 use super::TxExecStrategy;
 use crate::{
     builder::BlockBuilder,
-    consts::{self,ChainSpec, GWEI_TO_WEI},
+    consts::{self, ChainSpec, GWEI_TO_WEI},
     guest_mem_forget,
     taiko_utils::{check_anchor_tx, generate_transactions, generate_transactions_2, get_contracts},
 };

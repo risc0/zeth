@@ -26,9 +26,8 @@ jobs:
         submodules: recursive
     - uses: risc0/risc0/.github/actions/rustup@release-0.19
     - uses: risc0/risc0/.github/actions/sccache@release-0.19
-    - uses: risc0/cargo-install@v1x
-      with:
-        crate: cargo-binstall
+    - name: Install cargo-binstall
+      uses: cargo-bins/cargo-binstall@v1.6.4
     - run: cargo binstall -y --force cargo-risczero@${{ env.RISC0_VERSION }}
     - run: cargo risczero install --version $RISC0_TOOLCHAIN_VERSION
     - run: cargo build -p risc0-guest
@@ -45,8 +44,8 @@ jobs:
           toolchain: nightly-2024-01-25
           override: true
           components: clippy, rustfmt, rust-src
-      - run: curl -L https://sp1.succinct.xyz | bash
       - run: |
+          curl -L https://sp1.succinct.xyz | bash
           source $HOME/.bashrc
       - run: sp1up
       - run: cargo build -p raiko-host --features succinct

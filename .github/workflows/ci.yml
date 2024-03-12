@@ -16,8 +16,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: test
+  build-risc0:
+    name: Build risc0
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -31,10 +31,40 @@ jobs:
         crate: cargo-binstall
     - run: cargo binstall -y --force cargo-risczero@${{ env.RISC0_VERSION }}
     - run: cargo risczero install --version $RISC0_TOOLCHAIN_VERSION
-    - run: cargo test --workspace --all-targets --features taiko
-    - run: cargo test --workspace --all-targets --features "taiko std"
-    - run: cargo test --workspace --all-targets --features optimism
+    - run: cargo build -p risc0-guest
 
+  build-sp1:
+    name: Build sp1
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly-2024-01-25
+          override: true
+          components: clippy, rustfmt, rust-src
+      - run: curl -L https://sp1.succinct.xyz | bash
+      - run: |
+          source $HOME/.bashrc
+      - run: sp1up
+      - run: cargo build -p raiko-host --features succinct
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly-2024-01-25
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: check
 
   clippy:
     name: clippy

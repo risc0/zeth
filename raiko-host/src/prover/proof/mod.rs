@@ -66,7 +66,6 @@ pub mod risc0;
 pub mod risc0 {
     use zeth_lib::{
         builder::{BlockBuilderStrategy, TaikoStrategy},
-        consts::TKO_MAINNET_CHAIN_SPEC,
         input::GuestInput,
         EthereumTxEssence,
     };

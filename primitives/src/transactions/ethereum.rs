@@ -352,6 +352,12 @@ pub enum EthereumTxEssence {
     Eip4844(TxEssenceEip4844),
 }
 
+impl Default for EthereumTxEssence {
+    fn default() -> Self {
+        EthereumTxEssence::Eip1559(Default::default())
+    }
+}
+
 impl Encodable for EthereumTxEssence {
     /// Encodes the [EthereumTxEssence] enum variant into the provided `out` buffer.
     ///

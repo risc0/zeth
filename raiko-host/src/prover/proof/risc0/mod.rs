@@ -2,10 +2,6 @@ use std::{
     env, fs,
     path::{Path, PathBuf},
 };
-use std::{
-    env, fs,
-    path::{Path, PathBuf},
-};
 
 use hex::ToHex;
 use risc0_guest::{RISC0_METHODS_ELF, RISC0_METHODS_ID};
@@ -23,9 +19,6 @@ use crate::prover::{
     request::{ProofRequest, ProofType, Risc0ProofParams, Risc0Response},
     utils::guest_executable_path,
 };
-
-// TODO: import from risc0_guest_method
-// const RISC0_GUEST_ID: [u32; 8] = [1,2,3,4,5,6,7,8];
 
 pub async fn execute_risc0(
     input: GuestInput<EthereumTxEssence>,
@@ -383,7 +376,6 @@ pub fn prove_locally(
         let env = env_builder.build().unwrap();
         let mut exec = ExecutorImpl::from_elf(env, elf).unwrap();
 
-        // let segment_dir = tempdir().unwrap();
         let segment_dir = env::current_dir().expect("dir error");
 
         exec.run_with_callback(|segment| {

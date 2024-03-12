@@ -31,7 +31,7 @@ use crate::{
     builder::BlockBuilder,
     consts::MAX_BLOCK_HASH_AGE,
     guest_mem_forget,
-    mem_db::{AccountState, DbAccount, MemDb},
+    mem_db::{AccountState, DbAccount, MemDb}, taiko_utils::HeaderHasher,
 };
 
 pub trait DbInitStrategy<D>

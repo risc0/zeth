@@ -14,17 +14,18 @@
 use core::fmt::Debug;
 
 use alloy_sol_types::{sol, SolCall, SolType};
+use alloy_consensus::Header as AlloyConsensusHeader;
 use anyhow::{anyhow, Result};
 use ethers_core::types::H256;
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
-    block::Header,
     mpt::MptNode,
     transactions::{Transaction, TxEssence},
     withdrawal::Withdrawal,
     Address, Bytes, FixedBytes, B256, U256,
 };
+use alloy_rpc_types::Transaction as AlloyTransaction;
 
 /// Represents the state of an account's storage.
 /// The storage trie together with the used storage slots allow us to reconstruct all the
@@ -32,18 +33,18 @@ use zeth_primitives::{
 pub type StorageEntry = (MptNode, Vec<U256>);
 
 /// External block input.
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct GuestInput<E: TxEssence> {
     /// Block hash - for reference!
     pub block_hash: H256,
     /// Previous block header
-    pub parent_header: Header,
+    pub parent_header: AlloyConsensusHeader,
     /// Address to which all priority fees in this block are transferred.
     pub beneficiary: Address,
     /// Scalar equal to the current limit of gas expenditure per block.
-    pub gas_limit: U256,
+    pub gas_limit: u64,
     /// Scalar corresponding to the seconds since Epoch at this block's inception.
-    pub timestamp: U256,
+    pub timestamp: u64,
     /// Arbitrary byte array containing data relevant for this block.
     pub extra_data: Bytes,
     /// Hash previously used for the PoW now containing the RANDAO value.
@@ -59,19 +60,20 @@ pub struct GuestInput<E: TxEssence> {
     /// The code of all unique contracts.
     pub contracts: Vec<Bytes>,
     /// List of at most 256 previous block headers
-    pub ancestor_headers: Vec<Header>,
+    pub ancestor_headers: Vec<AlloyConsensusHeader>,
     /// Base fee per gas
-    pub base_fee_per_gas: U256,
+    pub base_fee_per_gas: u64,
     /// Taiko specific data
     pub taiko: TaikoGuestInput<E>,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TaikoGuestInput<E: TxEssence> {
     pub chain_spec_name: String,
-    pub l1_header: Header,
+    pub l1_header: AlloyConsensusHeader,
     pub tx_list: Vec<u8>,
     pub anchor_tx: Option<Transaction<E>>,
+    pub anchor_tx_alloy: String,
     pub block_proposed: BlockProposed,
     pub prover_data: TaikoProverData,
     pub tx_blob_hash: Option<B256>,
@@ -85,7 +87,7 @@ pub struct TaikoProverData {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GuestOutput {
-    Success((Header, FixedBytes<32>)),
+    Success((AlloyConsensusHeader, FixedBytes<32>)),
     Failure,
 }
 

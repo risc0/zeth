@@ -6,6 +6,7 @@ use zeth_lib::{
     input::{GuestInput, GuestOutput, TaikoProverData},
     protocol_instance::{assemble_protocol_instance, EvidenceType},
     EthereumTxEssence,
+    taiko_utils::HeaderHasher,
 };
 use zeth_primitives::Address;
 
@@ -98,7 +99,28 @@ pub async fn execute(
                 let resp = execute_risc0(input, output, ctx, instance).await?;
                 ProofResponse::Risc0(resp)
             }
-            ProofType::Native => ProofResponse::Native(output),
+            ProofType::Native => {
+                // Make sure the binary serialization of the input works
+                let encoded: Vec<u8> = bincode::serialize(&input).unwrap();
+                let input = bincode::deserialize(&encoded[..]).unwrap();
+                // Build the block
+                let build_result = TaikoStrategy::build_from(&input);
+                match &build_result {
+                    Ok((header, mpt_node)) => {
+                        // Make sure the blockhash from the node matches the one from the builder
+                        assert_eq!(
+                            header.hash().0,
+                            input.block_hash.to_fixed_bytes(),
+                            "block hash unexpected"
+                        );
+                        ProofResponse::Native(output)
+                    }
+                    Err(_) => {
+                        warn!("Proving bad block construction!");
+                        ProofResponse::Native(GuestOutput::Failure)
+                    }
+                }
+            }
         };
         let time_elapsed = Instant::now().duration_since(start);
         println!(

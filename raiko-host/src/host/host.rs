@@ -1,6 +1,11 @@
 use std::path::PathBuf;
 
 use alloy_sol_types::SolCall;
+use alloy_rpc_types::{Block as AlloyBlock, BlockTransactions};
+use alloy_providers::tmp::{HttpProvider, TempProvider};
+use alloy_transport_http::Http;
+use url::Url;
+
 use anyhow::{anyhow, ensure, Context, Result};
 use ethers_core::types::Transaction as EthersTransaction;
 use hashbrown::HashSet;
@@ -14,10 +19,9 @@ use zeth_lib::{
         decode_propose_block_call_params, proposeBlockCall, BlockMetadata, GuestInput,
         TaikoGuestInput, TaikoProverData,
     },
-    taiko_utils::{generate_transactions, MAX_TX_LIST_BYTES},
+    taiko_utils::{generate_transactions, generate_transactions_alloy, MAX_TX_LIST_BYTES, to_header},
 };
 use zeth_primitives::{
-    block::Header,
     ethers::{from_ethers_h160, from_ethers_h256, from_ethers_u256},
     mpt::proofs_to_tries,
     transactions::ethereum::EthereumTxEssence,
@@ -33,6 +37,26 @@ pub struct HostArgs {
     pub l1_rpc: Option<String>,
     pub l2_cache: Option<PathBuf>,
     pub l2_rpc: Option<String>,
+}
+
+pub fn get_block_alloy(rpc_url: String, block_number: u64, full: bool) -> Result<AlloyBlock> {
+    let http = Http::new(Url::parse(&rpc_url).expect("invalid rpc url"));
+    let provider: HttpProvider = HttpProvider::new(http);
+
+    //info!("Querying RPC for full block: {query:?}");
+
+    let tokio_handle = tokio::runtime::Handle::current();
+
+    let response = tokio_handle.block_on(async {
+        provider
+            .get_block_by_number((block_number).into(), full)
+            .await
+    })?;
+
+    match response {
+        Some(out) => Ok(out),
+        None => Err(anyhow!("No data for {block_number:?}")),
+    }
 }
 
 pub fn taiko_run_preflight(
@@ -52,7 +76,7 @@ pub fn taiko_run_preflight(
     )?;
 
     // Fetch the parent block
-    let parent_block = tp.l2_provider.get_partial_block(&BlockQuery {
+    /*let parent_block = tp.l2_provider.get_partial_block(&BlockQuery {
         block_no: l2_block_no - 1,
     })?;
 
@@ -63,34 +87,44 @@ pub fn taiko_run_preflight(
         parent_block.number.unwrap(),
         parent_block.hash.unwrap()
     );
-    let parent_header: Header = parent_block.try_into().context("invalid parent block")?;
+    let parent_header: Header = parent_block.try_into().context("invalid parent block")?;*/
+
+    let parent_block = get_block_alloy(l2_rpc_url.clone().unwrap(), l2_block_no - 1, false).unwrap();
+    println!("*** alloy parent block ***:{:?}", parent_block);
+
+    let block_alloy = get_block_alloy(l2_rpc_url.clone().unwrap(), l2_block_no, true).unwrap();
+    println!("*** alloy block ***:{:?}", block_alloy);
 
     // Fetch the target block
-    let mut block = tp.l2_provider.get_full_block(&BlockQuery {
+    let mut block_ethers = tp.l2_provider.get_full_block(&BlockQuery {
         block_no: l2_block_no,
     })?;
-    let (anchor_tx, anchor_call) = tp.get_anchor(&block)?;
-    println!("block.hash: {:?}", block.hash.unwrap());
-    println!("block.parent_hash: {:?}", block.parent_hash);
-    println!("block: {:?}", block);
+    let (anchor_tx_ethers, anchor_call_ethers) = tp.get_anchor(&block_ethers)?;
+    let (anchor_tx_alloy, anchor_call_alloy) = tp.get_anchor_alloy(&block_alloy)?;
+    println!("block.hash: {:?}", block_alloy.header.hash.unwrap());
+    println!("block.parent_hash: {:?}", block_alloy.header.parent_hash);
+    println!("block: {:?}", block_ethers);
 
-    println!("anchor L1 block id: {:?}", anchor_call.l1Height);
-    println!("anchor L1 state root: {:?}", anchor_call.l1SignalRoot);
+    println!("anchor L1 block id: {:?}", anchor_call_ethers.l1Height);
+    println!("anchor L1 state root: {:?}", anchor_call_ethers.l1SignalRoot);
 
-    let l1_state_block_no = anchor_call.l1Height;
+    let l1_state_block_no = anchor_call_ethers.l1Height;
     let l1_inclusion_block_no = l1_state_block_no + 1;
 
     println!("l1_state_block_no: {:?}", l1_state_block_no);
 
+    let l1_state_root_block_alloy = get_block_alloy(l1_rpc_url.clone().unwrap(), l1_state_block_no, false).unwrap();
+    println!("*** alloy block ***:{:?}", l1_state_root_block_alloy);
+
     // Get the L1 state block header so that we can prove the L1 state root
     // Fetch the parent block
-    let l1_state_root_block = tp.l1_provider.get_partial_block(&BlockQuery {
+    /*let l1_state_root_block = tp.l1_provider.get_partial_block(&BlockQuery {
         block_no: l1_state_block_no,
-    })?;
+    })?;*/
     // println!("l1_state_root_block: {:?}", l1_state_root_block);
     println!(
         "l1_state_root_block hash: {:?}",
-        l1_state_root_block.hash.unwrap()
+        l1_state_root_block_alloy.header.hash.unwrap()
     );
 
     // let l1_propose_block = tp.l1_provider.get_partial_block(&BlockQuery {
@@ -150,48 +184,50 @@ pub fn taiko_run_preflight(
     // println!("tx_list: {:?}", tx_list);
 
     // Create the transactions for the proposed tx list
-    let transactions: Vec<EthersTransaction> = generate_transactions(&tx_list, anchor_tx.clone());
+    let transactions_ethers: Vec<EthersTransaction> = generate_transactions(&tx_list, anchor_tx_ethers.clone());
 
-    println!("Block valid transactions: {:?}", block.transactions.len());
+
+    let transactions_alloy = generate_transactions_alloy(&tx_list, anchor_tx_alloy.clone());
+
+    println!("Block valid transactions: {:?}", block_alloy.transactions.len());
     assert!(
-        transactions.len() >= block.transactions.len(),
+        transactions_ethers.len() >= block_alloy.transactions.len(),
         "unexpected number of transactions"
     );
 
     // Set the original transactions on the block
-    block.transactions = transactions.clone();
+    //block_alloy.transactions = BlockTransactions::default();
 
     info!(
         "Final block number: {:?} ({:?})",
-        block.number.unwrap(),
-        block.hash.unwrap()
+        block_alloy.header.number.unwrap(),
+        block_alloy.header.hash.unwrap()
     );
-    println!("Transaction count: {:?}", block.transactions.len());
+    println!("Transaction count: {:?}", block_alloy.transactions.len());
 
     let taiko_guest_input = TaikoGuestInput {
         chain_spec_name: chain_spec_name.to_string(),
-        l1_header: l1_state_root_block
-            .try_into()
-            .expect("Failed to convert ethers block to zeth block"),
+        l1_header: to_header(&l1_state_root_block_alloy.header),
         tx_list,
-        anchor_tx: Some(anchor_tx.try_into().unwrap()),
+        anchor_tx: Some(anchor_tx_ethers.try_into().unwrap()),
+        anchor_tx_alloy: serde_json::to_string(&anchor_tx_alloy).unwrap(),
         tx_blob_hash,
         block_proposed: proposal_event,
         prover_data,
     };
 
     // convert each transaction
-    let transactions = transactions
+    /*let transactions = transactions_ethers
         .into_iter()
         .enumerate()
         .map(|(i, tx)| {
             tx.try_into()
                 .map_err(|err| anyhow!("transaction {i} invalid: {err:?}"))
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>, _>>()?;*/
 
     // convert each withdrawal
-    let withdrawals = block
+    let withdrawals = block_ethers
         .withdrawals
         .unwrap_or_default()
         .into_iter()
@@ -204,27 +240,25 @@ pub fn taiko_run_preflight(
 
     // Create the input struct without the block data set
     let input = GuestInput {
-        block_hash: block.hash.unwrap(),
-        beneficiary: from_ethers_h160(block.author.context("author missing")?),
-        gas_limit: from_ethers_u256(block.gas_limit),
-        timestamp: from_ethers_u256(block.timestamp),
-        extra_data: block.extra_data.0.into(),
-        mix_hash: from_ethers_h256(block.mix_hash.context("mix_hash missing")?),
-        transactions,
+        block_hash: block_alloy.header.hash.unwrap().0.try_into().unwrap(),
+        beneficiary: block_alloy.header.miner,
+        gas_limit: block_alloy.header.gas_limit.try_into().unwrap(),
+        timestamp: block_alloy.header.timestamp.try_into().unwrap(),
+        extra_data: block_alloy.header.extra_data.0.into(),
+        mix_hash: block_alloy.header.mix_hash.unwrap(),
+        transactions: Vec::new(),
         withdrawals,
         parent_state_trie: Default::default(),
         parent_storage: Default::default(),
         contracts: Default::default(),
-        parent_header: parent_header.clone(),
+        parent_header: to_header(&parent_block.header),
         ancestor_headers: Default::default(),
-        base_fee_per_gas: from_ethers_u256(
-            block.base_fee_per_gas.context("base_fee_per_gas missing")?,
-        ),
+        base_fee_per_gas: block_alloy.header.base_fee_per_gas.unwrap().try_into().unwrap(),
         taiko: taiko_guest_input,
     };
 
     // Create the provider DB
-    let provider_db = ProviderDb::new(tp.l2_provider, parent_header.number);
+    let provider_db = ProviderDb::new(tp.l2_provider, parent_block.header.number.unwrap().try_into().unwrap());
 
     println!("execute block");
 
@@ -245,7 +279,7 @@ pub fn taiko_run_preflight(
         proofs_to_tries(input.parent_header.state_root, parent_proofs, proofs)?;
 
     // Gather proofs for block history
-    let ancestor_headers = provider_db.get_ancestor_headers()?;
+    let ancestor_headers = provider_db.get_ancestor_headers(l2_rpc_url.unwrap())?;
 
     // Get the contracts from the initial db.
     let mut contracts = HashSet::new();

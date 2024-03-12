@@ -14,6 +14,9 @@
 
 use core::{fmt::Debug, mem::take, str::from_utf8};
 
+use alloy_consensus::{TxEnvelope, TxKind};
+use alloy_consensus::TxEip4844Variant::TxEip4844;
+use alloy_consensus::TxEip4844Variant;
 use anyhow::{anyhow, bail, Context, Result};
 #[cfg(feature = "std")]
 use log::debug;
@@ -36,6 +39,7 @@ use zeth_primitives::{
 };
 
 use super::TxExecStrategy;
+use crate::taiko_utils::generate_transactions_alloy;
 use crate::{
     builder::BlockBuilder,
     consts::{self, ChainSpec, GWEI_TO_WEI},
@@ -68,9 +72,15 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
         let chain_id = block_builder.chain_spec.chain_id();
 
         // generate the transactions from the tx list
-        let mut transactions = generate_transactions_2(
+        let mut transactions = generate_transactions_alloy(
             &block_builder.input.taiko.tx_list,
-            block_builder.input.taiko.anchor_tx.clone().unwrap(),
+            serde_json::from_str(&block_builder.input.taiko.anchor_tx_alloy.clone()).unwrap(),
+        );
+
+        // generate the transactions from the tx list
+        let mut transactions_ether = generate_transactions_2(
+            &block_builder.input.taiko.tx_list,
+            block_builder.input.taiko.anchor_tx.clone().unwrap().clone(),
         );
 
         #[cfg(feature = "std")]
@@ -87,7 +97,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
             info!("  Transactions: {}", transactions.len());
             info!("  Fee Recipient: {:?}", block_builder.input.beneficiary);
             info!("  Gas limit: {}", block_builder.input.gas_limit);
-            info!("  Base fee per gas: {}", header.base_fee_per_gas);
+            info!("  Base fee per gas: {}", header.base_fee_per_gas.unwrap());
             info!("  Extra data: {:?}", block_builder.input.extra_data);
         }
 
@@ -102,11 +112,11 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
                 // set the EVM block environment
                 blk_env.number = U256::from(header.number);
                 blk_env.coinbase = block_builder.input.beneficiary;
-                blk_env.timestamp = header.timestamp;
+                blk_env.timestamp = header.timestamp.try_into().unwrap();
                 blk_env.difficulty = U256::ZERO;
                 blk_env.prevrandao = Some(header.mix_hash);
-                blk_env.basefee = header.base_fee_per_gas;
-                blk_env.gas_limit = block_builder.input.gas_limit;
+                blk_env.basefee = header.base_fee_per_gas.unwrap().try_into().unwrap();
+                blk_env.gas_limit = block_builder.input.gas_limit.try_into().unwrap();
             })
             .with_db(block_builder.db.take().unwrap())
             .append_handler_register(taiko::handler_register::taiko_handle_register)
@@ -115,7 +125,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
         // bloom filter over all transaction logs
         let mut logs_bloom = Bloom::default();
         // keep track of the gas used over all transactions
-        let mut cumulative_gas_used = consts::ZERO;
+        let mut cumulative_gas_used = 0u64;
 
         // process all the transactions
         let mut tx_trie = MptNode::default();
@@ -126,8 +136,56 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
             // anchor transaction must be executed successfully
             let is_anchor = tx_no == 0;
 
+            let tx_hash = match &tx {
+                TxEnvelope::Legacy(tx) => {
+                    tx.hash()
+                }
+                TxEnvelope::TaggedLegacy(tx) => {
+                    tx.hash()
+                }
+                TxEnvelope::Eip2930(tx) => {
+                    tx.hash()
+                }
+                TxEnvelope::Eip1559(tx) => {
+                    tx.hash()
+                }
+                TxEnvelope::Eip4844(tx) => {
+                    tx.hash()
+                }
+            };
+            println!("**** hash: {:?}", tx_hash);
+
+            let from = match &tx {
+                TxEnvelope::Legacy(tx) => {
+                    tx.recover_signer()
+                }
+                TxEnvelope::TaggedLegacy(tx) => {
+                    tx.recover_signer()
+                }
+                TxEnvelope::Eip2930(tx) => {
+                    tx.recover_signer()
+                }
+                TxEnvelope::Eip1559(tx) => {
+                    tx.recover_signer()
+                }
+                TxEnvelope::Eip4844(tx) => {
+                    tx.recover_signer()
+                }
+            };
+
+            println!("**** from: {:?}", from);
+
+            let tx_type  = match tx.tx_type() {
+                alloy_consensus::TxType::Legacy => 0,
+                alloy_consensus::TxType::Eip2930 => 1,
+                alloy_consensus::TxType::Eip1559 => 2,
+                alloy_consensus::TxType::Eip4844 => 3,
+            };
+
+            //println!("**** tx_type: {:?}", tx_type);
+
             // verify the transaction signature
-            let tx_from = match tx.recover_from() {
+            let tx_from = match from {
                 Ok(tx_from) => tx_from,
                 Err(err) => {
                     if is_anchor {
@@ -144,7 +202,8 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
             };
 
             // verify the anchor tx
-            if is_anchor {
+            // TODO(Brecht): reenable with alloy tx
+            /*if is_anchor {
                 check_anchor_tx(
                     &block_builder.input,
                     &tx,
@@ -152,31 +211,43 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
                     &block_builder.input.taiko.chain_spec_name,
                 )
                 .expect("invalid anchor tx");
-            }
+            }*/
 
             #[cfg(feature = "std")]
             {
-                let tx_hash = tx.hash();
+                //let tx_hash = tx.hash();
                 debug!("Tx no. {tx_no} (hash: {tx_hash})");
-                debug!("  Type: {}", tx.essence.tx_type());
+                debug!("  Type: {}", tx_type);
                 debug!("  Fr: {tx_from:?}");
-                debug!("  To: {:?}", tx.essence.to().unwrap_or_default());
+                //debug!("  To: {:?}", tx.to().unwrap_or_default());
             }
 
             // verify transaction gas
             let block_available_gas = block_builder.input.gas_limit - cumulative_gas_used;
-            if block_available_gas < tx.essence.gas_limit() {
-                bail!("Error at transaction {tx_no}: gas exceeds block limit");
-            }
+            // TODO(Brecht): reenable
+            //if block_available_gas < tx.gas_limit().try_into().unwrap() {
+            //    bail!("Error at transaction {tx_no}: gas exceeds block limit");
+            //}
 
-            // setup the transaction
-            fill_eth_tx_env(
+            println!("**** fill");
+
+            /*fill_eth_tx_env(
                 &block_builder.input.taiko.chain_spec_name,
                 &mut evm.env().tx,
-                &tx.essence,
+                &transactions_ether[0].clone().essence,
+                tx_from,
+                is_anchor,
+            );*/
+
+            // setup the transaction
+            fill_eth_tx_env_alloy(
+                &block_builder.input.taiko.chain_spec_name,
+                &mut evm.env().tx,
+                &tx,
                 tx_from,
                 is_anchor,
             );
+            //println!("**** transact: {:?}", evm.env().tx);
             // process the transaction
             let ResultAndState { result, state } = match evm.transact() {
                 Ok(result) => result,
@@ -201,6 +272,8 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
                 }
             };
 
+            //println!("**** transact done");
+
             // anchor tx needs to succeed
             if is_anchor && !result.is_success() {
                 bail!(
@@ -217,9 +290,9 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
 
             // create the receipt from the EVM result
             let receipt = Receipt::new(
-                tx.essence.tx_type(),
+                tx_type,
                 result.is_success(),
-                cumulative_gas_used,
+                cumulative_gas_used.try_into().unwrap(),
                 result.logs().into_iter().map(|log| log.into()).collect(),
             );
 
@@ -259,7 +332,15 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
 
             // Add receipt and tx to tries
             let trie_key = actual_tx_no.to_rlp();
-            tx_trie.insert_rlp(&trie_key, tx)?;
+
+            //tx_trie.insert_rlp(&trie_key, tx)?;
+
+            //if is_anchor {
+                tx_trie.insert_rlp(&trie_key, transactions_ether[tx_no].clone())?;
+            //} else {
+            //    tx_trie.insert_rlp(&trie_key, tx)?;
+            //};
+
             receipt_trie.insert_rlp(&trie_key, receipt)?;
             actual_tx_no += 1;
         }
@@ -295,7 +376,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
         header.transactions_root = tx_trie.hash();
         header.receipts_root = receipt_trie.hash();
         header.logs_bloom = logs_bloom;
-        header.gas_used = cumulative_gas_used;
+        header.gas_used = cumulative_gas_used.try_into().unwrap() ;
         header.withdrawals_root = if spec_id < SpecId::SHANGHAI {
             None
         } else {
@@ -388,6 +469,101 @@ pub fn fill_eth_tx_env(
         }
     };
 }
+
+pub fn fill_eth_tx_env_alloy(
+    chain_name: &str,
+    tx_env: &mut TxEnv,
+    tx: &TxEnvelope,
+    caller: Address,
+    is_anchor: bool,
+) {
+    // claim the anchor
+    tx_env.taiko.is_anchor = is_anchor;
+    // set the treasury address
+    tx_env.taiko.treasury = get_contracts(chain_name).unwrap().1;
+
+    tx_env.caller = caller;
+    match tx {
+        TxEnvelope::Legacy(tx) => {
+            tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
+            tx_env.gas_price = tx.gas_price.try_into().unwrap();
+            tx_env.gas_priority_fee = None;
+            tx_env.transact_to = if let TxKind::Call(to_addr) = tx.to {
+                TransactTo::Call(to_addr)
+            } else {
+                TransactTo::create()
+            };
+            tx_env.value = tx.value;
+            tx_env.data = tx.input.clone();
+            tx_env.chain_id = tx.chain_id;
+            tx_env.nonce = Some(tx.nonce);
+            tx_env.access_list.clear();
+        }
+        TxEnvelope::TaggedLegacy(tx) => {
+            tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
+            tx_env.gas_price = tx.gas_price.try_into().unwrap();
+            tx_env.gas_priority_fee = None;
+            tx_env.transact_to = if let TxKind::Call(to_addr) = tx.to {
+                TransactTo::Call(to_addr)
+            } else {
+                TransactTo::create()
+            };
+            tx_env.value = tx.value;
+            tx_env.data = tx.input.clone();
+            tx_env.chain_id = tx.chain_id;
+            tx_env.nonce = Some(tx.nonce);
+            tx_env.access_list.clear();
+        }
+        TxEnvelope::Eip2930(tx) => {
+            tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
+            tx_env.gas_price = tx.gas_price.try_into().unwrap();
+            tx_env.gas_priority_fee = None;
+            tx_env.transact_to = if let TxKind::Call(to_addr) = tx.to {
+                TransactTo::Call(to_addr)
+            } else {
+                TransactTo::create()
+            };
+            tx_env.value = tx.value;
+            tx_env.data = tx.input.clone();
+            tx_env.chain_id = Some(tx.chain_id);
+            tx_env.nonce = Some(tx.nonce);
+            tx_env.access_list = tx.access_list.clone().into_flattened();
+        }
+        TxEnvelope::Eip1559(tx) => {
+            tx_env.caller = caller;
+            tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
+            tx_env.gas_price = tx.max_fee_per_gas.try_into().unwrap();
+            tx_env.gas_priority_fee = Some(tx.max_priority_fee_per_gas.try_into().unwrap());
+            tx_env.transact_to = if let TxKind::Call(to_addr) = tx.to {
+                TransactTo::Call(to_addr)
+            } else {
+                TransactTo::create()
+            };
+            tx_env.value = tx.value;
+            tx_env.data = tx.input.clone();
+            tx_env.chain_id = Some(tx.chain_id);
+            tx_env.nonce = Some(tx.nonce);
+            tx_env.access_list = tx.access_list.clone().into_flattened();
+        }
+        TxEnvelope::Eip4844(tx) => {
+            let tx = tx.tx().tx();
+            tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
+            tx_env.gas_price = tx.max_fee_per_gas.try_into().unwrap();
+            tx_env.gas_priority_fee = Some(tx.max_priority_fee_per_gas.try_into().unwrap());
+            tx_env.transact_to = if let TxKind::Call(to_addr) = tx.to {
+                TransactTo::Call(to_addr)
+            } else {
+                TransactTo::create()
+            };
+            tx_env.value = tx.value;
+            tx_env.data = tx.input.clone();
+            tx_env.chain_id = Some(tx.chain_id);
+            tx_env.nonce = Some(tx.nonce);
+            tx_env.access_list = tx.access_list.clone().into_flattened();
+        }
+    };
+}
+
 
 pub fn increase_account_balance<D>(
     db: &mut D,

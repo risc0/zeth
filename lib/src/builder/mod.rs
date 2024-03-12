@@ -15,7 +15,6 @@
 use anyhow::Result;
 use revm::{Database, DatabaseCommit};
 use zeth_primitives::{
-    block::Header,
     mpt::MptNode,
     transactions::{ethereum::EthereumTxEssence, TxEssence},
 };
@@ -32,6 +31,7 @@ use crate::{
     input::GuestInput,
     mem_db::MemDb,
 };
+use alloy_consensus::Header as AlloyConsensusHeader;
 
 mod execute;
 mod finalize;
@@ -44,7 +44,7 @@ pub struct BlockBuilder<D, E: TxEssence> {
     pub(crate) chain_spec: ChainSpec,
     pub(crate) input: GuestInput<E>,
     pub(crate) db: Option<D>,
-    pub(crate) header: Option<Header>,
+    pub(crate) header: Option<AlloyConsensusHeader>,
 }
 
 impl<D, E> BlockBuilder<D, E>
@@ -85,7 +85,7 @@ where
     }
 
     /// Finalizes the block building and returns the header and the state trie.
-    pub fn finalize<T: BlockFinalizeStrategy<D>>(self) -> Result<(Header, MptNode)> {
+    pub fn finalize<T: BlockFinalizeStrategy<D>>(self) -> Result<(AlloyConsensusHeader, MptNode)> {
         T::finalize(self)
     }
 
@@ -110,7 +110,7 @@ pub trait BlockBuilderStrategy {
     type BlockFinalizeStrategy: BlockFinalizeStrategy<MemDb>;
 
     /// Builds a block from the given input.
-    fn build_from(input: &GuestInput<Self::TxEssence>) -> Result<(Header, MptNode)> {
+    fn build_from(input: &GuestInput<Self::TxEssence>) -> Result<(AlloyConsensusHeader, MptNode)> {
         BlockBuilder::<MemDb, Self::TxEssence>::new(input)
             .initialize_database::<Self::DbInitStrategy>()?
             .prepare_header::<Self::HeaderPrepStrategy>()?

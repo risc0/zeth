@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use alloy_rpc_types::{Block as AlloyBlock, BlockTransactions, Transaction as AlloyTransaction};
 use anyhow::{anyhow, bail, Context, Result};
 use ethers_core::types::{Block, Transaction};
 use zeth_lib::{
@@ -53,6 +54,15 @@ impl TaikoProvider {
         let tx = l2_block.transactions[0].clone();
         let call = decode_anchor(tx.input.as_ref())?;
         Ok((tx, call))
+    }
+
+    pub fn get_anchor_alloy(&self, block: &AlloyBlock) -> Result<(AlloyTransaction, anchorCall)> {
+        let anchor_tx = match &block.transactions {
+            BlockTransactions::Full(txs) => txs[0].to_owned(),
+            _ => unreachable!(),
+        };
+        let call = decode_anchor(anchor_tx.input.as_ref())?;
+        Ok((anchor_tx, call))
     }
 
     pub fn get_proposal(

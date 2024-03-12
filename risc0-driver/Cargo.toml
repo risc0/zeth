@@ -21,13 +21,13 @@ ethers-core = { git = "https://github.com/smtmfft/ethers-rs", branch = "ethers-c
 ethers-providers = { version = "2.0" }
 hex = "0.4.3"
 log = "0.4"
-risc0-zkvm = { version = "0.20.1", features = ["prove"] }
+risc0-zkvm = { version = "0.20.1", features = ["prove"], optional = true }
 serde = "1.0"
 tempfile = "3.6"
 tokio = { version = "^1.23", features = ["full"] }
 tracing = { version = "0.1", features = ["log"] }
 typetag = "0.2.15"
-risc0-guest = { path = "../raiko-guests/risc0" }
+#risc0-guest = { path = "../raiko-guests/risc0", optional = true }
 zeth-lib = { path = "../lib", features = ["taiko", "std"]}
 zeth-primitives = { path = "../primitives", features = ["taiko", "std"]}
 

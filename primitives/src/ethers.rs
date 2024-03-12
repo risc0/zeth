@@ -44,7 +44,6 @@ use ethers_core::types::{
 
 use crate::{
     access_list::{AccessList, AccessListItem},
-    block::Header,
     receipt::{Log, Receipt, ReceiptPayload},
     transactions::{
         ethereum::{
@@ -115,39 +114,6 @@ impl From<Option<EthersH160>> for TransactionKind {
             Some(address) => TransactionKind::Call(address.0.into()),
             None => TransactionKind::Create,
         }
-    }
-}
-
-/// Conversion from `EthersBlock` to the local [Header].
-/// This conversion may fail if certain expected fields are missing.
-impl<T> TryFrom<EthersBlock<T>> for Header {
-    type Error = anyhow::Error;
-
-    fn try_from(block: EthersBlock<T>) -> Result<Self, Self::Error> {
-        Ok(Header {
-            parent_hash: from_ethers_h256(block.parent_hash),
-            ommers_hash: from_ethers_h256(block.uncles_hash),
-            beneficiary: from_ethers_h160(block.author.context("author missing")?),
-            state_root: from_ethers_h256(block.state_root),
-            transactions_root: from_ethers_h256(block.transactions_root),
-            receipts_root: from_ethers_h256(block.receipts_root),
-            logs_bloom: Bloom::from_slice(
-                block.logs_bloom.context("logs_bloom missing")?.as_bytes(),
-            ),
-            difficulty: from_ethers_u256(block.difficulty),
-            number: block.number.context("number missing")?.as_u64(),
-            gas_limit: from_ethers_u256(block.gas_limit),
-            gas_used: from_ethers_u256(block.gas_used),
-            timestamp: from_ethers_u256(block.timestamp),
-            extra_data: block.extra_data.0.into(),
-            mix_hash: block.mix_hash.context("mix_hash missing")?.0.into(),
-            nonce: block.nonce.context("nonce missing")?.0.into(),
-            base_fee_per_gas: from_ethers_u256(
-                block.base_fee_per_gas.context("base_fee_per_gas missing")?,
-            ),
-            withdrawals_root: block.withdrawals_root.map(from_ethers_h256),
-            transactions: Default::default(),
-        })
     }
 }
 

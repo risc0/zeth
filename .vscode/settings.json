@@ -1,10 +1,6 @@
 {
-    "rust-analyzer.cargo.features": "all",
+    "rust-analyzer.cargo.features": "",
     "rust-analyzer.linkedProjects": [
         "./Cargo.toml",
-        "./raiko-guests/succinct/Cargo.toml",
-        "./raiko-guests/risc0/Cargo.toml",
-        "./raiko-guests/risc0/bin/Cargo.toml",
-        "./risc0-driver/Cargo.toml",
     ]
 }

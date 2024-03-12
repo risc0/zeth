@@ -20,12 +20,14 @@ use revm::{
     primitives::{Account, AccountInfo, Bytecode},
     Database, DatabaseCommit,
 };
-use zeth_lib::mem_db::{DbError, MemDb};
+use zeth_lib::{taiko_utils::to_header, mem_db::{DbError, MemDb}};
 use zeth_primitives::{
-    block::Header,
     ethers::{from_ethers_bytes, from_ethers_u256},
     Address, B256, U256,
 };
+use alloy_rpc_types::Header as AlloyHeader;
+use alloy_consensus::Header as AlloyConsensusHeader;
+use crate::host::host::get_block_alloy;
 
 use super::provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery};
 
@@ -107,7 +109,7 @@ impl ProviderDb {
         self.get_proofs(self.block_no + 1, storage_keys)
     }
 
-    pub fn get_ancestor_headers(&mut self) -> Result<Vec<Header>, anyhow::Error> {
+    pub fn get_ancestor_headers(&mut self, rpc_url: String) -> Result<Vec<AlloyConsensusHeader>, anyhow::Error> {
         let earliest_block = self
             .initial_db
             .block_hashes
@@ -117,11 +119,7 @@ impl ProviderDb {
         let headers = (*earliest_block..self.block_no)
             .rev()
             .map(|block_no| {
-                self.provider
-                    .get_partial_block(&BlockQuery { block_no })
-                    .expect("Failed to retrieve ancestor block")
-                    .try_into()
-                    .expect("Failed to convert ethers block to zeth block")
+                to_header(&get_block_alloy(rpc_url.clone(), block_no, false).unwrap().header)
             })
             .collect();
         Ok(headers)

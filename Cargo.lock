@@ -90,6 +90,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "alloy-consensus"
+version = "0.1.0"
+source = "git+https://github.com/brechtpd/alloy?branch=header-serialize#14381350e57921a71292304875e87dfbfd33c3b5"
+dependencies = [
+ "alloy-eips 0.1.0 (git+https://github.com/brechtpd/alloy?branch=header-serialize)",
+ "alloy-network",
+ "alloy-primitives",
+ "alloy-rlp",
+ "serde",
+]
+
+[[package]]
 name = "alloy-dyn-abi"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -107,7 +119,7 @@ dependencies = [
 [[package]]
 name = "alloy-eips"
 version = "0.1.0"
-source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
+source = "git+https://github.com/brechtpd/alloy?branch=header-serialize#e77a49aad28ca01624bbb9cc3ee0f1daaceb1869"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -149,7 +161,7 @@ dependencies = [
 [[package]]
 name = "alloy-json-rpc"
 version = "0.1.0"
-source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
+source = "git+https://github.com/brechtpd/alloy?branch=header-serialize#e77a49aad28ca01624bbb9cc3ee0f1daaceb1869"
 dependencies = [
  "alloy-primitives",
  "serde",
@@ -160,9 +172,9 @@ dependencies = [
 [[package]]
 name = "alloy-network"
 version = "0.1.0"
-source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
+source = "git+https://github.com/brechtpd/alloy?branch=header-serialize#e77a49aad28ca01624bbb9cc3ee0f1daaceb1869"
 dependencies = [
- "alloy-eips 0.1.0 (git+https://github.com/brechtpd/alloy?branch=r170)",
+ "alloy-eips 0.1.0 (git+https://github.com/brechtpd/alloy?branch=header-serialize)",
  "alloy-json-rpc",
  "alloy-primitives",
  "alloy-rlp",
@@ -195,13 +207,13 @@ dependencies = [
 [[package]]
 name = "alloy-providers"
 version = "0.1.0"
-source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
+source = "git+https://github.com/brechtpd/alloy?branch=header-serialize#e77a49aad28ca01624bbb9cc3ee0f1daaceb1869"
 dependencies = [
  "alloy-network",
  "alloy-primitives",
  "alloy-rpc-client",
- "alloy-rpc-trace-types 0.1.0 (git+https://github.com/brechtpd/alloy?branch=r170)",
- "alloy-rpc-types 0.1.0 (git+https://github.com/brechtpd/alloy?branch=r170)",
+ "alloy-rpc-trace-types 0.1.0 (git+https://github.com/brechtpd/alloy?branch=header-serialize)",
+ "alloy-rpc-types 0.1.0 (git+https://github.com/brechtpd/alloy?branch=header-serialize)",
  "alloy-transport",
  "alloy-transport-http",
  "async-stream",
@@ -241,7 +253,7 @@ dependencies = [
 [[package]]
 name = "alloy-rpc-client"
 version = "0.1.0"
-source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
+source = "git+https://github.com/brechtpd/alloy?branch=header-serialize#e77a49aad28ca01624bbb9cc3ee0f1daaceb1869"
 dependencies = [
  "alloy-json-rpc",
  "alloy-transport",
@@ -274,10 +286,10 @@ dependencies = [
 [[package]]
 name = "alloy-rpc-trace-types"
 version = "0.1.0"
-source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
+source = "git+https://github.com/brechtpd/alloy?branch=header-serialize#e77a49aad28ca01624bbb9cc3ee0f1daaceb1869"
 dependencies = [
  "alloy-primitives",
- "alloy-rpc-types 0.1.0 (git+https://github.com/brechtpd/alloy?branch=r170)",
+ "alloy-rpc-types 0.1.0 (git+https://github.com/brechtpd/alloy?branch=header-serialize)",
  "serde",
  "serde_json",
 ]
@@ -296,7 +308,7 @@ dependencies = [
 [[package]]
 name = "alloy-rpc-types"
 version = "0.1.0"
-source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
+source = "git+https://github.com/brechtpd/alloy?branch=header-serialize#e77a49aad28ca01624bbb9cc3ee0f1daaceb1869"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -362,7 +374,7 @@ dependencies = [
 [[package]]
 name = "alloy-transport"
 version = "0.1.0"
-source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
+source = "git+https://github.com/brechtpd/alloy?branch=header-serialize#e77a49aad28ca01624bbb9cc3ee0f1daaceb1869"
 dependencies = [
  "alloy-json-rpc",
  "base64 0.21.7",
@@ -378,7 +390,7 @@ dependencies = [
 [[package]]
 name = "alloy-transport-http"
 version = "0.1.0"
-source = "git+https://github.com/brechtpd/alloy?branch=r170#8ed5684f69f3d6ed8dfe99549f93a6ecac1dee14"
+source = "git+https://github.com/brechtpd/alloy?branch=header-serialize#e77a49aad28ca01624bbb9cc3ee0f1daaceb1869"
 dependencies = [
  "alloy-json-rpc",
  "alloy-transport",
@@ -4209,9 +4221,10 @@ checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
 name = "raiko-host"
 version = "0.1.0"
 dependencies = [
+ "alloy-consensus",
  "alloy-primitives",
  "alloy-providers",
- "alloy-rpc-types 0.1.0 (git+https://github.com/brechtpd/alloy?branch=r170)",
+ "alloy-rpc-types 0.1.0 (git+https://github.com/brechtpd/alloy?branch=header-serialize)",
  "alloy-sol-types",
  "alloy-transport-http",
  "anyhow",
@@ -5951,7 +5964,7 @@ version = "0.1.0"
 dependencies = [
  "env_logger",
  "gobuild",
- "hex 0.4.3",
+ "hex 0.3.2",
  "log",
  "serde",
  "serde_json",
@@ -7005,9 +7018,12 @@ dependencies = [
 name = "zeth-lib"
 version = "0.1.0"
 dependencies = [
+ "alloy-consensus",
+ "alloy-network",
  "alloy-primitives",
  "alloy-rlp",
  "alloy-rlp-derive",
+ "alloy-rpc-types 0.1.0 (git+https://github.com/brechtpd/alloy?branch=header-serialize)",
  "alloy-sol-types",
  "anyhow",
  "bincode",
@@ -7041,7 +7057,7 @@ dependencies = [
  "alloy-primitives",
  "alloy-rlp",
  "alloy-rlp-derive",
- "alloy-rpc-types 0.1.0 (git+https://github.com/brechtpd/alloy?branch=r170)",
+ "alloy-rpc-types 0.1.0 (git+https://github.com/brechtpd/alloy?branch=header-serialize)",
  "alloy-sol-types",
  "anyhow",
  "bincode",

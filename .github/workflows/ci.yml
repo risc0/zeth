@@ -25,6 +25,10 @@ jobs:
       with:
         submodules: recursive
     - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly-2024-01-25
+        override: true
     - run: rustc --version
     - uses: risc0/risc0/.github/actions/sccache@release-0.19
     - name: Install cargo-binstall
@@ -68,25 +72,50 @@ jobs:
         with: 
           command: check
 
-  clippy:
-    name: clippy
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-    - uses: actions/checkout@v4
-    - uses: risc0/risc0/.github/actions/rustup@release-0.19
-    - uses: risc0/risc0/.github/actions/sccache@release-0.19
-    - uses: risc0/clippy-action@main
-      with:
-        reporter: 'github-pr-check'
-        fail_on_error: true
-        clippy_flags: --workspace --all-targets --all-features -- -Dwarnings
 
-  fmt:
-    name: fmt
+  lints:
+    name: Formatting & Clippy
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
+
     steps:
-    - uses: actions/checkout@v4
-    - uses: risc0/risc0/.github/actions/rustup@release-0.19
-    - run: cargo fmt --all --check
+      - name: Checkout sources
+        uses: actions/checkout@v2
+      - name: rust-cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+            ~/.rustup/
+          key: clippy-rust-nightly-2024-01-25-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: rust-nightly-2024-01-25-
+
+      - name: Install nightly toolchain
+        id: rustc-toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly-2024-01-25
+          override: true
+          components: rustfmt, clippy
+
+      - name: Run cargo fmt
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+        env:
+          CARGO_INCREMENTAL: 1
+
+      - name: Run cargo clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --all-features --all-targets -- -D warnings -A incomplete-features
+        env:
+          CARGO_INCREMENTAL: 1
+        

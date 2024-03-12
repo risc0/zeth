@@ -46,8 +46,7 @@ jobs:
           components: clippy, rustfmt, rust-src
       - run: |
           curl -L https://sp1.succinct.xyz | bash
-          source $HOME/.bashrc
-      - run: sp1up
+      - run: source $HOME/.bashrc; sp1up
       - run: cargo build -p raiko-host --features succinct
 
   test:

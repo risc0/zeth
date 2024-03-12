@@ -46,13 +46,11 @@ jobs:
           override: true
           components: clippy, rustfmt, rust-src
       - run: curl -L https://sp1.succinct.xyz | bash
-      - name: Install SP1up
+      - name: Use sp1up
         run: |
-          # Your installation script here
-          echo "source /home/runner/.bashrc" >> $GITHUB_ENV
-      - name: Use SP1up
-        run: |
+          source /home/runner/.bashrc
           sp1up
+        shell: bash
       - run: cargo build -p raiko-host --features succinct
 
   test:

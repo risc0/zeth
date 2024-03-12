@@ -1,0 +1,3 @@
+nightly-2024-01-25
+components: clippy, rustfmt, rust-src
+profile: minimal

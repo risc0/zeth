@@ -33,8 +33,8 @@ jobs:
     - uses: risc0/risc0/.github/actions/sccache@release-0.19
     - name: Install cargo-binstall
       uses: cargo-bins/cargo-binstall@v1.6.4
-    - run: cargo binstall -y --force cargo-risczero@${{ env.RISC0_VERSION }}
-    - run: cargo risczero install --version $RISC0_TOOLCHAIN_VERSION
+    - run: cargo binstall cargo-risczero
+    - run: cargo risczero install
     - run: cargo build -p risc0-guest
 
   build-sp1:

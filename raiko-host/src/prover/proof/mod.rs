@@ -64,6 +64,12 @@ pub mod succinct {
 pub mod risc0;
 #[cfg(not(feature = "risc0"))]
 pub mod risc0 {
+    use zeth_lib::{
+        builder::{BlockBuilderStrategy, TaikoStrategy},
+        input::GuestInput,
+        EthereumTxEssence,
+    };
+
     use super::*;
     use crate::prover::request::{Risc0ProofParams, Risc0Response};
     pub async fn execute_risc0(

@@ -20,9 +20,6 @@ use crate::prover::{
     utils::guest_executable_path,
 };
 
-// TODO: import from risc0_guest_method
-// const RISC0_GUEST_ID: [u32; 8] = [1,2,3,4,5,6,7,8];
-
 pub async fn execute_risc0(
     input: GuestInput<EthereumTxEssence>,
     output: GuestOutput,
@@ -379,8 +376,11 @@ pub fn prove_locally(
         let env = env_builder.build().unwrap();
         let mut exec = ExecutorImpl::from_elf(env, elf).unwrap();
 
-        // let segment_dir = tempdir().unwrap();
-        let segment_dir = env::current_dir().expect("dir error");
+        let segment_dir = PathBuf::from("/tmp/risc0-cache");
+        if segment_dir.exists() {
+            fs::remove_dir_all(segment_dir.clone()).unwrap();
+        }
+        fs::create_dir(segment_dir.clone()).unwrap();
 
         exec.run_with_callback(|segment| {
             let path = segment_dir
@@ -495,10 +495,7 @@ pub fn save_receipt<T: serde::Serialize>(receipt_label: &String, receipt_data: &
 }
 
 fn zkp_cache_path(receipt_label: &String) -> String {
-    // Path::new("cache_zkp")
-    env::current_dir()
-        .expect("dir error")
-        .as_path()
+    Path::new("/tmp/risc0-cache")
         .join(format!("{}.zkp", receipt_label))
         .to_str()
         .unwrap()

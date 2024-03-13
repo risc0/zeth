@@ -8,7 +8,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  RISC0_VERSION: 0.19.1
+  RISC0_VERSION: 0.20.1
   RISC0_TOOLCHAIN_VERSION: test-release-2
 
 concurrency:
@@ -16,25 +16,59 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: test
+  build-test-risc0:
+    name: Build and test risc0
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
-    - uses: risc0/risc0/.github/actions/rustup@release-0.19
-    - uses: risc0/risc0/.github/actions/sccache@release-0.19
-    - uses: risc0/cargo-install@v1
+    - uses: actions-rs/toolchain@v1
       with:
-        crate: cargo-binstall
-    - run: cargo binstall -y --force cargo-risczero@${{ env.RISC0_VERSION }}
-    - run: cargo risczero install --version $RISC0_TOOLCHAIN_VERSION
-    - run: cargo test --workspace --all-targets --features taiko
-    - run: cargo test --workspace --all-targets --features "taiko std"
-    - run: cargo test --workspace --all-targets --features optimism
+        profile: minimal
+        toolchain: 1.76.0
+        override: true
+    - run: rustc --version
+    - uses: risc0/risc0/.github/actions/sccache@release-0.19
+    - name: Install cargo-binstall
+      uses: cargo-bins/cargo-binstall@v1.6.4
+    - run: cargo binstall -y --force cargo-risczero
+    - run: cargo risczero install
+    - run: cargo build -p risc0-guest
 
+  build-test-sp1:
+    name: Build and test sp1
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly-2024-01-25
+          override: true
+          components: clippy, rustfmt, rust-src
+      - name: Setup and build
+        run: |
+          curl -L https://sp1.succinct.xyz | bash
+          /home/runner/.config/.sp1/bin/sp1up
+          cargo build -p raiko-host --features succinct
+          cargo test -p raiko-host --features succinct
+        shell: bash
+
+  test-lib:
+    name: Test zeth-lib
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly-2024-01-25
+          override: true
+      - run: cargo test -p zeth-lib --features=taiko,std
 
   clippy:
     name: clippy
@@ -58,3 +92,5 @@ jobs:
     - uses: actions/checkout@v4
     - uses: risc0/risc0/.github/actions/rustup@release-0.19
     - run: cargo fmt --all --check
+
+

@@ -38,7 +38,7 @@ jobs:
     - run: cargo build -p risc0-guest
     - run: cargo test -p risc0-guest
 
-  build-sp1:
+  build-test-sp1:
     name: Build and test sp1
     runs-on: ubuntu-latest
     timeout-minutes: 60

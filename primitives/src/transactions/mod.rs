@@ -17,6 +17,7 @@ use std::fmt::Debug;
 use alloy_primitives::{Address, Bytes, TxHash};
 use alloy_rlp::{Decodable, Encodable};
 use anyhow::ensure;
+use k256::ecdsa::VerifyingKey;
 use serde::{Deserialize, Serialize};
 
 use self::{
@@ -56,7 +57,7 @@ pub trait SignedDecodable<S>: Sized {
 
 /// Represents the core details of a [Transaction], specifically the portion that gets
 /// signed.
-pub trait TxEssence: SignedDecodable<TxSignature> + Encodable + Clone {
+pub trait TxEssence: SignedDecodable<TxSignature> + Encodable + Debug + Clone {
     /// Returns the EIP-2718 transaction type or `0x00` for Legacy transactions.
     fn tx_type(&self) -> u8;
     /// Returns the gas limit set for the transaction.
@@ -69,6 +70,15 @@ pub trait TxEssence: SignedDecodable<TxSignature> + Encodable + Clone {
     /// For contract creation transactions, this method returns `None` as there's no
     /// recipient address.
     fn to(&self) -> Option<Address>;
+    /// Recovers the Ethereum address of the sender from the transaction's signature
+    /// using the provided verification key.
+    fn recover_with_vk(
+        &self,
+        signature: &TxSignature,
+        verifying_key: &VerifyingKey,
+    ) -> anyhow::Result<Address>;
+    /// Recovers the ECDSA verification key of this transaction's signer
+    fn verifying_key(&self, signature: &TxSignature) -> anyhow::Result<VerifyingKey>;
     /// Recovers the Ethereum address of the sender from the transaction's signature.
     ///
     /// This method uses the ECDSA recovery mechanism to derive the sender's public key
@@ -132,19 +142,32 @@ impl<E: TxEssence> Encodable for Transaction<E> {
     }
 }
 
-impl<E: TxEssence + Debug> Decodable for Transaction<E> {
+impl<E: TxEssence> Decodable for Transaction<E> {
     fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
         E::decode_signed(buf).map(|(essence, signature)| Self { essence, signature })
     }
 }
 
-impl<E: TxEssence + Debug> Transaction<E> {
+impl<E: TxEssence> Transaction<E> {
     /// Calculates the Keccak hash of the RLP-encoded transaction.
     ///
     /// This hash uniquely identifies the transaction on the Ethereum network.
     #[inline]
     pub fn hash(&self) -> TxHash {
         keccak(alloy_rlp::encode(self)).into()
+    }
+
+    /// Recovers the Ethereum address of the sender from the transaction's signature
+    /// using the provided verification key.
+    #[inline]
+    pub fn recover_with_vk(&self, verifying_key: &VerifyingKey) -> anyhow::Result<Address> {
+        self.essence.recover_with_vk(&self.signature, verifying_key)
+    }
+
+    /// Recovers the ECDSA verification key of this transaction's signer
+    #[inline]
+    pub fn verifying_key(&self) -> anyhow::Result<VerifyingKey> {
+        self.essence.verifying_key(&self.signature)
     }
 
     /// Recovers the Ethereum address of the sender from the transaction's signature.

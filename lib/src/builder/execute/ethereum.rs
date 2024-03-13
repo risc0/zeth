@@ -15,6 +15,7 @@
 use core::{fmt::Debug, mem::take};
 
 use anyhow::{anyhow, bail, Context};
+use k256::ecdsa::VerifyingKey;
 #[cfg(not(target_os = "zkvm"))]
 use log::{debug, trace};
 use revm::{
@@ -28,7 +29,7 @@ use zeth_primitives::{
     receipt::Receipt,
     transactions::{
         ethereum::{EthereumTxEssence, TransactionKind},
-        TxEssence,
+        Transaction, TxEssence,
     },
     trie::MptNode,
     Bloom,
@@ -124,9 +125,7 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
             .enumerate()
         {
             // verify the transaction signature
-            let tx_from = tx
-                .recover_from()
-                .with_context(|| format!("Error recovering address for transaction {}", tx_no))?;
+            let tx_from = hinted_ec_recover(&tx, &block_builder.input.verifying_key_hints, tx_no)?;
 
             #[cfg(not(target_os = "zkvm"))]
             {
@@ -257,6 +256,24 @@ impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
         guest_mem_forget([tx_trie, receipt_trie, withdrawals_trie]);
         // Return block builder with updated database
         Ok(block_builder.with_db(evm.context.evm.db))
+    }
+}
+
+pub fn hinted_ec_recover<E: TxEssence>(
+    tx: &Transaction<E>,
+    vk_hints: &[Option<VerifyingKey>],
+    tx_no: usize,
+) -> anyhow::Result<Address> {
+    if let Some(Some(verifying_key)) = vk_hints.get(tx_no) {
+        Ok(tx.recover_with_vk(verifying_key).unwrap_or_else(|_| {
+            panic!(
+                "Error recovering address with hint for transaction {}",
+                tx_no
+            )
+        }))
+    } else {
+        tx.recover_from()
+            .with_context(|| format!("Error recovering address for transaction {}", tx_no))
     }
 }
 

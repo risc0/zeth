@@ -16,17 +16,14 @@ extern crate alloc;
 
 use std::collections::BTreeSet;
 
-use ethers_core::types::{EIP1186ProofResponse, H160, H256};
+use alloy::rpc::types::eth::{Block, EIP1186AccountProofResponse, TransactionReceipt};
+use anyhow::Context;
 use hashbrown::HashMap;
 use revm::{
     primitives::{Account, AccountInfo, Bytecode},
     Database, DatabaseCommit,
 };
-use zeth_primitives::{
-    block::Header,
-    ethers::{from_ethers_bytes, from_ethers_u256},
-    Address, B256, U256,
-};
+use zeth_primitives::{block::Header, Address, B256, U256};
 
 use crate::{
     host::provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
@@ -66,13 +63,12 @@ impl ProviderDb {
         &mut self,
         block_no: u64,
         storage_keys: HashMap<Address, Vec<U256>>,
-    ) -> Result<HashMap<Address, EIP1186ProofResponse>, anyhow::Error> {
+    ) -> Result<HashMap<Address, EIP1186AccountProofResponse>, anyhow::Error> {
         let mut out = HashMap::new();
 
         for (address, indices) in storage_keys {
             let proof = {
-                let address: H160 = address.into_array().into();
-                let indices: BTreeSet<H256> = indices
+                let indices: BTreeSet<B256> = indices
                     .into_iter()
                     .map(|x| x.to_be_bytes().into())
                     .collect();
@@ -90,13 +86,13 @@ impl ProviderDb {
 
     pub fn get_initial_proofs(
         &mut self,
-    ) -> Result<HashMap<Address, EIP1186ProofResponse>, anyhow::Error> {
+    ) -> Result<HashMap<Address, EIP1186AccountProofResponse>, anyhow::Error> {
         self.get_proofs(self.block_no, self.initial_db.storage_keys())
     }
 
     pub fn get_latest_proofs(
         &mut self,
-    ) -> Result<HashMap<Address, EIP1186ProofResponse>, anyhow::Error> {
+    ) -> Result<HashMap<Address, EIP1186AccountProofResponse>, anyhow::Error> {
         let mut storage_keys = self.initial_db.storage_keys();
 
         for (address, mut indices) in self.latest_db.storage_keys() {
@@ -124,8 +120,9 @@ impl ProviderDb {
                 self.provider
                     .get_partial_block(&BlockQuery { block_no })
                     .expect("Failed to retrieve ancestor block")
+                    .header
                     .try_into()
-                    .expect("Failed to convert ethers block to zeth block")
+                    .expect("Failed to convert alloy block to zeth block")
             })
             .collect();
         Ok(headers)
@@ -155,11 +152,11 @@ impl Database for ProviderDb {
             let nonce = self.provider.get_transaction_count(&query)?;
             let balance = self.provider.get_balance(&query)?;
             let code = self.provider.get_code(&query)?;
-            let bytecode = Bytecode::new_raw(from_ethers_bytes(code));
+            let bytecode = Bytecode::new_raw(code);
 
             AccountInfo::new(
-                from_ethers_u256(balance),
-                nonce.as_u64(),
+                balance,
+                nonce.try_into().context("invalid nonce")?,
                 bytecode.hash_slow(),
                 bytecode,
             )
@@ -191,15 +188,12 @@ impl Database for ProviderDb {
         self.initial_db.basic(address)?;
 
         let storage = {
-            let bytes = index.to_be_bytes();
-            let index = H256::from(bytes);
-
             let storage = self.provider.get_storage(&StorageQuery {
                 block_no: self.block_no,
                 address: address.into_array().into(),
                 index,
             })?;
-            U256::from_be_bytes(storage.to_fixed_bytes())
+            storage
         };
 
         self.initial_db
@@ -218,6 +212,7 @@ impl Database for ProviderDb {
         let block_hash = self
             .provider
             .get_partial_block(&BlockQuery { block_no })?
+            .header
             .hash
             .unwrap()
             .0

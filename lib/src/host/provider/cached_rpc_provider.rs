@@ -14,15 +14,13 @@
 
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
-use ethers_core::types::{
-    Block, Bytes, EIP1186ProofResponse, Transaction, TransactionReceipt, H256, U256,
-};
-
 use super::{
     file_provider::FileProvider, rpc_provider::RpcProvider, AccountQuery, BlockQuery, MutProvider,
     ProofQuery, Provider, StorageQuery,
 };
+use alloy::rpc::types::eth::{Block, EIP1186AccountProofResponse, TransactionReceipt};
+use anyhow::{Context, Result};
+use zeth_primitives::{Bytes, U256};
 
 pub struct CachedRpcProvider {
     cache: FileProvider,
@@ -43,7 +41,7 @@ impl Provider for CachedRpcProvider {
         self.cache.save()
     }
 
-    fn get_full_block(&mut self, query: &BlockQuery) -> Result<Block<Transaction>> {
+    fn get_full_block(&mut self, query: &BlockQuery) -> Result<Block> {
         let cache_out = self.cache.get_full_block(query);
         if cache_out.is_ok() {
             return cache_out;
@@ -55,7 +53,7 @@ impl Provider for CachedRpcProvider {
         Ok(out)
     }
 
-    fn get_partial_block(&mut self, query: &BlockQuery) -> Result<Block<H256>> {
+    fn get_partial_block(&mut self, query: &BlockQuery) -> Result<Block> {
         let cache_out = self.cache.get_partial_block(query);
         if cache_out.is_ok() {
             return cache_out;
@@ -79,7 +77,7 @@ impl Provider for CachedRpcProvider {
         Ok(out)
     }
 
-    fn get_proof(&mut self, query: &ProofQuery) -> Result<EIP1186ProofResponse> {
+    fn get_proof(&mut self, query: &ProofQuery) -> Result<EIP1186AccountProofResponse> {
         let cache_out = self.cache.get_proof(query);
         if cache_out.is_ok() {
             return cache_out;
@@ -127,7 +125,7 @@ impl Provider for CachedRpcProvider {
         Ok(out)
     }
 
-    fn get_storage(&mut self, query: &StorageQuery) -> Result<H256> {
+    fn get_storage(&mut self, query: &StorageQuery) -> Result<U256> {
         let cache_out = self.cache.get_storage(query);
         if cache_out.is_ok() {
             return cache_out;

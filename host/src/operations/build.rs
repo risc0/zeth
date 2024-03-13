@@ -14,8 +14,8 @@
 
 use std::fmt::Debug;
 
+use alloy::rpc::types::eth::Transaction as AlloyTransaction;
 use anyhow::Context;
-use ethers_core::types::Transaction as EthersTransaction;
 use log::{info, warn};
 use risc0_zkvm::{compute_image_id, Receipt};
 use serde::{Deserialize, Serialize};
@@ -40,8 +40,11 @@ pub async fn build_block<N: BlockBuilderStrategy>(
     guest_elf: &[u8],
 ) -> anyhow::Result<Option<(String, Receipt)>>
 where
-    N::TxEssence: 'static + Send + TryFrom<EthersTransaction> + Serialize + Deserialize<'static>,
-    <N::TxEssence as TryFrom<EthersTransaction>>::Error: Debug,
+    N::TxEssence: 'static
+        + Send
+        + TryFrom<AlloyTransaction, Error = anyhow::Error>
+        + Serialize
+        + Deserialize<'static>,
 {
     let build_args = cli.build_args().clone();
     if build_args.block_count > 1 {

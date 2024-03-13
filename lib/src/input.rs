@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use alloy_rlp_derive::RlpEncodable;
-use ethers_core::k256::sha2::{Digest, Sha256};
 use hashbrown::HashMap;
+use k256::sha2::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
     block::Header,

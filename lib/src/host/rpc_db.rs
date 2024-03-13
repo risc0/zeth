@@ -14,6 +14,7 @@
 
 use std::path::{Path, PathBuf};
 
+use alloy::rpc::types::eth::BlockTransactions;
 use anyhow::Context;
 use zeth_primitives::{
     block::Header,
@@ -95,14 +96,17 @@ impl BatcherDb for RpcDb {
         )
         .context("failed to create provider")?;
         let block = {
-            let ethers_block = provider.get_full_block(&BlockQuery { block_no })?;
+            let alloy_block = provider.get_full_block(&BlockQuery { block_no })?;
+            let block_header = alloy_block.header.clone().try_into().unwrap();
+            let transactions = match alloy_block.transactions {
+                BlockTransactions::Full(txs) => {
+                    txs.into_iter().map(|tx| tx.try_into().unwrap()).collect()
+                }
+                _ => unreachable!(),
+            };
             BlockInput {
-                block_header: ethers_block.clone().try_into().unwrap(),
-                transactions: ethers_block
-                    .transactions
-                    .into_iter()
-                    .map(|tx| tx.try_into().unwrap())
-                    .collect(),
+                block_header,
+                transactions,
                 receipts: None,
             }
         };
@@ -118,6 +122,7 @@ impl BatcherDb for RpcDb {
         )?;
         let header: Header = provider
             .get_partial_block(&BlockQuery { block_no })?
+            .header
             .try_into()?;
         self.mem_db.op_block_header.insert(block_no, header.clone());
         provider.save()?;
@@ -134,8 +139,8 @@ impl BatcherDb for RpcDb {
             self.eth_rpc_url.clone(),
         )?;
         let block = {
-            let ethers_block = provider.get_full_block(&query)?;
-            let block_header: Header = ethers_block.clone().try_into().unwrap();
+            let alloy_block = provider.get_full_block(&query)?;
+            let block_header: Header = alloy_block.header.clone().try_into().unwrap();
             // include receipts when needed
             let can_contain_deposits =
                 deposits::can_contain(&self.deposit_contract, &block_header.logs_bloom);
@@ -153,13 +158,15 @@ impl BatcherDb for RpcDb {
             } else {
                 None
             };
+            let transactions = match alloy_block.transactions {
+                BlockTransactions::Full(txs) => {
+                    txs.into_iter().map(|tx| tx.try_into().unwrap()).collect()
+                }
+                _ => unreachable!(),
+            };
             BlockInput {
                 block_header,
-                transactions: ethers_block
-                    .transactions
-                    .into_iter()
-                    .map(|tx| tx.try_into().unwrap())
-                    .collect(),
+                transactions,
                 receipts,
             }
         };

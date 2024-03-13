@@ -22,8 +22,8 @@ pub mod transactions;
 pub mod trie;
 pub mod withdrawal;
 
-#[cfg(feature = "ethers")]
-pub mod ethers;
+#[cfg(feature = "alloy")]
+pub mod alloy;
 
 pub mod batch;
 pub mod mmr;

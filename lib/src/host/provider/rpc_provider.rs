@@ -12,24 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloy::providers::provider::{HttpProvider, TempProvider};
+use alloy::rpc::types::eth::{Block, EIP1186AccountProofResponse, TransactionReceipt};
 use anyhow::{anyhow, Result};
-use ethers_core::types::{
-    Block, Bytes, EIP1186ProofResponse, Transaction, TransactionReceipt, H256, U256,
-};
-use ethers_providers::{Http, Middleware, RetryClient};
 use log::debug;
+use zeth_primitives::{Bytes, U256};
 
 use super::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery};
 
 pub struct RpcProvider {
-    http_client: ethers_providers::Provider<RetryClient<Http>>,
+    http_client: HttpProvider,
     tokio_handle: tokio::runtime::Handle,
 }
 
 impl RpcProvider {
     pub fn new(rpc_url: String) -> Result<Self> {
-        let http_client =
-            ethers_providers::Provider::<RetryClient<Http>>::new_client(&rpc_url, 3, 500)?;
+        let http_client: HttpProvider = rpc_url.try_into()?;
         let tokio_handle = tokio::runtime::Handle::current();
 
         Ok(RpcProvider {
@@ -44,12 +42,12 @@ impl Provider for RpcProvider {
         Ok(())
     }
 
-    fn get_full_block(&mut self, query: &BlockQuery) -> Result<Block<Transaction>> {
+    fn get_full_block(&mut self, query: &BlockQuery) -> Result<Block> {
         debug!("Querying RPC for full block: {:?}", query);
 
         let response = self
             .tokio_handle
-            .block_on(self.http_client.get_block_with_txs(query.block_no))?;
+            .block_on(self.http_client.get_block(query.block_no.into(), true))?;
 
         match response {
             Some(out) => Ok(out),
@@ -57,12 +55,12 @@ impl Provider for RpcProvider {
         }
     }
 
-    fn get_partial_block(&mut self, query: &BlockQuery) -> Result<Block<H256>> {
+    fn get_partial_block(&mut self, query: &BlockQuery) -> Result<Block> {
         debug!("Querying RPC for partial block: {:?}", query);
 
         let response = self
             .tokio_handle
-            .block_on(self.http_client.get_block(query.block_no))?;
+            .block_on(self.http_client.get_block(query.block_no.into(), false))?;
 
         match response {
             Some(out) => Ok(out),
@@ -75,12 +73,12 @@ impl Provider for RpcProvider {
 
         let response = self
             .tokio_handle
-            .block_on(self.http_client.get_block_receipts(query.block_no))?;
+            .block_on(self.http_client.get_block_receipts(query.block_no.into()))?;
 
-        Ok(response)
+        Ok(response.unwrap_or_default())
     }
 
-    fn get_proof(&mut self, query: &ProofQuery) -> Result<EIP1186ProofResponse> {
+    fn get_proof(&mut self, query: &ProofQuery) -> Result<EIP1186AccountProofResponse> {
         debug!("Querying RPC for inclusion proof: {:?}", query);
 
         let out = self.tokio_handle.block_on(self.http_client.get_proof(
@@ -119,13 +117,13 @@ impl Provider for RpcProvider {
 
         let out = self.tokio_handle.block_on(
             self.http_client
-                .get_code(query.address, Some(query.block_no.into())),
+                .get_code_at(query.address, Some(query.block_no.into())),
         )?;
 
         Ok(out)
     }
 
-    fn get_storage(&mut self, query: &StorageQuery) -> Result<H256> {
+    fn get_storage(&mut self, query: &StorageQuery) -> Result<U256> {
         debug!("Querying RPC for storage: {:?}", query);
 
         let out = self.tokio_handle.block_on(self.http_client.get_storage_at(

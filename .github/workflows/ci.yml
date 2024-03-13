@@ -16,8 +16,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-risc0:
-    name: Build risc0
+  build-test-risc0:
+    name: Build and test risc0
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -36,9 +36,10 @@ jobs:
     - run: cargo binstall -y --force cargo-risczero
     - run: cargo risczero install
     - run: cargo build -p risc0-guest
+    - run: cargo test -p risc0-guest
 
   build-sp1:
-    name: Build sp1
+    name: Build and test sp1
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -54,6 +55,7 @@ jobs:
           curl -L https://sp1.succinct.xyz | bash
           /home/runner/.config/.sp1/bin/sp1up
           cargo build -p raiko-host --features succinct
+          cargo test -p raiko-host --features succinct
         shell: bash
 
   clippy:

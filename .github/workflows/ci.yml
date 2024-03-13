@@ -42,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
@@ -50,28 +50,13 @@ jobs:
           override: true
           components: clippy, rustfmt, rust-src
       - run: curl -L https://sp1.succinct.xyz | bash
-      - name: Use sp1up
+      - name: Setup and build
         run: |
+          curl -L https://sp1.succinct.xyz | bash
           source /home/runner/.bashrc
           sp1up
+          cargo build -p raiko-host --features succinct
         shell: bash
-      - run: cargo build -p raiko-host --features succinct
-
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: nightly-2024-01-25
-          override: true
-      - uses: actions-rs/cargo@v1
-        with: 
-          command: check
-
 
   clippy:
     name: clippy

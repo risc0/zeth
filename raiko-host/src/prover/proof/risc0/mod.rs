@@ -51,12 +51,16 @@ pub async fn execute_risc0(
 
         traicing_info!("Validating SNARK uuid: {}", snark_uuid);
 
+        let snark_journal: String = snark_receipt.journal.encode_hex();
         verify_groth16_snark(image_id, snark_receipt)
             .await
             .map_err(|err| format!("Failed to verify SNARK: {:?}", err))?;
+        Ok(Risc0Response {
+            journal: snark_journal
+        })
+    } else {
+        Ok(Risc0Response { journal })
     }
-
-    Ok(Risc0Response { journal })
 }
 
 // pub mod build;

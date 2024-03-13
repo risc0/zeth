@@ -52,9 +52,7 @@ jobs:
       - name: Setup and build
         run: |
           curl -L https://sp1.succinct.xyz | bash
-          source /home/runner/.bashrc
-          cat /home/runner/.bashrc
-          sp1up
+          /home/runner/.config/.sp1/bin/sp1up
           cargo build -p raiko-host --features succinct
         shell: bash
 

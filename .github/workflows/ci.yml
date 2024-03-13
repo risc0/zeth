@@ -36,8 +36,6 @@ jobs:
     - run: cargo binstall -y --force cargo-risczero
     - run: cargo risczero install
     - run: cargo build -p risc0-guest
-    # This test the lib at the same time
-    - run: cargo test
 
   build-test-sp1:
     name: Build and test sp1
@@ -58,6 +56,19 @@ jobs:
           cargo build -p raiko-host --features succinct
           cargo test -p raiko-host --features succinct
         shell: bash
+
+  test-lib:
+    name: Test zeth-lib
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly-2024-01-25
+          override: true
+      - run: cargo test -p zeth-lib --features=taiko,std
 
   clippy:
     name: clippy

@@ -85,7 +85,7 @@ pub async fn verify_groth16_snark(
     snark_receipt: SnarkReceipt,
 ) -> anyhow::Result<()> {
     let verifier_rpc_url = env!("GROTH16_VERIFIER_RPC_URL");
-    let groth16_verifier_addr  = {
+    let groth16_verifier_addr = {
         let addr = env!("GROTH16_VERIFIER_ADDRESS");
         H160::from_str(addr).unwrap()
     };
@@ -120,7 +120,10 @@ pub async fn verify_groth16_snark(
         .await?;
 
     if verification {
-        log::info!("SNARK verified successfully using {:?}!", groth16_verifier_addr);
+        log::info!(
+            "SNARK verified successfully using {:?}!",
+            groth16_verifier_addr
+        );
     } else {
         log::error!("SNARK verification failed!");
     }

@@ -56,7 +56,7 @@ pub async fn execute_risc0(
             .await
             .map_err(|err| format!("Failed to verify SNARK: {:?}", err))?;
         Ok(Risc0Response {
-            journal: snark_journal
+            journal: snark_journal,
         })
     } else {
         Ok(Risc0Response { journal })

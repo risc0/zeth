@@ -658,6 +658,11 @@ impl MptNode {
         self.insert_internal(&to_nibs(key), value.to_rlp())
     }
 
+    #[inline]
+    pub fn insert_rlp_encoded(&mut self, key: &[u8], value: Vec<u8>) -> Result<bool, Error> {
+        self.insert_internal(&to_nibs(key), value)
+    }
+
     fn insert_internal(&mut self, key_nibs: &[u8], value: Vec<u8>) -> Result<bool, Error> {
         match &mut self.data {
             MptNodeData::Null => {

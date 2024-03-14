@@ -18,8 +18,6 @@ use alloy_network::Signed;
 use crate::input::{decode_anchor, GuestInput};
 
 pub const ANCHOR_GAS_LIMIT: u64 = 250_000;
-pub const MAX_TX_LIST_BYTES: usize = 120_000;
-pub const BLOCK_GAS_LIMIT: u64 = 15250000;
 pub const GOLDEN_TOUCH_ACCOUNT: Lazy<Address> = Lazy::new(|| {
     Address::from_str("0x0000777735367b36bC9B61C50022d9D0700dB4Ec")
         .expect("invalid golden touch account")
@@ -160,7 +158,7 @@ pub fn generate_transactions_alloy(
 
     let signed_eip1559_tx = Signed::<TxEip1559>::new_unchecked(
         eip1559_tx,
-        Signature::from_rs_and_parity(anchor_tx.signature.unwrap().r, anchor_tx.signature.unwrap().s, false).unwrap(),
+        Signature::from_rs_and_parity(anchor_tx.signature.unwrap().r, anchor_tx.signature.unwrap().s, parity.0).unwrap(),
         anchor_tx.hash,
     );
 

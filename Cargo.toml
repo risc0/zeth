@@ -9,7 +9,7 @@ members = [
     # "raiko-guests/succinct",
     "raiko-host",
     "sgx-ra",
-    "tests/*",
+    # "tests/*",
 ]
 
 

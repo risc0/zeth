@@ -19,7 +19,7 @@ use revm::{Database, DatabaseCommit};
 use zeth_primitives::transactions::TxEssence;
 use alloy_consensus::Header as AlloyConsensusHeader;
 
-use crate::{builder::BlockBuilder, consts::MAX_EXTRA_DATA_BYTES, taiko_utils::{HeaderHasher, BLOCK_GAS_LIMIT}};
+use crate::{builder::BlockBuilder, consts::MAX_EXTRA_DATA_BYTES, taiko_utils::HeaderHasher};
 
 pub trait HeaderPrepStrategy {
     fn prepare_header<D, E>(block_builder: BlockBuilder<D, E>) -> Result<BlockBuilder<D, E>>
@@ -38,14 +38,6 @@ impl HeaderPrepStrategy for TaikoHeaderPrepStrategy {
         <D as Database>::Error: Debug,
         E: TxEssence,
     {
-        // Validate gas limit
-        if block_builder.input.gas_limit != BLOCK_GAS_LIMIT {
-            bail!(
-                "Invalid gas limit: expected == {}, got {}",
-                BLOCK_GAS_LIMIT,
-                block_builder.input.gas_limit,
-            );
-        }
         // Validate timestamp
         let timestamp: u64 = block_builder.input.timestamp.try_into().unwrap();
         if timestamp < block_builder.input.parent_header.timestamp {

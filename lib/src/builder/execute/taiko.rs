@@ -17,6 +17,7 @@ use core::{fmt::Debug, mem::take, str::from_utf8};
 use alloy_consensus::{TxEnvelope, TxKind};
 use alloy_consensus::TxEip4844Variant::TxEip4844;
 use alloy_consensus::TxEip4844Variant;
+use alloy_rlp::Encodable;
 use anyhow::{anyhow, bail, Context, Result};
 #[cfg(feature = "std")]
 use log::debug;
@@ -247,13 +248,13 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
                 tx_from,
                 is_anchor,
             );
-            //println!("**** transact: {:?}", evm.env().tx);
+            println!("**** transact: {:?}", evm.env().tx);
             // process the transaction
             let ResultAndState { result, state } = match evm.transact() {
                 Ok(result) => result,
                 Err(err) => {
                     if is_anchor {
-                        bail!("Error at transaction {}: {:?}", tx_no, err);
+                        bail!("Anchor tx failed to execute successfully: {:?}", err);
                     }
                     // only continue for invalid tx errors, not db errors (because those can be
                     // manipulated by the prover)
@@ -266,7 +267,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
                         }
                         _ => {
                             // any other error is not allowed
-                            bail!("Invalid tx at {}: {:?}", tx_no, err);
+                            bail!("Error at tx {}: {:?}", tx_no, err);
                         }
                     }
                 }
@@ -336,10 +337,20 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
             //tx_trie.insert_rlp(&trie_key, tx)?;
 
             //if is_anchor {
-                tx_trie.insert_rlp(&trie_key, transactions_ether[tx_no].clone())?;
+            let tx_rlp = tx.to_rlp();
+            tx_trie.insert_rlp_encoded(&trie_key, tx_rlp[tx_rlp.len() - tx.inner_length() - 1..].to_vec())?;
             //} else {
             //    tx_trie.insert_rlp(&trie_key, tx)?;
             //};
+
+            println!("ethers: {:?}", transactions_ether[tx_no].to_rlp());
+            println!("alloy: {:?}", tx.to_rlp());
+            let mut buf = vec![];
+            tx.encode(&mut buf);
+            println!("alloy: {:?}", buf);
+            println!("alloy inner length: {:?}", tx.inner_length());
+            println!("alloy length: {:?}", tx.length());
+            println!("fixed: {:?}", tx_rlp[tx_rlp.len() - tx.inner_length() - 1..].to_vec());
 
             receipt_trie.insert_rlp(&trie_key, receipt)?;
             actual_tx_no += 1;

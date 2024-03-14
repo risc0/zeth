@@ -28,11 +28,6 @@ pub const ZERO: U256 = U256::ZERO;
 /// U256 representation of 1.
 pub const ONE: U256 = uint!(1_U256);
 
-/// The bound divisor of the gas limit,
-pub const GAS_LIMIT_BOUND_DIVISOR: U256 = uint!(1024_U256);
-/// Minimum the gas limit may ever be.
-pub const MIN_GAS_LIMIT: U256 = uint!(5000_U256);
-
 /// Maximum size of extra data.
 pub const MAX_EXTRA_DATA_BYTES: usize = 32;
 

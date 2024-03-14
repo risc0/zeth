@@ -23,6 +23,8 @@ use ethers_core::{abi::AbiDecode, types::H160};
 use ethers_providers::{Http, Provider, RetryClient};
 use once_cell::unsync::Lazy;
 use risc0_zkvm::sha::{Digest, Digestible};
+use tracing::{info as tracing_info, error as tracing_err};
+
 
 sol!(
     /// A Groth16 seal over the claimed receipt claim.
@@ -98,14 +100,14 @@ pub async fn verify_groth16_snark(
 
     let seal = <Groth16Seal as Into<Seal>>::into(snark_receipt.snark).abi_encode();
     let journal_digest = snark_receipt.journal.digest();
-    log::info!("Verifying SNARK:");
-    log::info!("Seal: {}", hex::encode(&seal));
-    log::info!("Image ID: {}", hex::encode(image_id.as_bytes()));
-    log::info!(
+    tracing_info!("Verifying SNARK:");
+    tracing_info!("Seal: {}", hex::encode(&seal));
+    tracing_info!("Image ID: {}", hex::encode(image_id.as_bytes()));
+    tracing_info!(
         "Post State Digest: {}",
         hex::encode(&snark_receipt.post_state_digest)
     );
-    log::info!("Journal Digest: {}", hex::encode(journal_digest.as_bytes()));
+    tracing_info!("Journal Digest: {}", hex::encode(journal_digest.as_bytes()));
     let verification: bool = IRiscZeroVerifier::new(groth16_verifier_addr, http_client)
         .verify(
             seal.into(),
@@ -120,12 +122,12 @@ pub async fn verify_groth16_snark(
         .await?;
 
     if verification {
-        log::info!(
+        tracing_info!(
             "SNARK verified successfully using {:?}!",
             groth16_verifier_addr
         );
     } else {
-        log::error!("SNARK verification failed!");
+        tracing_err!("SNARK verification failed!");
     }
 
     Ok(())

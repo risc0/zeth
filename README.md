@@ -60,16 +60,8 @@ RISC0_DEV_MODE=1 cargo run --release --features risc0
 ```
 # edit run_bonsai.sh and run
 run_bonsai.sh
-# edit prover conf to enable bonsai
-#  proofType='{
-#    "risc0": {
-#      "bonsai": true,
-#      "snark": true,
-#      "profile": false,
-#      "execution_po2": 20
-#    }
-#  }'
-prove_block.sh testnet risc0 10
+# then
+prove_block.sh testnet risc0-bonsai 10
 ```
 
 #### CPU

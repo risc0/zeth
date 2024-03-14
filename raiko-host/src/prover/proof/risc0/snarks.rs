@@ -23,8 +23,7 @@ use ethers_core::{abi::AbiDecode, types::H160};
 use ethers_providers::{Http, Provider, RetryClient};
 use once_cell::unsync::Lazy;
 use risc0_zkvm::sha::{Digest, Digestible};
-use tracing::{info as tracing_info, error as tracing_err};
-
+use tracing::{error as tracing_err, info as tracing_info};
 
 sol!(
     /// A Groth16 seal over the claimed receipt claim.

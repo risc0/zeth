@@ -56,7 +56,7 @@ jobs:
           cargo build -p raiko-host --features succinct
           cargo test -p raiko-host --features succinct
         shell: bash
-
+# test
   test-lib:
     name: Test zeth-lib
     runs-on: ubuntu-latest

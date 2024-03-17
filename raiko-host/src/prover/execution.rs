@@ -5,7 +5,6 @@ use zeth_lib::{
     builder::{BlockBuilderStrategy, TaikoStrategy},
     input::{GuestInput, GuestOutput, TaikoProverData},
     protocol_instance::{assemble_protocol_instance, EvidenceType},
-    EthereumTxEssence,
     taiko_utils::HeaderHasher,
 };
 use zeth_primitives::Address;
@@ -139,7 +138,7 @@ pub async fn execute(
 pub async fn prepare_input(
     ctx: &mut Context,
     req: ProofRequest,
-) -> Result<GuestInput<EthereumTxEssence>> {
+) -> Result<GuestInput> {
     // Todo(Cecilia): should contract address as args, curently hardcode
     let l1_cache = ctx.l1_cache_file.clone();
     let l2_cache = ctx.l2_cache_file.clone();
@@ -155,7 +154,7 @@ pub async fn prepare_input(
             },
             Some(req.beacon_rpc),
         )
-        .expect("Init taiko failed")
+        .expect("Failed to fetch required data for block")
     })
     .await
     .map_err(Into::<super::error::Error>::into)

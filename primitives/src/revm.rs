@@ -31,35 +31,9 @@ pub use core::{
     result::{Result, Result::*},
 };
 
-use alloy_primitives::{Address, U256};
 use revm_primitives::Log as RevmLog;
 
-use crate::{
-    access_list::{AccessList, AccessListItem},
-    receipt::Log,
-};
-
-/// Provides a conversion from [AccessListItem] to a tuple of `Address` and a vector of
-/// `U256`.
-impl From<AccessListItem> for (Address, Vec<U256>) {
-    fn from(item: AccessListItem) -> (Address, Vec<U256>) {
-        (
-            item.address,
-            item.storage_keys
-                .into_iter()
-                .map(|item| item.into())
-                .collect(),
-        )
-    }
-}
-
-/// Provides a conversion from [AccessList] to a vector of tuples containing `Address` and
-/// a vector of `U256`.
-impl From<AccessList> for Vec<(Address, Vec<U256>)> {
-    fn from(list: AccessList) -> Vec<(Address, Vec<U256>)> {
-        list.0.into_iter().map(|item| item.into()).collect()
-    }
-}
+use crate::receipt::Log;
 
 /// Provides a conversion from `RevmLog` to the local [Log].
 impl From<RevmLog> for Log {

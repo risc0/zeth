@@ -16,14 +16,13 @@ use core::fmt::Debug;
 
 use anyhow::Result;
 use revm::{Database, DatabaseCommit};
-use zeth_primitives::transactions::TxEssence;
 
 use super::BlockBuilder;
 
 pub(super) mod taiko;
 
-pub trait TxExecStrategy<E: TxEssence> {
-    fn execute_transactions<D>(block_builder: BlockBuilder<D, E>) -> Result<BlockBuilder<D, E>>
+pub trait TxExecStrategy {
+    fn execute_transactions<D>(block_builder: BlockBuilder<D>) -> Result<BlockBuilder<D>>
     where
         D: Database + DatabaseCommit,
         <D as Database>::Error: Debug;

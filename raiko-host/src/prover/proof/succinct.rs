@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 use sp1_core::{utils, SP1Prover, SP1Stdin, SP1Verifier};
 use zeth_lib::{
     input::{GuestInput, GuestOutput},
-    EthereumTxEssence,
 };
 
 use crate::prover::{
@@ -19,7 +18,7 @@ const ELF: &[u8] =
     include_bytes!("../../../../raiko-guests/succinct/elf/riscv32im-succinct-zkvm-elf");
 
 pub async fn execute_sp1(
-    input: GuestInput<EthereumTxEssence>,
+    input: GuestInput,
     output: GuestOutput,
     ctx: &mut Context,
     req: &ProofRequest,

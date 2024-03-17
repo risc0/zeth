@@ -21,11 +21,9 @@ use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
     mpt::MptNode,
-    transactions::{Transaction, TxEssence},
-    withdrawal::Withdrawal,
     Address, Bytes, FixedBytes, B256, U256,
 };
-use alloy_rpc_types::Transaction as AlloyTransaction;
+use alloy_rpc_types::Withdrawal as AlloyWithdrawal;
 
 /// Represents the state of an account's storage.
 /// The storage trie together with the used storage slots allow us to reconstruct all the
@@ -34,7 +32,7 @@ pub type StorageEntry = (MptNode, Vec<U256>);
 
 /// External block input.
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct GuestInput<E: TxEssence> {
+pub struct GuestInput {
     /// Block hash - for reference!
     pub block_hash: H256,
     /// Previous block header
@@ -50,9 +48,9 @@ pub struct GuestInput<E: TxEssence> {
     /// Hash previously used for the PoW now containing the RANDAO value.
     pub mix_hash: B256,
     /// List of transactions for execution
-    pub transactions: Vec<Transaction<E>>,
+    //pub transactions: Vec<Transaction<E>>,
     /// List of stake withdrawals for execution
-    pub withdrawals: Vec<Withdrawal>,
+    pub withdrawals: Vec<AlloyWithdrawal>,
     /// State trie of the parent block.
     pub parent_state_trie: MptNode,
     /// Maps each address with its storage trie and the used storage slots.
@@ -64,15 +62,14 @@ pub struct GuestInput<E: TxEssence> {
     /// Base fee per gas
     pub base_fee_per_gas: u64,
     /// Taiko specific data
-    pub taiko: TaikoGuestInput<E>,
+    pub taiko: TaikoGuestInput,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TaikoGuestInput<E: TxEssence> {
+pub struct TaikoGuestInput {
     pub chain_spec_name: String,
     pub l1_header: AlloyConsensusHeader,
     pub tx_list: Vec<u8>,
-    pub anchor_tx: Option<Transaction<E>>,
     pub anchor_tx_alloy: String,
     pub block_proposed: BlockProposed,
     pub prover_data: TaikoProverData,
@@ -329,13 +326,11 @@ impl From<protocol_testnet::BlockProposed> for BlockProposed {
 mod tests {
     use alloc::vec;
 
-    use zeth_primitives::transactions::ethereum::EthereumTxEssence;
-
     use super::*;
 
     #[test]
     fn input_serde_roundtrip() {
-        let input = GuestInput::<EthereumTxEssence> {
+        let input = GuestInput {
             block_hash: Default::default(),
             parent_header: Default::default(),
             beneficiary: Default::default(),
@@ -343,7 +338,7 @@ mod tests {
             timestamp: Default::default(),
             extra_data: Default::default(),
             mix_hash: Default::default(),
-            transactions: vec![],
+            //transactions: vec![],
             withdrawals: vec![],
             parent_state_trie: Default::default(),
             parent_storage: Default::default(),
@@ -352,7 +347,7 @@ mod tests {
             base_fee_per_gas: Default::default(),
             taiko: Default::default(),
         };
-        let _: GuestInput<EthereumTxEssence> =
+        let _: GuestInput =
             bincode::deserialize(&bincode::serialize(&input).unwrap()).unwrap();
     }
 }

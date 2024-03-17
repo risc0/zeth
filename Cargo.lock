@@ -4185,6 +4185,8 @@ dependencies = [
  "alloy-consensus",
  "alloy-primitives",
  "alloy-providers",
+ "alloy-rlp",
+ "alloy-rlp-derive",
  "alloy-rpc-types 0.1.0 (git+https://github.com/brechtpd/alloy?branch=header-serialize)",
  "alloy-sol-types",
  "alloy-transport-http",

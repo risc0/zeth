@@ -1,36 +1,51 @@
 use std::{path::PathBuf, sync::Arc};
 
-use alloy_sol_types::SolCall;
-use alloy_rpc_types::{Block as AlloyBlock, BlockTransactions};
+use alloy_sol_types::{SolCall, SolEvent};
+use alloy_rpc_types::{Block as AlloyBlock, BlockTransactions, Filter, Transaction as AlloyRpcTransaction};
 use alloy_providers::tmp::{HttpProvider, TempProvider};
 use alloy_transport_http::Http;
 use c_kzg::{Blob, KzgCommitment};
 use url::Url;
 
-use anyhow::{anyhow, ensure, Context, Result};
-use ethers_core::types::{Transaction as EthersTransaction, U256};
+use anyhow::{anyhow, bail, Result};
 use hashbrown::HashSet;
 use log::info;
 use reth_primitives::{constants::eip4844::MAINNET_KZG_TRUSTED_SETUP, eip4844::kzg_to_versioned_hash};
-use rlp::Rlp;
 use serde::{Deserialize, Serialize};
 use zeth_lib::{
     builder::{prepare::TaikoHeaderPrepStrategy, BlockBuilder, TkoTxExecStrategy},
     input::{
-        decode_propose_block_call_params, proposeBlockCall, BlockMetadata, GuestInput,
-        TaikoGuestInput, TaikoProverData,
+        decode_anchor, decode_propose_block_call_params, proposeBlockCall, protocol_testnet::BlockProposed as TestnetBlockProposed, BlockProposed, GuestInput, TaikoGuestInput, TaikoProverData
     },
-    taiko_utils::{generate_transactions, generate_transactions_alloy, to_header},
+    taiko_utils::{generate_transactions_alloy, get_contracts, to_header},
 };
-use zeth_primitives::{
-    ethers::{from_ethers_h160, from_ethers_h256, from_ethers_u256},
-    mpt::proofs_to_tries,
-    transactions::ethereum::EthereumTxEssence,
-    Bytes,
-};
+use zeth_primitives::mpt::proofs_to_tries;
 
-use super::provider::BlockQuery;
-use crate::host::{provider::GetBlobData, provider_db::ProviderDb, taiko_provider::TaikoProvider};
+use super::provider::GetBlobsResponse;
+use crate::host::{provider::GetBlobData, provider_db::ProviderDb};
+
+pub use alloy_primitives::*;
+pub use alloy_rlp as rlp;
+
+pub trait RlpBytes {
+    /// Returns the RLP-encoding.
+    fn to_rlp(&self) -> Vec<u8>;
+}
+
+impl<T> RlpBytes for T
+where
+    T: rlp::Encodable,
+{
+    #[inline]
+    fn to_rlp(&self) -> Vec<u8> {
+        let rlp_length = self.length();
+        let mut out = Vec::with_capacity(rlp_length);
+        self.encode(&mut out);
+        debug_assert_eq!(out.len(), rlp_length);
+        out
+    }
+}
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HostArgs {
@@ -60,6 +75,77 @@ pub fn get_block_alloy(rpc_url: String, block_number: u64, full: bool) -> Result
     }
 }
 
+pub fn get_log_alloy(rpc_url: String, chain_name: &str, block_hash: B256, l2_block_no: u64) -> Result<(AlloyRpcTransaction, BlockProposed)> {
+    let http = Http::new(Url::parse(&rpc_url).expect("invalid rpc url"));
+    let provider: HttpProvider = HttpProvider::new(http);
+
+
+    let l1_address = get_contracts(chain_name).unwrap().0;
+
+    //info!("Querying RPC for full block: {query:?}");
+
+    let tokio_handle = tokio::runtime::Handle::current();
+
+    let event_signature = if chain_name == "testnet" {
+        TestnetBlockProposed::SIGNATURE_HASH
+    } else {
+        BlockProposed::SIGNATURE_HASH
+    };
+
+    let filter = Filter::new()
+        .address(l1_address)
+        .at_block_hash(block_hash)
+        .event_signature(event_signature);
+
+    let logs = tokio_handle.block_on(async {
+        provider
+            .get_logs(filter)
+            .await
+    })?;
+
+    for log in logs {
+        if chain_name == "testnet" {
+            let event = TestnetBlockProposed::decode_log(&Log::new(log.address, log.topics, log.data).unwrap(), false).unwrap();
+            if event.blockId == zeth_primitives::U256::from(l2_block_no) {
+                let tx = tokio_handle.block_on(async {
+                    provider
+                        .get_transaction_by_hash(log.transaction_hash.unwrap())
+                        .await
+                }).expect("could not find the propose tx");
+                return Ok((tx, event.data.into()));
+            }
+        } else {
+            let event = BlockProposed::decode_log(&Log::new(log.address, log.topics, log.data).unwrap(), false).unwrap();
+            if event.blockId == zeth_primitives::U256::from(l2_block_no) {
+                let tx = tokio_handle.block_on(async {
+                    provider
+                        .get_transaction_by_hash(log.transaction_hash.unwrap())
+                        .await
+                }).expect("could not find the propose tx");
+                return Ok((tx, event.data));
+            }
+        }
+    }
+    bail!("No BlockProposed event found for block {l2_block_no}");
+}
+
+fn get_blob_data(beacon_rpc_url: &str, block_id: u64) -> Result<GetBlobsResponse> {
+    let tokio_handle = tokio::runtime::Handle::current();
+    tokio_handle.block_on(async {
+        let url = format!("{}/eth/v1/beacon/blob_sidecars/{}", beacon_rpc_url, block_id);
+        let response = reqwest::get(url.clone()).await?;
+        if response.status().is_success() {
+            let blob_response: GetBlobsResponse = response.json().await?;
+            Ok(blob_response)
+        } else {
+            Err(anyhow::anyhow!(
+                "Request failed with status code: {}",
+                response.status()
+            ))
+        }
+    })
+}
+
 pub fn taiko_run_preflight(
     l1_rpc_url: Option<String>,
     l2_rpc_url: Option<String>,
@@ -67,79 +153,50 @@ pub fn taiko_run_preflight(
     chain_spec_name: &str,
     prover_data: TaikoProverData,
     beacon_rpc_url: Option<String>,
-) -> Result<GuestInput<EthereumTxEssence>> {
-    let mut tp = TaikoProvider::new(
-        None,
-        l1_rpc_url.clone(),
-        None,
-        l2_rpc_url.clone(),
-        beacon_rpc_url,
-    )?;
-
-    // Fetch the parent block
-    /*let parent_block = tp.l2_provider.get_partial_block(&BlockQuery {
-        block_no: l2_block_no - 1,
-    })?;
-
-    println!("parent_block: {:?}", parent_block);
-
-    info!(
-        "Initial block: {:?} ({:?})",
-        parent_block.number.unwrap(),
-        parent_block.hash.unwrap()
-    );
-    let parent_header: Header = parent_block.try_into().context("invalid parent block")?;*/
+) -> Result<GuestInput> {
+    let http_l2 = Http::new(Url::parse(&l2_rpc_url.clone().unwrap()).expect("invalid rpc url"));
+    let provider_l2: HttpProvider = HttpProvider::new(http_l2);
 
     let parent_block = get_block_alloy(l2_rpc_url.clone().unwrap(), l2_block_no - 1, false).unwrap();
-    println!("*** alloy parent block ***:{:?}", parent_block);
+    //println!("*** alloy parent block ***:{:?}", parent_block);
 
     let block_alloy = get_block_alloy(l2_rpc_url.clone().unwrap(), l2_block_no, true).unwrap();
-    println!("*** alloy block ***:{:?}", block_alloy);
+    //println!("*** alloy block ***:{:?}", block_alloy);
 
     // Fetch the target block
-    let mut block_ethers = tp.l2_provider.get_full_block(&BlockQuery {
-        block_no: l2_block_no,
-    })?;
-    let (anchor_tx_ethers, anchor_call_ethers) = tp.get_anchor(&block_ethers)?;
-    let (anchor_tx_alloy, anchor_call_alloy) = tp.get_anchor_alloy(&block_alloy)?;
+    let anchor_tx_alloy = match &block_alloy.transactions {
+        BlockTransactions::Full(txs) => txs[0].to_owned(),
+        _ => unreachable!(),
+    };
+    let anchor_call_alloy = decode_anchor(anchor_tx_alloy.input.as_ref())?;
+
     println!("block.hash: {:?}", block_alloy.header.hash.unwrap());
     println!("block.parent_hash: {:?}", block_alloy.header.parent_hash);
-    println!("block: {:?}", block_ethers);
 
-    println!("anchor L1 block id: {:?}", anchor_call_ethers.l1Height);
-    println!("anchor L1 state root: {:?}", anchor_call_ethers.l1SignalRoot);
+    println!("anchor L1 block id: {:?}", anchor_call_alloy.l1Height);
+    println!("anchor L1 state root: {:?}", anchor_call_alloy.l1SignalRoot);
 
-    let l1_state_block_no = anchor_call_ethers.l1Height;
+    let l1_state_block_no = anchor_call_alloy.l1Height;
     let l1_inclusion_block_no = l1_state_block_no + 1;
 
     println!("l1_state_block_no: {:?}", l1_state_block_no);
 
     let l1_state_root_block_alloy = get_block_alloy(l1_rpc_url.clone().unwrap(), l1_state_block_no, false).unwrap();
-    println!("*** alloy block ***:{:?}", l1_state_root_block_alloy);
+    
+    let l1_inclusion_block_alloy = get_block_alloy(l1_rpc_url.clone().unwrap(), l1_inclusion_block_no, false).unwrap();
 
     // Get the L1 state block header so that we can prove the L1 state root
-    // Fetch the parent block
-    /*let l1_state_root_block = tp.l1_provider.get_partial_block(&BlockQuery {
-        block_no: l1_state_block_no,
-    })?;*/
-    // println!("l1_state_root_block: {:?}", l1_state_root_block);
     println!(
         "l1_state_root_block hash: {:?}",
         l1_state_root_block_alloy.header.hash.unwrap()
     );
 
-    // let l1_propose_block = tp.l1_provider.get_partial_block(&BlockQuery {
-    // block_no: l1_inclusion_block_no,
-    // })?;
-    // println!("l1_propose_block: {:?}", l1_propose_block);
+    let (proposal_tx_alloy, proposal_event_alloy) =
+        get_log_alloy(l1_rpc_url.clone().unwrap(), chain_spec_name, l1_inclusion_block_alloy.header.hash.unwrap(), l2_block_no)?;
 
-    // Get the block proposal data
-    let (proposal_tx, proposal_event) =
-        tp.get_proposal(l1_inclusion_block_no, l2_block_no, chain_spec_name)?;
+    println!("proposal alloy: {:?}", proposal_event_alloy);
 
-    println!("proposal: {:?}", proposal_event);
-
-    let proposal_call = proposeBlockCall::abi_decode(&proposal_tx.input, false).unwrap();
+    let proposal_call = proposeBlockCall::abi_decode(&proposal_tx_alloy.input, false).unwrap();
     // .with_context(|| "failed to decode propose block call")?;
 
     // blobUsed == (txList.length == 0) according to TaikoL1
@@ -150,20 +207,20 @@ pub fn taiko_run_preflight(
             .expect("valid propose_block_call_params");
         println!("metadata: {:?}", metadata);
 
-        let blob_hashs = proposal_tx.blob_versioned_hashes.unwrap();
+        let blob_hashs = proposal_tx_alloy.blob_versioned_hashes;
         // TODO: multiple blob hash support
         assert!(blob_hashs.len() == 1);
         let blob_hash = blob_hashs[0];
         // TODO: check _proposed_blob_hash with blob_hash if _proposed_blob_hash is not None
 
-        let blobs = tp.l1_provider.get_blob_data(l1_inclusion_block_no)?;
+        let blobs = get_blob_data(&beacon_rpc_url.clone().unwrap(), l1_inclusion_block_no)?;
         assert!(blobs.data.len() > 0, "blob data not available anymore");
         let tx_blobs: Vec<GetBlobData> = blobs
             .data
             .iter()
             .filter(|blob: &&GetBlobData| {
                 // calculate from plain blob
-                blob_hash.as_fixed_bytes() == &calc_blob_versioned_hash(&blob.blob)
+                blob_hash == &calc_blob_versioned_hash(&blob.blob)
             })
             .cloned()
             .collect::<Vec<GetBlobData>>();
@@ -172,27 +229,22 @@ pub fn taiko_run_preflight(
         let size = metadata.txListByteSize as usize;
         (
             blob_data.as_slice()[offset..(offset + size)].to_vec(),
-            Some(from_ethers_h256(blob_hash)),
+            Some(blob_hash),
         )
     } else {
         (proposal_call.txList.clone(), None)
     };
 
-    println!("tx_list: {:?}", tx_list);
+    //println!("tx_list: {:?}", tx_list);
 
     // Create the transactions for the proposed tx list
-    let transactions_ethers: Vec<EthersTransaction> = generate_transactions(&tx_list, anchor_tx_ethers.clone());
     let transactions_alloy = generate_transactions_alloy(&tx_list, anchor_tx_alloy.clone());
-    assert!(transactions_ethers.len() == transactions_alloy.len());
 
     println!("Block valid transactions: {:?}", block_alloy.transactions.len());
     assert!(
         transactions_alloy.len() >= block_alloy.transactions.len(),
         "unexpected number of transactions"
     );
-
-    // Set the original transactions on the block
-    //block_alloy.transactions = BlockTransactions::default();
 
     info!(
         "Final block number: {:?} ({:?})",
@@ -205,24 +257,11 @@ pub fn taiko_run_preflight(
         chain_spec_name: chain_spec_name.to_string(),
         l1_header: to_header(&l1_state_root_block_alloy.header),
         tx_list,
-        anchor_tx: Some(anchor_tx_ethers.try_into().unwrap()),
         anchor_tx_alloy: serde_json::to_string(&anchor_tx_alloy).unwrap(),
         tx_blob_hash,
-        block_proposed: proposal_event,
+        block_proposed: proposal_event_alloy.into(),
         prover_data,
     };
-
-    // convert each withdrawal
-    let withdrawals = block_ethers
-        .withdrawals
-        .unwrap_or_default()
-        .into_iter()
-        .enumerate()
-        .map(|(i, tx)| {
-            tx.try_into()
-                .with_context(|| format!("withdrawal {i} invalid"))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
 
     // Create the input struct without the block data set
     let input = GuestInput {
@@ -232,8 +271,7 @@ pub fn taiko_run_preflight(
         timestamp: block_alloy.header.timestamp.try_into().unwrap(),
         extra_data: block_alloy.header.extra_data.0.into(),
         mix_hash: block_alloy.header.mix_hash.unwrap(),
-        transactions: Vec::new(),
-        withdrawals,
+        withdrawals: block_alloy.withdrawals.unwrap_or_default(),
         parent_state_trie: Default::default(),
         parent_storage: Default::default(),
         contracts: Default::default(),
@@ -244,7 +282,7 @@ pub fn taiko_run_preflight(
     };
 
     // Create the provider DB
-    let provider_db = ProviderDb::new(tp.l2_provider, parent_block.header.number.unwrap().try_into().unwrap());
+    let provider_db = ProviderDb::new(provider_l2, parent_block.header.number.unwrap().try_into().unwrap());
 
     println!("execute block");
 
@@ -277,11 +315,6 @@ pub fn taiko_run_preflight(
         }
     }
 
-    info!("Saving provider cache ...");
-
-    // Save the provider cache
-    // tp.save()?;
-
     info!("Provider-backed execution is Done!");
 
     Ok(GuestInput {
@@ -300,8 +333,8 @@ const BLOB_DATA_LEN: usize = BLOB_FIELD_ELEMENT_NUM * BLOB_FIELD_ELEMENT_BYTES;
 
 fn decode_blob_data(blob: &str) -> Vec<u8> {
     let origin_blob = hex::decode(blob.to_lowercase().trim_start_matches("0x")).unwrap();
-    let header: U256 = U256::from_big_endian(&origin_blob[0..BLOB_FIELD_ELEMENT_BYTES]); // first element is the length
-    let expected_len = header.as_usize();
+    let header: U256 = U256::from_be_bytes::<BLOB_FIELD_ELEMENT_BYTES>(origin_blob[0..BLOB_FIELD_ELEMENT_BYTES].try_into().unwrap()); // first element is the length
+    let expected_len = header.as_limbs()[0] as usize;
 
     assert!(origin_blob.len() == BLOB_DATA_LEN);
     // the first 32 bytes is the length of the blob

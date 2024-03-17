@@ -16,4 +16,3 @@ extern crate std;
 pub mod host;
 pub mod provider;
 pub mod provider_db;
-pub mod taiko_provider;

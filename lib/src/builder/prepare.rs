@@ -16,27 +16,24 @@ use core::fmt::Debug;
 
 use anyhow::{bail, Context, Result};
 use revm::{Database, DatabaseCommit};
-use zeth_primitives::transactions::TxEssence;
 use alloy_consensus::Header as AlloyConsensusHeader;
 
 use crate::{builder::BlockBuilder, consts::MAX_EXTRA_DATA_BYTES, taiko_utils::HeaderHasher};
 
 pub trait HeaderPrepStrategy {
-    fn prepare_header<D, E>(block_builder: BlockBuilder<D, E>) -> Result<BlockBuilder<D, E>>
+    fn prepare_header<D>(block_builder: BlockBuilder<D>) -> Result<BlockBuilder<D>>
     where
         D: Database + DatabaseCommit,
-        <D as Database>::Error: core::fmt::Debug,
-        E: TxEssence;
+        <D as Database>::Error: core::fmt::Debug;
 }
 
 pub struct TaikoHeaderPrepStrategy {}
 
 impl HeaderPrepStrategy for TaikoHeaderPrepStrategy {
-    fn prepare_header<D, E>(mut block_builder: BlockBuilder<D, E>) -> Result<BlockBuilder<D, E>>
+    fn prepare_header<D>(mut block_builder: BlockBuilder<D>) -> Result<BlockBuilder<D>>
     where
         D: Database + DatabaseCommit,
         <D as Database>::Error: Debug,
-        E: TxEssence,
     {
         // Validate timestamp
         let timestamp: u64 = block_builder.input.timestamp.try_into().unwrap();

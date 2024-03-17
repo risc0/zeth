@@ -1,7 +1,7 @@
 use alloy_primitives::{Address, TxHash, B256};
 use alloy_sol_types::SolValue;
 use anyhow::{ensure, Result};
-use zeth_primitives::{keccak::keccak, transactions::ethereum::EthereumTxEssence};
+use zeth_primitives::{keccak::keccak};
 use alloy_consensus::Header as AlloyConsensusHeader;
 
 use super::taiko_utils::ANCHOR_GAS_LIMIT;
@@ -68,7 +68,7 @@ pub enum EvidenceType {
 
 // TODO(cecilia): rewrite
 pub fn assemble_protocol_instance(
-    input: &GuestInput<EthereumTxEssence>,
+    input: &GuestInput,
     header: &AlloyConsensusHeader,
 ) -> Result<ProtocolInstance> {
     let blob_used = input.taiko.block_proposed.meta.blobUsed;

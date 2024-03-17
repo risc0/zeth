@@ -5,6 +5,8 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0"
+alloy-rlp = { version = "0.3", default-features = false }
+alloy-rlp-derive = { version = "0.3", default-features = false }
 alloy-sol-types = { version = "0.6" }
 alloy-primitives = { version = "0.6", default-features = false }
 alloy-rpc-types = { git = "https://github.com/brechtpd/alloy", branch = "header-serialize" }

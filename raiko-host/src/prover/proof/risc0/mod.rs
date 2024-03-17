@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 use tracing::info as traicing_info;
 use zeth_lib::{
     input::{GuestInput, GuestOutput},
-    EthereumTxEssence,
 };
 
 use crate::prover::{
@@ -24,14 +23,14 @@ use crate::prover::{
 // const RISC0_GUEST_ID: [u32; 8] = [1,2,3,4,5,6,7,8];
 
 pub async fn execute_risc0(
-    input: GuestInput<EthereumTxEssence>,
+    input: GuestInput,
     output: GuestOutput,
     ctx: &Context,
     req: &Risc0ProofParams,
 ) -> Result<Risc0Response, String> {
     println!("elf code length: {}", RISC0_METHODS_ELF.len());
 
-    let result = maybe_prove::<GuestInput<EthereumTxEssence>, GuestOutput>(
+    let result = maybe_prove::<GuestInput, GuestOutput>(
         req,
         &input,
         RISC0_METHODS_ELF,

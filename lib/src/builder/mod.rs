@@ -12,16 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloy_consensus::Header as AlloyConsensusHeader;
 use anyhow::Result;
 use revm::{Database, DatabaseCommit};
-use zeth_primitives::{
-    mpt::MptNode,
-};
+use zeth_primitives::mpt::MptNode;
 
-pub use self::execute::taiko::TkoTxExecStrategy;
+pub use self::execute::TkoTxExecStrategy;
 use crate::{
     builder::{
-        execute::TxExecStrategy,
         finalize::{BlockFinalizeStrategy, MemDbBlockFinalizeStrategy},
         initialize::{DbInitStrategy, MemDbInitStrategy},
         prepare::{HeaderPrepStrategy, TaikoHeaderPrepStrategy},
@@ -30,9 +28,8 @@ use crate::{
     input::GuestInput,
     mem_db::MemDb,
 };
-use alloy_consensus::Header as AlloyConsensusHeader;
 
-mod execute;
+pub mod execute;
 mod finalize;
 mod initialize;
 pub mod prepare;
@@ -122,4 +119,10 @@ impl BlockBuilderStrategy for TaikoStrategy {
     type HeaderPrepStrategy = TaikoHeaderPrepStrategy;
     type TxExecStrategy = TkoTxExecStrategy;
     type BlockFinalizeStrategy = MemDbBlockFinalizeStrategy;
+}
+pub trait TxExecStrategy {
+    fn execute_transactions<D>(block_builder: BlockBuilder<D>) -> Result<BlockBuilder<D>>
+    where
+        D: Database + DatabaseCommit,
+        <D as Database>::Error: core::fmt::Debug;
 }

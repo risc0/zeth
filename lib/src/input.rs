@@ -13,17 +13,14 @@
 // limitations under the License.
 use core::fmt::Debug;
 
-use alloy_sol_types::{sol, SolCall, SolType};
 use alloy_consensus::Header as AlloyConsensusHeader;
+use alloy_rpc_types::Withdrawal as AlloyWithdrawal;
+use alloy_sol_types::{sol, SolCall};
 use anyhow::{anyhow, Result};
 use ethers_core::types::H256;
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
-use zeth_primitives::{
-    mpt::MptNode,
-    Address, Bytes, FixedBytes, B256, U256,
-};
-use alloy_rpc_types::Withdrawal as AlloyWithdrawal;
+use zeth_primitives::{mpt::MptNode, Address, Bytes, FixedBytes, B256, U256};
 
 /// Represents the state of an account's storage.
 /// The storage trie together with the used storage slots allow us to reconstruct all the
@@ -48,7 +45,7 @@ pub struct GuestInput {
     /// Hash previously used for the PoW now containing the RANDAO value.
     pub mix_hash: B256,
     /// List of transactions for execution
-    //pub transactions: Vec<Transaction<E>>,
+    // pub transactions: Vec<Transaction<E>>,
     /// List of stake withdrawals for execution
     pub withdrawals: Vec<AlloyWithdrawal>,
     /// State trie of the parent block.
@@ -273,12 +270,6 @@ pub mod protocol_testnet {
     }
 }
 
-pub fn decode_propose_block_call_params(data: &[u8]) -> Result<BlockParams> {
-    let propose_block_params = BlockParams::abi_decode(data, false)
-        .map_err(|e| anyhow!("failed to decode propose block call: {e}"))?;
-    Ok(propose_block_params)
-}
-
 impl From<protocol_testnet::EthDeposit> for EthDeposit {
     fn from(item: protocol_testnet::EthDeposit) -> Self {
         EthDeposit {
@@ -338,7 +329,7 @@ mod tests {
             timestamp: Default::default(),
             extra_data: Default::default(),
             mix_hash: Default::default(),
-            //transactions: vec![],
+            // transactions: vec![],
             withdrawals: vec![],
             parent_state_trie: Default::default(),
             parent_storage: Default::default(),
@@ -347,7 +338,6 @@ mod tests {
             base_fee_per_gas: Default::default(),
             taiko: Default::default(),
         };
-        let _: GuestInput =
-            bincode::deserialize(&bincode::serialize(&input).unwrap()).unwrap();
+        let _: GuestInput = bincode::deserialize(&bincode::serialize(&input).unwrap()).unwrap();
     }
 }

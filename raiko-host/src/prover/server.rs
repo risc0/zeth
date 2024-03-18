@@ -224,7 +224,6 @@ impl Handler {
         match method {
             // enqueues a task for computating proof for any given block
             "proof" => {
-                println!("prodfasdfkasj;dkflja;sldk");
                 let options = params.first().ok_or("expected struct ProofRequest")?;
                 let req: ProofRequest =
                     serde_json::from_value(options.to_owned()).map_err(|e| e.to_string())?;

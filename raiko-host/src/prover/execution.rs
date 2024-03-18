@@ -135,10 +135,7 @@ pub async fn execute(
 }
 
 /// prepare input data for guests
-pub async fn prepare_input(
-    ctx: &mut Context,
-    req: ProofRequest,
-) -> Result<GuestInput> {
+pub async fn prepare_input(ctx: &mut Context, req: ProofRequest) -> Result<GuestInput> {
     // Todo(Cecilia): should contract address as args, curently hardcode
     let l1_cache = ctx.l1_cache_file.clone();
     let l2_cache = ctx.l2_cache_file.clone();

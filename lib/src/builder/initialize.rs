@@ -30,7 +30,8 @@ use crate::{
     builder::BlockBuilder,
     consts::MAX_BLOCK_HASH_AGE,
     guest_mem_forget,
-    mem_db::{AccountState, DbAccount, MemDb}, taiko_utils::HeaderHasher,
+    mem_db::{AccountState, DbAccount, MemDb},
+    taiko_utils::HeaderHasher,
 };
 
 pub trait DbInitStrategy<D>
@@ -44,9 +45,7 @@ where
 pub struct MemDbInitStrategy {}
 
 impl DbInitStrategy<MemDb> for MemDbInitStrategy {
-    fn initialize_database(
-        mut block_builder: BlockBuilder<MemDb>,
-    ) -> Result<BlockBuilder<MemDb>> {
+    fn initialize_database(mut block_builder: BlockBuilder<MemDb>) -> Result<BlockBuilder<MemDb>> {
         // Verify state trie root
         if block_builder.input.parent_state_trie.hash()
             != block_builder.input.parent_header.state_root

@@ -15,7 +15,6 @@ use zeth_lib::{
     consts::TKO_MAINNET_CHAIN_SPEC,
     input::Input,
     taiko::{
-        host::{HostArgs},
         protocol_instance::{assemble_protocol_instance, EvidenceType},
         TaikoGuestInput,
     },

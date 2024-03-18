@@ -11,6 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use alloy_consensus::Header as AlloyConsensusHeader;
+use alloy_providers::tmp::{HttpProvider, TempProvider};
 use alloy_rpc_types::{BlockId, EIP1186AccountProofResponse};
 use hashbrown::HashMap;
 use revm::{
@@ -18,13 +20,10 @@ use revm::{
     Database, DatabaseCommit,
 };
 use tokio::runtime::Handle;
-use zeth_lib::{taiko_utils::to_header, mem_db::{DbError, MemDb}};
-use zeth_primitives::{
-    Address, B256, U256,
-};
-use alloy_consensus::Header as AlloyConsensusHeader;
+use zeth_lib::{mem_db::MemDb, taiko_utils::to_header};
+use zeth_primitives::{Address, B256, U256};
+
 use crate::host::host::get_block;
-use alloy_providers::tmp::{HttpProvider, TempProvider};
 
 pub struct ProviderDb {
     pub provider: HttpProvider,
@@ -101,9 +100,7 @@ impl ProviderDb {
             .unwrap_or(&self.block_number);
         let headers = (*earliest_block..self.block_number)
             .rev()
-            .map(|block_no| {
-                to_header(&get_block(&self.provider, block_no, false).unwrap().header)
-            })
+            .map(|block_no| to_header(&get_block(&self.provider, block_no, false).unwrap().header))
             .collect();
         Ok(headers)
     }
@@ -195,8 +192,7 @@ impl Database for ProviderDb {
                 .0
                 .into()
         });
-        self.initial_db
-            .insert_block_hash(block_number, block_hash);
+        self.initial_db.insert_block_hash(block_number, block_hash);
         Ok(block_hash)
     }
 

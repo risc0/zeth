@@ -14,9 +14,9 @@
 
 use core::fmt::Debug;
 
+use alloy_consensus::Header as AlloyConsensusHeader;
 use anyhow::{bail, Context, Result};
 use revm::{Database, DatabaseCommit};
-use alloy_consensus::Header as AlloyConsensusHeader;
 
 use crate::{builder::BlockBuilder, consts::MAX_EXTRA_DATA_BYTES, taiko_utils::HeaderHasher};
 
@@ -58,7 +58,9 @@ impl HeaderPrepStrategy for TaikoHeaderPrepStrategy {
         block_builder.header = Some(AlloyConsensusHeader {
             // Initialize fields that we can compute from the parent
             parent_hash: block_builder.input.parent_header.hash(),
-            number: number.checked_add(1).with_context(|| "Invalid block number: too large")?,
+            number: number
+                .checked_add(1)
+                .with_context(|| "Invalid block number: too large")?,
             base_fee_per_gas: Some(block_builder.input.base_fee_per_gas),
             // Initialize metadata from input
             beneficiary: block_builder.input.beneficiary,

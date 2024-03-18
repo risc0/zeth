@@ -1,31 +1,32 @@
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
-use alloy_sol_types::{SolCall, SolEvent};
-use alloy_rpc_types::{Block as AlloyBlock, BlockTransactions, Filter, Transaction as AlloyRpcTransaction};
+pub use alloy_primitives::*;
 use alloy_providers::tmp::{HttpProvider, TempProvider};
+pub use alloy_rlp as rlp;
+use alloy_rpc_types::{
+    Block as AlloyBlock, BlockTransactions, Filter, Transaction as AlloyRpcTransaction,
+};
+use alloy_sol_types::{SolCall, SolEvent};
 use alloy_transport_http::Http;
-use c_kzg::{Blob, KzgCommitment};
-use url::Url;
-
 use anyhow::{anyhow, bail, Result};
+use c_kzg::{Blob, KzgCommitment};
 use hashbrown::HashSet;
-use log::info;
-use reth_primitives::{constants::eip4844::MAINNET_KZG_TRUSTED_SETUP, eip4844::kzg_to_versioned_hash};
+use reth_primitives::{
+    constants::eip4844::MAINNET_KZG_TRUSTED_SETUP, eip4844::kzg_to_versioned_hash,
+};
 use serde::{Deserialize, Serialize};
+use url::Url;
 use zeth_lib::{
     builder::{prepare::TaikoHeaderPrepStrategy, BlockBuilder, TkoTxExecStrategy},
     input::{
-        decode_anchor, decode_propose_block_call_params, proposeBlockCall, protocol_testnet::BlockProposed as TestnetBlockProposed, BlockProposed, GuestInput, TaikoGuestInput, TaikoProverData
+        decode_anchor, proposeBlockCall, protocol_testnet::BlockProposed as TestnetBlockProposed,
+        BlockProposed, GuestInput, TaikoGuestInput, TaikoProverData,
     },
     taiko_utils::{generate_transactions, get_contracts, to_header},
 };
 use zeth_primitives::mpt::proofs_to_tries;
 
-use super::provider::GetBlobsResponse;
-use crate::host::{provider::GetBlobData, provider_db::ProviderDb};
-
-pub use alloy_primitives::*;
-pub use alloy_rlp as rlp;
+use crate::host::provider_db::ProviderDb;
 
 pub trait RlpBytes {
     /// Returns the RLP-encoding.
@@ -46,99 +47,6 @@ where
     }
 }
 
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HostArgs {
-    pub l1_cache: Option<PathBuf>,
-    pub l1_rpc: Option<String>,
-    pub l2_cache: Option<PathBuf>,
-    pub l2_rpc: Option<String>,
-}
-
-pub fn get_block(provider: &HttpProvider, block_number: u64, full: bool) -> Result<AlloyBlock> {
-    let tokio_handle = tokio::runtime::Handle::current();
-    let response = tokio_handle.block_on(async {
-        provider
-            .get_block_by_number((block_number).into(), full)
-            .await
-    })?;
-    match response {
-        Some(out) => Ok(out),
-        None => Err(anyhow!("No data for {block_number:?}")),
-    }
-}
-
-pub fn get_log(rpc_url: String, chain_name: &str, block_hash: B256, l2_block_no: u64) -> Result<(AlloyRpcTransaction, BlockProposed)> {
-    let http = Http::new(Url::parse(&rpc_url).expect("invalid rpc url"));
-    let provider: HttpProvider = HttpProvider::new(http);
-
-
-    let l1_address = get_contracts(chain_name).unwrap().0;
-
-    //info!("Querying RPC for full block: {query:?}");
-
-    let tokio_handle = tokio::runtime::Handle::current();
-
-    let event_signature = if chain_name == "testnet" {
-        TestnetBlockProposed::SIGNATURE_HASH
-    } else {
-        BlockProposed::SIGNATURE_HASH
-    };
-
-    let filter = Filter::new()
-        .address(l1_address)
-        .at_block_hash(block_hash)
-        .event_signature(event_signature);
-
-    let logs = tokio_handle.block_on(async {
-        provider
-            .get_logs(filter)
-            .await
-    })?;
-
-    for log in logs {
-        if chain_name == "testnet" {
-            let event = TestnetBlockProposed::decode_log(&Log::new(log.address, log.topics, log.data).unwrap(), false).unwrap();
-            if event.blockId == zeth_primitives::U256::from(l2_block_no) {
-                let tx = tokio_handle.block_on(async {
-                    provider
-                        .get_transaction_by_hash(log.transaction_hash.unwrap())
-                        .await
-                }).expect("could not find the propose tx");
-                return Ok((tx, event.data.into()));
-            }
-        } else {
-            let event = BlockProposed::decode_log(&Log::new(log.address, log.topics, log.data).unwrap(), false).unwrap();
-            if event.blockId == zeth_primitives::U256::from(l2_block_no) {
-                let tx = tokio_handle.block_on(async {
-                    provider
-                        .get_transaction_by_hash(log.transaction_hash.unwrap())
-                        .await
-                }).expect("could not find the propose tx");
-                return Ok((tx, event.data));
-            }
-        }
-    }
-    bail!("No BlockProposed event found for block {l2_block_no}");
-}
-
-fn get_blob_data(beacon_rpc_url: &str, block_id: u64) -> Result<GetBlobsResponse> {
-    let tokio_handle = tokio::runtime::Handle::current();
-    tokio_handle.block_on(async {
-        let url = format!("{}/eth/v1/beacon/blob_sidecars/{}", beacon_rpc_url, block_id);
-        let response = reqwest::get(url.clone()).await?;
-        if response.status().is_success() {
-            let blob_response: GetBlobsResponse = response.json().await?;
-            Ok(blob_response)
-        } else {
-            Err(anyhow::anyhow!(
-                "Request failed with status code: {}",
-                response.status()
-            ))
-        }
-    })
-}
-
 pub fn preflight(
     l1_rpc_url: Option<String>,
     l2_rpc_url: Option<String>,
@@ -153,8 +61,8 @@ pub fn preflight(
     let http_l1 = Http::new(Url::parse(&l1_rpc_url.clone().unwrap()).expect("invalid rpc url"));
     let provider_l1: HttpProvider = HttpProvider::new(http_l1);
 
-    let parent_block = get_block(&provider_l2, l2_block_no - 1, false).unwrap();
     let block = get_block(&provider_l2, l2_block_no, true).unwrap();
+    let parent_block = get_block(&provider_l2, l2_block_no - 1, false).unwrap();
 
     // Decode the anchor tx to find out which L1 blocks we need to fetch
     let anchor_tx = match &block.transactions {
@@ -172,32 +80,37 @@ pub fn preflight(
     println!("anchor L1 state root: {:?}", anchor_call.l1SignalRoot);
 
     // Get the L1 state block header so that we can prove the L1 state root
-    let l1_state_block = get_block(&provider_l1, l1_state_block_no, false).unwrap();
     let l1_inclusion_block = get_block(&provider_l1, l1_inclusion_block_no, false).unwrap();
+    let l1_state_block = get_block(&provider_l1, l1_state_block_no, false).unwrap();
     println!(
         "l1_state_root_block hash: {:?}",
         l1_state_block.header.hash.unwrap()
     );
 
     // Get the block proposal data
-    let (proposal_tx, proposal_event) =
-        get_log(l1_rpc_url.clone().unwrap(), chain_spec_name, l1_inclusion_block.header.hash.unwrap(), l2_block_no)?;
-    let proposal_call = proposeBlockCall::abi_decode(&proposal_tx.input, false).unwrap();
+    let (proposal_tx, proposal_event) = get_log(
+        l1_rpc_url.clone().unwrap(),
+        chain_spec_name,
+        l1_inclusion_block.header.hash.unwrap(),
+        l2_block_no,
+    )?;
 
     // Fetch the tx list
     let (tx_list, tx_blob_hash) = if proposal_event.meta.blobUsed {
         println!("blob active");
-        let metadata = decode_propose_block_call_params(&proposal_call.params)
-            .expect("valid propose_block_call_params");
-        println!("metadata: {:?}", metadata);
+        let metadata = &proposal_event.meta;
 
+        // Get the blob hashes attached to the propose tx
         let blob_hashs = proposal_tx.blob_versioned_hashes;
         assert!(blob_hashs.len() >= 1);
+        // Currently the protocol enforces the first blob hash to be used
         let blob_hash = blob_hashs[0];
         // TODO: check _proposed_blob_hash with blob_hash if _proposed_blob_hash is not None
 
+        // Get the blob data for this block
         let blobs = get_blob_data(&beacon_rpc_url.clone().unwrap(), l1_inclusion_block_no)?;
         assert!(blobs.data.len() > 0, "blob data not available anymore");
+        // Get the blob data for the blob storing the tx list
         let tx_blobs: Vec<GetBlobData> = blobs
             .data
             .iter()
@@ -208,6 +121,7 @@ pub fn preflight(
             .cloned()
             .collect::<Vec<GetBlobData>>();
         let blob_data = decode_blob_data(&tx_blobs[0].blob);
+        // Extract the specified range at which the tx list is stored
         let offset = metadata.txListByteOffset as usize;
         let size = metadata.txListByteSize as usize;
         (
@@ -215,6 +129,8 @@ pub fn preflight(
             Some(blob_hash),
         )
     } else {
+        // Get the tx list data directly from the propose transaction data
+        let proposal_call = proposeBlockCall::abi_decode(&proposal_tx.input, false).unwrap();
         (proposal_call.txList.clone(), None)
     };
 
@@ -255,7 +171,10 @@ pub fn preflight(
     };
 
     // Create the block builder, run the transactions and extract the DB
-    let provider_db = ProviderDb::new(provider_l2, parent_block.header.number.unwrap().try_into().unwrap());
+    let provider_db = ProviderDb::new(
+        provider_l2,
+        parent_block.header.number.unwrap().try_into().unwrap(),
+    );
     let mut builder = BlockBuilder::new(&input)
         .with_db(provider_db)
         .prepare_header::<TaikoHeaderPrepStrategy>()?
@@ -298,7 +217,9 @@ const BLOB_DATA_LEN: usize = BLOB_FIELD_ELEMENT_NUM * BLOB_FIELD_ELEMENT_BYTES;
 
 fn decode_blob_data(blob: &str) -> Vec<u8> {
     let origin_blob = hex::decode(blob.to_lowercase().trim_start_matches("0x")).unwrap();
-    let header: U256 = U256::from_be_bytes::<BLOB_FIELD_ELEMENT_BYTES>(origin_blob[0..BLOB_FIELD_ELEMENT_BYTES].try_into().unwrap()); // first element is the length
+    let header: U256 = U256::from_be_bytes::<BLOB_FIELD_ELEMENT_BYTES>(
+        origin_blob[0..BLOB_FIELD_ELEMENT_BYTES].try_into().unwrap(),
+    ); // first element is the length
     let expected_len = header.as_limbs()[0] as usize;
 
     assert!(origin_blob.len() == BLOB_DATA_LEN);
@@ -330,4 +251,128 @@ fn calc_blob_versioned_hash(blob_str: &str) -> [u8; 32] {
     let kzg_commit = KzgCommitment::blob_to_kzg_commitment(&blob, &kzg_settings).unwrap();
     let version_hash: [u8; 32] = kzg_to_versioned_hash(kzg_commit).0;
     version_hash
+}
+
+fn get_blob_data(beacon_rpc_url: &str, block_id: u64) -> Result<GetBlobsResponse> {
+    let tokio_handle = tokio::runtime::Handle::current();
+    tokio_handle.block_on(async {
+        let url = format!(
+            "{}/eth/v1/beacon/blob_sidecars/{}",
+            beacon_rpc_url, block_id
+        );
+        let response = reqwest::get(url.clone()).await?;
+        if response.status().is_success() {
+            let blob_response: GetBlobsResponse = response.json().await?;
+            Ok(blob_response)
+        } else {
+            Err(anyhow::anyhow!(
+                "Request failed with status code: {}",
+                response.status()
+            ))
+        }
+    })
+}
+
+// Blob data from the beacon chain
+// type Sidecar struct {
+// Index                    string                   `json:"index"`
+// Blob                     string                   `json:"blob"`
+// SignedBeaconBlockHeader  *SignedBeaconBlockHeader `json:"signed_block_header"`
+// KzgCommitment            string                   `json:"kzg_commitment"`
+// KzgProof                 string                   `json:"kzg_proof"`
+// CommitmentInclusionProof []string
+// `json:"kzg_commitment_inclusion_proof"` }
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GetBlobData {
+    pub index: String,
+    pub blob: String,
+    // pub signed_block_header: SignedBeaconBlockHeader, // ignore for now
+    pub kzg_commitment: String,
+    pub kzg_proof: String,
+    pub kzg_commitment_inclusion_proof: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GetBlobsResponse {
+    pub data: Vec<GetBlobData>,
+}
+
+pub fn get_block(provider: &HttpProvider, block_number: u64, full: bool) -> Result<AlloyBlock> {
+    let tokio_handle = tokio::runtime::Handle::current();
+    let response = tokio_handle.block_on(async {
+        provider
+            .get_block_by_number((block_number).into(), full)
+            .await
+    })?;
+    match response {
+        Some(out) => Ok(out),
+        None => Err(anyhow!("No data for {block_number:?}")),
+    }
+}
+
+pub fn get_log(
+    rpc_url: String,
+    chain_name: &str,
+    block_hash: B256,
+    l2_block_no: u64,
+) -> Result<(AlloyRpcTransaction, BlockProposed)> {
+    let http = Http::new(Url::parse(&rpc_url).expect("invalid rpc url"));
+    let provider: HttpProvider = HttpProvider::new(http);
+    let tokio_handle = tokio::runtime::Handle::current();
+
+    // Get the address that emited the event
+    let l1_address = get_contracts(chain_name).unwrap().0;
+
+    // Get the event signature (value can differ between chains)
+    let event_signature = if chain_name == "testnet" {
+        TestnetBlockProposed::SIGNATURE_HASH
+    } else {
+        BlockProposed::SIGNATURE_HASH
+    };
+    // Setup the filter to get the relevant events
+    let filter = Filter::new()
+        .address(l1_address)
+        .at_block_hash(block_hash)
+        .event_signature(event_signature);
+    // Now fetch the events
+    let logs = tokio_handle.block_on(async { provider.get_logs(filter).await })?;
+
+    // Run over the logs returned to find the matching event for the specified L2 block number
+    // (there can be multiple blocks proposed in the same block and even same tx)
+    for log in logs {
+        if chain_name == "testnet" {
+            let event = TestnetBlockProposed::decode_log(
+                &Log::new(log.address, log.topics, log.data).unwrap(),
+                false,
+            )
+            .unwrap();
+            if event.blockId == zeth_primitives::U256::from(l2_block_no) {
+                let tx = tokio_handle
+                    .block_on(async {
+                        provider
+                            .get_transaction_by_hash(log.transaction_hash.unwrap())
+                            .await
+                    })
+                    .expect("could not find the propose tx");
+                return Ok((tx, event.data.into()));
+            }
+        } else {
+            let event = BlockProposed::decode_log(
+                &Log::new(log.address, log.topics, log.data).unwrap(),
+                false,
+            )
+            .unwrap();
+            if event.blockId == zeth_primitives::U256::from(l2_block_no) {
+                let tx = tokio_handle
+                    .block_on(async {
+                        provider
+                            .get_transaction_by_hash(log.transaction_hash.unwrap())
+                            .await
+                    })
+                    .expect("could not find the propose tx");
+                return Ok((tx, event.data));
+            }
+        }
+    }
+    bail!("No BlockProposed event found for block {l2_block_no}");
 }

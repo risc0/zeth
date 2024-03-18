@@ -15,33 +15,23 @@
 use core::{fmt::Debug, mem::take, str::from_utf8};
 
 use alloy_consensus::{TxEnvelope, TxKind};
-use alloy_consensus::TxEip4844Variant::TxEip4844;
-use alloy_consensus::TxEip4844Variant;
-use alloy_rlp::Encodable;
 use anyhow::{anyhow, bail, Context, Result};
 #[cfg(feature = "std")]
 use log::debug;
 use revm::{
     interpreter::Host,
-    primitives::{
-        Account, Address, EVMError, InvalidTransaction, ResultAndState, SpecId, TransactTo, TxEnv,
-    },
+    primitives::{Account, Address, EVMError, ResultAndState, SpecId, TransactTo, TxEnv},
     taiko, Database, DatabaseCommit, Evm,
 };
 use ruint::aliases::U256;
-use zeth_primitives::{
-    mpt::MptNode,
-    receipt::Receipt,
-    Bloom, RlpBytes,
-};
+use zeth_primitives::{mpt::MptNode, receipt::Receipt, Bloom, RlpBytes};
 
 use super::TxExecStrategy;
-use crate::taiko_utils::generate_transactions;
 use crate::{
     builder::BlockBuilder,
-    consts::{self, ChainSpec, GWEI_TO_WEI},
+    consts::GWEI_TO_WEI,
     guest_mem_forget,
-    taiko_utils::{check_anchor_tx, get_contracts},
+    taiko_utils::{check_anchor_tx, generate_transactions, get_contracts},
 };
 
 /// Minimum supported protocol version: Bedrock (Block no. 105235063).
@@ -50,9 +40,7 @@ const MIN_SPEC_ID: SpecId = SpecId::SHANGHAI /*change*/;
 pub struct TkoTxExecStrategy {}
 
 impl TxExecStrategy for TkoTxExecStrategy {
-    fn execute_transactions<D>(
-        mut block_builder: BlockBuilder<D>,
-    ) -> Result<BlockBuilder<D>>
+    fn execute_transactions<D>(mut block_builder: BlockBuilder<D>) -> Result<BlockBuilder<D>>
     where
         D: Database + DatabaseCommit,
         <D as Database>::Error: Debug,
@@ -111,24 +99,14 @@ impl TxExecStrategy for TkoTxExecStrategy {
 
             // TODO(Brecht): use optimized recover
             let (tx_gas_limit, from) = match &tx {
-                TxEnvelope::Legacy(tx) => {
-                    (tx.gas_limit, tx.recover_signer())
-                }
-                TxEnvelope::TaggedLegacy(tx) => {
-                    (tx.gas_limit, tx.recover_signer())
-                }
-                TxEnvelope::Eip2930(tx) => {
-                    (tx.gas_limit, tx.recover_signer())
-                }
-                TxEnvelope::Eip1559(tx) => {
-                    (tx.gas_limit, tx.recover_signer())
-                }
-                TxEnvelope::Eip4844(tx) => {
-                    (tx.tx().tx().gas_limit, tx.recover_signer())
-                }
+                TxEnvelope::Legacy(tx) => (tx.gas_limit, tx.recover_signer()),
+                TxEnvelope::TaggedLegacy(tx) => (tx.gas_limit, tx.recover_signer()),
+                TxEnvelope::Eip2930(tx) => (tx.gas_limit, tx.recover_signer()),
+                TxEnvelope::Eip1559(tx) => (tx.gas_limit, tx.recover_signer()),
+                TxEnvelope::Eip4844(tx) => (tx.tx().tx().gas_limit, tx.recover_signer()),
             };
-
-            let tx_type  = match tx.tx_type() {
+            // Get the tx type as a number
+            let tx_type = match tx.tx_type() {
                 alloy_consensus::TxType::Legacy => 0,
                 alloy_consensus::TxType::Eip2930 => 1,
                 alloy_consensus::TxType::Eip1559 => 2,
@@ -182,7 +160,6 @@ impl TxExecStrategy for TkoTxExecStrategy {
                 tx_from,
                 is_anchor,
             );
-            //println!("**** transact: {:?}", evm.env().tx);
             // process the transaction
             let ResultAndState { result, state } = match evm.transact() {
                 Ok(result) => result,
@@ -206,6 +183,8 @@ impl TxExecStrategy for TkoTxExecStrategy {
                     }
                 }
             };
+            #[cfg(feature = "std")]
+            debug!("  Ok: {result:?}");
 
             // anchor tx needs to succeed
             if is_anchor && !result.is_success() {
@@ -215,11 +194,9 @@ impl TxExecStrategy for TkoTxExecStrategy {
                 );
             }
 
+            // keep track of all the gas used in the block
             let gas_used = result.gas_used().try_into().unwrap();
             cumulative_gas_used = cumulative_gas_used.checked_add(gas_used).unwrap();
-
-            #[cfg(feature = "std")]
-            debug!("  Ok: {result:?}");
 
             // create the receipt from the EVM result
             let receipt = Receipt::new(
@@ -274,7 +251,7 @@ impl TxExecStrategy for TkoTxExecStrategy {
         header.transactions_root = tx_trie.hash();
         header.receipts_root = receipt_trie.hash();
         header.logs_bloom = logs_bloom;
-        header.gas_used = cumulative_gas_used.try_into().unwrap() ;
+        header.gas_used = cumulative_gas_used.try_into().unwrap();
         header.withdrawals_root = if spec_id < SpecId::SHANGHAI {
             None
         } else {
@@ -381,7 +358,6 @@ pub fn fill_eth_tx_env_alloy(
         }
     };
 }
-
 
 pub fn increase_account_balance<D>(
     db: &mut D,

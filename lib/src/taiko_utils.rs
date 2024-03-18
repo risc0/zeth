@@ -74,7 +74,7 @@ pub mod internal_devnet_b {
     });
 }
 
-pub fn generate_transactions_alloy(
+pub fn generate_transactions(
     tx_list: &[u8],
     anchor_tx: AlloyTransaction,
 ) -> Vec<TxEnvelope> {
@@ -198,9 +198,6 @@ pub fn check_anchor_tx(
 
             // Okay now let's decode the anchor tx to verify the inputs
             let anchor_call = decode_anchor(&tx.input)?;
-
-            println!("anchor: {:?}", anchor_call.l1Hash);
-            println!("expected: {:?}", input.taiko.l1_header.hash());
             // The L1 blockhash needs to match the expected value
             ensure!(
                 anchor_call.l1Hash == input.taiko.l1_header.hash(),

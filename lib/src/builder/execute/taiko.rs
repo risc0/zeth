@@ -36,7 +36,7 @@ use zeth_primitives::{
 };
 
 use super::TxExecStrategy;
-use crate::taiko_utils::generate_transactions_alloy;
+use crate::taiko_utils::generate_transactions;
 use crate::{
     builder::BlockBuilder,
     consts::{self, ChainSpec, GWEI_TO_WEI},
@@ -69,28 +69,10 @@ impl TxExecStrategy for TkoTxExecStrategy {
         let chain_id = block_builder.chain_spec.chain_id();
 
         // generate the transactions from the tx list
-        let mut transactions = generate_transactions_alloy(
+        let mut transactions = generate_transactions(
             &block_builder.input.taiko.tx_list,
-            serde_json::from_str(&block_builder.input.taiko.anchor_tx_alloy.clone()).unwrap(),
+            serde_json::from_str(&block_builder.input.taiko.anchor_tx.clone()).unwrap(),
         );
-
-        #[cfg(feature = "std")]
-        {
-            use chrono::{TimeZone, Utc};
-            use log::info;
-            let dt = Utc
-                .timestamp_opt(block_builder.input.timestamp.try_into().unwrap(), 0)
-                .unwrap();
-
-            info!("Block no. {}", header.number);
-            info!("  EVM spec ID: {spec_id:?}");
-            info!("  Timestamp: {dt}");
-            info!("  Transactions: {}", transactions.len());
-            info!("  Fee Recipient: {:?}", block_builder.input.beneficiary);
-            info!("  Gas limit: {}", block_builder.input.gas_limit);
-            info!("  Base fee per gas: {}", header.base_fee_per_gas.unwrap());
-            info!("  Extra data: {:?}", block_builder.input.extra_data);
-        }
 
         let mut evm = Evm::builder()
             .spec_id(spec_id)
@@ -124,47 +106,27 @@ impl TxExecStrategy for TkoTxExecStrategy {
         // track the actual tx number to use in the tx/receipt trees as the key
         let mut actual_tx_no = 0usize;
         for (tx_no, tx) in take(&mut transactions).into_iter().enumerate() {
-            // anchor transaction must be executed successfully
+            // anchor transaction always the first transaction
             let is_anchor = tx_no == 0;
 
-            let (tx_gas_limit, tx_hash) = match &tx {
+            // TODO(Brecht): use optimized recover
+            let (tx_gas_limit, from) = match &tx {
                 TxEnvelope::Legacy(tx) => {
-                    (tx.gas_limit, tx.hash())
+                    (tx.gas_limit, tx.recover_signer())
                 }
                 TxEnvelope::TaggedLegacy(tx) => {
-                    (tx.gas_limit, tx.hash())
+                    (tx.gas_limit, tx.recover_signer())
                 }
                 TxEnvelope::Eip2930(tx) => {
-                    (tx.gas_limit, tx.hash())
+                    (tx.gas_limit, tx.recover_signer())
                 }
                 TxEnvelope::Eip1559(tx) => {
-                    (tx.gas_limit, tx.hash())
+                    (tx.gas_limit, tx.recover_signer())
                 }
                 TxEnvelope::Eip4844(tx) => {
-                    (tx.tx().tx().gas_limit, tx.hash())
+                    (tx.tx().tx().gas_limit, tx.recover_signer())
                 }
             };
-            println!("**** hash: {:?}", tx_hash);
-
-            let from = match &tx {
-                TxEnvelope::Legacy(tx) => {
-                    tx.recover_signer()
-                }
-                TxEnvelope::TaggedLegacy(tx) => {
-                    tx.recover_signer()
-                }
-                TxEnvelope::Eip2930(tx) => {
-                    tx.recover_signer()
-                }
-                TxEnvelope::Eip1559(tx) => {
-                    tx.recover_signer()
-                }
-                TxEnvelope::Eip4844(tx) => {
-                    tx.recover_signer()
-                }
-            };
-
-            println!("**** from: {:?}", from);
 
             let tx_type  = match tx.tx_type() {
                 alloy_consensus::TxType::Legacy => 0,
@@ -172,8 +134,6 @@ impl TxExecStrategy for TkoTxExecStrategy {
                 alloy_consensus::TxType::Eip1559 => 2,
                 alloy_consensus::TxType::Eip4844 => 3,
             };
-
-            //println!("**** tx_type: {:?}", tx_type);
 
             // verify the transaction signature
             let tx_from = match from {
@@ -193,7 +153,6 @@ impl TxExecStrategy for TkoTxExecStrategy {
             };
 
             // verify the anchor tx
-            // TODO(Brecht): reenable with alloy tx
             if is_anchor {
                 check_anchor_tx(
                     &block_builder.input,
@@ -204,19 +163,15 @@ impl TxExecStrategy for TkoTxExecStrategy {
                 .expect("invalid anchor tx");
             }
 
-            #[cfg(feature = "std")]
-            {
-                //let tx_hash = tx.hash();
-                debug!("Tx no. {tx_no} (hash: {tx_hash})");
-                debug!("  Type: {}", tx_type);
-                debug!("  Fr: {tx_from:?}");
-                //debug!("  To: {:?}", tx.to().unwrap_or_default());
-            }
-
             // verify transaction gas
             let block_available_gas = block_builder.input.gas_limit - cumulative_gas_used;
             if block_available_gas < tx_gas_limit.try_into().unwrap() {
-                bail!("Error at transaction {tx_no}: gas exceeds block limit");
+                if is_anchor {
+                    bail!("Error at transaction {}: gas exceeds block limit", tx_no);
+                }
+                #[cfg(not(target_os = "zkvm"))]
+                debug!("Error at transaction {}: gas exceeds block limit", tx_no);
+                continue;
             }
 
             // setup the transaction
@@ -274,34 +229,6 @@ impl TxExecStrategy for TkoTxExecStrategy {
                 result.logs().into_iter().map(|log| log.into()).collect(),
             );
 
-            // update account states
-            #[cfg(feature = "std")]
-            for (address, account) in &state {
-                if account.is_touched() {
-                    // log account
-                    debug!(
-                        "  State {address:?} (is_selfdestructed={}, is_loaded_as_not_existing={}, is_created={})",
-                        account.is_selfdestructed(),
-                        account.is_loaded_as_not_existing(),
-                        account.is_created()
-                    );
-                    // log balance changes
-                    debug!(
-                        "     After balance: {} (Nonce: {})",
-                        account.info.balance, account.info.nonce
-                    );
-
-                    // log state changes
-                    for (addr, slot) in &account.storage {
-                        if slot.is_changed() {
-                            debug!("    Storage address: {addr:?}");
-                            debug!("      Before: {:?}", slot.original_value());
-                            debug!("       After: {:?}", slot.present_value());
-                        }
-                    }
-                }
-            }
-
             // update the state
             evm.context.evm.db.commit(state);
 
@@ -310,26 +237,15 @@ impl TxExecStrategy for TkoTxExecStrategy {
 
             // Add receipt and tx to tries
             let trie_key = actual_tx_no.to_rlp();
-
-            //tx_trie.insert_rlp(&trie_key, tx)?;
-
-            //if is_anchor {
+            // This will encode the tx inside an rlp value wrapper
             let tx_rlp = tx.to_rlp();
-            tx_trie.insert_rlp_encoded(&trie_key, tx_rlp[tx_rlp.len() - tx.inner_length() - 1..].to_vec())?;
-            //} else {
-            //    tx_trie.insert_rlp(&trie_key, tx)?;
-            //};
-
-            //println!("ethers: {:?}", transactions_ether[tx_no].to_rlp());
-            //println!("alloy: {:?}", tx.to_rlp());
-            //let mut buf = vec![];
-            //tx.encode(&mut buf);
-            //println!("alloy: {:?}", buf);
-            //println!("alloy inner length: {:?}", tx.inner_length());
-            //println!("alloy length: {:?}", tx.length());
-            //println!("fixed: {:?}", tx_rlp[tx_rlp.len() - tx.inner_length() - 1..].to_vec());
-
+            // Extract the actual tx rlp encoding
+            let tx_rlp = tx_rlp[tx_rlp.len() - tx.inner_length() - 1..].to_vec();
+            tx_trie.insert_rlp_encoded(&trie_key, tx_rlp)?;
+            // Add to receipt trie
             receipt_trie.insert_rlp(&trie_key, receipt)?;
+
+            // If we got here it means the tx is not invalid
             actual_tx_no += 1;
         }
 
@@ -346,12 +262,6 @@ impl TxExecStrategy for TkoTxExecStrategy {
                 .checked_mul(withdrawal.amount.try_into().unwrap())
                 .unwrap();
 
-            #[cfg(not(target_os = "zkvm"))]
-            {
-                debug!("Withdrawal no. {}", withdrawal.index);
-                debug!("  Recipient: {:?}", withdrawal.address);
-                debug!("  Value: {}", amount_wei);
-            }
             // Credit withdrawal amount
             increase_account_balance(&mut db, withdrawal.address, amount_wei)?;
             // Add withdrawal to trie

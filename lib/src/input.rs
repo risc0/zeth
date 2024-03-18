@@ -70,7 +70,7 @@ pub struct TaikoGuestInput {
     pub chain_spec_name: String,
     pub l1_header: AlloyConsensusHeader,
     pub tx_list: Vec<u8>,
-    pub anchor_tx_alloy: String,
+    pub anchor_tx: String,
     pub block_proposed: BlockProposed,
     pub prover_data: TaikoProverData,
     pub tx_blob_hash: Option<B256>,

@@ -17,7 +17,7 @@ use zeth_lib::{
     input::{
         decode_anchor, decode_propose_block_call_params, proposeBlockCall, protocol_testnet::BlockProposed as TestnetBlockProposed, BlockProposed, GuestInput, TaikoGuestInput, TaikoProverData
     },
-    taiko_utils::{generate_transactions_alloy, get_contracts, to_header},
+    taiko_utils::{generate_transactions, get_contracts, to_header},
 };
 use zeth_primitives::mpt::proofs_to_tries;
 
@@ -55,27 +55,20 @@ pub struct HostArgs {
     pub l2_rpc: Option<String>,
 }
 
-pub fn get_block_alloy(rpc_url: String, block_number: u64, full: bool) -> Result<AlloyBlock> {
-    let http = Http::new(Url::parse(&rpc_url).expect("invalid rpc url"));
-    let provider: HttpProvider = HttpProvider::new(http);
-
-    //info!("Querying RPC for full block: {query:?}");
-
+pub fn get_block(provider: &HttpProvider, block_number: u64, full: bool) -> Result<AlloyBlock> {
     let tokio_handle = tokio::runtime::Handle::current();
-
     let response = tokio_handle.block_on(async {
         provider
             .get_block_by_number((block_number).into(), full)
             .await
     })?;
-
     match response {
         Some(out) => Ok(out),
         None => Err(anyhow!("No data for {block_number:?}")),
     }
 }
 
-pub fn get_log_alloy(rpc_url: String, chain_name: &str, block_hash: B256, l2_block_no: u64) -> Result<(AlloyRpcTransaction, BlockProposed)> {
+pub fn get_log(rpc_url: String, chain_name: &str, block_hash: B256, l2_block_no: u64) -> Result<(AlloyRpcTransaction, BlockProposed)> {
     let http = Http::new(Url::parse(&rpc_url).expect("invalid rpc url"));
     let provider: HttpProvider = HttpProvider::new(http);
 
@@ -146,7 +139,7 @@ fn get_blob_data(beacon_rpc_url: &str, block_id: u64) -> Result<GetBlobsResponse
     })
 }
 
-pub fn taiko_run_preflight(
+pub fn preflight(
     l1_rpc_url: Option<String>,
     l2_rpc_url: Option<String>,
     l2_block_no: u64,
@@ -157,59 +150,49 @@ pub fn taiko_run_preflight(
     let http_l2 = Http::new(Url::parse(&l2_rpc_url.clone().unwrap()).expect("invalid rpc url"));
     let provider_l2: HttpProvider = HttpProvider::new(http_l2);
 
-    let parent_block = get_block_alloy(l2_rpc_url.clone().unwrap(), l2_block_no - 1, false).unwrap();
-    //println!("*** alloy parent block ***:{:?}", parent_block);
+    let http_l1 = Http::new(Url::parse(&l1_rpc_url.clone().unwrap()).expect("invalid rpc url"));
+    let provider_l1: HttpProvider = HttpProvider::new(http_l1);
 
-    let block_alloy = get_block_alloy(l2_rpc_url.clone().unwrap(), l2_block_no, true).unwrap();
-    //println!("*** alloy block ***:{:?}", block_alloy);
+    let parent_block = get_block(&provider_l2, l2_block_no - 1, false).unwrap();
+    let block = get_block(&provider_l2, l2_block_no, true).unwrap();
 
-    // Fetch the target block
-    let anchor_tx_alloy = match &block_alloy.transactions {
+    // Decode the anchor tx to find out which L1 blocks we need to fetch
+    let anchor_tx = match &block.transactions {
         BlockTransactions::Full(txs) => txs[0].to_owned(),
         _ => unreachable!(),
     };
-    let anchor_call_alloy = decode_anchor(anchor_tx_alloy.input.as_ref())?;
-
-    println!("block.hash: {:?}", block_alloy.header.hash.unwrap());
-    println!("block.parent_hash: {:?}", block_alloy.header.parent_hash);
-
-    println!("anchor L1 block id: {:?}", anchor_call_alloy.l1Height);
-    println!("anchor L1 state root: {:?}", anchor_call_alloy.l1SignalRoot);
-
-    let l1_state_block_no = anchor_call_alloy.l1Height;
+    let anchor_call = decode_anchor(anchor_tx.input.as_ref())?;
+    // The L1 blocks we need
+    let l1_state_block_no = anchor_call.l1Height;
     let l1_inclusion_block_no = l1_state_block_no + 1;
 
-    println!("l1_state_block_no: {:?}", l1_state_block_no);
-
-    let l1_state_root_block_alloy = get_block_alloy(l1_rpc_url.clone().unwrap(), l1_state_block_no, false).unwrap();
-    
-    let l1_inclusion_block_alloy = get_block_alloy(l1_rpc_url.clone().unwrap(), l1_inclusion_block_no, false).unwrap();
+    println!("block.hash: {:?}", block.header.hash.unwrap());
+    println!("block.parent_hash: {:?}", block.header.parent_hash);
+    println!("anchor L1 block id: {:?}", anchor_call.l1Height);
+    println!("anchor L1 state root: {:?}", anchor_call.l1SignalRoot);
 
     // Get the L1 state block header so that we can prove the L1 state root
+    let l1_state_block = get_block(&provider_l1, l1_state_block_no, false).unwrap();
+    let l1_inclusion_block = get_block(&provider_l1, l1_inclusion_block_no, false).unwrap();
     println!(
         "l1_state_root_block hash: {:?}",
-        l1_state_root_block_alloy.header.hash.unwrap()
+        l1_state_block.header.hash.unwrap()
     );
 
-    let (proposal_tx_alloy, proposal_event_alloy) =
-        get_log_alloy(l1_rpc_url.clone().unwrap(), chain_spec_name, l1_inclusion_block_alloy.header.hash.unwrap(), l2_block_no)?;
+    // Get the block proposal data
+    let (proposal_tx, proposal_event) =
+        get_log(l1_rpc_url.clone().unwrap(), chain_spec_name, l1_inclusion_block.header.hash.unwrap(), l2_block_no)?;
+    let proposal_call = proposeBlockCall::abi_decode(&proposal_tx.input, false).unwrap();
 
-    println!("proposal alloy: {:?}", proposal_event_alloy);
-
-    let proposal_call = proposeBlockCall::abi_decode(&proposal_tx_alloy.input, false).unwrap();
-    // .with_context(|| "failed to decode propose block call")?;
-
-    // blobUsed == (txList.length == 0) according to TaikoL1
-    let blob_used = proposal_call.txList.is_empty();
-    let (tx_list, tx_blob_hash) = if blob_used {
+    // Fetch the tx list
+    let (tx_list, tx_blob_hash) = if proposal_event.meta.blobUsed {
         println!("blob active");
         let metadata = decode_propose_block_call_params(&proposal_call.params)
             .expect("valid propose_block_call_params");
         println!("metadata: {:?}", metadata);
 
-        let blob_hashs = proposal_tx_alloy.blob_versioned_hashes;
-        // TODO: multiple blob hash support
-        assert!(blob_hashs.len() == 1);
+        let blob_hashs = proposal_tx.blob_versioned_hashes;
+        assert!(blob_hashs.len() >= 1);
         let blob_hash = blob_hashs[0];
         // TODO: check _proposed_blob_hash with blob_hash if _proposed_blob_hash is not None
 
@@ -235,65 +218,49 @@ pub fn taiko_run_preflight(
         (proposal_call.txList.clone(), None)
     };
 
-    //println!("tx_list: {:?}", tx_list);
-
-    // Create the transactions for the proposed tx list
-    let transactions_alloy = generate_transactions_alloy(&tx_list, anchor_tx_alloy.clone());
-
-    println!("Block valid transactions: {:?}", block_alloy.transactions.len());
+    // Create the transactions from the proposed tx list
+    let transactions = generate_transactions(&tx_list, anchor_tx.clone());
+    // Do a sanity check using the transactions returned by the node
+    println!("Block transactions: {:?}", block.transactions.len());
     assert!(
-        transactions_alloy.len() >= block_alloy.transactions.len(),
+        transactions.len() >= block.transactions.len(),
         "unexpected number of transactions"
     );
 
-    info!(
-        "Final block number: {:?} ({:?})",
-        block_alloy.header.number.unwrap(),
-        block_alloy.header.hash.unwrap()
-    );
-    println!("Transaction count: {:?}", block_alloy.transactions.len());
-
+    // Create the input struct without the block data set
     let taiko_guest_input = TaikoGuestInput {
         chain_spec_name: chain_spec_name.to_string(),
-        l1_header: to_header(&l1_state_root_block_alloy.header),
+        l1_header: to_header(&l1_state_block.header),
         tx_list,
-        anchor_tx_alloy: serde_json::to_string(&anchor_tx_alloy).unwrap(),
+        anchor_tx: serde_json::to_string(&anchor_tx).unwrap(),
         tx_blob_hash,
-        block_proposed: proposal_event_alloy.into(),
+        block_proposed: proposal_event,
         prover_data,
     };
-
-    // Create the input struct without the block data set
     let input = GuestInput {
-        block_hash: block_alloy.header.hash.unwrap().0.try_into().unwrap(),
-        beneficiary: block_alloy.header.miner,
-        gas_limit: block_alloy.header.gas_limit.try_into().unwrap(),
-        timestamp: block_alloy.header.timestamp.try_into().unwrap(),
-        extra_data: block_alloy.header.extra_data.0.into(),
-        mix_hash: block_alloy.header.mix_hash.unwrap(),
-        withdrawals: block_alloy.withdrawals.unwrap_or_default(),
+        block_hash: block.header.hash.unwrap().0.try_into().unwrap(),
+        beneficiary: block.header.miner,
+        gas_limit: block.header.gas_limit.try_into().unwrap(),
+        timestamp: block.header.timestamp.try_into().unwrap(),
+        extra_data: block.header.extra_data.0.into(),
+        mix_hash: block.header.mix_hash.unwrap(),
+        withdrawals: block.withdrawals.unwrap_or_default(),
         parent_state_trie: Default::default(),
         parent_storage: Default::default(),
         contracts: Default::default(),
         parent_header: to_header(&parent_block.header),
         ancestor_headers: Default::default(),
-        base_fee_per_gas: block_alloy.header.base_fee_per_gas.unwrap().try_into().unwrap(),
+        base_fee_per_gas: block.header.base_fee_per_gas.unwrap().try_into().unwrap(),
         taiko: taiko_guest_input,
     };
 
-    // Create the provider DB
-    let provider_db = ProviderDb::new(provider_l2, parent_block.header.number.unwrap().try_into().unwrap());
-
-    println!("execute block");
-
     // Create the block builder, run the transactions and extract the DB
+    let provider_db = ProviderDb::new(provider_l2, parent_block.header.number.unwrap().try_into().unwrap());
     let mut builder = BlockBuilder::new(&input)
         .with_db(provider_db)
         .prepare_header::<TaikoHeaderPrepStrategy>()?
         .execute_transactions::<TkoTxExecStrategy>()?;
     let provider_db: &mut ProviderDb = builder.mut_db().unwrap();
-
-    info!("Gathering inclusion proofs ...");
 
     // Construct the state trie and storage from the storage proofs.
     // Gather inclusion proofs for the initial and final state
@@ -303,7 +270,7 @@ pub fn taiko_run_preflight(
         proofs_to_tries(input.parent_header.state_root, parent_proofs, proofs)?;
 
     // Gather proofs for block history
-    let ancestor_headers = provider_db.get_ancestor_headers(l2_rpc_url.unwrap())?;
+    let ancestor_headers = provider_db.get_ancestor_headers()?;
 
     // Get the contracts from the initial db.
     let mut contracts = HashSet::new();
@@ -315,8 +282,7 @@ pub fn taiko_run_preflight(
         }
     }
 
-    info!("Provider-backed execution is Done!");
-
+    // Add the collected data to the input
     Ok(GuestInput {
         parent_state_trie: state_trie,
         parent_storage: storage,
@@ -325,7 +291,6 @@ pub fn taiko_run_preflight(
         ..input
     })
 }
-
 
 const BLOB_FIELD_ELEMENT_NUM: usize = 4096;
 const BLOB_FIELD_ELEMENT_BYTES: usize = 32;

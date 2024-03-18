@@ -19,7 +19,7 @@ use super::{
     request::{ProofRequest, ProofResponse, ProofType},
 };
 use crate::{
-    host::host::taiko_run_preflight,
+    host::host::preflight,
     metrics::{inc_sgx_success, observe_input, observe_sgx_gen},
 };
 
@@ -143,7 +143,7 @@ pub async fn prepare_input(
     let l1_cache = ctx.l1_cache_file.clone();
     let l2_cache = ctx.l2_cache_file.clone();
     tokio::task::spawn_blocking(move || {
-        taiko_run_preflight(
+        preflight(
             Some(req.l1_rpc),
             Some(req.l2_rpc),
             req.block_number,

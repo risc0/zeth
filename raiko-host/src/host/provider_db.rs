@@ -23,7 +23,7 @@ use zeth_primitives::{
     Address, B256, U256,
 };
 use alloy_consensus::Header as AlloyConsensusHeader;
-use crate::host::host::get_block_alloy;
+use crate::host::host::get_block;
 use alloy_providers::tmp::{HttpProvider, TempProvider};
 
 pub struct ProviderDb {
@@ -92,7 +92,7 @@ impl ProviderDb {
         self.get_proofs(self.block_number + 1, storage_keys)
     }
 
-    pub fn get_ancestor_headers(&mut self, rpc_url: String) -> Result<Vec<AlloyConsensusHeader>, anyhow::Error> {
+    pub fn get_ancestor_headers(&mut self) -> Result<Vec<AlloyConsensusHeader>, anyhow::Error> {
         let earliest_block = self
             .initial_db
             .block_hashes
@@ -102,7 +102,7 @@ impl ProviderDb {
         let headers = (*earliest_block..self.block_number)
             .rev()
             .map(|block_no| {
-                to_header(&get_block_alloy(rpc_url.clone(), block_no, false).unwrap().header)
+                to_header(&get_block(&self.provider, block_no, false).unwrap().header)
             })
             .collect();
         Ok(headers)

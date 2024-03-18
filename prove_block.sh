@@ -33,8 +33,17 @@ elif [ "$proof" == "risc0" ]; then
       "execution_po2": 18
     }
   }'
+elif [ "$proof" == "risc0-bonsai" ]; then
+  proofType='{
+    "risc0": {
+      "bonsai": true,
+      "snark": true,
+      "profile": false,
+      "execution_po2": 20
+    }
+  }'
 else
-  echo "Invalid proof name. Please use 'native' or 'risc0'."
+  echo "Invalid proof name. Please use 'native' or 'risc0[-bonsai]'."
   exit 1
 fi
 

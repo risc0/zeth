@@ -78,6 +78,6 @@ pub mod risc0 {
         ctx: &Context,
         req: &Risc0ProofParams,
     ) -> Result<Risc0Response, String> {
-        Err("Feature not risc0 is enabled".to_string())
+        Err("Feature risc0 is not enabled".to_string())
     }
 }

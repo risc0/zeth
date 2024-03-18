@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use alloy_primitives::U256;
 use alloy_sol_types::{sol, SolValue};
 use anyhow::anyhow;
 use bonsai_sdk::alpha::responses::{Groth16Seal, SnarkReceipt};
 use ethers_contract::abigen;
-use ethers_core::types::H160;
+use ethers_core::{abi::AbiDecode, types::H160};
 use ethers_providers::{Http, Provider, RetryClient};
+use once_cell::unsync::Lazy;
 use risc0_zkvm::sha::{Digest, Digestible};
-
-static RISC_ZERO_VERIFIER: ethers_core::types::Address = H160::zero();
+use tracing::{error as tracing_err, info as tracing_info};
 
 sol!(
     /// A Groth16 seal over the claimed receipt claim.
@@ -85,7 +85,11 @@ pub async fn verify_groth16_snark(
     image_id: Digest,
     snark_receipt: SnarkReceipt,
 ) -> anyhow::Result<()> {
-    let verifier_rpc_url = "TODO: http://fuckBonsai:8545";
+    let verifier_rpc_url = env!("GROTH16_VERIFIER_RPC_URL");
+    let groth16_verifier_addr = {
+        let addr = env!("GROTH16_VERIFIER_ADDRESS");
+        H160::from_str(addr).unwrap()
+    };
 
     let http_client = Arc::new(Provider::<RetryClient<Http>>::new_client(
         &verifier_rpc_url,
@@ -95,15 +99,15 @@ pub async fn verify_groth16_snark(
 
     let seal = <Groth16Seal as Into<Seal>>::into(snark_receipt.snark).abi_encode();
     let journal_digest = snark_receipt.journal.digest();
-    log::info!("Verifying SNARK:");
-    log::info!("Seal: {}", hex::encode(&seal));
-    log::info!("Image ID: {}", hex::encode(image_id.as_bytes()));
-    log::info!(
+    tracing_info!("Verifying SNARK:");
+    tracing_info!("Seal: {}", hex::encode(&seal));
+    tracing_info!("Image ID: {}", hex::encode(image_id.as_bytes()));
+    tracing_info!(
         "Post State Digest: {}",
         hex::encode(&snark_receipt.post_state_digest)
     );
-    log::info!("Journal Digest: {}", hex::encode(journal_digest.as_bytes()));
-    let verification = IRiscZeroVerifier::new(RISC_ZERO_VERIFIER, http_client)
+    tracing_info!("Journal Digest: {}", hex::encode(journal_digest.as_bytes()));
+    let verification: bool = IRiscZeroVerifier::new(groth16_verifier_addr, http_client)
         .verify(
             seal.into(),
             image_id.as_bytes().try_into().unwrap(),
@@ -117,9 +121,12 @@ pub async fn verify_groth16_snark(
         .await?;
 
     if verification {
-        log::info!("SNARK verified successfully using {}!", RISC_ZERO_VERIFIER);
+        tracing_info!(
+            "SNARK verified successfully using {:?}!",
+            groth16_verifier_addr
+        );
     } else {
-        log::error!("SNARK verification failed!");
+        tracing_err!("SNARK verification failed!");
     }
 
     Ok(())

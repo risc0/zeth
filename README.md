@@ -56,6 +56,14 @@ cargo run --release --features "risc0 succinct"
 RISC0_DEV_MODE=1 cargo run --release --features risc0
 ```
 
+#### Bonsai
+```
+# edit run_bonsai.sh and run
+run_bonsai.sh
+# then
+prove_block.sh testnet risc0-bonsai 10
+```
+
 #### CPU
 ```
 cargo run --release --features risc0

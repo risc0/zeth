@@ -15,7 +15,7 @@
 use core::{fmt::Debug, mem::take, str::from_utf8};
 
 use alloy_consensus::{TxEnvelope, TxKind};
-use anyhow::{anyhow, bail, Context, Result, Error};
+use anyhow::{anyhow, bail, Context, Error, Result};
 #[cfg(feature = "std")]
 use log::debug;
 use revm::{

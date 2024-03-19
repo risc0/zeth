@@ -55,11 +55,7 @@ pub async fn execute(
                     .instance_hash(req.proof_type.clone().into());
 
                 // Make sure the blockhash from the node matches the one from the builder
-                assert_eq!(
-                    header.hash().0,
-                    input.block_hash,
-                    "block hash unexpected"
-                );
+                assert_eq!(header.hash().0, input.block_hash, "block hash unexpected");
                 GuestOutput::Success((header.clone(), pi))
             }
             Err(_) => {
@@ -107,11 +103,7 @@ pub async fn execute(
                 match &build_result {
                     Ok((header, mpt_node)) => {
                         // Make sure the blockhash from the node matches the one from the builder
-                        assert_eq!(
-                            header.hash().0,
-                            input.block_hash,
-                            "block hash unexpected"
-                        );
+                        assert_eq!(header.hash().0, input.block_hash, "block hash unexpected");
                         ProofResponse::Native(output)
                     }
                     Err(_) => {

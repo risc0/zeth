@@ -27,10 +27,11 @@ pub async fn execute_risc0(
     req: &Risc0ProofParams,
 ) -> Result<Risc0Response, String> {
     println!("elf code length: {}", RISC0_METHODS_ELF.len());
+    let encoded_input = to_vec(&input).expect("Could not serialize proving input!");
 
     let result = maybe_prove::<GuestInput, GuestOutput>(
         req,
-        &input,
+        encoded_input,
         RISC0_METHODS_ELF,
         &output,
         Default::default(),
@@ -223,13 +224,12 @@ pub async fn verify_bonsai_receipt<O: Eq + Debug + DeserializeOwned>(
 
 pub async fn maybe_prove<I: Serialize, O: Eq + Debug + Serialize + DeserializeOwned>(
     req: &Risc0ProofParams,
-    input: &I,
+    encoded_input: Vec<u32>,
     elf: &[u8],
     expected_output: &O,
     assumptions: (Vec<Assumption>, Vec<String>),
 ) -> Option<(String, Receipt)> {
     let (assumption_instances, assumption_uuids) = assumptions;
-    let encoded_input = to_vec(input).expect("Could not serialize proving input!");
 
     let encoded_output =
         to_vec(expected_output).expect("Could not serialize expected proving output!");

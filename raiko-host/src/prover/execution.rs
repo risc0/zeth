@@ -94,8 +94,8 @@ pub async fn execute(
                 let time_elapsed = Instant::now().duration_since(start).as_millis() as i64;
                 ProofResponse::SP1(resp)
             }
-            ProofType::Risc0(instance) => {
-                let resp = execute_risc0(input, output, ctx, instance).await?;
+            ProofType::Risc0(param) => {
+                let resp = execute_risc0(input, output, ctx, param).await?;
                 ProofResponse::Risc0(resp)
             }
             ProofType::Native => {

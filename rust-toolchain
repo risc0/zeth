@@ -4,7 +4,7 @@ components = ["clippy", "rustfmt", "rust-src"]
 profile = "minimal"
 
 
-# sp1: cargo +nightly-2024-01-25 run --features succinct
 # [toolchain]
-# channel = "nightly-2024-01-25"
-# components = ["llvm-tools", "rustc-dev"]
+# channel = "nightly-2024-02-25"
+# components = ["clippy", "rustfmt", "rust-src"]
+# profile = "minimal"

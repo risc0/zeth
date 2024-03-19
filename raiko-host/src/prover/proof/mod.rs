@@ -61,6 +61,11 @@ pub mod succinct {
 pub mod risc0;
 #[cfg(not(feature = "risc0"))]
 pub mod risc0 {
+    use zeth_lib::{
+        builder::{BlockBuilderStrategy, TaikoStrategy},
+        input::GuestInput,
+    };
+
     use super::*;
     use crate::prover::request::{Risc0ProofParams, Risc0Response};
     pub async fn execute_risc0(
@@ -69,6 +74,6 @@ pub mod risc0 {
         ctx: &Context,
         req: &Risc0ProofParams,
     ) -> Result<Risc0Response, String> {
-        Err("Feature not risc0 is enabled".to_string())
+        Err("Feature risc0 is not enabled".to_string())
     }
 }

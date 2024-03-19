@@ -9,7 +9,7 @@ use zeth_lib::{
 use zeth_lib::protocol_instance::assemble_protocol_instance;
 use zeth_lib::protocol_instance::EvidenceType;
 
-fn main(){
+fn main() {
 
     let input: GuestInput = env::read();
     let build_result = TaikoStrategy::build_from(&input);

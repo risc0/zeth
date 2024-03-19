@@ -376,8 +376,11 @@ pub fn prove_locally(
         let env = env_builder.build().unwrap();
         let mut exec = ExecutorImpl::from_elf(env, elf).unwrap();
 
-        // let segment_dir = tempdir().unwrap();
-        let segment_dir = env::current_dir().expect("dir error");
+        let segment_dir = PathBuf::from("/tmp/risc0-cache");
+        if segment_dir.exists() {
+            fs::remove_dir_all(segment_dir.clone()).unwrap();
+        }
+        fs::create_dir(segment_dir.clone()).unwrap();
 
         exec.run_with_callback(|segment| {
             let path = segment_dir
@@ -492,9 +495,7 @@ pub fn save_receipt<T: serde::Serialize>(receipt_label: &String, receipt_data: &
 }
 
 fn zkp_cache_path(receipt_label: &String) -> String {
-    // Path::new("cache_zkp")
-    env::current_dir()
-        .expect("dir error")
+    Path::new("cache_zkp")
         .as_path()
         .join(format!("{}.zkp", receipt_label))
         .to_str()

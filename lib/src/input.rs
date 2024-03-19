@@ -17,7 +17,6 @@ use alloy_consensus::Header as AlloyConsensusHeader;
 use alloy_rpc_types::Withdrawal as AlloyWithdrawal;
 use alloy_sol_types::{sol, SolCall};
 use anyhow::{anyhow, Result};
-use ethers_core::types::H256;
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{mpt::MptNode, Address, Bytes, FixedBytes, B256, U256};
@@ -31,7 +30,7 @@ pub type StorageEntry = (MptNode, Vec<U256>);
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct GuestInput {
     /// Block hash - for reference!
-    pub block_hash: H256,
+    pub block_hash: B256,
     /// Previous block header
     pub parent_header: AlloyConsensusHeader,
     /// Address to which all priority fees in this block are transferred.
@@ -62,7 +61,7 @@ pub struct GuestInput {
     pub taiko: TaikoGuestInput,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TaikoGuestInput {
     pub chain_spec_name: String,
     pub l1_header: AlloyConsensusHeader,

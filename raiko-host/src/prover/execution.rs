@@ -57,7 +57,7 @@ pub async fn execute(
                 // Make sure the blockhash from the node matches the one from the builder
                 assert_eq!(
                     header.hash().0,
-                    input.block_hash.to_fixed_bytes(),
+                    input.block_hash,
                     "block hash unexpected"
                 );
                 GuestOutput::Success((header.clone(), pi))
@@ -109,7 +109,7 @@ pub async fn execute(
                         // Make sure the blockhash from the node matches the one from the builder
                         assert_eq!(
                             header.hash().0,
-                            input.block_hash.to_fixed_bytes(),
+                            input.block_hash,
                             "block hash unexpected"
                         );
                         ProofResponse::Native(output)

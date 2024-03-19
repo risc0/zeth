@@ -15,7 +15,7 @@
 use core::{fmt::Debug, mem::take, str::from_utf8};
 
 use alloy_consensus::{TxEnvelope, TxKind};
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result, Error};
 #[cfg(feature = "std")]
 use log::debug;
 use revm::{
@@ -153,13 +153,13 @@ impl TxExecStrategy for TkoTxExecStrategy {
             }
 
             // setup the transaction
-            fill_eth_tx_env_alloy(
+            fill_eth_tx_env(
                 &block_builder.input.taiko.chain_spec_name,
                 &mut evm.env().tx,
                 &tx,
                 tx_from,
                 is_anchor,
-            );
+            )?;
             // process the transaction
             let ResultAndState { result, state } = match evm.transact() {
                 Ok(result) => result,
@@ -265,13 +265,13 @@ impl TxExecStrategy for TkoTxExecStrategy {
     }
 }
 
-pub fn fill_eth_tx_env_alloy(
+pub fn fill_eth_tx_env(
     chain_name: &str,
     tx_env: &mut TxEnv,
     tx: &TxEnvelope,
     caller: Address,
     is_anchor: bool,
-) {
+) -> Result<(), Error> {
     // claim the anchor
     tx_env.taiko.is_anchor = is_anchor;
     // set the treasury address
@@ -355,8 +355,12 @@ pub fn fill_eth_tx_env_alloy(
             tx_env.chain_id = Some(tx.chain_id);
             tx_env.nonce = Some(tx.nonce);
             tx_env.access_list = tx.access_list.clone().into_flattened();
+
+            // Data blobs are not allowed on L2
+            bail!(tx.blob_versioned_hashes.len() == 0);
         }
     };
+    Ok(())
 }
 
 pub fn increase_account_balance<D>(

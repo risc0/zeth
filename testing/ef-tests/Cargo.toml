@@ -8,7 +8,6 @@ ef-tests = []
 
 [dependencies]
 anyhow = "1.0"
-ethers-core = { git = "https://github.com/smtmfft/ethers-rs", branch = "ethers-core-2.0.10" }
 hashbrown = { workspace = true }
 revm = { workspace = true }
 serde = "1.0"
@@ -21,12 +20,8 @@ zeth-primitives = { path = "../../primitives" }
 diff = "0.1"
 env_logger = "0.10"
 log = "0.4"
-risc0-zkvm = { workspace = true, features = ["prove"] }
 rstest = "0.18"
 tempfile = "3.6"
-
-[build-dependencies]
-risc0-build = { version = "0.20.1" }
 
 [package.metadata.risc0]
 methods = ["testguest"]

@@ -42,6 +42,7 @@ fn executor(
         .try_init();
 
     for EthTestCase {
+        name,
         json,
         genesis,
         chain_spec,
@@ -57,6 +58,8 @@ fn executor(
             break;
         }
 
+        println!("running: {}", name);
+
         let block_header = block.block_header.unwrap();
         let expected_header: Header = block_header.clone().into();
         assert_eq!(&expected_header.hash(), &block_header.hash);
@@ -67,7 +70,7 @@ fn executor(
             json.pre,
             expected_header.clone(),
             block.transactions,
-            block.withdrawals.unwrap_or_default(),
+            block.withdrawals,
             json.post.unwrap(),
         );
 

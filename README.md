@@ -72,11 +72,11 @@ cargo run --release --features risc0
 #### GPU
 
 ```
-RISC0_DEV_MODE=1 cargo run -F cuda --release --features risc0
+cargo run -F cuda --release --features risc0
 ```
 OR
 ```
-RISC0_DEV_MODE=1 cargo run -F metal --release --features risc0
+cargo run -F metal --release --features risc0
 ```
 
 CUDA needs to be installed when using `cuda`: https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html

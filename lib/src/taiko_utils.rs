@@ -218,19 +218,15 @@ pub fn check_anchor_tx(
     Ok(())
 }
 
-pub fn hash_header(header: &AlloyConsensusHeader) -> B256 {
-    let mut out = Vec::<u8>::new();
-    header.encode(&mut out);
-    keccak256(&out)
-}
-
 pub trait HeaderHasher {
     fn hash(&self) -> B256;
 }
 
 impl HeaderHasher for AlloyConsensusHeader {
     fn hash(&self) -> B256 {
-        hash_header(self)
+        let mut out = Vec::<u8>::new();
+        self.encode(&mut out);
+        keccak256(&out)
     }
 }
 

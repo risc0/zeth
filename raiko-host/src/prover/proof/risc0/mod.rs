@@ -495,8 +495,7 @@ pub fn save_receipt<T: serde::Serialize>(receipt_label: &String, receipt_data: &
 }
 
 fn zkp_cache_path(receipt_label: &String) -> String {
-    Path::new("cache_zkp")
-        .as_path()
+    Path::new("/tmp/risc0-cache")
         .join(format!("{}.zkp", receipt_label))
         .to_str()
         .unwrap()

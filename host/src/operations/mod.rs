@@ -310,6 +310,7 @@ pub fn prove_locally(
         encoded_input.len(),
         encoded_input.len() * 4 / 1_000_000
     );
+    let segment_dir = tempdir().unwrap();
 
     info!("Running the prover...");
     let session = {

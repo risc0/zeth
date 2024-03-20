@@ -311,6 +311,7 @@ pub fn prove_locally(
         encoded_input.len(),
         encoded_input.len() * 4 / 1_000_000
     );
+    let segment_dir = tempdir().unwrap();
 
     info!("Running the prover...");
     let session = {
@@ -331,8 +332,6 @@ pub fn prove_locally(
 
         let env = env_builder.build().unwrap();
         let mut exec = ExecutorImpl::from_elf(env, elf).unwrap();
-
-        let segment_dir = tempdir().unwrap();
 
         exec.run_with_callback(|segment| {
             Ok(Box::new(FileSegmentRef::new(&segment, segment_dir.path())?))

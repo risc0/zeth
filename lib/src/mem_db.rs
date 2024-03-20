@@ -13,9 +13,8 @@
 // limitations under the License.
 
 use anyhow::anyhow;
-use hashbrown::{hash_map::Entry, HashMap};
 use revm::{
-    primitives::{Account, AccountInfo, Bytecode},
+    primitives::{hash_map::Entry, Account, AccountInfo, Bytecode, HashMap},
     Database, DatabaseCommit,
 };
 use thiserror::Error as ThisError;

@@ -17,10 +17,9 @@ use core::mem;
 use anyhow::Result;
 use revm::{Database, DatabaseCommit};
 use zeth_primitives::{
-    block::Header,
     keccak::keccak,
     trie::{MptNode, StateAccount},
-    U256,
+    Header, U256,
 };
 
 use crate::{

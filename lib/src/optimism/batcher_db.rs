@@ -16,16 +16,20 @@ use std::collections::HashMap;
 
 use anyhow::{ensure, Context, Result};
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use zeth_primitives::{
-    alloy_rlp, block::Header, receipt::ReceiptEnvelope, transactions::TxEnvelope, trie::MptNode,
+    alloy_rlp, receipt::ReceiptEnvelope, serde_with::RlpBytes, transactions::TxEnvelope,
+    trie::MptNode, Header,
 };
 
 use super::{config::ChainConfig, deposits, system_config};
 
 /// Input for extracting deposits.
+#[serde_as]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct BlockInput {
     /// Header of the block.
+    #[serde_as(as = "RlpBytes")]
     pub block_header: Header,
     /// Transactions of the block.
     pub transactions: Vec<TxEnvelope>,
@@ -40,11 +44,14 @@ pub trait BatcherDb {
     fn get_full_eth_block(&mut self, block_no: u64) -> Result<&BlockInput>;
 }
 
+#[serde_as]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MemDb {
     pub full_op_block: HashMap<u64, BlockInput>,
+    #[serde_as(as = "HashMap<_, RlpBytes>")]
     pub op_block_header: HashMap<u64, Header>,
     pub full_eth_block: HashMap<u64, BlockInput>,
+    #[serde_as(as = "HashMap<_, RlpBytes>")]
     pub eth_block_header: HashMap<u64, Header>,
 }
 

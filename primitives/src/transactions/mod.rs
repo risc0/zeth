@@ -14,13 +14,13 @@
 
 use std::fmt::Debug;
 
-pub use alloy_consensus::{TxEip1559, TxEip2930, TxEip4844, TxLegacy};
-pub use alloy_network::SignableTransaction;
-use alloy_network::{
-    eip2718::{Decodable2718, Eip2718Error, Encodable2718},
-    Signed, Transaction as _,
+pub use alloy_consensus::{
+    SignableTransaction, TxEip1559, TxEip2930, TxEip4844, TxEip4844Variant,
+    TxEnvelope as EthTxEnvelope, TxLegacy,
 };
-use alloy_primitives::B256;
+use alloy_consensus::{Signed, Transaction};
+use alloy_network::eip2718::{Decodable2718, Eip2718Error, Encodable2718};
+use alloy_primitives::{TxKind, B256};
 use alloy_rlp::{Decodable, Encodable};
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -35,7 +35,7 @@ pub trait EvmTransaction: Encodable + Decodable {
     /// Recover `from`.
     fn from(&self) -> Result<alloy_primitives::Address, alloy_primitives::SignatureError>;
     /// Get `to`.
-    fn to(&self) -> Option<alloy_primitives::Address>;
+    fn to(&self) -> TxKind;
     /// Get `gas_limit`.
     fn gas_limit(&self) -> u64;
     /// Get `data`.
@@ -74,47 +74,51 @@ impl TryFrom<u8> for TxType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TxEnvelope {
-    /// An untagged [`TxLegacy`].
-    Legacy(Signed<TxLegacy>),
-    /// A [`TxEip2930`].
-    Eip2930(Signed<TxEip2930>),
-    /// A [`TxEip1559`].
-    Eip1559(Signed<TxEip1559>),
-    /// A [`TxEip4844`].
-    Eip4844(Signed<TxEip4844>),
+    Ethereum(EthTxEnvelope),
     /// An [`TxOptimismDeposited`].
     OptimismDeposit(TxOptimismDeposit),
+}
+
+impl From<Signed<TxLegacy>> for TxEnvelope {
+    fn from(v: Signed<TxLegacy>) -> Self {
+        Self::Ethereum(EthTxEnvelope::Legacy(v))
+    }
+}
+
+impl From<Signed<TxEip2930>> for TxEnvelope {
+    fn from(v: Signed<TxEip2930>) -> Self {
+        Self::Ethereum(EthTxEnvelope::Eip2930(v))
+    }
+}
+
+impl From<Signed<TxEip1559>> for TxEnvelope {
+    fn from(v: Signed<TxEip1559>) -> Self {
+        Self::Ethereum(EthTxEnvelope::Eip1559(v))
+    }
+}
+
+impl From<Signed<TxEip4844>> for TxEnvelope {
+    fn from(v: Signed<TxEip4844>) -> Self {
+        let (tx, signature, hash) = v.into_parts();
+        Self::Ethereum(EthTxEnvelope::Eip4844(Signed::new_unchecked(
+            TxEip4844Variant::TxEip4844(tx),
+            signature,
+            hash,
+        )))
+    }
 }
 
 impl TxEnvelope {
     /// Return the [`TxType`] of the inner txn.
     pub const fn tx_type(&self) -> TxType {
         match self {
-            Self::Legacy(_) => TxType::Legacy,
-            Self::Eip2930(_) => TxType::Eip2930,
-            Self::Eip1559(_) => TxType::Eip1559,
-            Self::Eip4844(_) => TxType::Eip4844,
+            Self::Ethereum(eth) => match eth {
+                EthTxEnvelope::Legacy(_) => TxType::Legacy,
+                EthTxEnvelope::Eip2930(_) => TxType::Eip2930,
+                EthTxEnvelope::Eip1559(_) => TxType::Eip1559,
+                EthTxEnvelope::Eip4844(_) => TxType::Eip4844,
+            },
             Self::OptimismDeposit(_) => TxType::OptimismDeposit,
-        }
-    }
-
-    fn inner_encode(&self, out: &mut dyn alloy_rlp::BufMut) {
-        match self {
-            Self::Legacy(t) => t.encode(out),
-            Self::Eip2930(t) => t.encode(out),
-            Self::Eip1559(t) => t.encode(out),
-            Self::Eip4844(t) => t.encode(out),
-            Self::OptimismDeposit(t) => t.encode(out),
-        }
-    }
-
-    fn inner_length(&self) -> usize {
-        match self {
-            Self::Legacy(t) => t.length(),
-            Self::Eip2930(t) => t.length(),
-            Self::Eip1559(t) => t.length(),
-            Self::Eip4844(t) => t.length(),
-            Self::OptimismDeposit(t) => t.length(),
         }
     }
 }
@@ -122,51 +126,60 @@ impl TxEnvelope {
 impl EvmTransaction for TxEnvelope {
     fn from(&self) -> Result<alloy_primitives::Address, alloy_primitives::SignatureError> {
         match self {
-            Self::Legacy(tx) => tx.recover_signer(),
-            Self::Eip2930(tx) => tx.recover_signer(),
-            Self::Eip1559(tx) => tx.recover_signer(),
-            Self::Eip4844(tx) => tx.recover_signer(),
+            Self::Ethereum(eth) => match eth {
+                EthTxEnvelope::Legacy(tx) => tx.recover_signer(),
+                EthTxEnvelope::Eip2930(tx) => tx.recover_signer(),
+                EthTxEnvelope::Eip1559(tx) => tx.recover_signer(),
+                EthTxEnvelope::Eip4844(tx) => tx.recover_signer(),
+            },
             Self::OptimismDeposit(tx) => Ok(tx.from()),
         }
     }
 
-    fn to(&self) -> Option<alloy_primitives::Address> {
+    fn to(&self) -> TxKind {
         match self {
-            Self::Legacy(tx) => tx.to().to(),
-            Self::Eip2930(tx) => tx.to().to(),
-            Self::Eip1559(tx) => tx.to().to(),
-            Self::Eip4844(tx) => tx.to().to(),
-            Self::OptimismDeposit(tx) => tx.to().to(),
+            Self::Ethereum(eth) => match eth {
+                EthTxEnvelope::Legacy(tx) => tx.tx().to(),
+                EthTxEnvelope::Eip2930(tx) => tx.tx().to(),
+                EthTxEnvelope::Eip1559(tx) => tx.tx().to(),
+                EthTxEnvelope::Eip4844(tx) => tx.tx().to(),
+            },
+            Self::OptimismDeposit(tx) => tx.to(),
         }
     }
 
     fn gas_limit(&self) -> u64 {
         match self {
-            Self::Legacy(tx) => tx.gas_limit(),
-            Self::Eip2930(tx) => tx.gas_limit(),
-            Self::Eip1559(tx) => tx.gas_limit(),
-            Self::Eip4844(tx) => tx.gas_limit(),
+            Self::Ethereum(eth) => match eth {
+                EthTxEnvelope::Legacy(tx) => tx.tx().gas_limit(),
+                EthTxEnvelope::Eip2930(tx) => tx.tx().gas_limit(),
+                EthTxEnvelope::Eip1559(tx) => tx.tx().gas_limit(),
+                EthTxEnvelope::Eip4844(tx) => tx.tx().gas_limit(),
+            },
             Self::OptimismDeposit(tx) => tx.gas_limit(),
         }
     }
 
     fn input(&self) -> &[u8] {
         match self {
-            Self::Legacy(tx) => tx.input(),
-            Self::Eip2930(tx) => tx.input(),
-            Self::Eip1559(tx) => tx.input(),
-            Self::Eip4844(tx) => tx.input(),
+            Self::Ethereum(eth) => match eth {
+                EthTxEnvelope::Legacy(tx) => tx.tx().input(),
+                EthTxEnvelope::Eip2930(tx) => tx.tx().input(),
+                EthTxEnvelope::Eip1559(tx) => tx.tx().input(),
+                EthTxEnvelope::Eip4844(tx) => tx.tx().input(),
+            },
             Self::OptimismDeposit(tx) => tx.input(),
         }
     }
 
     fn hash(&self) -> B256 {
         match self {
-            Self::Legacy(tx) => *tx.hash(),
-            Self::Eip2930(tx) => *tx.hash(),
-            Self::Eip1559(tx) => *tx.hash(),
-            Self::Eip4844(tx) => *tx.hash(),
-            // TODO: cache the hash for `OptimismDeposited`
+            Self::Ethereum(eth) => match eth {
+                EthTxEnvelope::Legacy(tx) => *tx.hash(),
+                EthTxEnvelope::Eip2930(tx) => *tx.hash(),
+                EthTxEnvelope::Eip1559(tx) => *tx.hash(),
+                EthTxEnvelope::Eip4844(tx) => *tx.hash(),
+            },
             Self::OptimismDeposit(tx) => tx.hash_slow(),
         }
     }
@@ -203,62 +216,52 @@ impl Encodable for TxEnvelope {
 impl Decodable for TxEnvelope {
     #[inline]
     fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
-        match Self::decode_2718(buf) {
-            Ok(tx) => Ok(tx),
-            Err(Eip2718Error::RlpError(e)) => Err(e),
-            Err(_) => Err(alloy_rlp::Error::Custom("Unexpected type")),
-        }
+        Self::decode_2718(buf)
     }
 }
 
 impl Encodable2718 for TxEnvelope {
     fn type_flag(&self) -> Option<u8> {
         match self {
-            TxEnvelope::Legacy(_) => None,
-            TxEnvelope::Eip2930(_) => Some(TxType::Eip2930 as u8),
-            TxEnvelope::Eip1559(_) => Some(TxType::Eip1559 as u8),
-            TxEnvelope::Eip4844(_) => Some(TxType::Eip4844 as u8),
+            TxEnvelope::Ethereum(eth) => Encodable2718::type_flag(eth),
             TxEnvelope::OptimismDeposit(_) => Some(OPTIMISM_DEPOSITED_TX_TYPE),
         }
     }
 
     fn encode_2718_len(&self) -> usize {
         match self {
-            Self::Legacy(tx) => tx.length(),
-            _ => 1 + self.inner_length(),
+            TxEnvelope::Ethereum(eth) => Encodable2718::encode_2718_len(eth),
+            TxEnvelope::OptimismDeposit(tx) => 1 + tx.length(),
         }
     }
 
     fn encode_2718(&self, out: &mut dyn bytes::BufMut) {
         match self {
-            Self::Legacy(tx) => tx.encode(out),
-            _ => {
-                out.put_u8(self.tx_type() as u8);
-                self.inner_encode(out);
+            TxEnvelope::Ethereum(eth) => Encodable2718::encode_2718(eth, out),
+            TxEnvelope::OptimismDeposit(tx) => {
+                out.put_u8(OPTIMISM_DEPOSITED_TX_TYPE);
+                tx.encode(out);
             }
         }
     }
 }
 
 impl Decodable2718 for TxEnvelope {
-    fn typed_decode(ty: u8, buf: &mut &[u8]) -> Result<Self, Eip2718Error> {
-        match ty.try_into()? {
-            TxType::Legacy => unreachable!(),
-            TxType::Eip2930 => Ok(Self::Eip2930(Decodable::decode(buf)?)),
-            TxType::Eip1559 => Ok(Self::Eip1559(Decodable::decode(buf)?)),
-            TxType::Eip4844 => Ok(Self::Eip4844(Decodable::decode(buf)?)),
-            TxType::OptimismDeposit => Ok(Self::OptimismDeposit(Decodable::decode(buf)?)),
+    fn typed_decode(ty: u8, buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
+        match ty {
+            OPTIMISM_DEPOSITED_TX_TYPE => Ok(Self::OptimismDeposit(Decodable::decode(buf)?)),
+            _ => Ok(TxEnvelope::Ethereum(EthTxEnvelope::typed_decode(ty, buf)?)),
         }
     }
 
-    fn fallback_decode(buf: &mut &[u8]) -> Result<Self, Eip2718Error> {
-        Ok(TxEnvelope::Legacy(Decodable::decode(buf)?))
+    fn fallback_decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
+        Ok(TxEnvelope::Ethereum(EthTxEnvelope::fallback_decode(buf)?))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{address, b256};
+    use alloy_primitives::{address, b256, Bytes};
     use hex_literal::hex;
 
     use super::*;
@@ -363,6 +366,7 @@ mod tests {
         println!("{:#?}", tx);
 
         // verify the RLP roundtrip
+        println!("{:?}", Bytes::from(alloy_rlp::encode(&tx)));
         let decoded = TxEnvelope::decode_bytes(alloy_rlp::encode(&tx)).unwrap();
         assert_eq!(tx, decoded);
 

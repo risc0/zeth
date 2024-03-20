@@ -24,10 +24,9 @@ use risc0_zkvm::{
     compute_image_id,
     serde::to_vec,
     sha::{Digest, Digestible},
-    Assumption, ExecutorEnv, ExecutorImpl, FileSegmentRef, Receipt, Segment, SegmentRef,
+    Assumption, ExecutorEnv, ExecutorImpl, Receipt, Segment, SegmentRef,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use tempfile::tempdir;
 use zeth_primitives::keccak::keccak;
 
 use crate::{cli::Cli, load_receipt, save_receipt};
@@ -331,13 +330,7 @@ pub fn prove_locally(
 
         let env = env_builder.build().unwrap();
         let mut exec = ExecutorImpl::from_elf(env, elf).unwrap();
-
-        let segment_dir = tempdir().unwrap();
-
-        exec.run_with_callback(|segment| {
-            Ok(Box::new(FileSegmentRef::new(&segment, segment_dir.path())?))
-        })
-        .unwrap()
+        exec.run().unwrap()
     };
     session.prove().unwrap()
 }
@@ -346,7 +339,6 @@ const NULL_SEGMENT_REF: NullSegmentRef = NullSegmentRef {};
 #[derive(Serialize, Deserialize)]
 struct NullSegmentRef {}
 
-#[typetag::serde]
 impl SegmentRef for NullSegmentRef {
     fn resolve(&self) -> anyhow::Result<Segment> {
         unimplemented!()

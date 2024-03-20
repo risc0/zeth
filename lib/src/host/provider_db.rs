@@ -17,15 +17,13 @@ extern crate alloc;
 use std::collections::BTreeSet;
 
 use ethers_core::types::{EIP1186ProofResponse, H160, H256};
-use hashbrown::HashMap;
 use revm::{
-    primitives::{Account, AccountInfo, Bytecode},
+    primitives::{Account, AccountInfo, Bytecode, HashMap},
     Database, DatabaseCommit,
 };
 use zeth_primitives::{
-    block::Header,
     ethers::{from_ethers_block, from_ethers_bytes, from_ethers_u256},
-    Address, B256, U256,
+    Address, Header, B256, U256,
 };
 
 use crate::{

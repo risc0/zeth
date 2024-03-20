@@ -14,13 +14,12 @@
 
 use anyhow::{bail, Context, Result};
 use ethers_core::types::EIP1186ProofResponse;
-use hashbrown::HashMap;
 use log::error;
+use revm::primitives::HashMap;
 use zeth_primitives::{
-    block::Header,
     keccak::keccak,
     trie::{Error as TrieError, MptNode, StateAccount},
-    Address, B256, U256,
+    Address, Header, B256, U256,
 };
 
 use super::{mpt, preflight};

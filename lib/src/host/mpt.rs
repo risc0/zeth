@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use anyhow::{bail, Context, Result};
-use hashbrown::HashMap;
 use zeth_primitives::trie::{to_encoded_path, MptNode, MptNodeData, MptNodeReference};
 
 /// Parses proof bytes into a vector of MPT nodes.

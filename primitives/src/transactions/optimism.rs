@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloy_network::{Transaction, TxKind};
-use alloy_primitives::{keccak256, Address, Bytes, ChainId, B256, U256};
+use alloy_consensus::Transaction;
+use alloy_primitives::{keccak256, Address, Bytes, ChainId, TxKind, B256, U256};
 use alloy_rlp::Encodable;
 use alloy_rlp_derive::{RlpDecodable, RlpEncodable};
 use bytes::BufMut;

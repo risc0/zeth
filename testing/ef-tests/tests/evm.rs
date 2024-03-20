@@ -21,7 +21,7 @@ use zeth_lib::{
     builder::{BlockBuilderStrategy, EthereumStrategy},
     output::BlockBuildOutput,
 };
-use zeth_primitives::{block::Header, trie::StateAccount};
+use zeth_primitives::{trie::StateAccount, Header};
 use zeth_testeth::{
     create_input, ethers,
     ethtests::{read_eth_test, EthTestCase},

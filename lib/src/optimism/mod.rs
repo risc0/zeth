@@ -22,11 +22,10 @@ use serde::{Deserialize, Serialize};
 use zeth_primitives::{
     alloy_rlp,
     batch::Batch,
-    block::Header,
     keccak::keccak,
     transactions::{optimism::TxOptimismDeposit, EvmTransaction, TxEnvelope},
     trie::MptNode,
-    Address, FixedBytes, RlpBytes, B256, U256,
+    Address, FixedBytes, Header, RlpBytes, B256, U256,
 };
 
 #[cfg(not(target_os = "zkvm"))]

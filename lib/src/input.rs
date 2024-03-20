@@ -14,11 +14,12 @@
 
 use alloy_rlp_derive::RlpEncodable;
 use ethers_core::k256::sha2::{Digest, Sha256};
-use hashbrown::HashMap;
+use revm::primitives::HashMap;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use zeth_primitives::{
-    block::Header, mmr::Hash, transactions::TxEnvelope, trie::MptNode, withdrawal::Withdrawal,
-    Address, Bytes, B256, U256,
+    mmr::Hash, serde_with::RlpBytes, transactions::TxEnvelope, trie::MptNode,
+    withdrawal::Withdrawal, Address, Bytes, Header, B256, U256,
 };
 
 /// Represents the state of an account's storage.
@@ -27,6 +28,7 @@ use zeth_primitives::{
 pub type StorageEntry = (MptNode, Vec<U256>);
 
 /// External block input.
+#[serde_as]
 #[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize, Serialize)]
 pub struct BlockBuildInput {
     /// Block and transaction data to execute
@@ -38,13 +40,16 @@ pub struct BlockBuildInput {
     /// The code of all unique contracts.
     pub contracts: Vec<Bytes>,
     /// List of at most 256 previous block headers
+    #[serde_as(as = "Vec<RlpBytes>")]
     pub ancestor_headers: Vec<Header>,
 }
 
+#[serde_as]
 #[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize, Serialize, RlpEncodable)]
 #[rlp(trailing)]
 pub struct StateInput {
     /// Previous block header
+    #[serde_as(as = "RlpBytes")]
     pub parent_header: Header,
     /// Address to which all priority fees in this block are transferred.
     pub beneficiary: Address,

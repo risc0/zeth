@@ -25,8 +25,10 @@ use revm::{
 use ruint::aliases::U256;
 use zeth_primitives::{
     alloy_rlp,
-    receipt::{OptimismDepositReceipt, Receipt, ReceiptEnvelope},
-    transactions::{optimism::TxOptimismDeposit, EvmTransaction as _, TxEnvelope, TxType},
+    receipt::{EthReceiptEnvelope, OptimismDepositReceipt, Receipt, ReceiptEnvelope},
+    transactions::{
+        optimism::TxOptimismDeposit, EthTxEnvelope, EvmTransaction as _, TxEnvelope, TxType,
+    },
     trie::{MptNode, EMPTY_ROOT},
     Bloom, Bytes,
 };
@@ -125,7 +127,7 @@ impl TxExecStrategy for OpTxExecStrategy {
                 trace!("Tx no. {} (hash: {})", tx_no, tx_hash);
                 trace!("  Type: {:?}", tx.tx_type());
                 trace!("  Fr: {:?}", tx_from);
-                trace!("  To: {:?}", tx.to().unwrap_or_default());
+                trace!("  To: {:?}", tx.to().to().unwrap_or_default());
             }
 
             // verify transaction gas
@@ -145,19 +147,19 @@ impl TxExecStrategy for OpTxExecStrategy {
             });
 
             match &tx {
-                TxEnvelope::OptimismDeposit(deposit) => {
+                TxEnvelope::OptimismDeposit(op) => {
                     #[cfg(not(target_os = "zkvm"))]
                     {
-                        trace!("  Source: {:?}", &deposit.source_hash);
-                        trace!("  Mint: {:?}", &deposit.mint);
-                        trace!("  System Tx: {:?}", deposit.is_system_tx);
+                        trace!("  Source: {:?}", &op.source_hash);
+                        trace!("  Mint: {:?}", &op.mint);
+                        trace!("  System Tx: {:?}", op.is_system_tx);
                     }
 
                     // Initialize tx environment
-                    fill_deposit_tx_env(&mut evm.env_mut().tx, deposit, tx_from);
+                    fill_deposit_tx_env(&mut evm.env_mut().tx, op, tx_from);
                 }
-                _ => {
-                    fill_eth_tx_env(&mut evm.env_mut().tx, alloy_rlp::encode(&tx), &tx, tx_from);
+                TxEnvelope::Ethereum(eth) => {
+                    fill_eth_tx_env(&mut evm.env_mut().tx, alloy_rlp::encode(&tx), eth, tx_from);
                 }
             };
 
@@ -177,7 +179,7 @@ impl TxExecStrategy for OpTxExecStrategy {
             let receipt = Receipt {
                 success: result.is_success(),
                 cumulative_gas_used,
-                logs: result.logs(),
+                logs: result.into_logs(),
             }
             .with_bloom();
 
@@ -186,10 +188,10 @@ impl TxExecStrategy for OpTxExecStrategy {
 
             // create the EIP-2718 enveloped receipt
             let receipt = match tx.tx_type() {
-                TxType::Legacy => ReceiptEnvelope::Legacy(receipt),
-                TxType::Eip2930 => ReceiptEnvelope::Eip2930(receipt),
-                TxType::Eip1559 => ReceiptEnvelope::Eip1559(receipt),
-                TxType::Eip4844 => ReceiptEnvelope::Eip4844(receipt),
+                TxType::Legacy => ReceiptEnvelope::Ethereum(EthReceiptEnvelope::Legacy(receipt)),
+                TxType::Eip2930 => ReceiptEnvelope::Ethereum(EthReceiptEnvelope::Eip2930(receipt)),
+                TxType::Eip1559 => ReceiptEnvelope::Ethereum(EthReceiptEnvelope::Eip1559(receipt)),
+                TxType::Eip4844 => ReceiptEnvelope::Ethereum(EthReceiptEnvelope::Eip4844(receipt)),
                 TxType::OptimismDeposit => ReceiptEnvelope::OptimismDeposit(
                     OptimismDepositReceipt::new(receipt, deposit_nonce),
                 ),
@@ -254,7 +256,7 @@ impl TxExecStrategy for OpTxExecStrategy {
         // Leak memory, save cycles
         guest_mem_forget([tx_trie, receipt_trie]);
         // Return block builder with updated database
-        Ok(block_builder.with_db(evm.context.evm.db))
+        Ok(block_builder.with_db(evm.context.evm.inner.db))
     }
 }
 
@@ -281,7 +283,7 @@ fn fill_deposit_tx_env(tx_env: &mut TxEnv, tx: &TxOptimismDeposit, caller: Addre
     tx_env.access_list.clear();
 }
 
-fn fill_eth_tx_env(tx_env: &mut TxEnv, tx: Vec<u8>, essence: &TxEnvelope, caller: Address) {
+fn fill_eth_tx_env(tx_env: &mut TxEnv, tx: Vec<u8>, essence: &EthTxEnvelope, caller: Address) {
     // initialize additional optimism tx fields
     tx_env.optimism.source_hash = None;
     tx_env.optimism.mint = None;

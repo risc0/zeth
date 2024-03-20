@@ -14,7 +14,7 @@
 
 //! Convert from Ethers types.
 
-use alloy_network::{eip2718::Eip2718Error, SignableTransaction};
+use alloy_consensus::{Header, ReceiptEnvelope as AlloyReceiptEnvelope, SignableTransaction};
 use alloy_primitives::{Address, Bloom, Bytes, Log, Signature, B256, U256};
 use anyhow::{anyhow, Context};
 use ethers_core::types::{
@@ -26,7 +26,6 @@ use ethers_core::types::{
 
 use crate::{
     access_list::{AccessList, AccessListItem},
-    block::Header,
     receipt::{OptimismDepositReceipt, Receipt, ReceiptEnvelope, ReceiptWithBloom},
     transactions::{
         optimism::TxOptimismDeposit, TxEip1559, TxEip2930, TxEnvelope, TxLegacy, TxType,
@@ -82,12 +81,14 @@ pub fn from_ethers_access_list(list: EthersAccessList) -> AccessList {
     AccessList(items)
 }
 
-fn from_ethers_transaction_type(v: Option<U64>) -> Result<Option<TxType>, Eip2718Error> {
+fn from_ethers_transaction_type(v: Option<U64>) -> Result<Option<TxType>, anyhow::Error> {
     let tx_type = match v {
-        Some(v) => Some(match u8::try_from(v) {
-            Ok(v) => TxType::try_from(v)?,
-            Err(err) => return Err(Eip2718Error::Custom(err.into())),
-        }),
+        Some(v) => {
+            let v: u8 = v
+                .try_into()
+                .map_err(|err| anyhow!("invalid transaction_type: {}", err))?;
+            Some(TxType::try_from(v).context("invalid transaction_type")?)
+        }
         None => None,
     };
     Ok(tx_type)
@@ -148,8 +149,7 @@ impl TryFrom<EthersTransaction> for TxEnvelope {
     type Error = anyhow::Error;
 
     fn try_from(tx: EthersTransaction) -> Result<Self, Self::Error> {
-        let tx_type = from_ethers_transaction_type(tx.transaction_type)
-            .map_err(|err| anyhow!("invalid transaction_type: {}", err))?;
+        let tx_type = from_ethers_transaction_type(tx.transaction_type)?;
 
         let signature = if tx_type != Some(TxType::OptimismDeposit) {
             Some(Signature::from_rs_and_parity(
@@ -162,99 +162,96 @@ impl TryFrom<EthersTransaction> for TxEnvelope {
         };
 
         let tx = match tx_type {
-            None | Some(TxType::Legacy) => TxEnvelope::Legacy(
-                TxLegacy {
-                    chain_id: match tx.chain_id {
-                        None => None,
-                        Some(chain_id) => Some(
-                            chain_id
-                                .try_into()
-                                .map_err(|err| anyhow!("invalid chain_id: {}", err))?,
-                        ),
-                    },
-                    nonce: tx
-                        .nonce
-                        .try_into()
-                        .map_err(|err| anyhow!("invalid nonce: {}", err))?,
-                    gas_price: tx
-                        .gas_price
-                        .context("gas_price missing")?
-                        .try_into()
-                        .map_err(|err| anyhow!("invalid gas_price: {}", err))?,
-                    gas_limit: tx
-                        .gas
-                        .try_into()
-                        .map_err(|err| anyhow!("invalid gas_limit: {}", err))?,
-                    to: tx.to.map(from_ethers_h160).into(),
-                    value: from_ethers_u256(tx.value),
-                    input: tx.input.0.into(),
-                }
-                .into_signed(signature.unwrap()),
-            ),
-            Some(TxType::Eip2930) => TxEnvelope::Eip2930(
-                TxEip2930 {
-                    chain_id: tx
-                        .chain_id
-                        .context("chain_id missing")?
-                        .try_into()
-                        .map_err(|err| anyhow!("invalid chain_id: {}", err))?,
-                    nonce: tx
-                        .nonce
-                        .try_into()
-                        .map_err(|err| anyhow!("invalid nonce: {}", err))?,
-                    gas_price: tx
-                        .gas_price
-                        .context("gas_price missing")?
-                        .try_into()
-                        .map_err(|err| anyhow!("invalid gas_price: {}", err))?,
-                    gas_limit: tx
-                        .gas
-                        .try_into()
-                        .map_err(|err| anyhow!("invalid gas_limit: {}", err))?,
-                    to: tx.to.map(from_ethers_h160).into(),
-                    value: from_ethers_u256(tx.value),
-                    access_list: from_ethers_access_list(
-                        tx.access_list.context("access_list missing")?,
+            None | Some(TxType::Legacy) => TxLegacy {
+                chain_id: match tx.chain_id {
+                    None => None,
+                    Some(chain_id) => Some(
+                        chain_id
+                            .try_into()
+                            .map_err(|err| anyhow!("invalid chain_id: {}", err))?,
                     ),
-                    input: tx.input.0.into(),
-                }
-                .into_signed(signature.unwrap()),
-            ),
-            Some(TxType::Eip1559) => TxEnvelope::Eip1559(
-                TxEip1559 {
-                    chain_id: tx
-                        .chain_id
-                        .context("chain_id missing")?
-                        .try_into()
-                        .map_err(|err| anyhow!("invalid chain_id: {}", err))?,
-                    nonce: tx
-                        .nonce
-                        .try_into()
-                        .map_err(|err| anyhow!("invalid nonce: {}", err))?,
-                    max_priority_fee_per_gas: tx
-                        .max_priority_fee_per_gas
-                        .context("max_priority_fee_per_gas missing")?
-                        .try_into()
-                        .map_err(|err| anyhow!("invalid max_priority_fee_per_gas: {}", err))?,
-                    max_fee_per_gas: tx
-                        .max_fee_per_gas
-                        .context("max_fee_per_gas missing")?
-                        .try_into()
-                        .map_err(|err| anyhow!("invalid max_fee_per_gas: {}", err))?,
-                    gas_limit: tx
-                        .gas
-                        .try_into()
-                        .map_err(|err| anyhow!("invalid gas_limit: {}", err))?,
-                    to: tx.to.map(from_ethers_h160).into(),
-                    value: from_ethers_u256(tx.value),
-                    access_list: from_ethers_access_list(
-                        tx.access_list.context("access_list missing")?,
-                    ),
-                    input: tx.input.0.into(),
-                }
-                .into_signed(signature.unwrap()),
-            ),
-            Some(TxType::Eip4844) => todo!(),
+                },
+                nonce: tx
+                    .nonce
+                    .try_into()
+                    .map_err(|err| anyhow!("invalid nonce: {}", err))?,
+                gas_price: tx
+                    .gas_price
+                    .context("gas_price missing")?
+                    .try_into()
+                    .map_err(|err| anyhow!("invalid gas_price: {}", err))?,
+                gas_limit: tx
+                    .gas
+                    .try_into()
+                    .map_err(|err| anyhow!("invalid gas_limit: {}", err))?,
+                to: tx.to.map(from_ethers_h160).into(),
+                value: from_ethers_u256(tx.value),
+                input: tx.input.0.into(),
+            }
+            .into_signed(signature.unwrap())
+            .into(),
+            Some(TxType::Eip2930) => TxEip2930 {
+                chain_id: tx
+                    .chain_id
+                    .context("chain_id missing")?
+                    .try_into()
+                    .map_err(|err| anyhow!("invalid chain_id: {}", err))?,
+                nonce: tx
+                    .nonce
+                    .try_into()
+                    .map_err(|err| anyhow!("invalid nonce: {}", err))?,
+                gas_price: tx
+                    .gas_price
+                    .context("gas_price missing")?
+                    .try_into()
+                    .map_err(|err| anyhow!("invalid gas_price: {}", err))?,
+                gas_limit: tx
+                    .gas
+                    .try_into()
+                    .map_err(|err| anyhow!("invalid gas_limit: {}", err))?,
+                to: tx.to.map(from_ethers_h160).into(),
+                value: from_ethers_u256(tx.value),
+                access_list: from_ethers_access_list(
+                    tx.access_list.context("access_list missing")?,
+                ),
+                input: tx.input.0.into(),
+            }
+            .into_signed(signature.unwrap())
+            .into(),
+            Some(TxType::Eip1559) => TxEip1559 {
+                chain_id: tx
+                    .chain_id
+                    .context("chain_id missing")?
+                    .try_into()
+                    .map_err(|err| anyhow!("invalid chain_id: {}", err))?,
+                nonce: tx
+                    .nonce
+                    .try_into()
+                    .map_err(|err| anyhow!("invalid nonce: {}", err))?,
+                max_priority_fee_per_gas: tx
+                    .max_priority_fee_per_gas
+                    .context("max_priority_fee_per_gas missing")?
+                    .try_into()
+                    .map_err(|err| anyhow!("invalid max_priority_fee_per_gas: {}", err))?,
+                max_fee_per_gas: tx
+                    .max_fee_per_gas
+                    .context("max_fee_per_gas missing")?
+                    .try_into()
+                    .map_err(|err| anyhow!("invalid max_fee_per_gas: {}", err))?,
+                gas_limit: tx
+                    .gas
+                    .try_into()
+                    .map_err(|err| anyhow!("invalid gas_limit: {}", err))?,
+                to: tx.to.map(from_ethers_h160).into(),
+                value: from_ethers_u256(tx.value),
+                access_list: from_ethers_access_list(
+                    tx.access_list.context("access_list missing")?,
+                ),
+                input: tx.input.0.into(),
+            }
+            .into_signed(signature.unwrap())
+            .into(),
+            Some(TxType::Eip4844) => unimplemented!("EIP-4844 not supported"),
             Some(TxType::OptimismDeposit) => TxEnvelope::OptimismDeposit(TxOptimismDeposit {
                 source_hash: from_ethers_h256(tx.source_hash),
                 from: tx.from.0.into(),
@@ -317,10 +314,18 @@ impl TryFrom<EthersReceipt> for ReceiptEnvelope {
         let receipt = ReceiptWithBloom::new(receipt, Bloom::from_slice(v.logs_bloom.as_bytes()));
 
         Ok(match tx_type {
-            None | Some(TxType::Legacy) => ReceiptEnvelope::Legacy(receipt),
-            Some(TxType::Eip2930) => ReceiptEnvelope::Eip2930(receipt),
-            Some(TxType::Eip1559) => ReceiptEnvelope::Eip1559(receipt),
-            Some(TxType::Eip4844) => ReceiptEnvelope::Eip4844(receipt),
+            None | Some(TxType::Legacy) => {
+                ReceiptEnvelope::Ethereum(AlloyReceiptEnvelope::Legacy(receipt))
+            }
+            Some(TxType::Eip2930) => {
+                ReceiptEnvelope::Ethereum(AlloyReceiptEnvelope::Eip2930(receipt))
+            }
+            Some(TxType::Eip1559) => {
+                ReceiptEnvelope::Ethereum(AlloyReceiptEnvelope::Eip1559(receipt))
+            }
+            Some(TxType::Eip4844) => {
+                ReceiptEnvelope::Ethereum(AlloyReceiptEnvelope::Eip4844(receipt))
+            }
             Some(TxType::OptimismDeposit) => {
                 let receipt = OptimismDepositReceipt::new(receipt, v.deposit_nonce);
                 ReceiptEnvelope::OptimismDeposit(receipt)

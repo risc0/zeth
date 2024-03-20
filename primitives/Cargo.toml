@@ -4,14 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-alloy-consensus = { path = "../../alloy-rs/alloy/crates/consensus", features = [
+alloy-consensus = { git = "https://github.com/Wollac/alloy.git", branch = "fix/encoding", features = [
     "k256",
 ] }
-alloy-eips = { path = "../../alloy-rs/alloy/crates/eips" }
-alloy-network = { path = "../../alloy-rs/alloy/crates/network", features = [
+alloy-eips = { git = "https://github.com/Wollac/alloy.git", branch = "fix/encoding" }
+alloy-network = { git = "https://github.com/Wollac/alloy.git", branch = "fix/encoding", features = [
     "k256",
 ] }
-alloy-primitives = { version = "0.6.2", default-features = false, features = [
+alloy-primitives = { version = "0.6.4", default-features = false, features = [
     "k256",
     "rlp",
     "serde",
@@ -22,14 +22,10 @@ alloy-rlp-derive = { version = "0.3", default-features = false }
 anyhow = "1.0"
 bytes = { version = "1.1", default-features = false }
 ethers-core = { version = "2.0", optional = true, features = ["optimism"] }
-k256 = { version = "=0.13.3", features = [
-    "std",
-    "ecdsa",
-], default_features = false }
-revm-primitives = { workspace = true, optional = true }
 rlp = "0.5.2"
 serde = { version = "1.0", features = ["derive"] }
-sha2 = { version = "=0.10.6", default-features = false }
+serde_with = "3.7"
+sha2 = { version = "0.10.8", default-features = false }
 sha3 = "0.10"
 thiserror = "1.0"
 

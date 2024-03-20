@@ -18,7 +18,7 @@ use std::{
 };
 
 use anyhow::Context;
-use zeth_primitives::{block::Header, ethers::from_ethers_block, Address};
+use zeth_primitives::{ethers::from_ethers_block, Address, Header};
 
 use crate::{
     host::provider::{new_provider, BlockQuery},

@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 use revm::{primitives::SpecId, Database, DatabaseCommit};
-use zeth_primitives::{block::Header, trie::MptNode};
+use zeth_primitives::{trie::MptNode, Header};
 
 use crate::{
     builder::{

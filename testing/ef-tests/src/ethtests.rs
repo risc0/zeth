@@ -17,7 +17,7 @@ use std::{fs::File, io::BufReader, path::PathBuf};
 use revm::primitives::SpecId;
 use serde_json::Value;
 use zeth_lib::consts::{ChainSpec, ETH_MAINNET_CHAIN_SPEC, ETH_MAINNET_EIP1559_CONSTANTS};
-use zeth_primitives::block::Header;
+use zeth_primitives::Header;
 
 use crate::TestJson;
 

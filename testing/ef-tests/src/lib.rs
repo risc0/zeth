@@ -32,13 +32,12 @@ use zeth_lib::{
 use zeth_primitives::{
     access_list::{AccessList, AccessListItem},
     alloy_rlp,
-    block::Header,
     ethers::from_ethers_h160,
     keccak::keccak,
     transactions::{SignableTransaction, TxEip1559, TxEip2930, TxEip4844, TxEnvelope, TxLegacy},
     trie::{self, MptNode, MptNodeData, StateAccount},
     withdrawal::Withdrawal,
-    Address, Bloom, Bytes, Signature, StorageKey, B256, B64, U128, U256, U64, U8,
+    Address, Bloom, Bytes, Header, Signature, StorageKey, B256, B64, U128, U256, U64, U8,
 };
 
 use crate::ethers::TestProvider;
@@ -199,69 +198,58 @@ impl From<TestTransaction> for TxEnvelope {
     fn from(tx: TestTransaction) -> Self {
         let signature = Signature::from_rs_and_parity(tx.r, tx.s, tx.v).unwrap();
         match tx.type_id.map(|v| u8::try_from(v).unwrap()) {
-            None | Some(0) => TxEnvelope::Legacy(
-                TxLegacy {
-                    chain_id: signature.v().chain_id(), // derive chain ID from signature
-                    nonce: tx.nonce.try_into().unwrap(),
-                    gas_price: tx.gas_price.unwrap().try_into().unwrap(),
-                    gas_limit: tx.gas_limit.try_into().unwrap(),
-                    to: tx.to.into(),
-                    value: tx.value,
-                    input: tx.data,
-                }
-                .into_signed(signature),
-            ),
-            Some(1) => TxEnvelope::Eip2930(
-                TxEip2930 {
-                    chain_id: tx.chain_id.unwrap().try_into().unwrap(),
-                    nonce: tx.nonce.try_into().unwrap(),
-                    gas_price: tx.gas_price.unwrap().try_into().unwrap(),
-                    gas_limit: tx.gas_limit.try_into().unwrap(),
-                    to: tx.to.into(),
-                    value: tx.value,
-                    input: tx.data,
-                    access_list: tx.access_list.unwrap().into(),
-                }
-                .into_signed(signature),
-            ),
-            Some(2) => TxEnvelope::Eip1559(
-                TxEip1559 {
-                    chain_id: tx.chain_id.unwrap().try_into().unwrap(),
-                    nonce: tx.nonce.try_into().unwrap(),
-                    max_priority_fee_per_gas: tx
-                        .max_priority_fee_per_gas
-                        .unwrap()
-                        .try_into()
-                        .unwrap(),
-                    max_fee_per_gas: tx.max_fee_per_gas.unwrap().try_into().unwrap(),
-                    gas_limit: tx.gas_limit.try_into().unwrap(),
-                    to: tx.to.into(),
-                    value: tx.value,
-                    input: tx.data,
-                    access_list: tx.access_list.unwrap().into(),
-                }
-                .into_signed(signature),
-            ),
-            Some(3) => TxEnvelope::Eip4844(
-                TxEip4844 {
-                    chain_id: tx.chain_id.unwrap().try_into().unwrap(),
-                    nonce: tx.nonce.try_into().unwrap(),
-                    gas_limit: tx.gas_limit.try_into().unwrap(),
-                    max_fee_per_gas: tx.max_fee_per_gas.unwrap().try_into().unwrap(),
-                    max_priority_fee_per_gas: tx
-                        .max_priority_fee_per_gas
-                        .unwrap()
-                        .try_into()
-                        .unwrap(),
-                    to: tx.to.into(),
-                    value: tx.value,
-                    access_list: tx.access_list.unwrap().into(),
-                    blob_versioned_hashes: tx.blob_versioned_hashes.unwrap(),
-                    max_fee_per_blob_gas: tx.max_fee_per_blob_gas.unwrap().try_into().unwrap(),
-                    input: tx.data,
-                }
-                .into_signed(signature),
-            ),
+            None | Some(0) => TxLegacy {
+                chain_id: signature.v().chain_id(), // derive chain ID from signature
+                nonce: tx.nonce.try_into().unwrap(),
+                gas_price: tx.gas_price.unwrap().try_into().unwrap(),
+                gas_limit: tx.gas_limit.try_into().unwrap(),
+                to: tx.to.into(),
+                value: tx.value,
+                input: tx.data,
+            }
+            .into_signed(signature)
+            .into(),
+
+            Some(1) => TxEip2930 {
+                chain_id: tx.chain_id.unwrap().try_into().unwrap(),
+                nonce: tx.nonce.try_into().unwrap(),
+                gas_price: tx.gas_price.unwrap().try_into().unwrap(),
+                gas_limit: tx.gas_limit.try_into().unwrap(),
+                to: tx.to.into(),
+                value: tx.value,
+                input: tx.data,
+                access_list: tx.access_list.unwrap().into(),
+            }
+            .into_signed(signature)
+            .into(),
+            Some(2) => TxEip1559 {
+                chain_id: tx.chain_id.unwrap().try_into().unwrap(),
+                nonce: tx.nonce.try_into().unwrap(),
+                max_priority_fee_per_gas: tx.max_priority_fee_per_gas.unwrap().try_into().unwrap(),
+                max_fee_per_gas: tx.max_fee_per_gas.unwrap().try_into().unwrap(),
+                gas_limit: tx.gas_limit.try_into().unwrap(),
+                to: tx.to.into(),
+                value: tx.value,
+                input: tx.data,
+                access_list: tx.access_list.unwrap().into(),
+            }
+            .into_signed(signature)
+            .into(),
+            Some(3) => TxEip4844 {
+                chain_id: tx.chain_id.unwrap().try_into().unwrap(),
+                nonce: tx.nonce.try_into().unwrap(),
+                gas_limit: tx.gas_limit.try_into().unwrap(),
+                max_fee_per_gas: tx.max_fee_per_gas.unwrap().try_into().unwrap(),
+                max_priority_fee_per_gas: tx.max_priority_fee_per_gas.unwrap().try_into().unwrap(),
+                to: tx.to.into(),
+                value: tx.value,
+                access_list: tx.access_list.unwrap().into(),
+                blob_versioned_hashes: tx.blob_versioned_hashes.unwrap(),
+                max_fee_per_blob_gas: tx.max_fee_per_blob_gas.unwrap().try_into().unwrap(),
+                input: tx.data,
+            }
+            .into_signed(signature)
+            .into(),
             v @ _ => panic!("invalid transaction type: {}", v.unwrap()),
         }
     }

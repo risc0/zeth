@@ -15,7 +15,6 @@
 extern crate core;
 
 pub mod access_list;
-pub mod block;
 pub mod keccak;
 pub mod receipt;
 pub mod transactions;
@@ -28,6 +27,7 @@ pub mod ethers;
 pub mod batch;
 pub mod mmr;
 
+pub use alloy_consensus::Header;
 pub use alloy_primitives::*;
 pub use alloy_rlp;
 
@@ -49,6 +49,41 @@ where
             Ok(this)
         } else {
             Err(alloy_rlp::Error::Custom("Trailing data"))
+        }
+    }
+}
+
+pub mod serde_with {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use serde_with::{DeserializeAs, SerializeAs};
+
+    use super::RlpBytes as _;
+
+    pub struct RlpBytes {}
+
+    impl<T> SerializeAs<T> for RlpBytes
+    where
+        T: alloy_rlp::Encodable,
+    {
+        fn serialize_as<S>(source: &T, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            let bytes = alloy_rlp::encode(source);
+            bytes.serialize(serializer)
+        }
+    }
+
+    impl<'de, T> DeserializeAs<'de, T> for RlpBytes
+    where
+        T: alloy_rlp::Decodable,
+    {
+        fn deserialize_as<D>(deserializer: D) -> Result<T, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            let bytes = <Vec<u8>>::deserialize(deserializer)?;
+            T::decode_bytes(bytes).map_err(serde::de::Error::custom)
         }
     }
 }

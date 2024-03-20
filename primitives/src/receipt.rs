@@ -12,15 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use alloy_consensus::{Receipt, ReceiptWithBloom};
-use alloy_eips::eip2718::{Decodable2718, Eip2718Error, Encodable2718};
-use alloy_network::Receipt as _;
+use alloy_consensus::TxReceipt;
+pub use alloy_consensus::{Receipt, ReceiptEnvelope as EthReceiptEnvelope, ReceiptWithBloom};
+use alloy_eips::eip2718::{Decodable2718, Encodable2718};
 use alloy_primitives::{Bloom, Log, TxNumber};
 use alloy_rlp::{Decodable, Encodable};
 use alloy_rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::{transactions::TxType, RlpBytes};
+use crate::{
+    transactions::{optimism::OPTIMISM_DEPOSITED_TX_TYPE, TxType},
+    RlpBytes,
+};
 
 /// Represents a minimal EVM transaction receipt.
 pub trait EvmReceipt: Encodable + Decodable {
@@ -36,88 +39,58 @@ pub trait EvmReceipt: Encodable + Decodable {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReceiptEnvelope {
-    /// Receipt envelope with no type flag.
-    Legacy(ReceiptWithBloom),
-    /// Receipt envelope with type flag 1, containing a [EIP-2930] receipt.
-    Eip2930(ReceiptWithBloom),
-    /// Receipt envelope with type flag 2, containing a [EIP-1559] receipt.
-    Eip1559(ReceiptWithBloom),
-    /// Receipt envelope with type flag 2, containing a [EIP-4844] receipt.
-    Eip4844(ReceiptWithBloom),
+    Ethereum(EthReceiptEnvelope),
     /// Receipt envelope with type flag 0x7e, containing a [OptimismDepositReceipt].
     OptimismDeposit(OptimismDepositReceipt),
 }
 
-impl ReceiptEnvelope {
-    /// Return the [`TxType`] of the inner txn.
-    pub const fn tx_type(&self) -> TxType {
-        match self {
-            Self::Legacy(_) => TxType::Legacy,
-            Self::Eip2930(_) => TxType::Eip2930,
-            Self::Eip1559(_) => TxType::Eip1559,
-            Self::Eip4844(_) => TxType::Eip4844,
-            Self::OptimismDeposit(_) => TxType::OptimismDeposit,
-        }
-    }
-
-    fn inner_encode(&self, out: &mut dyn alloy_rlp::BufMut) {
-        match self {
-            Self::Legacy(t) => t.encode(out),
-            Self::Eip2930(t) => t.encode(out),
-            Self::Eip1559(t) => t.encode(out),
-            Self::Eip4844(t) => t.encode(out),
-            Self::OptimismDeposit(t) => t.encode(out),
-        }
-    }
-
-    fn inner_length(&self) -> usize {
-        match self {
-            Self::Legacy(t) => t.length(),
-            Self::Eip2930(t) => t.length(),
-            Self::Eip1559(t) => t.length(),
-            Self::Eip4844(t) => t.length(),
-            Self::OptimismDeposit(t) => t.length(),
-        }
-    }
-}
+impl ReceiptEnvelope {}
 
 impl EvmReceipt for ReceiptEnvelope {
     fn success(&self) -> bool {
         match self {
-            Self::Legacy(r) => r.success(),
-            Self::Eip2930(r) => r.success(),
-            Self::Eip1559(r) => r.success(),
-            Self::Eip4844(r) => r.success(),
+            Self::Ethereum(eth) => match eth {
+                EthReceiptEnvelope::Legacy(r) => r.success(),
+                EthReceiptEnvelope::Eip2930(r) => r.success(),
+                EthReceiptEnvelope::Eip1559(r) => r.success(),
+                EthReceiptEnvelope::Eip4844(r) => r.success(),
+            },
             Self::OptimismDeposit(r) => r.success,
         }
     }
 
     fn cumulative_gas_used(&self) -> u64 {
         match self {
-            Self::Legacy(r) => r.cumulative_gas_used(),
-            Self::Eip2930(r) => r.cumulative_gas_used(),
-            Self::Eip1559(r) => r.cumulative_gas_used(),
-            Self::Eip4844(r) => r.cumulative_gas_used(),
+            Self::Ethereum(eth) => match eth {
+                EthReceiptEnvelope::Legacy(r) => r.cumulative_gas_used(),
+                EthReceiptEnvelope::Eip2930(r) => r.cumulative_gas_used(),
+                EthReceiptEnvelope::Eip1559(r) => r.cumulative_gas_used(),
+                EthReceiptEnvelope::Eip4844(r) => r.cumulative_gas_used(),
+            },
             Self::OptimismDeposit(r) => r.cumulative_gas_used,
         }
     }
 
     fn logs(&self) -> &[Log] {
         match self {
-            Self::Legacy(r) => r.logs(),
-            Self::Eip2930(r) => r.logs(),
-            Self::Eip1559(r) => r.logs(),
-            Self::Eip4844(r) => r.logs(),
+            Self::Ethereum(eth) => match eth {
+                EthReceiptEnvelope::Legacy(r) => r.logs(),
+                EthReceiptEnvelope::Eip2930(r) => r.logs(),
+                EthReceiptEnvelope::Eip1559(r) => r.logs(),
+                EthReceiptEnvelope::Eip4844(r) => r.logs(),
+            },
             Self::OptimismDeposit(r) => &r.logs,
         }
     }
 
     fn logs_bloom(&self) -> &Bloom {
         match self {
-            Self::Legacy(r) => &r.bloom,
-            Self::Eip2930(r) => &r.bloom,
-            Self::Eip1559(r) => &r.bloom,
-            Self::Eip4844(r) => &r.bloom,
+            Self::Ethereum(eth) => match eth {
+                EthReceiptEnvelope::Legacy(r) => &r.bloom,
+                EthReceiptEnvelope::Eip2930(r) => &r.bloom,
+                EthReceiptEnvelope::Eip1559(r) => &r.bloom,
+                EthReceiptEnvelope::Eip4844(r) => &r.bloom,
+            },
             Self::OptimismDeposit(r) => &r.logs_bloom,
         }
     }
@@ -156,56 +129,50 @@ impl Encodable for ReceiptEnvelope {
 impl Decodable for ReceiptEnvelope {
     #[inline]
     fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
-        match Self::decode_2718(buf) {
-            Ok(tx) => Ok(tx),
-            Err(Eip2718Error::RlpError(e)) => Err(e),
-            Err(_) => Err(alloy_rlp::Error::Custom("Unexpected type")),
-        }
+        Self::decode_2718(buf)
     }
 }
 
 impl Encodable2718 for ReceiptEnvelope {
     fn type_flag(&self) -> Option<u8> {
         match self {
-            Self::Legacy(_) => None,
-            Self::Eip2930(_) => Some(TxType::Eip2930 as u8),
-            Self::Eip1559(_) => Some(TxType::Eip1559 as u8),
-            Self::Eip4844(_) => Some(TxType::Eip4844 as u8),
+            Self::Ethereum(eth) => eth.type_flag(),
             Self::OptimismDeposit(_) => Some(TxType::OptimismDeposit as u8),
         }
     }
 
     fn encode_2718_len(&self) -> usize {
         match self {
-            Self::Legacy(tx) => tx.length(),
-            _ => 1 + self.inner_length(),
+            Self::Ethereum(eth) => eth.encode_2718_len(),
+            Self::OptimismDeposit(op) => 1 + op.length(),
         }
     }
 
     fn encode_2718(&self, out: &mut dyn bytes::BufMut) {
         match self {
-            Self::Legacy(tx) => tx.encode(out),
-            _ => {
-                out.put_u8(self.tx_type() as u8);
-                self.inner_encode(out);
+            Self::Ethereum(eth) => Encodable2718::encode_2718(eth, out),
+            Self::OptimismDeposit(op) => {
+                out.put_u8(OPTIMISM_DEPOSITED_TX_TYPE);
+                op.encode(out);
             }
         }
     }
 }
 
 impl Decodable2718 for ReceiptEnvelope {
-    fn typed_decode(ty: u8, buf: &mut &[u8]) -> Result<Self, Eip2718Error> {
-        match ty.try_into()? {
-            TxType::Legacy => unreachable!(),
-            TxType::Eip2930 => Ok(Self::Eip2930(Decodable::decode(buf)?)),
-            TxType::Eip1559 => Ok(Self::Eip1559(Decodable::decode(buf)?)),
-            TxType::Eip4844 => Ok(Self::Eip4844(Decodable::decode(buf)?)),
-            TxType::OptimismDeposit => Ok(Self::OptimismDeposit(Decodable::decode(buf)?)),
+    fn typed_decode(ty: u8, buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
+        match ty {
+            OPTIMISM_DEPOSITED_TX_TYPE => Ok(Self::OptimismDeposit(Decodable::decode(buf)?)),
+            _ => Ok(ReceiptEnvelope::Ethereum(EthReceiptEnvelope::typed_decode(
+                ty, buf,
+            )?)),
         }
     }
 
-    fn fallback_decode(buf: &mut &[u8]) -> Result<Self, Eip2718Error> {
-        Ok(Self::Legacy(Decodable::decode(buf)?))
+    fn fallback_decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
+        Ok(ReceiptEnvelope::Ethereum(
+            EthReceiptEnvelope::fallback_decode(buf)?,
+        ))
     }
 }
 
@@ -282,7 +249,7 @@ mod tests {
             ]))
             .unwrap(),
         };
-        let envelop = ReceiptEnvelope::Legacy(receipt.into());
+        let envelop = ReceiptEnvelope::Ethereum(EthReceiptEnvelope::Legacy(receipt.into()));
         assert_eq!(envelop.encoded_2718(), expected);
     }
 
@@ -312,7 +279,7 @@ mod tests {
             ]))
             .unwrap(),
         };
-        let envelop = ReceiptEnvelope::Eip2930(receipt.into());
+        let envelop = ReceiptEnvelope::Ethereum(EthReceiptEnvelope::Eip2930(receipt.into()));
         assert_eq!(envelop.encoded_2718(), expected);
     }
 
@@ -342,7 +309,7 @@ mod tests {
             ]))
             .unwrap(),
         };
-        let envelop = ReceiptEnvelope::Eip1559(receipt.into());
+        let envelop = ReceiptEnvelope::Ethereum(EthReceiptEnvelope::Eip1559(receipt.into()));
         assert_eq!(envelop.encoded_2718(), expected);
     }
 }

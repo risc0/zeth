@@ -25,8 +25,8 @@ use revm::{
 use ruint::aliases::U256;
 use zeth_primitives::{
     alloy_rlp,
-    receipt::{Receipt, ReceiptEnvelope},
-    transactions::{EvmTransaction, TxEnvelope, TxType},
+    receipt::{EthReceiptEnvelope, Receipt, ReceiptEnvelope},
+    transactions::{EthTxEnvelope, EvmTransaction, TxEnvelope, TxType},
     trie::MptNode,
     Address, Bloom,
 };
@@ -172,7 +172,7 @@ impl TxExecStrategy for EthTxExecStrategy {
                 trace!("Tx no. {} (hash: {})", tx_no, tx_hash);
                 trace!("  Type: {:?}", tx.tx_type());
                 trace!("  Fr: {:?}", tx_from);
-                trace!("  To: {:?}", tx.to().unwrap_or_default());
+                trace!("  To: {:?}", tx.to().to().unwrap_or_default());
             }
 
             // validate transaction gas
@@ -183,8 +183,8 @@ impl TxExecStrategy for EthTxExecStrategy {
             }
 
             // validity blob gas
-            if let TxEnvelope::Eip4844(signed) = &tx {
-                let tx = signed.tx();
+            if let TxEnvelope::Ethereum(EthTxEnvelope::Eip4844(blob_tx)) = &tx {
+                let tx = blob_tx.tx().tx();
                 blob_gas_used = blob_gas_used.checked_add(tx.blob_gas()).unwrap();
                 ensure!(
                     blob_gas_used <= MAX_BLOB_GAS_PER_BLOCK,
@@ -193,8 +193,12 @@ impl TxExecStrategy for EthTxExecStrategy {
                 );
             }
 
+            let TxEnvelope::Ethereum(essence) = &tx else {
+                unreachable!("OptimismDeposit transactions are not supported")
+            };
+
             // process the transaction
-            fill_eth_tx_env(&mut evm.env_mut().tx, &tx, tx_from);
+            fill_eth_tx_env(&mut evm.env_mut().tx, essence, tx_from);
             let ResultAndState { result, state } = evm
                 .transact()
                 .map_err(|evm_err| anyhow!("Error at transaction {}: {:?}", tx_no, evm_err))
@@ -211,7 +215,7 @@ impl TxExecStrategy for EthTxExecStrategy {
             let receipt = Receipt {
                 success: result.is_success(),
                 cumulative_gas_used,
-                logs: result.logs(),
+                logs: result.into_logs(),
             }
             .with_bloom();
 
@@ -220,10 +224,10 @@ impl TxExecStrategy for EthTxExecStrategy {
 
             // create the EIP-2718 enveloped receipt
             let receipt = match tx.tx_type() {
-                TxType::Legacy => ReceiptEnvelope::Legacy(receipt),
-                TxType::Eip2930 => ReceiptEnvelope::Eip2930(receipt),
-                TxType::Eip1559 => ReceiptEnvelope::Eip1559(receipt),
-                TxType::Eip4844 => ReceiptEnvelope::Eip4844(receipt),
+                TxType::Legacy => ReceiptEnvelope::Ethereum(EthReceiptEnvelope::Legacy(receipt)),
+                TxType::Eip2930 => ReceiptEnvelope::Ethereum(EthReceiptEnvelope::Eip2930(receipt)),
+                TxType::Eip1559 => ReceiptEnvelope::Ethereum(EthReceiptEnvelope::Eip1559(receipt)),
+                TxType::Eip4844 => ReceiptEnvelope::Ethereum(EthReceiptEnvelope::Eip4844(receipt)),
                 TxType::OptimismDeposit => unreachable!(),
             };
 
@@ -315,13 +319,15 @@ impl TxExecStrategy for EthTxExecStrategy {
         // Leak memory, save cycles
         guest_mem_forget([tx_trie, receipt_trie, withdrawals_trie]);
         // Return block builder with updated database
-        Ok(block_builder.with_db(evm.context.evm.db))
+        Ok(block_builder.with_db(evm.context.evm.inner.db))
     }
 }
 
-pub fn fill_eth_tx_env(tx_env: &mut TxEnv, essence: &TxEnvelope, caller: Address) {
+pub fn fill_eth_tx_env(tx_env: &mut TxEnv, essence: &EthTxEnvelope, caller: Address) {
     match essence {
-        TxEnvelope::Legacy(tx) => {
+        EthTxEnvelope::Legacy(tx) => {
+            let tx = tx.tx();
+
             tx_env.caller = caller;
             tx_env.gas_limit = tx.gas_limit;
             tx_env.gas_price = U256::from(tx.gas_price);
@@ -339,7 +345,9 @@ pub fn fill_eth_tx_env(tx_env: &mut TxEnv, essence: &TxEnvelope, caller: Address
             tx_env.blob_hashes.clear();
             tx_env.max_fee_per_blob_gas.take();
         }
-        TxEnvelope::Eip2930(tx) => {
+        EthTxEnvelope::Eip2930(tx) => {
+            let tx = tx.tx();
+
             tx_env.caller = caller;
             tx_env.gas_limit = tx.gas_limit;
             tx_env.gas_price = U256::from(tx.gas_price);
@@ -357,7 +365,9 @@ pub fn fill_eth_tx_env(tx_env: &mut TxEnv, essence: &TxEnvelope, caller: Address
             tx_env.blob_hashes.clear();
             tx_env.max_fee_per_blob_gas.take();
         }
-        TxEnvelope::Eip1559(tx) => {
+        EthTxEnvelope::Eip1559(tx) => {
+            let tx = tx.tx();
+
             tx_env.caller = caller;
             tx_env.gas_limit = tx.gas_limit;
             tx_env.gas_price = U256::from(tx.max_fee_per_gas);
@@ -375,7 +385,9 @@ pub fn fill_eth_tx_env(tx_env: &mut TxEnv, essence: &TxEnvelope, caller: Address
             tx_env.blob_hashes.clear();
             tx_env.max_fee_per_blob_gas.take();
         }
-        TxEnvelope::Eip4844(tx) => {
+        EthTxEnvelope::Eip4844(tx) => {
+            let tx = tx.tx().tx();
+
             tx_env.caller = caller;
             tx_env.gas_limit = tx.gas_limit;
             tx_env.gas_price = U256::from(tx.max_fee_per_gas);
@@ -393,7 +405,6 @@ pub fn fill_eth_tx_env(tx_env: &mut TxEnv, essence: &TxEnvelope, caller: Address
             tx_env.blob_hashes = tx.blob_versioned_hashes.clone();
             tx_env.max_fee_per_blob_gas = Some(U256::from(tx.max_fee_per_blob_gas));
         }
-        _ => unreachable!(),
     };
 }
 

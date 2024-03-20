@@ -19,7 +19,7 @@ use revm::{
     primitives::{calc_excess_blob_gas as calculate_excess_blob_gas, SpecId},
     Database, DatabaseCommit,
 };
-use zeth_primitives::block::Header;
+use zeth_primitives::Header;
 
 use crate::{
     builder::BlockBuilder,

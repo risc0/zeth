@@ -32,8 +32,8 @@ use zeth_lib::{
     output::BlockBuildOutput,
 };
 use zeth_primitives::{
-    block::Header,
     mmr::{MerkleMountainRange, MerkleProof},
+    Header,
 };
 
 use crate::{

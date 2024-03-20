@@ -13,13 +13,16 @@
 // limitations under the License.
 
 use serde::{Deserialize, Serialize};
-use zeth_primitives::{block::Header, trie::MptNode, B256};
+use serde_with::serde_as;
+use zeth_primitives::{serde_with::RlpBytes, trie::MptNode, Header, B256};
 
 /// Output of block execution
+#[serde_as]
 #[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 pub enum BlockBuildOutput {
     SUCCESS {
         hash: B256,
+        #[serde_as(as = "RlpBytes")]
         head: Header,
         state: MptNode,
         state_input_hash: B256,

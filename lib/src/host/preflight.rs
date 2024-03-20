@@ -22,16 +22,15 @@ use anyhow::{anyhow, Context, Result};
 use ethers_core::types::{
     Block as EthersBlock, EIP1186ProofResponse, Transaction as EthersTransaction,
 };
-use hashbrown::{HashMap, HashSet};
 use log::{debug, info};
+use revm::primitives::{HashMap, HashSet};
 use zeth_primitives::{
-    block::Header,
-    ethers::{from_ethers_block, from_ethers_h160, from_ethers_h256},
+    ethers::{from_ethers_block, from_ethers_h160, from_ethers_h256, from_ethers_u256},
     keccak::keccak,
     transactions::TxEnvelope,
     trie::{MptNode, MptNodeReference},
     withdrawal::Withdrawal,
-    Address, B256, U256,
+    Address, Header, B256, U256,
 };
 
 use crate::{
@@ -317,7 +316,7 @@ fn proofs_to_tries(
             continue;
         }
 
-        let mut storage_nodes = HashMap::new();
+        let mut storage_nodes = std::collections::HashMap::new();
         let mut storage_root_node = MptNode::default();
         for storage_proof in &proof.storage_proof {
             let proof_nodes =
@@ -336,7 +335,12 @@ fn proofs_to_tries(
 
         // assure that slots can be deleted from the storage trie
         for storage_proof in &fini_proofs.storage_proof {
-            add_orphaned_leafs(storage_proof.key, &storage_proof.proof, &mut storage_nodes)?;
+            let key = from_ethers_u256(storage_proof.key);
+            add_orphaned_leafs(
+                key.to_be_bytes::<32>(),
+                &storage_proof.proof,
+                &mut storage_nodes,
+            )?;
         }
         // create the storage trie, from all the relevant nodes
         let storage_trie = resolve_nodes(&storage_root_node, &storage_nodes);

@@ -15,9 +15,8 @@
 use core::mem;
 
 use anyhow::{bail, Result};
-use hashbrown::HashMap;
 use revm::{
-    primitives::{AccountInfo, Bytecode, B256},
+    primitives::{AccountInfo, Bytecode, HashMap, B256},
     Database, DatabaseCommit,
 };
 use zeth_primitives::{

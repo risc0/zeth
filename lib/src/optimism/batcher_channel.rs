@@ -25,7 +25,7 @@ use zeth_primitives::{
     alloy_rlp::Decodable,
     batch::Batch,
     transactions::{EvmTransaction, TxEnvelope},
-    Address, BlockNumber,
+    Address, BlockNumber, TxKind,
 };
 
 use super::{batcher::BatchWithInclusion, config::ChainConfig};
@@ -66,7 +66,7 @@ impl BatcherChannels {
         for tx in transactions {
             // From the spec:
             // "The receiver must be the configured batcher inbox address."
-            if tx.to() != Some(self.batch_inbox) {
+            if tx.to() != TxKind::Call(self.batch_inbox) {
                 continue;
             }
             // From the spec:

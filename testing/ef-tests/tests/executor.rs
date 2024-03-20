@@ -16,11 +16,10 @@
 
 use std::path::PathBuf;
 
-use risc0_zkvm::{ExecutorEnv, ExecutorImpl, FileSegmentRef};
+use risc0_zkvm::{ExecutorEnv, ExecutorImpl};
 use rstest::rstest;
-use tempfile::tempdir;
 use zeth_lib::output::BlockBuildOutput;
-use zeth_primitives::block::Header;
+use zeth_primitives::Header;
 use zeth_testeth::{
     create_input,
     ethtests::{read_eth_test, EthTestCase},
@@ -83,14 +82,9 @@ fn executor(
             .unwrap()
             .build()
             .unwrap();
-        let mut exec = ExecutorImpl::from_elf(env, TEST_GUEST_ELF).unwrap();
 
-        let segment_dir = tempdir().unwrap();
-        let session = exec
-            .run_with_callback(|segment| {
-                Ok(Box::new(FileSegmentRef::new(&segment, segment_dir.path())?))
-            })
-            .unwrap();
+        let mut exec = ExecutorImpl::from_elf(env, TEST_GUEST_ELF).unwrap();
+        let session = exec.run().unwrap();
         println!("Generated {} segments", session.segments.len());
 
         let build_output: BlockBuildOutput = session.journal.unwrap().decode().unwrap();

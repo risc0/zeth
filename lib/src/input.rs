@@ -113,21 +113,19 @@ sol! {
 
     #[derive(Debug, Default, Deserialize, Serialize)]
     struct BlockMetadata {
-        bytes32 l1Hash; // slot 1
-        bytes32 difficulty; // slot 2
-        bytes32 blobHash; //or txListHash (if Blob not yet supported), // slot 3
-        bytes32 extraData; // slot 4
-        bytes32 depositsHash; // slot 5
-        address coinbase; // L2 coinbase, // slot 6
+        bytes32 l1Hash;
+        bytes32 difficulty;
+        bytes32 blobHash; //or txListHash (if Blob not yet supported)
+        bytes32 extraData;
+        bytes32 depositsHash;
+        address coinbase; // L2 coinbase
         uint64 id;
         uint32 gasLimit;
-        uint64 timestamp; // slot 7
+        uint64 timestamp;
         uint64 l1Height;
-        uint24 txListByteOffset;
-        uint24 txListByteSize;
         uint16 minTier;
         bool blobUsed;
-        bytes32 parentMetaHash; // slot 8
+        bytes32 parentMetaHash;
         address sender;
     }
 
@@ -136,10 +134,6 @@ sol! {
         address assignedProver;
         address coinbase;
         bytes32 extraData;
-        bytes32 blobHash;
-        uint24 txListByteOffset;
-        uint24 txListByteSize;
-        bool cacheBlobForReuse;
         bytes32 parentMetaHash;
         HookCall[] hookCalls;
     }
@@ -296,8 +290,6 @@ impl From<protocol_testnet::BlockProposed> for BlockProposed {
                 gasLimit: item.meta.gasLimit,
                 timestamp: item.meta.timestamp,
                 l1Height: item.meta.l1Height,
-                txListByteOffset: item.meta.txListByteOffset,
-                txListByteSize: item.meta.txListByteSize,
                 minTier: item.meta.minTier,
                 blobUsed: item.meta.blobUsed,
                 parentMetaHash: item.meta.parentMetaHash,

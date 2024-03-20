@@ -16,6 +16,10 @@ pub const GOLDEN_TOUCH_ACCOUNT: Lazy<Address> = Lazy::new(|| {
     Address::from_str("0x0000777735367b36bC9B61C50022d9D0700dB4Ec")
         .expect("invalid golden touch account")
 });
+pub const SGX_VERIFIER_ADDRESS: Lazy<Address> = Lazy::new(|| {
+    Address::from_str("0xA4702E22F8807Df82Fe5B6dDdd99eB3Fcb0237B0")
+        .expect("invalid sgx verifier contract address")
+});
 
 macro_rules! taiko_contracts {
     ($name:ident) => {{
@@ -73,10 +77,13 @@ pub mod internal_devnet_b {
     });
 }
 
+pub fn decode_transactions(tx_list: &[u8]) -> Vec<TxEnvelope> {
+    alloy_rlp::Decodable::decode(&mut &tx_list.to_owned()[..]).unwrap_or_default()
+}
+
 pub fn generate_transactions(tx_list: &[u8], anchor_tx: AlloyTransaction) -> Vec<TxEnvelope> {
     // Decode the transactions from the tx list
-    let mut transactions: Vec<TxEnvelope> =
-        alloy_rlp::Decodable::decode(&mut &tx_list.to_owned()[..]).unwrap_or_default();
+    let mut transactions = decode_transactions(tx_list);
     // Create a tx from the anchor tx that has the same type as the transactions encoded from
     // the tx list
     let signed_eip1559_tx = Signed::<TxEip1559>::new_unchecked(

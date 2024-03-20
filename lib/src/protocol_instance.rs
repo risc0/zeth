@@ -110,8 +110,6 @@ pub fn assemble_protocol_instance(
             gasLimit: (gas_limit - ANCHOR_GAS_LIMIT) as u32,
             timestamp: header.timestamp.try_into().unwrap(),
             l1Height: input.taiko.l1_header.number.try_into().unwrap(),
-            txListByteOffset: 0u32,
-            txListByteSize: input.taiko.tx_list.len() as u32,
             minTier: input.taiko.block_proposed.meta.minTier,
             blobUsed: blob_used,
             parentMetaHash: input.taiko.block_proposed.meta.parentMetaHash,

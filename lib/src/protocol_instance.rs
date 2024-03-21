@@ -1,10 +1,14 @@
+use alloy_consensus::Header as AlloyConsensusHeader;
 use alloy_primitives::{Address, TxHash, B256};
 use alloy_sol_types::SolValue;
 use anyhow::{ensure, Result};
-use zeth_primitives::{block::Header, keccak::keccak, transactions::ethereum::EthereumTxEssence};
+use zeth_primitives::keccak::keccak;
 
 use super::taiko_utils::ANCHOR_GAS_LIMIT;
-use crate::input::{BlockMetadata, EthDeposit, GuestInput, Transition};
+use crate::{
+    input::{BlockMetadata, EthDeposit, GuestInput, Transition},
+    taiko_utils::HeaderHasher,
+};
 
 #[derive(Debug)]
 pub struct ProtocolInstance {
@@ -67,8 +71,8 @@ pub enum EvidenceType {
 
 // TODO(cecilia): rewrite
 pub fn assemble_protocol_instance(
-    input: &GuestInput<EthereumTxEssence>,
-    header: &Header,
+    input: &GuestInput,
+    header: &AlloyConsensusHeader,
 ) -> Result<ProtocolInstance> {
     let blob_used = input.taiko.block_proposed.meta.blobUsed;
     let tx_list_hash = if blob_used {
@@ -92,13 +96,11 @@ pub fn assemble_protocol_instance(
         transition: Transition {
             parentHash: header.parent_hash,
             blockHash: header.hash(),
-            signalRoot: input.taiko.l1_header.state_root,
+            stateRoot: input.taiko.l1_header.state_root,
             graffiti: input.taiko.prover_data.graffiti,
         },
         block_metadata: BlockMetadata {
-            // TODO(Brecht): fix L1 block hash calculation in cancun
-            // l1Hash: input.taiko.l1_header.hash(),
-            l1Hash: input.taiko.block_proposed.meta.l1Hash,
+            l1Hash: input.taiko.l1_header.hash(),
             difficulty: input.taiko.block_proposed.meta.difficulty,
             blobHash: tx_list_hash,
             extraData: bytes_to_bytes32(&header.extra_data).into(),
@@ -107,9 +109,7 @@ pub fn assemble_protocol_instance(
             id: header.number,
             gasLimit: (gas_limit - ANCHOR_GAS_LIMIT) as u32,
             timestamp: header.timestamp.try_into().unwrap(),
-            l1Height: input.taiko.l1_header.number,
-            txListByteOffset: 0u32,
-            txListByteSize: input.taiko.tx_list.len() as u32,
+            l1Height: input.taiko.l1_header.number.try_into().unwrap(),
             minTier: input.taiko.block_proposed.meta.minTier,
             blobUsed: blob_used,
             parentMetaHash: input.taiko.block_proposed.meta.parentMetaHash,

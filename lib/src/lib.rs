@@ -26,8 +26,6 @@ pub mod mem_db;
 pub mod protocol_instance;
 pub mod taiko_utils;
 
-pub use zeth_primitives::transactions::ethereum::EthereumTxEssence;
-
 /// call forget only if running inside the guest
 pub fn guest_mem_forget<T>(_t: T) {
     #[cfg(target_os = "zkvm")] // TODO: seperate for risc0

@@ -14,13 +14,12 @@
 
 use core::mem;
 
+use alloy_consensus::Header as AlloyConsensusHeader;
 use anyhow::Result;
 use revm::{Database, DatabaseCommit};
 use zeth_primitives::{
-    block::Header,
     keccak::keccak,
     mpt::{MptNode, StateAccount},
-    transactions::TxEssence,
 };
 
 use crate::{
@@ -34,18 +33,14 @@ where
     D: Database + DatabaseCommit,
     <D as Database>::Error: core::fmt::Debug,
 {
-    fn finalize<E>(block_builder: BlockBuilder<D, E>) -> Result<(Header, MptNode)>
-    where
-        E: TxEssence;
+    fn finalize(block_builder: BlockBuilder<D>) -> Result<(AlloyConsensusHeader, MptNode)>;
 }
 
 pub struct MemDbBlockFinalizeStrategy {}
 
 impl BlockFinalizeStrategy<MemDb> for MemDbBlockFinalizeStrategy {
-    fn finalize<E: TxEssence>(
-        mut block_builder: BlockBuilder<MemDb, E>,
-    ) -> Result<(Header, MptNode)> {
-        let db = block_builder.db.take().expect("DB not initialized");
+    fn finalize(mut block_builder: BlockBuilder<MemDb>) -> Result<(AlloyConsensusHeader, MptNode)> {
+        let db: MemDb = block_builder.db.take().expect("DB not initialized");
 
         // apply state updates
         let mut state_trie = mem::take(&mut block_builder.input.parent_state_trie);

@@ -17,6 +17,7 @@ extern crate alloc;
 
 use alloc::{collections::BTreeMap, str::FromStr};
 
+use alloy_primitives::Address;
 use anyhow::bail;
 use once_cell::unsync::Lazy;
 use revm::primitives::SpecId;
@@ -27,11 +28,6 @@ use zeth_primitives::{uint, BlockNumber, ChainId, U256};
 pub const ZERO: U256 = U256::ZERO;
 /// U256 representation of 1.
 pub const ONE: U256 = uint!(1_U256);
-
-/// The bound divisor of the gas limit,
-pub const GAS_LIMIT_BOUND_DIVISOR: U256 = uint!(1024_U256);
-/// Minimum the gas limit may ever be.
-pub const MIN_GAS_LIMIT: U256 = uint!(5000_U256);
 
 /// Maximum size of extra data.
 pub const MAX_EXTRA_DATA_BYTES: usize = 32;
@@ -59,11 +55,13 @@ pub const ETH_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| {
             base_fee_max_decrease_denominator: uint!(8_U256),
             elasticity_multiplier: uint!(2_U256),
         },
+        l1_contract: None,
+        l2_contract: None,
     }
 });
 
-/// The Taiko testnet specification.
-pub const TKO_TESTNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
+/// The Taiko A6 specification.
+pub const TAIKO_A6_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
     chain_id: 167008,
     hard_forks: BTreeMap::from([
         (SpecId::SHANGHAI, ForkCondition::Block(0)),
@@ -75,10 +73,12 @@ pub const TKO_TESTNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
         base_fee_max_decrease_denominator: uint!(8_U256),
         elasticity_multiplier: uint!(2_U256),
     },
+    l1_contract: Some(Address::from_str("0xB20BB9105e007Bd3E0F73d63D4D3dA2c8f736b77").unwrap()),
+    l2_contract: Some(Address::from_str("0x1670080000000000000000000000000000010001").unwrap()),
 });
 
-/// The Taiko testnet specification.
-pub const TKO_DEVNETA_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
+/// The Taiko A7 specification.
+pub const TAIKO_A7_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
     chain_id: 167001,
     hard_forks: BTreeMap::from([
         (SpecId::SHANGHAI, ForkCondition::Block(0)),
@@ -90,17 +90,17 @@ pub const TKO_DEVNETA_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
         base_fee_max_decrease_denominator: uint!(8_U256),
         elasticity_multiplier: uint!(2_U256),
     },
+    l1_contract: Some(Address::from_str("0x78155FaC733356cbA069245A435Eb114e7fd815d").unwrap()),
+    l2_contract: Some(Address::from_str("0x1670010000000000000000000000000000010001").unwrap()),
 });
 
-pub fn get_chain_spec(name: &str) -> ChainSpec {
-    match name {
-        "testnet" => TKO_TESTNET_CHAIN_SPEC.clone(),
-        "internal_devnet_a" => TKO_DEVNETA_CHAIN_SPEC.clone(),
-        _ => unimplemented!("invalid chain name: {name}"),
+pub fn get_network_spec(network: Network) -> ChainSpec {
+    match network {
+        Network::TaikoA6 => TAIKO_A6_CHAIN_SPEC.clone(),
+        Network::TaikoA7 => TAIKO_A7_CHAIN_SPEC.clone(),
+        _ => unimplemented!("invalid chain name: {:?}", network),
     }
 }
-
-pub use crate::taiko_utils::testnet::*;
 
 /// The condition at which a fork is activated.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -148,6 +148,8 @@ pub struct ChainSpec {
     pub chain_id: ChainId,
     pub hard_forks: BTreeMap<SpecId, ForkCondition>,
     pub eip_1559_constants: Eip1559Constants,
+    pub l1_contract: Option<Address>,
+    pub l2_contract: Option<Address>,
 }
 
 impl ChainSpec {
@@ -161,6 +163,8 @@ impl ChainSpec {
             chain_id,
             hard_forks: BTreeMap::from([(spec_id, ForkCondition::Block(0))]),
             eip_1559_constants,
+            l1_contract: None,
+            l2_contract: None,
         }
     }
     /// Returns the network chain ID.
@@ -182,13 +186,15 @@ impl ChainSpec {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Network {
     /// The Ethereum Mainnet
     #[default]
     Ethereum,
-    /// The Taiko Mainnet
-    Taiko,
+    /// Taiko A6 tesnet
+    TaikoA6,
+    /// Taiko A7 tesnet
+    TaikoA7,
 }
 
 impl FromStr for Network {
@@ -197,7 +203,8 @@ impl FromStr for Network {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "ethereum" => Ok(Network::Ethereum),
-            "taiko" => Ok(Network::Taiko),
+            "taiko_a6" => Ok(Network::TaikoA6),
+            "taiko_a7" => Ok(Network::TaikoA7),
             #[allow(clippy::needless_return)]
             _ => bail!("Unknown network"),
         }
@@ -208,7 +215,8 @@ impl ToString for Network {
     fn to_string(&self) -> String {
         match self {
             Network::Ethereum => String::from("ethereum"),
-            Network::Taiko => String::from("taiko"),
+            Network::TaikoA6 => String::from("taiko_a6"),
+            Network::TaikoA7 => String::from("taiko_a7"),
         }
     }
 }

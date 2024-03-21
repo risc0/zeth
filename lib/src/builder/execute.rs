@@ -14,33 +14,24 @@
 
 use core::{fmt::Debug, mem::take, str::from_utf8};
 
-use anyhow::{anyhow, bail, Context, Result};
+use alloy_consensus::{TxEnvelope, TxKind};
+use anyhow::{anyhow, bail, Context, Error, Result};
 #[cfg(feature = "std")]
 use log::debug;
 use revm::{
     interpreter::Host,
-    primitives::{
-        Account, Address, EVMError, InvalidTransaction, ResultAndState, SpecId, TransactTo, TxEnv,
-    },
+    primitives::{Account, Address, EVMError, ResultAndState, SpecId, TransactTo, TxEnv},
     taiko, Database, DatabaseCommit, Evm,
 };
 use ruint::aliases::U256;
-use zeth_primitives::{
-    mpt::MptNode,
-    receipt::Receipt,
-    transactions::{
-        ethereum::{EthereumTxEssence, TransactionKind},
-        TxEssence,
-    },
-    Bloom, RlpBytes,
-};
+use zeth_primitives::{mpt::MptNode, receipt::Receipt, Bloom, RlpBytes};
 
 use super::TxExecStrategy;
 use crate::{
     builder::BlockBuilder,
-    consts::{self, ChainSpec, GWEI_TO_WEI},
+    consts::{get_network_spec, Network, GWEI_TO_WEI},
     guest_mem_forget,
-    taiko_utils::{check_anchor_tx, generate_transactions, generate_transactions_2, get_contracts},
+    taiko_utils::{check_anchor_tx, generate_transactions},
 };
 
 /// Minimum supported protocol version: Bedrock (Block no. 105235063).
@@ -48,10 +39,8 @@ const MIN_SPEC_ID: SpecId = SpecId::SHANGHAI /*change*/;
 
 pub struct TkoTxExecStrategy {}
 
-impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
-    fn execute_transactions<D>(
-        mut block_builder: BlockBuilder<D, EthereumTxEssence>,
-    ) -> Result<BlockBuilder<D, EthereumTxEssence>>
+impl TxExecStrategy for TkoTxExecStrategy {
+    fn execute_transactions<D>(mut block_builder: BlockBuilder<D>) -> Result<BlockBuilder<D>>
     where
         D: Database + DatabaseCommit,
         <D as Database>::Error: Debug,
@@ -68,28 +57,10 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
         let chain_id = block_builder.chain_spec.chain_id();
 
         // generate the transactions from the tx list
-        let mut transactions = generate_transactions_2(
+        let mut transactions = generate_transactions(
             &block_builder.input.taiko.tx_list,
-            block_builder.input.taiko.anchor_tx.clone().unwrap(),
+            serde_json::from_str(&block_builder.input.taiko.anchor_tx.clone()).unwrap(),
         );
-
-        #[cfg(feature = "std")]
-        {
-            use chrono::{TimeZone, Utc};
-            use log::info;
-            let dt = Utc
-                .timestamp_opt(block_builder.input.timestamp.try_into().unwrap(), 0)
-                .unwrap();
-
-            info!("Block no. {}", header.number);
-            info!("  EVM spec ID: {spec_id:?}");
-            info!("  Timestamp: {dt}");
-            info!("  Transactions: {}", transactions.len());
-            info!("  Fee Recipient: {:?}", block_builder.input.beneficiary);
-            info!("  Gas limit: {}", block_builder.input.gas_limit);
-            info!("  Base fee per gas: {}", header.base_fee_per_gas);
-            info!("  Extra data: {:?}", block_builder.input.extra_data);
-        }
 
         let mut evm = Evm::builder()
             .spec_id(spec_id)
@@ -102,11 +73,11 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
                 // set the EVM block environment
                 blk_env.number = U256::from(header.number);
                 blk_env.coinbase = block_builder.input.beneficiary;
-                blk_env.timestamp = header.timestamp;
+                blk_env.timestamp = header.timestamp.try_into().unwrap();
                 blk_env.difficulty = U256::ZERO;
                 blk_env.prevrandao = Some(header.mix_hash);
-                blk_env.basefee = header.base_fee_per_gas;
-                blk_env.gas_limit = block_builder.input.gas_limit;
+                blk_env.basefee = header.base_fee_per_gas.unwrap().try_into().unwrap();
+                blk_env.gas_limit = block_builder.input.gas_limit.try_into().unwrap();
             })
             .with_db(block_builder.db.take().unwrap())
             .append_handler_register(taiko::handler_register::taiko_handle_register)
@@ -115,7 +86,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
         // bloom filter over all transaction logs
         let mut logs_bloom = Bloom::default();
         // keep track of the gas used over all transactions
-        let mut cumulative_gas_used = consts::ZERO;
+        let mut cumulative_gas_used = 0u64;
 
         // process all the transactions
         let mut tx_trie = MptNode::default();
@@ -123,11 +94,27 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
         // track the actual tx number to use in the tx/receipt trees as the key
         let mut actual_tx_no = 0usize;
         for (tx_no, tx) in take(&mut transactions).into_iter().enumerate() {
-            // anchor transaction must be executed successfully
+            // anchor transaction always the first transaction
             let is_anchor = tx_no == 0;
 
+            // TODO(Brecht): use optimized recover
+            let (tx_gas_limit, from) = match &tx {
+                TxEnvelope::Legacy(tx) => (tx.gas_limit, tx.recover_signer()),
+                TxEnvelope::TaggedLegacy(tx) => (tx.gas_limit, tx.recover_signer()),
+                TxEnvelope::Eip2930(tx) => (tx.gas_limit, tx.recover_signer()),
+                TxEnvelope::Eip1559(tx) => (tx.gas_limit, tx.recover_signer()),
+                TxEnvelope::Eip4844(tx) => (tx.tx().tx().gas_limit, tx.recover_signer()),
+            };
+            // Get the tx type as a number
+            let tx_type = match tx.tx_type() {
+                alloy_consensus::TxType::Legacy => 0,
+                alloy_consensus::TxType::Eip2930 => 1,
+                alloy_consensus::TxType::Eip1559 => 2,
+                alloy_consensus::TxType::Eip4844 => 3,
+            };
+
             // verify the transaction signature
-            let tx_from = match tx.recover_from() {
+            let tx_from = match from {
                 Ok(tx_from) => tx_from,
                 Err(err) => {
                     if is_anchor {
@@ -149,40 +136,36 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
                     &block_builder.input,
                     &tx,
                     &tx_from,
-                    &block_builder.input.taiko.chain_spec_name,
+                    block_builder.input.network,
                 )
                 .expect("invalid anchor tx");
             }
 
-            #[cfg(feature = "std")]
-            {
-                let tx_hash = tx.hash();
-                debug!("Tx no. {tx_no} (hash: {tx_hash})");
-                debug!("  Type: {}", tx.essence.tx_type());
-                debug!("  Fr: {tx_from:?}");
-                debug!("  To: {:?}", tx.essence.to().unwrap_or_default());
-            }
-
             // verify transaction gas
             let block_available_gas = block_builder.input.gas_limit - cumulative_gas_used;
-            if block_available_gas < tx.essence.gas_limit() {
-                bail!("Error at transaction {tx_no}: gas exceeds block limit");
+            if block_available_gas < tx_gas_limit.try_into().unwrap() {
+                if is_anchor {
+                    bail!("Error at transaction {}: gas exceeds block limit", tx_no);
+                }
+                #[cfg(not(target_os = "zkvm"))]
+                debug!("Error at transaction {}: gas exceeds block limit", tx_no);
+                continue;
             }
 
             // setup the transaction
             fill_eth_tx_env(
-                &block_builder.input.taiko.chain_spec_name,
+                block_builder.input.network,
                 &mut evm.env().tx,
-                &tx.essence,
+                &tx,
                 tx_from,
                 is_anchor,
-            );
+            )?;
             // process the transaction
             let ResultAndState { result, state } = match evm.transact() {
                 Ok(result) => result,
                 Err(err) => {
                     if is_anchor {
-                        bail!("Error at transaction {}: {:?}", tx_no, err);
+                        bail!("Anchor tx failed to execute successfully: {:?}", err);
                     }
                     // only continue for invalid tx errors, not db errors (because those can be
                     // manipulated by the prover)
@@ -195,11 +178,13 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
                         }
                         _ => {
                             // any other error is not allowed
-                            bail!("Invalid tx at {}: {:?}", tx_no, err);
+                            bail!("Error at tx {}: {:?}", tx_no, err);
                         }
                     }
                 }
             };
+            #[cfg(feature = "std")]
+            debug!("  Ok: {result:?}");
 
             // anchor tx needs to succeed
             if is_anchor && !result.is_success() {
@@ -209,47 +194,17 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
                 );
             }
 
+            // keep track of all the gas used in the block
             let gas_used = result.gas_used().try_into().unwrap();
             cumulative_gas_used = cumulative_gas_used.checked_add(gas_used).unwrap();
 
-            #[cfg(feature = "std")]
-            debug!("  Ok: {result:?}");
-
             // create the receipt from the EVM result
             let receipt = Receipt::new(
-                tx.essence.tx_type(),
+                tx_type,
                 result.is_success(),
-                cumulative_gas_used,
+                cumulative_gas_used.try_into().unwrap(),
                 result.logs().into_iter().map(|log| log.into()).collect(),
             );
-
-            // update account states
-            #[cfg(feature = "std")]
-            for (address, account) in &state {
-                if account.is_touched() {
-                    // log account
-                    debug!(
-                        "  State {address:?} (is_selfdestructed={}, is_loaded_as_not_existing={}, is_created={})",
-                        account.is_selfdestructed(),
-                        account.is_loaded_as_not_existing(),
-                        account.is_created()
-                    );
-                    // log balance changes
-                    debug!(
-                        "     After balance: {} (Nonce: {})",
-                        account.info.balance, account.info.nonce
-                    );
-
-                    // log state changes
-                    for (addr, slot) in &account.storage {
-                        if slot.is_changed() {
-                            debug!("    Storage address: {addr:?}");
-                            debug!("      Before: {:?}", slot.original_value());
-                            debug!("       After: {:?}", slot.present_value());
-                        }
-                    }
-                }
-            }
 
             // update the state
             evm.context.evm.db.commit(state);
@@ -259,8 +214,15 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
 
             // Add receipt and tx to tries
             let trie_key = actual_tx_no.to_rlp();
-            tx_trie.insert_rlp(&trie_key, tx)?;
+            // This will encode the tx inside an rlp value wrapper
+            let tx_rlp = tx.to_rlp();
+            // Extract the actual tx rlp encoding
+            let tx_rlp = tx_rlp[tx_rlp.len() - tx.inner_length() - 1..].to_vec();
+            tx_trie.insert_rlp_encoded(&trie_key, tx_rlp)?;
+            // Add to receipt trie
             receipt_trie.insert_rlp(&trie_key, receipt)?;
+
+            // If we got here it means the tx is not invalid
             actual_tx_no += 1;
         }
 
@@ -277,12 +239,6 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
                 .checked_mul(withdrawal.amount.try_into().unwrap())
                 .unwrap();
 
-            #[cfg(not(target_os = "zkvm"))]
-            {
-                debug!("Withdrawal no. {}", withdrawal.index);
-                debug!("  Recipient: {:?}", withdrawal.address);
-                debug!("  Value: {}", amount_wei);
-            }
             // Credit withdrawal amount
             increase_account_balance(&mut db, withdrawal.address, amount_wei)?;
             // Add withdrawal to trie
@@ -295,7 +251,7 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
         header.transactions_root = tx_trie.hash();
         header.receipts_root = receipt_trie.hash();
         header.logs_bloom = logs_bloom;
-        header.gas_used = cumulative_gas_used;
+        header.gas_used = cumulative_gas_used.try_into().unwrap();
         header.withdrawals_root = if spec_id < SpecId::SHANGHAI {
             None
         } else {
@@ -310,83 +266,101 @@ impl TxExecStrategy<EthereumTxEssence> for TkoTxExecStrategy {
 }
 
 pub fn fill_eth_tx_env(
-    chain_name: &str,
+    network: Network,
     tx_env: &mut TxEnv,
-    essence: &EthereumTxEssence,
+    tx: &TxEnvelope,
     caller: Address,
     is_anchor: bool,
-) {
+) -> Result<(), Error> {
     // claim the anchor
     tx_env.taiko.is_anchor = is_anchor;
     // set the treasury address
-    tx_env.taiko.treasury = get_contracts(chain_name).unwrap().1;
+    tx_env.taiko.treasury = get_network_spec(network).l2_contract.unwrap();
 
-    match essence {
-        EthereumTxEssence::Legacy(tx) => {
-            tx_env.caller = caller;
+    tx_env.caller = caller;
+    match tx {
+        TxEnvelope::Legacy(tx) => {
             tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
-            tx_env.gas_price = tx.gas_price;
+            tx_env.gas_price = tx.gas_price.try_into().unwrap();
             tx_env.gas_priority_fee = None;
-            tx_env.transact_to = if let TransactionKind::Call(to_addr) = tx.to {
+            tx_env.transact_to = if let TxKind::Call(to_addr) = tx.to {
                 TransactTo::Call(to_addr)
             } else {
                 TransactTo::create()
             };
             tx_env.value = tx.value;
-            tx_env.data = tx.data.clone();
+            tx_env.data = tx.input.clone();
             tx_env.chain_id = tx.chain_id;
             tx_env.nonce = Some(tx.nonce);
             tx_env.access_list.clear();
         }
-        EthereumTxEssence::Eip2930(tx) => {
-            tx_env.caller = caller;
+        TxEnvelope::TaggedLegacy(tx) => {
             tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
-            tx_env.gas_price = tx.gas_price;
+            tx_env.gas_price = tx.gas_price.try_into().unwrap();
             tx_env.gas_priority_fee = None;
-            tx_env.transact_to = if let TransactionKind::Call(to_addr) = tx.to {
+            tx_env.transact_to = if let TxKind::Call(to_addr) = tx.to {
                 TransactTo::Call(to_addr)
             } else {
                 TransactTo::create()
             };
             tx_env.value = tx.value;
-            tx_env.data = tx.data.clone();
+            tx_env.data = tx.input.clone();
+            tx_env.chain_id = tx.chain_id;
+            tx_env.nonce = Some(tx.nonce);
+            tx_env.access_list.clear();
+        }
+        TxEnvelope::Eip2930(tx) => {
+            tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
+            tx_env.gas_price = tx.gas_price.try_into().unwrap();
+            tx_env.gas_priority_fee = None;
+            tx_env.transact_to = if let TxKind::Call(to_addr) = tx.to {
+                TransactTo::Call(to_addr)
+            } else {
+                TransactTo::create()
+            };
+            tx_env.value = tx.value;
+            tx_env.data = tx.input.clone();
             tx_env.chain_id = Some(tx.chain_id);
             tx_env.nonce = Some(tx.nonce);
-            tx_env.access_list = tx.access_list.clone().into();
+            tx_env.access_list = tx.access_list.clone().into_flattened();
         }
-        EthereumTxEssence::Eip1559(tx) => {
+        TxEnvelope::Eip1559(tx) => {
             tx_env.caller = caller;
             tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
-            tx_env.gas_price = tx.max_fee_per_gas;
-            tx_env.gas_priority_fee = Some(tx.max_priority_fee_per_gas);
-            tx_env.transact_to = if let TransactionKind::Call(to_addr) = tx.to {
+            tx_env.gas_price = tx.max_fee_per_gas.try_into().unwrap();
+            tx_env.gas_priority_fee = Some(tx.max_priority_fee_per_gas.try_into().unwrap());
+            tx_env.transact_to = if let TxKind::Call(to_addr) = tx.to {
                 TransactTo::Call(to_addr)
             } else {
                 TransactTo::create()
             };
             tx_env.value = tx.value;
-            tx_env.data = tx.data.clone();
+            tx_env.data = tx.input.clone();
             tx_env.chain_id = Some(tx.chain_id);
             tx_env.nonce = Some(tx.nonce);
-            tx_env.access_list = tx.access_list.clone().into();
+            tx_env.access_list = tx.access_list.clone().into_flattened();
         }
-        EthereumTxEssence::Eip4844(tx) => {
-            tx_env.caller = caller;
+        TxEnvelope::Eip4844(tx) => {
+            let tx = tx.tx().tx();
             tx_env.gas_limit = tx.gas_limit.try_into().unwrap();
-            tx_env.gas_price = tx.max_fee_per_gas;
-            tx_env.gas_priority_fee = Some(tx.max_priority_fee_per_gas);
-            tx_env.transact_to = if let TransactionKind::Call(to_addr) = tx.to {
+            tx_env.gas_price = tx.max_fee_per_gas.try_into().unwrap();
+            tx_env.gas_priority_fee = Some(tx.max_priority_fee_per_gas.try_into().unwrap());
+            tx_env.transact_to = if let TxKind::Call(to_addr) = tx.to {
                 TransactTo::Call(to_addr)
             } else {
                 TransactTo::create()
             };
             tx_env.value = tx.value;
-            tx_env.data = tx.data.clone();
+            tx_env.data = tx.input.clone();
             tx_env.chain_id = Some(tx.chain_id);
             tx_env.nonce = Some(tx.nonce);
-            tx_env.access_list = tx.access_list.clone().into();
+            tx_env.access_list = tx.access_list.clone().into_flattened();
+
+            // Data blobs are not allowed on L2
+            bail!(tx.blob_versioned_hashes.len() == 0);
         }
     };
+    Ok(())
 }
 
 pub fn increase_account_balance<D>(

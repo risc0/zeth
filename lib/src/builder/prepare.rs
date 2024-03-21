@@ -14,39 +14,30 @@
 
 use core::fmt::Debug;
 
+use alloy_consensus::Header as AlloyConsensusHeader;
 use anyhow::{bail, Context, Result};
 use revm::{Database, DatabaseCommit};
-use zeth_primitives::{block::Header, transactions::TxEssence};
 
-use crate::{builder::BlockBuilder, consts::MAX_EXTRA_DATA_BYTES, taiko_utils::BLOCK_GAS_LIMIT};
+use crate::{builder::BlockBuilder, consts::MAX_EXTRA_DATA_BYTES, taiko_utils::HeaderHasher};
 
 pub trait HeaderPrepStrategy {
-    fn prepare_header<D, E>(block_builder: BlockBuilder<D, E>) -> Result<BlockBuilder<D, E>>
+    fn prepare_header<D>(block_builder: BlockBuilder<D>) -> Result<BlockBuilder<D>>
     where
         D: Database + DatabaseCommit,
-        <D as Database>::Error: core::fmt::Debug,
-        E: TxEssence;
+        <D as Database>::Error: core::fmt::Debug;
 }
 
 pub struct TaikoHeaderPrepStrategy {}
 
 impl HeaderPrepStrategy for TaikoHeaderPrepStrategy {
-    fn prepare_header<D, E>(mut block_builder: BlockBuilder<D, E>) -> Result<BlockBuilder<D, E>>
+    fn prepare_header<D>(mut block_builder: BlockBuilder<D>) -> Result<BlockBuilder<D>>
     where
         D: Database + DatabaseCommit,
         <D as Database>::Error: Debug,
-        E: TxEssence,
     {
-        // Validate gas limit
-        if block_builder.input.gas_limit != *BLOCK_GAS_LIMIT {
-            bail!(
-                "Invalid gas limit: expected == {}, got {}",
-                *BLOCK_GAS_LIMIT,
-                block_builder.input.gas_limit,
-            );
-        }
         // Validate timestamp
-        if block_builder.input.timestamp < block_builder.input.parent_header.timestamp {
+        let timestamp: u64 = block_builder.input.timestamp.try_into().unwrap();
+        if timestamp < block_builder.input.parent_header.timestamp {
             bail!(
                 "Invalid timestamp: expected >= {}, got {}",
                 block_builder.input.parent_header.timestamp,
@@ -63,16 +54,14 @@ impl HeaderPrepStrategy for TaikoHeaderPrepStrategy {
             )
         }
         // Derive header
-        block_builder.header = Some(Header {
+        let number: u64 = block_builder.input.parent_header.number;
+        block_builder.header = Some(AlloyConsensusHeader {
             // Initialize fields that we can compute from the parent
             parent_hash: block_builder.input.parent_header.hash(),
-            number: block_builder
-                .input
-                .parent_header
-                .number
+            number: number
                 .checked_add(1)
                 .with_context(|| "Invalid block number: too large")?,
-            base_fee_per_gas: block_builder.input.base_fee_per_gas,
+            base_fee_per_gas: Some(block_builder.input.base_fee_per_gas),
             // Initialize metadata from input
             beneficiary: block_builder.input.beneficiary,
             gas_limit: block_builder.input.gas_limit,

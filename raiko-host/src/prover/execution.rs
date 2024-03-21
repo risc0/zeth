@@ -1,11 +1,12 @@
-use std::time::Instant;
+use std::{str::FromStr, time::Instant};
 
 use tracing::{info, warn};
 use zeth_lib::{
     builder::{BlockBuilderStrategy, TaikoStrategy},
+    consts::Network,
     input::{GuestInput, GuestOutput, TaikoProverData},
     protocol_instance::{assemble_protocol_instance, EvidenceType},
-    EthereumTxEssence,
+    taiko_utils::HeaderHasher,
 };
 use zeth_primitives::Address;
 
@@ -19,7 +20,7 @@ use super::{
     request::{ProofRequest, ProofResponse, ProofType},
 };
 use crate::{
-    host::host::taiko_run_preflight,
+    host::host::preflight,
     metrics::{inc_sgx_success, observe_input, observe_sgx_gen},
 };
 
@@ -55,11 +56,7 @@ pub async fn execute(
                     .instance_hash(req.proof_type.clone().into());
 
                 // Make sure the blockhash from the node matches the one from the builder
-                assert_eq!(
-                    header.hash().0,
-                    input.block_hash.to_fixed_bytes(),
-                    "block hash unexpected"
-                );
+                assert_eq!(header.hash().0, input.block_hash, "block hash unexpected");
                 GuestOutput::Success((header.clone(), pi))
             }
             Err(_) => {
@@ -98,7 +95,24 @@ pub async fn execute(
                 let resp = execute_risc0(input, output, ctx, param).await?;
                 ProofResponse::Risc0(resp)
             }
-            ProofType::Native => ProofResponse::Native(output),
+            ProofType::Native => {
+                // Make sure the binary serialization of the input works
+                let encoded: Vec<u8> = bincode::serialize(&input).unwrap();
+                let input = bincode::deserialize(&encoded[..]).unwrap();
+                // Build the block
+                let build_result = TaikoStrategy::build_from(&input);
+                match &build_result {
+                    Ok((header, mpt_node)) => {
+                        // Make sure the blockhash from the node matches the one from the builder
+                        assert_eq!(header.hash().0, input.block_hash, "block hash unexpected");
+                        ProofResponse::Native(output)
+                    }
+                    Err(_) => {
+                        warn!("Proving bad block construction!");
+                        ProofResponse::Native(GuestOutput::Failure)
+                    }
+                }
+            }
         };
         let time_elapsed = Instant::now().duration_since(start);
         println!(
@@ -114,26 +128,23 @@ pub async fn execute(
 }
 
 /// prepare input data for guests
-pub async fn prepare_input(
-    ctx: &mut Context,
-    req: ProofRequest,
-) -> Result<GuestInput<EthereumTxEssence>> {
+pub async fn prepare_input(ctx: &mut Context, req: ProofRequest) -> Result<GuestInput> {
     // Todo(Cecilia): should contract address as args, curently hardcode
     let l1_cache = ctx.l1_cache_file.clone();
     let l2_cache = ctx.l2_cache_file.clone();
     tokio::task::spawn_blocking(move || {
-        taiko_run_preflight(
+        preflight(
             Some(req.l1_rpc),
             Some(req.l2_rpc),
             req.block_number,
-            &req.chain,
+            Network::from_str(&req.chain).unwrap(),
             TaikoProverData {
                 graffiti: req.graffiti,
                 prover: req.prover,
             },
             Some(req.beacon_rpc),
         )
-        .expect("Init taiko failed")
+        .expect("Failed to fetch required data for block")
     })
     .await
     .map_err(Into::<super::error::Error>::into)

@@ -6,11 +6,8 @@ use std::{
 use hex::ToHex;
 use risc0_guest::{RISC0_METHODS_ELF, RISC0_METHODS_ID};
 use serde::{Deserialize, Serialize};
-use tracing::info as tracing_info;
-use zeth_lib::{
-    input::{GuestInput, GuestOutput},
-    EthereumTxEssence,
-};
+use tracing::info as traicing_info;
+use zeth_lib::input::{GuestInput, GuestOutput};
 
 use crate::prover::{
     consts::*,
@@ -20,8 +17,11 @@ use crate::prover::{
     utils::guest_executable_path,
 };
 
+// TODO: import from risc0_guest_method
+// const RISC0_GUEST_ID: [u32; 8] = [1,2,3,4,5,6,7,8];
+
 pub async fn execute_risc0(
-    input: GuestInput<EthereumTxEssence>,
+    input: GuestInput,
     output: GuestOutput,
     ctx: &Context,
     req: &Risc0ProofParams,
@@ -29,7 +29,7 @@ pub async fn execute_risc0(
     println!("elf code length: {}", RISC0_METHODS_ELF.len());
     let encoded_input = to_vec(&input).expect("Could not serialize proving input!");
 
-    let result = maybe_prove::<GuestInput<EthereumTxEssence>, GuestOutput>(
+    let result = maybe_prove::<GuestInput, GuestOutput>(
         req,
         encoded_input,
         RISC0_METHODS_ELF,
@@ -50,18 +50,14 @@ pub async fn execute_risc0(
             .await
             .map_err(|err| format!("Failed to convert STARK to SNARK: {:?}", err))?;
 
-        tracing_info!("Validating SNARK uuid: {}", snark_uuid);
+        traicing_info!("Validating SNARK uuid: {}", snark_uuid);
 
-        let snark_journal: String = snark_receipt.journal.encode_hex();
         verify_groth16_snark(image_id, snark_receipt)
             .await
             .map_err(|err| format!("Failed to verify SNARK: {:?}", err))?;
-        Ok(Risc0Response {
-            journal: snark_journal,
-        })
-    } else {
-        Ok(Risc0Response { journal })
     }
+
+    Ok(Risc0Response { journal })
 }
 
 // pub mod build;

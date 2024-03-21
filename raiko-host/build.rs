@@ -1,3 +1,4 @@
+#[cfg(feature = "succinct")]
 use sp1_helper::build_program;
 
 fn main() {

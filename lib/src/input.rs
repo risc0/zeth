@@ -13,18 +13,15 @@
 // limitations under the License.
 use core::fmt::Debug;
 
-use alloy_sol_types::{sol, SolCall, SolType};
+use alloy_consensus::Header as AlloyConsensusHeader;
+use alloy_rpc_types::Withdrawal as AlloyWithdrawal;
+use alloy_sol_types::{sol, SolCall};
 use anyhow::{anyhow, Result};
-use ethers_core::types::H256;
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
-use zeth_primitives::{
-    block::Header,
-    mpt::MptNode,
-    transactions::{Transaction, TxEssence},
-    withdrawal::Withdrawal,
-    Address, Bytes, FixedBytes, B256, U256,
-};
+use zeth_primitives::{mpt::MptNode, Address, Bytes, FixedBytes, B256, U256};
+
+use crate::consts::Network;
 
 /// Represents the state of an account's storage.
 /// The storage trie together with the used storage slots allow us to reconstruct all the
@@ -32,26 +29,26 @@ use zeth_primitives::{
 pub type StorageEntry = (MptNode, Vec<U256>);
 
 /// External block input.
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
-pub struct GuestInput<E: TxEssence> {
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct GuestInput {
+    /// The network to generate the proof for
+    pub network: Network,
     /// Block hash - for reference!
-    pub block_hash: H256,
+    pub block_hash: B256,
     /// Previous block header
-    pub parent_header: Header,
+    pub parent_header: AlloyConsensusHeader,
     /// Address to which all priority fees in this block are transferred.
     pub beneficiary: Address,
     /// Scalar equal to the current limit of gas expenditure per block.
-    pub gas_limit: U256,
+    pub gas_limit: u64,
     /// Scalar corresponding to the seconds since Epoch at this block's inception.
-    pub timestamp: U256,
+    pub timestamp: u64,
     /// Arbitrary byte array containing data relevant for this block.
     pub extra_data: Bytes,
     /// Hash previously used for the PoW now containing the RANDAO value.
     pub mix_hash: B256,
-    /// List of transactions for execution
-    pub transactions: Vec<Transaction<E>>,
     /// List of stake withdrawals for execution
-    pub withdrawals: Vec<Withdrawal>,
+    pub withdrawals: Vec<AlloyWithdrawal>,
     /// State trie of the parent block.
     pub parent_state_trie: MptNode,
     /// Maps each address with its storage trie and the used storage slots.
@@ -59,19 +56,18 @@ pub struct GuestInput<E: TxEssence> {
     /// The code of all unique contracts.
     pub contracts: Vec<Bytes>,
     /// List of at most 256 previous block headers
-    pub ancestor_headers: Vec<Header>,
+    pub ancestor_headers: Vec<AlloyConsensusHeader>,
     /// Base fee per gas
-    pub base_fee_per_gas: U256,
+    pub base_fee_per_gas: u64,
     /// Taiko specific data
-    pub taiko: TaikoGuestInput<E>,
+    pub taiko: TaikoGuestInput,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct TaikoGuestInput<E: TxEssence> {
-    pub chain_spec_name: String,
-    pub l1_header: Header,
+pub struct TaikoGuestInput {
+    pub l1_header: AlloyConsensusHeader,
     pub tx_list: Vec<u8>,
-    pub anchor_tx: Option<Transaction<E>>,
+    pub anchor_tx: String,
     pub block_proposed: BlockProposed,
     pub prover_data: TaikoProverData,
     pub tx_blob_hash: Option<B256>,
@@ -85,17 +81,15 @@ pub struct TaikoProverData {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GuestOutput {
-    Success((Header, FixedBytes<32>)),
+    Success((AlloyConsensusHeader, FixedBytes<32>)),
     Failure,
 }
 
 sol! {
     function anchor(
         bytes32 l1Hash,
-        //bytes32 l1StateRoot,
-        //uint64 l1BlockId,
-        bytes32 l1SignalRoot,
-        uint64 l1Height,
+        bytes32 l1StateRoot,
+        uint64 l1BlockId,
         uint32 parentGasUsed
     )
         external
@@ -118,21 +112,19 @@ sol! {
 
     #[derive(Debug, Default, Deserialize, Serialize)]
     struct BlockMetadata {
-        bytes32 l1Hash; // slot 1
-        bytes32 difficulty; // slot 2
-        bytes32 blobHash; //or txListHash (if Blob not yet supported), // slot 3
-        bytes32 extraData; // slot 4
-        bytes32 depositsHash; // slot 5
-        address coinbase; // L2 coinbase, // slot 6
+        bytes32 l1Hash;
+        bytes32 difficulty;
+        bytes32 blobHash; //or txListHash (if Blob not yet supported)
+        bytes32 extraData;
+        bytes32 depositsHash;
+        address coinbase; // L2 coinbase
         uint64 id;
         uint32 gasLimit;
-        uint64 timestamp; // slot 7
+        uint64 timestamp;
         uint64 l1Height;
-        uint24 txListByteOffset;
-        uint24 txListByteSize;
         uint16 minTier;
         bool blobUsed;
-        bytes32 parentMetaHash; // slot 8
+        bytes32 parentMetaHash;
         address sender;
     }
 
@@ -141,10 +133,6 @@ sol! {
         address assignedProver;
         address coinbase;
         bytes32 extraData;
-        bytes32 blobHash;
-        uint24 txListByteOffset;
-        uint24 txListByteSize;
-        bool cacheBlobForReuse;
         bytes32 parentMetaHash;
         HookCall[] hookCalls;
     }
@@ -159,8 +147,7 @@ sol! {
     struct Transition {
         bytes32 parentHash;
         bytes32 blockHash;
-        bytes32 signalRoot;
-        //bytes32 stateRoot;
+        bytes32 stateRoot;
         bytes32 graffiti;
     }
 
@@ -189,7 +176,7 @@ sol! {
     function proveBlock(uint64 blockId, bytes calldata input) {}
 }
 
-pub mod protocol_testnet {
+pub mod taiko_a6 {
     use alloy_sol_types::sol;
     use serde::{Deserialize, Serialize};
 
@@ -244,7 +231,6 @@ pub mod protocol_testnet {
             bytes32 parentHash;
             bytes32 blockHash;
             bytes32 signalRoot;
-            //bytes32 stateRoot;
             bytes32 graffiti;
         }
 
@@ -274,14 +260,8 @@ pub mod protocol_testnet {
     }
 }
 
-pub fn decode_propose_block_call_params(data: &[u8]) -> Result<BlockParams> {
-    let propose_block_params = BlockParams::abi_decode(data, false)
-        .map_err(|e| anyhow!("failed to decode propose block call: {e}"))?;
-    Ok(propose_block_params)
-}
-
-impl From<protocol_testnet::EthDeposit> for EthDeposit {
-    fn from(item: protocol_testnet::EthDeposit) -> Self {
+impl From<taiko_a6::EthDeposit> for EthDeposit {
+    fn from(item: taiko_a6::EthDeposit) -> Self {
         EthDeposit {
             recipient: item.recipient,
             amount: item.amount,
@@ -290,8 +270,8 @@ impl From<protocol_testnet::EthDeposit> for EthDeposit {
     }
 }
 
-impl From<protocol_testnet::BlockProposed> for BlockProposed {
-    fn from(item: protocol_testnet::BlockProposed) -> Self {
+impl From<taiko_a6::BlockProposed> for BlockProposed {
+    fn from(item: taiko_a6::BlockProposed) -> Self {
         BlockProposed {
             blockId: item.blockId,
             assignedProver: item.assignedProver,
@@ -307,8 +287,6 @@ impl From<protocol_testnet::BlockProposed> for BlockProposed {
                 gasLimit: item.meta.gasLimit,
                 timestamp: item.meta.timestamp,
                 l1Height: item.meta.l1Height,
-                txListByteOffset: item.meta.txListByteOffset,
-                txListByteSize: item.meta.txListByteSize,
                 minTier: item.meta.minTier,
                 blobUsed: item.meta.blobUsed,
                 parentMetaHash: item.meta.parentMetaHash,
@@ -327,13 +305,12 @@ impl From<protocol_testnet::BlockProposed> for BlockProposed {
 mod tests {
     use alloc::vec;
 
-    use zeth_primitives::transactions::ethereum::EthereumTxEssence;
-
     use super::*;
 
     #[test]
     fn input_serde_roundtrip() {
-        let input = GuestInput::<EthereumTxEssence> {
+        let input = GuestInput {
+            network: Default::default(),
             block_hash: Default::default(),
             parent_header: Default::default(),
             beneficiary: Default::default(),
@@ -341,7 +318,6 @@ mod tests {
             timestamp: Default::default(),
             extra_data: Default::default(),
             mix_hash: Default::default(),
-            transactions: vec![],
             withdrawals: vec![],
             parent_state_trie: Default::default(),
             parent_storage: Default::default(),
@@ -350,7 +326,6 @@ mod tests {
             base_fee_per_gas: Default::default(),
             taiko: Default::default(),
         };
-        let _: GuestInput<EthereumTxEssence> =
-            bincode::deserialize(&bincode::serialize(&input).unwrap()).unwrap();
+        let _: GuestInput = bincode::deserialize(&bincode::serialize(&input).unwrap()).unwrap();
     }
 }

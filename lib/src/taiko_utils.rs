@@ -1,120 +1,64 @@
 use core::str::FromStr;
 
-use alloy_primitives::{uint, Address, U256};
+use alloy_consensus::{Header as AlloyConsensusHeader, TxEip1559, TxEnvelope, TxKind};
+use alloy_network::Signed;
+use alloy_primitives::{uint, Address, Signature, U256};
+use alloy_rlp::*;
+use alloy_rpc_types::{Header as AlloyHeader, Transaction as AlloyTransaction};
 use anyhow::{anyhow, bail, ensure, Context, Result};
-use ethers_core::types::Transaction as EthersTransaction;
 use once_cell::unsync::Lazy;
-use rlp::{Decodable, DecoderError, Rlp};
-use zeth_primitives::transactions::{
-    ethereum::{EthereumTxEssence, TransactionKind},
-    EthereumTransaction, Transaction, TxEssence,
+use zeth_primitives::{keccak256, B256};
+
+use crate::{
+    consts::{get_network_spec, Network},
+    input::{decode_anchor, GuestInput},
 };
 
-use crate::input::{decode_anchor, GuestInput};
-
 pub const ANCHOR_GAS_LIMIT: u64 = 250_000;
-pub const MAX_TX_LIST_BYTES: usize = 120_000;
-pub const BLOCK_GAS_LIMIT: Lazy<U256> = Lazy::new(|| uint!(15250000_U256));
 pub const GOLDEN_TOUCH_ACCOUNT: Lazy<Address> = Lazy::new(|| {
     Address::from_str("0x0000777735367b36bC9B61C50022d9D0700dB4Ec")
         .expect("invalid golden touch account")
 });
+pub const SGX_VERIFIER_ADDRESS: Lazy<Address> = Lazy::new(|| {
+    Address::from_str("0xA4702E22F8807Df82Fe5B6dDdd99eB3Fcb0237B0")
+        .expect("invalid sgx verifier contract address")
+});
 
-macro_rules! taiko_contracts {
-    ($name:ident) => {{
-        use crate::taiko_utils::$name::*;
-        Ok((*L1_CONTRACT, *L2_CONTRACT))
-    }};
+pub fn decode_transactions(tx_list: &[u8]) -> Vec<TxEnvelope> {
+    alloy_rlp::Decodable::decode(&mut &tx_list.to_owned()[..]).unwrap_or_default()
 }
 
-pub fn get_contracts(name: &str) -> Result<(Address, Address)> {
-    match name {
-        "testnet" => taiko_contracts!(testnet),
-        "internal_devnet_a" => taiko_contracts!(internal_devnet_a),
-        "internal_devnet_b" => taiko_contracts!(internal_devnet_b),
-        #[allow(clippy::needless_return)]
-        _ => bail!("invalid chain name: {name}"),
-    }
-}
-
-pub mod testnet {
-    use super::*;
-    pub const CHAIN_ID: u64 = 167008;
-    pub const L1_CONTRACT: Lazy<Address> = Lazy::new(|| {
-        Address::from_str("0xB20BB9105e007Bd3E0F73d63D4D3dA2c8f736b77")
-            .expect("invalid l1 contract address")
-    });
-    pub const L2_CONTRACT: Lazy<Address> = Lazy::new(|| {
-        Address::from_str("0x1670080000000000000000000000000000010001")
-            .expect("invalid l2 contract address")
-    });
-}
-
-pub mod internal_devnet_a {
-    use super::*;
-    pub const CHAIN_ID: u64 = 167001;
-    pub const L1_CONTRACT: Lazy<Address> = Lazy::new(|| {
-        Address::from_str("0xC069c3d2a9f2479F559AD34485698ad5199C555f")
-            .expect("invalid l1 contract address")
-    });
-    pub const L2_CONTRACT: Lazy<Address> = Lazy::new(|| {
-        Address::from_str("0x1670010000000000000000000000000000010001")
-            .expect("invalid l2 contract address")
-    });
-}
-
-pub mod internal_devnet_b {
-    use super::*;
-    pub const CHAIN_ID: u64 = 167002;
-    pub const L1_CONTRACT: Lazy<Address> = Lazy::new(|| {
-        Address::from_str("0x674313F932cc0cE272154a288cf3De474D44e14F")
-            .expect("invalid l1 contract address")
-    });
-    pub const L2_CONTRACT: Lazy<Address> = Lazy::new(|| {
-        Address::from_str("0x1670020000000000000000000000000000010001")
-            .expect("invalid l2 contract address")
-    });
-}
-
-fn decode_tx_list<T>(tx_list: &[u8]) -> Result<Vec<T>, DecoderError>
-where
-    T: Decodable,
-{
-    Rlp::new(tx_list).as_list()
-}
-
-pub fn generate_transactions(
-    tx_list: &[u8],
-    anchor_tx: EthersTransaction,
-) -> Vec<EthersTransaction> {
-    // Decode all the transactions in the tx list
-    let mut transactions: Vec<EthersTransaction> = decode_tx_list(&tx_list).unwrap_or_default();
+pub fn generate_transactions(tx_list: &[u8], anchor_tx: AlloyTransaction) -> Vec<TxEnvelope> {
+    // Decode the transactions from the tx list
+    let mut transactions = decode_transactions(tx_list);
+    // Create a tx from the anchor tx that has the same type as the transactions encoded from
+    // the tx list
+    let signed_eip1559_tx = Signed::<TxEip1559>::new_unchecked(
+        TxEip1559 {
+            chain_id: anchor_tx.chain_id.unwrap().try_into().unwrap(),
+            nonce: anchor_tx.nonce.try_into().unwrap(),
+            gas_limit: anchor_tx.gas.try_into().unwrap(),
+            max_fee_per_gas: anchor_tx.max_fee_per_gas.unwrap().try_into().unwrap(),
+            max_priority_fee_per_gas: anchor_tx
+                .max_priority_fee_per_gas
+                .unwrap()
+                .try_into()
+                .unwrap(),
+            to: TxKind::Call(anchor_tx.to.unwrap()),
+            value: anchor_tx.value.try_into().unwrap(),
+            access_list: Default::default(),
+            input: anchor_tx.input,
+        },
+        Signature::from_rs_and_parity(
+            anchor_tx.signature.unwrap().r,
+            anchor_tx.signature.unwrap().s,
+            anchor_tx.signature.unwrap().y_parity.unwrap().0,
+        )
+        .unwrap(),
+        anchor_tx.hash,
+    );
     // Insert the anchor transactions generated by the node (which needs to be verified!)
-    transactions.insert(0, anchor_tx);
-    transactions
-}
-
-// TODO(Brecht): really need to switch to alloy for everything...
-pub fn generate_transactions_2(
-    tx_list: &[u8],
-    anchor_tx: Transaction<EthereumTxEssence>,
-) -> Vec<Transaction<EthereumTxEssence>> {
-    // Decode all the transactions in the tx list
-    let transactions: Vec<EthersTransaction> = decode_tx_list(&tx_list).unwrap_or_default();
-
-    // convert each transaction
-    let mut transactions = transactions
-        .into_iter()
-        .enumerate()
-        .map(|(i, tx)| {
-            tx.try_into()
-                .map_err(|err| anyhow!("transaction {i} invalid: {err:?}"))
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap_or_default();
-
-    // Insert the anchor transactions generated by the node (which needs to be verified!)
-    transactions.insert(0, anchor_tx);
+    transactions.insert(0, TxEnvelope::from(signed_eip1559_tx));
     transactions
 }
 
@@ -128,14 +72,14 @@ const GX2: Lazy<U256> =
     Lazy::new(|| uint!(0xc6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5_U256));
 
 /// check the anchor signature with fixed K value
-fn check_anchor_signature(anchor: &EthereumTransaction) -> Result<()> {
-    let sign = &anchor.signature;
-    if sign.r == *GX1 {
+fn check_anchor_signature(anchor: &Signed<TxEip1559>) -> Result<()> {
+    let sign = anchor.signature();
+    if sign.r() == *GX1 {
         return Ok(());
     }
-    let msg_hash = anchor.essence.signing_hash();
+    let msg_hash = anchor.signature_hash();
     let msg_hash: U256 = msg_hash.into();
-    if sign.r == *GX2 {
+    if sign.r() == *GX2 {
         // when r == GX2 require s == 0 if k == 1
         // alias: when r == GX2 require N == msg_hash + *GX1_MUL_PRIVATEKEY
         if *N != msg_hash + *GX1_MUL_PRIVATEKEY {
@@ -148,26 +92,25 @@ fn check_anchor_signature(anchor: &EthereumTransaction) -> Result<()> {
     }
     Err(anyhow!(
         "r != *GX1 && r != GX2, r: {}, *GX1: {}, GX2: {}",
-        sign.r,
+        sign.r(),
         *GX1,
         *GX2
     ))
 }
 
 pub fn check_anchor_tx(
-    input: &GuestInput<EthereumTxEssence>,
-    anchor: &EthereumTransaction,
+    input: &GuestInput,
+    anchor: &TxEnvelope,
     from: &Address,
-    chain_name: &str,
+    network: Network,
 ) -> Result<()> {
-    // Check the signature
-    check_anchor_signature(anchor).context(anyhow!("failed to check anchor signature"))?;
+    match anchor {
+        TxEnvelope::Eip1559(tx) => {
+            // Check the signature
+            check_anchor_signature(tx).context(anyhow!("failed to check anchor signature"))?;
 
-    // Check the data
-    match &anchor.essence {
-        EthereumTxEssence::Eip1559(tx) => {
             // Extract the `to` address
-            let to = if let TransactionKind::Call(to_addr) = tx.to {
+            let to = if let TxKind::Call(to_addr) = tx.to {
                 to_addr
             } else {
                 panic!("anchor tx not a smart contract call")
@@ -179,7 +122,7 @@ pub fn check_anchor_tx(
             );
             // Check that the L2 contract is being called
             ensure!(
-                to == get_contracts(chain_name).unwrap().1,
+                to == get_network_spec(network).l2_contract.unwrap(),
                 "anchor transaction to mismatch"
             );
             // Tx can't have any ETH attached
@@ -189,40 +132,35 @@ pub fn check_anchor_tx(
             );
             // Tx needs to have the expected gas limit
             ensure!(
-                tx.gas_limit == U256::from(ANCHOR_GAS_LIMIT),
+                tx.gas_limit == ANCHOR_GAS_LIMIT,
                 "anchor transaction gas price mismatch"
             );
             // Check needs to have the base fee set to the block base fee
             ensure!(
-                tx.max_fee_per_gas == input.base_fee_per_gas,
+                tx.max_fee_per_gas == input.base_fee_per_gas.try_into().unwrap(),
                 "anchor transaction gas mismatch"
             );
 
             // Okay now let's decode the anchor tx to verify the inputs
-            let anchor_call = decode_anchor(anchor.essence.data())?;
-
-            // TODO(Brecht): fix L1 block hash calculation in cancun
-            // TODO(Brecht): needs dynamic hash calculation based on L1 block number
-            println!("anchor: {:?}", anchor_call.l1Hash);
-            println!("expected: {:?}", input.taiko.l1_header.hash());
+            let anchor_call = decode_anchor(&tx.input)?;
             // The L1 blockhash needs to match the expected value
-            // ensure!(
-            //    anchor_call.l1Hash == input.taiko.l1_header.hash(),
-            //    "L1 hash mismatch"
-            //);
-            if chain_name != "testnet" {
+            ensure!(
+                anchor_call.l1Hash == input.taiko.l1_header.hash(),
+                "L1 hash mismatch"
+            );
+            if network == Network::TaikoA7 {
                 ensure!(
-                    anchor_call.l1SignalRoot == input.taiko.l1_header.state_root,
+                    anchor_call.l1StateRoot == input.taiko.l1_header.state_root,
                     "L1 state root mismatch"
                 );
             }
             ensure!(
-                anchor_call.l1Height == input.taiko.l1_header.number,
+                anchor_call.l1BlockId == input.taiko.l1_header.number,
                 "L1 block number mismatch"
             );
             // The parent gas used input needs to match the gas used value of the parent block
             ensure!(
-                U256::from(anchor_call.parentGasUsed) == input.parent_header.gas_used,
+                anchor_call.parentGasUsed == input.parent_header.gas_used as u32,
                 "parentGasUsed mismatch"
             );
         }
@@ -232,4 +170,43 @@ pub fn check_anchor_tx(
     }
 
     Ok(())
+}
+
+pub trait HeaderHasher {
+    fn hash(&self) -> B256;
+}
+
+impl HeaderHasher for AlloyConsensusHeader {
+    fn hash(&self) -> B256 {
+        let mut out = Vec::<u8>::new();
+        self.encode(&mut out);
+        keccak256(&out)
+    }
+}
+
+/// Convert from an Alloy RPC header to an ALloy Consensus Header
+/// which can be serialized and can be used to generate the block hash.
+pub fn to_header(header: &AlloyHeader) -> AlloyConsensusHeader {
+    AlloyConsensusHeader {
+        parent_hash: header.parent_hash,
+        ommers_hash: header.uncles_hash,
+        beneficiary: header.miner,
+        state_root: header.state_root,
+        transactions_root: header.transactions_root,
+        receipts_root: header.receipts_root,
+        logs_bloom: header.logs_bloom,
+        difficulty: header.difficulty,
+        number: header.number.unwrap().try_into().unwrap(),
+        gas_limit: header.gas_limit.try_into().unwrap(),
+        gas_used: header.gas_used.try_into().unwrap(),
+        timestamp: header.timestamp.try_into().unwrap(),
+        extra_data: header.extra_data.clone(),
+        mix_hash: header.mix_hash.unwrap(),
+        nonce: u64::from_be_bytes(header.nonce.unwrap().0),
+        base_fee_per_gas: Some(header.base_fee_per_gas.unwrap().try_into().unwrap()),
+        withdrawals_root: header.withdrawals_root,
+        blob_gas_used: header.blob_gas_used.map(|x| x.try_into().unwrap()),
+        excess_blob_gas: header.excess_blob_gas.map(|x| x.try_into().unwrap()),
+        parent_beacon_block_root: header.parent_beacon_block_root,
+    }
 }

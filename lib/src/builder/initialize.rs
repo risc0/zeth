@@ -23,7 +23,6 @@ use revm::{
 use zeth_primitives::{
     keccak::{keccak, KECCAK_EMPTY},
     mpt::StateAccount,
-    transactions::TxEssence,
     Bytes,
 };
 
@@ -32,6 +31,7 @@ use crate::{
     consts::MAX_BLOCK_HASH_AGE,
     guest_mem_forget,
     mem_db::{AccountState, DbAccount, MemDb},
+    taiko_utils::HeaderHasher,
 };
 
 pub trait DbInitStrategy<D>
@@ -39,17 +39,13 @@ where
     D: Database + DatabaseCommit,
     <D as Database>::Error: core::fmt::Debug,
 {
-    fn initialize_database<E>(block_builder: BlockBuilder<D, E>) -> Result<BlockBuilder<D, E>>
-    where
-        E: TxEssence;
+    fn initialize_database(block_builder: BlockBuilder<D>) -> Result<BlockBuilder<D>>;
 }
 
 pub struct MemDbInitStrategy {}
 
 impl DbInitStrategy<MemDb> for MemDbInitStrategy {
-    fn initialize_database<E: TxEssence>(
-        mut block_builder: BlockBuilder<MemDb, E>,
-    ) -> Result<BlockBuilder<MemDb, E>> {
+    fn initialize_database(mut block_builder: BlockBuilder<MemDb>) -> Result<BlockBuilder<MemDb>> {
         // Verify state trie root
         if block_builder.input.parent_state_trie.hash()
             != block_builder.input.parent_header.state_root

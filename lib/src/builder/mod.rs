@@ -12,51 +12,46 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloy_consensus::Header as AlloyConsensusHeader;
 use anyhow::Result;
 use revm::{Database, DatabaseCommit};
-use zeth_primitives::{
-    block::Header,
-    mpt::MptNode,
-    transactions::{ethereum::EthereumTxEssence, TxEssence},
-};
+use zeth_primitives::mpt::MptNode;
 
-pub use self::execute::taiko::TkoTxExecStrategy;
+pub use self::execute::TkoTxExecStrategy;
 use crate::{
     builder::{
-        execute::TxExecStrategy,
         finalize::{BlockFinalizeStrategy, MemDbBlockFinalizeStrategy},
         initialize::{DbInitStrategy, MemDbInitStrategy},
         prepare::{HeaderPrepStrategy, TaikoHeaderPrepStrategy},
     },
-    consts::{get_chain_spec, ChainSpec},
+    consts::{get_network_spec, ChainSpec},
     input::GuestInput,
     mem_db::MemDb,
 };
 
-mod execute;
+pub mod execute;
 mod finalize;
 mod initialize;
 pub mod prepare;
 
 /// A generic builder for building a block.
 #[derive(Clone, Debug)]
-pub struct BlockBuilder<D, E: TxEssence> {
+pub struct BlockBuilder<D> {
     pub(crate) chain_spec: ChainSpec,
-    pub(crate) input: GuestInput<E>,
+    pub(crate) input: GuestInput,
     pub(crate) db: Option<D>,
-    pub(crate) header: Option<Header>,
+    pub(crate) header: Option<AlloyConsensusHeader>,
 }
 
-impl<D, E> BlockBuilder<D, E>
+impl<D> BlockBuilder<D>
 where
     D: Database + DatabaseCommit,
     <D as Database>::Error: core::fmt::Debug,
-    E: TxEssence,
 {
     /// Creates a new block builder.
-    pub fn new(input: &GuestInput<E>) -> BlockBuilder<D, E> {
+    pub fn new(input: &GuestInput) -> BlockBuilder<D> {
         BlockBuilder {
-            chain_spec: get_chain_spec(&input.taiko.chain_spec_name),
+            chain_spec: get_network_spec(input.network),
             db: None,
             header: None,
             input: input.clone(),
@@ -80,12 +75,12 @@ where
     }
 
     /// Executes all input transactions.
-    pub fn execute_transactions<T: TxExecStrategy<E>>(self) -> Result<Self> {
+    pub fn execute_transactions<T: TxExecStrategy>(self) -> Result<Self> {
         T::execute_transactions(self)
     }
 
     /// Finalizes the block building and returns the header and the state trie.
-    pub fn finalize<T: BlockFinalizeStrategy<D>>(self) -> Result<(Header, MptNode)> {
+    pub fn finalize<T: BlockFinalizeStrategy<D>>(self) -> Result<(AlloyConsensusHeader, MptNode)> {
         T::finalize(self)
     }
 
@@ -102,16 +97,14 @@ where
 
 /// A bundle of strategies for building a block using [BlockBuilder].
 pub trait BlockBuilderStrategy {
-    type TxEssence: TxEssence;
-
     type DbInitStrategy: DbInitStrategy<MemDb>;
     type HeaderPrepStrategy: HeaderPrepStrategy;
-    type TxExecStrategy: TxExecStrategy<Self::TxEssence>;
+    type TxExecStrategy: TxExecStrategy;
     type BlockFinalizeStrategy: BlockFinalizeStrategy<MemDb>;
 
     /// Builds a block from the given input.
-    fn build_from(input: &GuestInput<Self::TxEssence>) -> Result<(Header, MptNode)> {
-        BlockBuilder::<MemDb, Self::TxEssence>::new(input)
+    fn build_from(input: &GuestInput) -> Result<(AlloyConsensusHeader, MptNode)> {
+        BlockBuilder::<MemDb>::new(input)
             .initialize_database::<Self::DbInitStrategy>()?
             .prepare_header::<Self::HeaderPrepStrategy>()?
             .execute_transactions::<Self::TxExecStrategy>()?
@@ -122,9 +115,14 @@ pub trait BlockBuilderStrategy {
 /// The [BlockBuilderStrategy] for building a Taiko block.
 pub struct TaikoStrategy {}
 impl BlockBuilderStrategy for TaikoStrategy {
-    type TxEssence = EthereumTxEssence;
     type DbInitStrategy = MemDbInitStrategy;
     type HeaderPrepStrategy = TaikoHeaderPrepStrategy;
     type TxExecStrategy = TkoTxExecStrategy;
     type BlockFinalizeStrategy = MemDbBlockFinalizeStrategy;
+}
+pub trait TxExecStrategy {
+    fn execute_transactions<D>(block_builder: BlockBuilder<D>) -> Result<BlockBuilder<D>>
+    where
+        D: Database + DatabaseCommit,
+        <D as Database>::Error: core::fmt::Debug;
 }

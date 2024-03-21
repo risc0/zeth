@@ -15,11 +15,9 @@ use zeth_lib::{
     consts::TKO_MAINNET_CHAIN_SPEC,
     input::Input,
     taiko::{
-        host::{HostArgs},
         protocol_instance::{assemble_protocol_instance, EvidenceType},
         TaikoGuestInput,
     },
-    EthereumTxEssence,
 };
 use zeth_primitives::{Address, B256};
 base64_serde_type!(Base64Standard, base64::engine::general_purpose::STANDARD);

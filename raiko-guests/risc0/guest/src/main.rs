@@ -5,14 +5,13 @@ risc0_zkvm::guest::entry!(main);
 use zeth_lib::{
     builder::{BlockBuilderStrategy, TaikoStrategy},
     input::{GuestInput, GuestOutput},
-    EthereumTxEssence
 };
 use zeth_lib::protocol_instance::assemble_protocol_instance;
 use zeth_lib::protocol_instance::EvidenceType;
 
 fn main() {
 
-    let input: GuestInput<EthereumTxEssence> = env::read();
+    let input: GuestInput = env::read();
     let build_result = TaikoStrategy::build_from(&input);
 
     // TODO: cherry-pick risc0 latest output

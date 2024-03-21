@@ -1,8 +1,5 @@
 //! Generate different proofs for the taiko protocol.
-use zeth_lib::{
-    input::{GuestInput, GuestOutput},
-    EthereumTxEssence,
-};
+use zeth_lib::input::{GuestInput, GuestOutput};
 
 use crate::prover::{
     context::Context,
@@ -51,7 +48,7 @@ pub mod succinct {
     use super::*;
     use crate::prover::request::SP1Response;
     pub async fn execute_sp1(
-        input: GuestInput<EthereumTxEssence>,
+        input: GuestInput,
         output: GuestOutput,
         ctx: &mut Context,
         req: &ProofRequest,
@@ -67,13 +64,12 @@ pub mod risc0 {
     use zeth_lib::{
         builder::{BlockBuilderStrategy, TaikoStrategy},
         input::GuestInput,
-        EthereumTxEssence,
     };
 
     use super::*;
     use crate::prover::request::{Risc0ProofParams, Risc0Response};
     pub async fn execute_risc0(
-        input: GuestInput<EthereumTxEssence>,
+        input: GuestInput,
         output: GuestOutput,
         ctx: &Context,
         req: &Risc0ProofParams,

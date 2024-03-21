@@ -11,43 +11,37 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use std::collections::BTreeSet;
-
-use alloy_rpc_types::EIP1186AccountProofResponse;
-use ethers_core::types::{H160, H256};
+use alloy_consensus::Header as AlloyConsensusHeader;
+use alloy_providers::tmp::{HttpProvider, TempProvider};
+use alloy_rpc_types::{BlockId, EIP1186AccountProofResponse};
 use hashbrown::HashMap;
 use revm::{
     primitives::{Account, AccountInfo, Bytecode},
     Database, DatabaseCommit,
 };
-use zeth_lib::mem_db::{DbError, MemDb};
-use zeth_primitives::{
-    block::Header,
-    ethers::{from_ethers_bytes, from_ethers_u256},
-    Address, B256, U256,
-};
+use tokio::runtime::Handle;
+use zeth_lib::{mem_db::MemDb, taiko_utils::to_header};
+use zeth_primitives::{Address, B256, U256};
 
-use super::provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery};
+use crate::host::host::get_block;
 
 pub struct ProviderDb {
-    pub provider: Box<dyn Provider>,
-    pub block_no: u64,
+    pub provider: HttpProvider,
+    pub block_number: u64,
     pub initial_db: MemDb,
-    pub latest_db: MemDb,
+    pub current_db: MemDb,
+    async_executor: Handle,
 }
 
 impl ProviderDb {
-    pub fn new(provider: Box<dyn Provider>, block_no: u64) -> Self {
+    pub fn new(provider: HttpProvider, block_number: u64) -> Self {
         ProviderDb {
             provider,
-            block_no,
+            block_number,
             initial_db: MemDb::default(),
-            latest_db: MemDb::default(),
+            current_db: MemDb::default(),
+            async_executor: tokio::runtime::Handle::current(),
         }
-    }
-
-    pub fn get_provider(&self) -> &dyn Provider {
-        self.provider.as_ref()
     }
 
     pub fn get_initial_db(&self) -> &MemDb {
@@ -55,47 +49,38 @@ impl ProviderDb {
     }
 
     pub fn get_latest_db(&self) -> &MemDb {
-        &self.latest_db
+        &self.current_db
     }
 
     fn get_proofs(
         &mut self,
-        block_no: u64,
+        block_number: u64,
         storage_keys: HashMap<Address, Vec<U256>>,
     ) -> Result<HashMap<Address, EIP1186AccountProofResponse>, anyhow::Error> {
-        let mut out = HashMap::new();
-
-        for (address, indices) in storage_keys {
-            let proof = {
-                let address: H160 = address.into_array().into();
-                let indices: BTreeSet<H256> = indices
-                    .into_iter()
-                    .map(|x| x.to_be_bytes().into())
-                    .collect();
-                self.provider.get_proof(&ProofQuery {
-                    block_no,
-                    address,
-                    indices,
-                })?
-            };
-            out.insert(address, proof);
+        let mut storage_proofs = HashMap::new();
+        for (address, keys) in storage_keys {
+            let indices = keys.into_iter().map(|x| x.to_be_bytes().into()).collect();
+            let proof = self.async_executor.block_on(async {
+                self.provider
+                    .get_proof(address, indices, Some(BlockId::from(block_number)))
+                    .await
+            })?;
+            storage_proofs.insert(address, proof);
         }
-
-        Ok(out)
+        Ok(storage_proofs)
     }
 
     pub fn get_initial_proofs(
         &mut self,
     ) -> Result<HashMap<Address, EIP1186AccountProofResponse>, anyhow::Error> {
-        self.get_proofs(self.block_no, self.initial_db.storage_keys())
+        self.get_proofs(self.block_number, self.initial_db.storage_keys())
     }
 
     pub fn get_latest_proofs(
         &mut self,
     ) -> Result<HashMap<Address, EIP1186AccountProofResponse>, anyhow::Error> {
         let mut storage_keys = self.initial_db.storage_keys();
-
-        for (address, mut indices) in self.latest_db.storage_keys() {
+        for (address, mut indices) in self.current_db.storage_keys() {
             match storage_keys.get_mut(&address) {
                 Some(initial_indices) => initial_indices.append(&mut indices),
                 None => {
@@ -103,26 +88,19 @@ impl ProviderDb {
                 }
             }
         }
-
-        self.get_proofs(self.block_no + 1, storage_keys)
+        self.get_proofs(self.block_number + 1, storage_keys)
     }
 
-    pub fn get_ancestor_headers(&mut self) -> Result<Vec<Header>, anyhow::Error> {
+    pub fn get_ancestor_headers(&mut self) -> Result<Vec<AlloyConsensusHeader>, anyhow::Error> {
         let earliest_block = self
             .initial_db
             .block_hashes
             .keys()
             .min()
-            .unwrap_or(&self.block_no);
-        let headers = (*earliest_block..self.block_no)
+            .unwrap_or(&self.block_number);
+        let headers = (*earliest_block..self.block_number)
             .rev()
-            .map(|block_no| {
-                self.provider
-                    .get_partial_block(&BlockQuery { block_no })
-                    .expect("Failed to retrieve ancestor block")
-                    .try_into()
-                    .expect("Failed to convert ethers block to zeth block")
-            })
+            .map(|block_no| to_header(&get_block(&self.provider, block_no, false).unwrap().header))
             .collect();
         Ok(headers)
     }
@@ -132,100 +110,99 @@ impl Database for ProviderDb {
     type Error = anyhow::Error;
 
     fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
-        match self.latest_db.basic(address) {
-            Ok(db_result) => return Ok(db_result),
-            Err(DbError::AccountNotFound(_)) => {}
-            Err(err) => return Err(err.into()),
+        // Check if the account is in the current database.
+        if let Ok(db_result) = self.current_db.basic(address) {
+            return Ok(db_result);
         }
-        match self.initial_db.basic(address) {
-            Ok(db_result) => return Ok(db_result),
-            Err(DbError::AccountNotFound(_)) => {}
-            Err(err) => return Err(err.into()),
+        if let Ok(db_result) = self.initial_db.basic(address) {
+            return Ok(db_result);
         }
 
-        let account_info = {
-            let query = AccountQuery {
-                block_no: self.block_no,
-                address: address.into_array().into(),
-            };
-            let nonce = self.provider.get_transaction_count(&query)?;
-            let balance = self.provider.get_balance(&query)?;
-            let code = self.provider.get_code(&query)?;
-            let bytecode = Bytecode::new_raw(from_ethers_bytes(code));
+        // Get the nonce, balance, and code to reconstruct the account.
+        let nonce = self.async_executor.block_on(async {
+            self.provider
+                .get_transaction_count(address, Some(BlockId::from(self.block_number)))
+                .await
+        })?;
+        let balance = self.async_executor.block_on(async {
+            self.provider
+                .get_balance(address, Some(BlockId::from(self.block_number)))
+                .await
+        })?;
+        let code = self.async_executor.block_on(async {
+            self.provider
+                .get_code_at(address, Some(BlockId::from(self.block_number)))
+                .await
+        })?;
 
-            AccountInfo::new(
-                from_ethers_u256(balance),
-                nonce.as_u64(),
-                bytecode.hash_slow(),
-                bytecode,
-            )
-        };
-
+        // Insert the account into the initial database.
+        let account_info = AccountInfo::new(
+            balance,
+            nonce.try_into().unwrap(),
+            Bytecode::new_raw(code.clone()).hash_slow(),
+            Bytecode::new_raw(code),
+        );
         self.initial_db
             .insert_account_info(address, account_info.clone());
         Ok(Some(account_info))
     }
 
-    fn code_by_hash(&mut self, _code_hash: B256) -> Result<Bytecode, Self::Error> {
-        // not needed because we already load code with basic info
-        unreachable!()
-    }
-
     fn storage(&mut self, address: Address, index: U256) -> Result<U256, Self::Error> {
-        match self.latest_db.storage(address, index) {
-            Ok(db_result) => return Ok(db_result),
-            Err(DbError::AccountNotFound(_)) | Err(DbError::SlotNotFound(_, _)) => {}
-            Err(err) => return Err(err.into()),
+        // Check if the storage slot is in the current database.
+        if let Ok(db_result) = self.current_db.storage(address, index) {
+            return Ok(db_result);
         }
-        match self.initial_db.storage(address, index) {
-            Ok(db_result) => return Ok(db_result),
-            Err(DbError::AccountNotFound(_)) | Err(DbError::SlotNotFound(_, _)) => {}
-            Err(err) => return Err(err.into()),
+        if let Ok(db_result) = self.initial_db.storage(address, index) {
+            return Ok(db_result);
         }
 
-        // ensure that the corresponding account is loaded
+        // Get the storage slot from the provider.
         self.initial_db.basic(address)?;
-
-        let storage = {
-            let bytes = index.to_be_bytes();
-            let index = H256::from(bytes);
-
-            let storage = self.provider.get_storage(&StorageQuery {
-                block_no: self.block_no,
-                address: address.into_array().into(),
-                index,
-            })?;
-            U256::from_be_bytes(storage.to_fixed_bytes())
-        };
-
+        let storage = self.async_executor.block_on(async {
+            self.provider
+                .get_storage_at(
+                    address.into_array().into(),
+                    index,
+                    Some(BlockId::from(self.block_number)),
+                )
+                .await
+        })?;
         self.initial_db
             .insert_account_storage(&address, index, storage);
         Ok(storage)
     }
 
     fn block_hash(&mut self, number: U256) -> Result<B256, Self::Error> {
-        match self.initial_db.block_hash(number) {
-            Ok(block_hash) => return Ok(block_hash),
-            Err(DbError::BlockNotFound(_)) => {}
-            Err(err) => return Err(err.into()),
+        // Check if the block hash is in the current database.
+        if let Ok(block_hash) = self.initial_db.block_hash(number) {
+            return Ok(block_hash);
         }
 
-        let block_no = u64::try_from(number).unwrap();
-        let block_hash = self
-            .provider
-            .get_partial_block(&BlockQuery { block_no })?
-            .hash
-            .unwrap()
-            .0
-            .into();
-
-        self.initial_db.insert_block_hash(block_no, block_hash);
+        // Get the block hash from the provider.
+        let block_number = u64::try_from(number).unwrap();
+        let block_hash = self.async_executor.block_on(async {
+            self.provider
+                .get_block_by_number(block_number.into(), false)
+                .await
+                .unwrap()
+                .unwrap()
+                .header
+                .hash
+                .unwrap()
+                .0
+                .into()
+        });
+        self.initial_db.insert_block_hash(block_number, block_hash);
         Ok(block_hash)
+    }
+
+    fn code_by_hash(&mut self, _code_hash: B256) -> Result<Bytecode, Self::Error> {
+        unreachable!()
     }
 }
 
 impl DatabaseCommit for ProviderDb {
     fn commit(&mut self, changes: HashMap<Address, Account>) {
-        self.latest_db.commit(changes)
+        self.current_db.commit(changes)
     }
 }

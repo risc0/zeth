@@ -14,14 +14,12 @@
 
 use anyhow::{bail, Context, Result};
 use ethers_core::types::EIP1186ProofResponse;
-use hashbrown::HashMap;
 use log::error;
+use revm::primitives::HashMap;
 use zeth_primitives::{
-    block::Header,
     keccak::keccak,
-    transactions::TxEssence,
     trie::{Error as TrieError, MptNode, StateAccount},
-    Address, B256, U256,
+    Address, Header, B256, U256,
 };
 
 use super::{mpt, preflight};
@@ -63,7 +61,7 @@ pub trait Verifier {
 }
 
 /// Verify using the preflight data.
-impl<E: TxEssence> Verifier for preflight::Data<E> {
+impl Verifier for preflight::Data {
     fn verify_block(&self, header: &Header, state: &MptNode) -> Result<()> {
         let errors =
             verify_state_trie(state, &self.proofs).context("failed to verify state trie")?;
@@ -117,7 +115,7 @@ fn verify_header(header: &Header, exp_header: &Header) -> Result<()> {
 
     if header.base_fee_per_gas != exp_header.base_fee_per_gas {
         error!(
-            "Base fee mismatch {} (expected {})",
+            "Base fee mismatch {:?} (expected {:?})",
             header.base_fee_per_gas, exp_header.base_fee_per_gas
         );
     }
@@ -129,8 +127,8 @@ fn verify_header(header: &Header, exp_header: &Header) -> Result<()> {
         );
     }
 
-    let found_hash = header.hash();
-    let expected_hash = exp_header.hash();
+    let found_hash = header.hash_slow();
+    let expected_hash = exp_header.hash_slow();
     if found_hash.as_slice() != expected_hash.as_slice() {
         error!(
             "Final block hash mismatch {} (expected {})",

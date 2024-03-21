@@ -14,9 +14,7 @@
 
 use anyhow::{self, bail, ensure, Context, Ok};
 use serde::{Deserialize, Serialize};
-use zeth_primitives::{
-    b256, transactions::ethereum::EthereumTxEssence, Address, Bloom, BloomInput, B256, U256,
-};
+use zeth_primitives::{b256, receipt::EvmReceipt, Address, Bloom, BloomInput, B256, U256};
 
 use super::batcher_db::BlockInput;
 
@@ -33,7 +31,7 @@ pub struct SystemConfig {
     /// Batch sender address
     pub batch_sender: Address,
     /// L2 gas limit
-    pub gas_limit: U256,
+    pub gas_limit: u64,
     /// Fee overhead
     pub l1_fee_overhead: U256,
     /// Fee scalar
@@ -48,7 +46,7 @@ impl SystemConfig {
     pub fn update(
         &mut self,
         system_config_contract: &Address,
-        input: &BlockInput<EthereumTxEssence>,
+        input: &BlockInput,
     ) -> anyhow::Result<bool> {
         let mut updated = false;
 
@@ -63,26 +61,24 @@ impl SystemConfig {
 
         let receipts = input.receipts.as_ref().context("receipts missing")?;
         for receipt in receipts {
-            let receipt = &receipt.payload;
-
             // skip failed transactions
-            if !receipt.success {
+            if !receipt.success() {
                 continue;
             }
 
-            for log in &receipt.logs {
+            for log in receipt.logs() {
+                let (address, log) = (&log.address, &log.data);
+
                 // the log event contract address must match the system config contract
                 // the first log event topic must match the ConfigUpdate signature
-                if &log.address == system_config_contract
-                    && log.topics[0] == CONFIG_UPDATE_SIGNATURE
-                {
+                if address == system_config_contract && log.topics()[0] == CONFIG_UPDATE_SIGNATURE {
                     updated = true;
 
                     // the second topic determines the version
-                    ensure!(log.topics[1] == CONFIG_UPDATE_VERSION, "invalid version");
+                    ensure!(log.topics()[1] == CONFIG_UPDATE_VERSION, "invalid version");
 
                     // the third topic determines the type of update
-                    let update_type: u64 = U256::from_be_bytes(log.topics[2].0)
+                    let update_type: u64 = U256::from_be_bytes(log.topics()[2].0)
                         .try_into()
                         .expect("invalid update type");
 
@@ -111,8 +107,9 @@ impl SystemConfig {
                         2 => {
                             let gas_limit = log.data.get(64..96).context("invalid data")?;
 
-                            self.gas_limit =
-                                U256::try_from_be_slice(gas_limit).context("invalid gas limit")?;
+                            self.gas_limit = U256::try_from_be_slice(gas_limit)
+                                .map(u64::try_from)
+                                .context("invalid gas limit")??;
                         }
                         // type 3: unsafeBlockSigner overwrite, as address payload
                         3 => {

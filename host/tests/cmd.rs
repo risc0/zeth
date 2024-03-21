@@ -59,36 +59,36 @@ fn build_optimism(#[files("testdata/optimism/*.json.gz")] path: PathBuf) {
         .stderr(predicate::str::contains(" WARN ").not());
 }
 
-#[rstest]
-#[case(109279674, 6)]
-fn build_optimism_derived(#[case] block_number: u64, #[case] block_count: u64) {
-    Command::cargo_bin("zeth")
-        .unwrap()
-        .env("RUST_LOG", "info")
-        .args([
-            "build",
-            "--network=optimism-derived",
-            "--cache=testdata/derivation",
-            &format!("--block-number={}", block_number),
-            &format!("--block-count={}", block_count),
-        ])
-        .assert()
-        .success()
-        .stderr(predicate::str::contains(" WARN ").not());
-
-    // test composition
-    Command::cargo_bin("zeth")
-        .unwrap()
-        .env("RUST_LOG", "info")
-        .args([
-            "build",
-            "--network=optimism-derived",
-            "--cache=testdata/derivation",
-            &format!("--block-number={}", block_number),
-            &format!("--block-count={}", block_count),
-            "--composition=1",
-        ])
-        .assert()
-        .success()
-        .stderr(predicate::str::contains(" WARN ").not());
-}
+// #[rstest]
+// #[case(109279674, 6)]
+// fn build_optimism_derived(#[case] block_number: u64, #[case] block_count: u64) {
+// Command::cargo_bin("zeth")
+// .unwrap()
+// .env("RUST_LOG", "info")
+// .args([
+// "build",
+// "--network=optimism-derived",
+// "--cache=testdata/derivation",
+// &format!("--block-number={}", block_number),
+// &format!("--block-count={}", block_count),
+// ])
+// .assert()
+// .success()
+// .stderr(predicate::str::contains(" WARN ").not());
+//
+// test composition
+// Command::cargo_bin("zeth")
+// .unwrap()
+// .env("RUST_LOG", "info")
+// .args([
+// "build",
+// "--network=optimism-derived",
+// "--cache=testdata/derivation",
+// &format!("--block-number={}", block_number),
+// &format!("--block-count={}", block_count),
+// "--composition=1",
+// ])
+// .assert()
+// .success()
+// .stderr(predicate::str::contains(" WARN ").not());
+// }

@@ -36,5 +36,5 @@ fn main() {
 
 #[cfg(any(feature = "debug-guest-build", debug_assertions))]
 fn main() {
-    risc0_build::embed_methods()
+    risc0_build::embed_methods();
 }

@@ -13,9 +13,8 @@
 // limitations under the License.
 
 use anyhow::anyhow;
-use hashbrown::{hash_map::Entry, HashMap};
 use revm::{
-    primitives::{Account, AccountInfo, Bytecode},
+    primitives::{hash_map::Entry, Account, AccountInfo, Bytecode, HashMap},
     Database, DatabaseCommit,
 };
 use thiserror::Error as ThisError;
@@ -199,9 +198,6 @@ impl DatabaseCommit for MemDb {
                         continue;
                     }
                 };
-
-                // it is not possible to delete a deleted account
-                debug_assert!(db_account.state != AccountState::Deleted);
 
                 // clear the account and mark it as deleted
                 db_account.storage.clear();

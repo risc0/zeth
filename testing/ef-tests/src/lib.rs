@@ -32,19 +32,12 @@ use zeth_lib::{
 use zeth_primitives::{
     access_list::{AccessList, AccessListItem},
     alloy_rlp,
-    block::Header,
     ethers::from_ethers_h160,
     keccak::keccak,
-    transactions::{
-        ethereum::{
-            EthereumTxEssence, TransactionKind, TxEssenceEip1559, TxEssenceEip2930, TxEssenceLegacy,
-        },
-        signature::TxSignature,
-        EthereumTransaction,
-    },
+    transactions::{SignableTransaction, TxEip1559, TxEip2930, TxEip4844, TxEnvelope, TxLegacy},
     trie::{self, MptNode, MptNodeData, StateAccount},
     withdrawal::Withdrawal,
-    Address, Bloom, Bytes, StorageKey, B256, B64, U256, U64,
+    Address, Bloom, Bytes, Header, Signature, StorageKey, B256, B64, U128, U256, U64, U8,
 };
 
 use crate::ethers::TestProvider;
@@ -79,8 +72,7 @@ pub struct TestBlock {
     #[serde(default)]
     pub transactions: Vec<TestTransaction>,
     #[serde(default)]
-    pub uncle_headers: Vec<TestHeader>,
-    pub withdrawals: Option<Vec<Withdrawal>>,
+    pub withdrawals: Vec<TestWithdrawal>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -128,21 +120,24 @@ impl From<&ProviderDb> for TestState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TestHeader {
-    pub base_fee_per_gas: Option<U256>,
+    pub base_fee_per_gas: Option<U64>,
+    pub blob_gas_used: Option<U64>,
     pub bloom: Bloom,
     pub coinbase: Address,
-    pub extra_data: Bytes,
     pub difficulty: U256,
-    pub gas_limit: U256,
-    pub gas_used: U256,
+    pub excess_blob_gas: Option<U64>,
+    pub extra_data: Bytes,
+    pub gas_limit: U64,
+    pub gas_used: U64,
     pub hash: B256,
     pub mix_hash: B256,
     pub nonce: B64,
     pub number: U64,
+    pub parent_beacon_block_root: Option<B256>,
     pub parent_hash: B256,
     pub receipt_trie: B256,
     pub state_root: B256,
-    pub timestamp: U256,
+    pub timestamp: U64,
     pub transactions_trie: B256,
     pub uncle_hash: B256,
     pub withdrawals_root: Option<B256>,
@@ -160,14 +155,17 @@ impl From<TestHeader> for Header {
             logs_bloom: header.bloom,
             difficulty: header.difficulty,
             number: header.number.try_into().unwrap(),
-            gas_limit: header.gas_limit,
-            gas_used: header.gas_used,
-            timestamp: header.timestamp,
+            gas_limit: header.gas_limit.try_into().unwrap(),
+            gas_used: header.gas_used.try_into().unwrap(),
+            timestamp: header.timestamp.try_into().unwrap(),
             extra_data: header.extra_data,
             mix_hash: header.mix_hash,
-            nonce: header.nonce,
-            base_fee_per_gas: header.base_fee_per_gas.unwrap(),
+            nonce: header.nonce.into(),
+            base_fee_per_gas: header.base_fee_per_gas.map(|v| v.try_into().unwrap()),
             withdrawals_root: header.withdrawals_root,
+            blob_gas_used: header.blob_gas_used.map(|v| v.try_into().unwrap()),
+            excess_blob_gas: header.excess_blob_gas.map(|v| v.try_into().unwrap()),
+            parent_beacon_block_root: header.parent_beacon_block_root,
         }
     }
 }
@@ -176,72 +174,84 @@ impl From<TestHeader> for Header {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TestTransaction {
-    pub data: Bytes,
     pub access_list: Option<TestAccessList>,
-    pub gas_limit: U256,
-    pub gas_price: Option<U256>,
-    pub max_fee_per_gas: Option<U256>,
-    pub max_priority_fee_per_gas: Option<U256>,
-    pub value: U256,
+    pub blob_versioned_hashes: Option<Vec<B256>>,
+    pub chain_id: Option<U64>,
+    pub data: Bytes,
+    pub gas_limit: U64,
+    pub gas_price: Option<U128>,
+    pub max_fee_per_blob_gas: Option<U128>,
+    pub max_fee_per_gas: Option<U128>,
+    pub max_priority_fee_per_gas: Option<U128>,
+    pub nonce: U64,
     #[serde_as(as = "NoneAsEmptyString")]
     pub to: Option<Address>,
-    pub nonce: U64,
+    #[serde(rename = "type")]
+    pub type_id: Option<U8>,
+    pub value: U256,
     pub v: U64,
     pub r: U256,
     pub s: U256,
 }
 
-impl From<TestTransaction> for EthereumTransaction {
+impl From<TestTransaction> for TxEnvelope {
     fn from(tx: TestTransaction) -> Self {
-        let signature = TxSignature {
-            v: tx.v.try_into().unwrap(),
-            r: tx.r,
-            s: tx.s,
-        };
-        let essence = if tx.access_list.is_none() {
-            EthereumTxEssence::Legacy(TxEssenceLegacy {
-                chain_id: None,
+        let signature = Signature::from_rs_and_parity(tx.r, tx.s, tx.v).unwrap();
+        match tx.type_id.map(|v| u8::try_from(v).unwrap()) {
+            None | Some(0) => TxLegacy {
+                chain_id: signature.v().chain_id(), // derive chain ID from signature
                 nonce: tx.nonce.try_into().unwrap(),
-                gas_price: tx.gas_price.unwrap(),
-                gas_limit: tx.gas_limit,
-                to: match tx.to {
-                    Some(addr) => TransactionKind::Call(addr),
-                    None => TransactionKind::Create,
-                },
+                gas_price: tx.gas_price.unwrap().try_into().unwrap(),
+                gas_limit: tx.gas_limit.try_into().unwrap(),
+                to: tx.to.into(),
                 value: tx.value,
-                data: tx.data,
-            })
-        } else if tx.max_fee_per_gas.is_none() {
-            EthereumTxEssence::Eip2930(TxEssenceEip2930 {
-                chain_id: 1,
+                input: tx.data,
+            }
+            .into_signed(signature)
+            .into(),
+
+            Some(1) => TxEip2930 {
+                chain_id: tx.chain_id.unwrap().try_into().unwrap(),
                 nonce: tx.nonce.try_into().unwrap(),
-                gas_price: tx.gas_price.unwrap(),
-                gas_limit: tx.gas_limit,
-                to: match tx.to {
-                    Some(addr) => TransactionKind::Call(addr),
-                    None => TransactionKind::Create,
-                },
+                gas_price: tx.gas_price.unwrap().try_into().unwrap(),
+                gas_limit: tx.gas_limit.try_into().unwrap(),
+                to: tx.to.into(),
                 value: tx.value,
-                data: tx.data,
+                input: tx.data,
                 access_list: tx.access_list.unwrap().into(),
-            })
-        } else {
-            EthereumTxEssence::Eip1559(TxEssenceEip1559 {
-                chain_id: 1,
+            }
+            .into_signed(signature)
+            .into(),
+            Some(2) => TxEip1559 {
+                chain_id: tx.chain_id.unwrap().try_into().unwrap(),
                 nonce: tx.nonce.try_into().unwrap(),
-                max_priority_fee_per_gas: tx.max_priority_fee_per_gas.unwrap(),
-                max_fee_per_gas: tx.max_fee_per_gas.unwrap(),
-                gas_limit: tx.gas_limit,
-                to: match tx.to {
-                    Some(addr) => TransactionKind::Call(addr),
-                    None => TransactionKind::Create,
-                },
+                max_priority_fee_per_gas: tx.max_priority_fee_per_gas.unwrap().try_into().unwrap(),
+                max_fee_per_gas: tx.max_fee_per_gas.unwrap().try_into().unwrap(),
+                gas_limit: tx.gas_limit.try_into().unwrap(),
+                to: tx.to.into(),
                 value: tx.value,
-                data: tx.data,
+                input: tx.data,
                 access_list: tx.access_list.unwrap().into(),
-            })
-        };
-        EthereumTransaction { essence, signature }
+            }
+            .into_signed(signature)
+            .into(),
+            Some(3) => TxEip4844 {
+                chain_id: tx.chain_id.unwrap().try_into().unwrap(),
+                nonce: tx.nonce.try_into().unwrap(),
+                gas_limit: tx.gas_limit.try_into().unwrap(),
+                max_fee_per_gas: tx.max_fee_per_gas.unwrap().try_into().unwrap(),
+                max_priority_fee_per_gas: tx.max_priority_fee_per_gas.unwrap().try_into().unwrap(),
+                to: tx.to.into(),
+                value: tx.value,
+                access_list: tx.access_list.unwrap().into(),
+                blob_versioned_hashes: tx.blob_versioned_hashes.unwrap(),
+                max_fee_per_blob_gas: tx.max_fee_per_blob_gas.unwrap().try_into().unwrap(),
+                input: tx.data,
+            }
+            .into_signed(signature)
+            .into(),
+            v @ _ => panic!("invalid transaction type: {}", v.unwrap()),
+        }
     }
 }
 
@@ -267,6 +277,26 @@ impl From<TestAccessList> for AccessList {
                 })
                 .collect(),
         )
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TestWithdrawal {
+    pub address: Address,
+    pub amount: U64,
+    pub index: U64,
+    pub validator_index: U64,
+}
+
+impl From<TestWithdrawal> for Withdrawal {
+    fn from(w: TestWithdrawal) -> Self {
+        Withdrawal {
+            address: w.address,
+            amount: w.amount.try_into().unwrap(),
+            index: w.index.try_into().unwrap(),
+            validator_index: w.validator_index.try_into().unwrap(),
+        }
     }
 }
 
@@ -314,9 +344,9 @@ pub fn create_input(
     parent_state: TestState,
     header: Header,
     transactions: Vec<TestTransaction>,
-    withdrawals: Vec<Withdrawal>,
+    withdrawals: Vec<TestWithdrawal>,
     state: TestState,
-) -> BlockBuildInput<EthereumTxEssence> {
+) -> BlockBuildInput {
     // create the provider DB
     let provider_db = ProviderDb::new(
         Box::new(TestProvider {
@@ -327,12 +357,11 @@ pub fn create_input(
         parent_header.number,
     );
 
-    let transactions: Vec<EthereumTransaction> = transactions
-        .into_iter()
-        .map(EthereumTransaction::from)
-        .collect();
+    let transactions: Vec<_> = transactions.into_iter().map(TxEnvelope::from).collect();
+    let withdrawals: Vec<_> = withdrawals.into_iter().map(Withdrawal::from).collect();
     let input = BlockBuildInput {
         state_input: StateInput {
+            parent_header: parent_header.clone(),
             beneficiary: header.beneficiary,
             gas_limit: header.gas_limit,
             timestamp: header.timestamp,
@@ -340,7 +369,7 @@ pub fn create_input(
             mix_hash: header.mix_hash,
             transactions: transactions.clone(),
             withdrawals: withdrawals.clone(),
-            parent_header: parent_header.clone(),
+            parent_beacon_block_root: header.parent_beacon_block_root,
         },
         parent_state_trie: Default::default(),
         parent_storage: Default::default(),

@@ -22,16 +22,15 @@ use anyhow::{anyhow, Context, Result};
 use ethers_core::types::{
     Block as EthersBlock, EIP1186ProofResponse, Transaction as EthersTransaction,
 };
-use hashbrown::{HashMap, HashSet};
 use log::{debug, info};
+use revm::primitives::{HashMap, HashSet};
 use zeth_primitives::{
-    block::Header,
-    ethers::{from_ethers_h160, from_ethers_h256, from_ethers_u256},
+    ethers::{from_ethers_block, from_ethers_h160, from_ethers_h256, from_ethers_u256},
     keccak::keccak,
-    transactions::{Transaction, TxEssence},
+    transactions::TxEnvelope,
     trie::{MptNode, MptNodeReference},
     withdrawal::Withdrawal,
-    Address, B256, U256,
+    Address, Header, B256, U256,
 };
 
 use crate::{
@@ -48,18 +47,18 @@ use crate::{
 
 /// The initial data required to build a block as returned by the [Preflight].
 #[derive(Debug, Clone)]
-pub struct Data<E: TxEssence> {
+pub struct Data {
     pub db: MemDb,
     pub parent_header: Header,
     pub parent_proofs: HashMap<Address, EIP1186ProofResponse>,
     pub header: Option<Header>,
-    pub transactions: Vec<Transaction<E>>,
+    pub transactions: Vec<TxEnvelope>,
     pub withdrawals: Vec<Withdrawal>,
     pub proofs: HashMap<Address, EIP1186ProofResponse>,
     pub ancestor_headers: Vec<Header>,
 }
 
-pub trait Preflight<E: TxEssence> {
+pub trait Preflight {
     /// Executes the complete block using the input and state from the RPC provider.
     /// It returns all the data required to build and validate the block.
     fn preflight_with_external_data(
@@ -67,27 +66,23 @@ pub trait Preflight<E: TxEssence> {
         cache_path: Option<PathBuf>,
         rpc_url: Option<String>,
         block_no: u64,
-    ) -> Result<Data<E>>;
+    ) -> Result<Data>;
 
     fn preflight_with_local_data(
         chain_spec: &ChainSpec,
         provider_db: ProviderDb,
-        input: BlockBuildInput<E>,
-    ) -> Result<Data<E>>;
+        input: BlockBuildInput,
+    ) -> Result<Data>;
 }
 
 /// Implements the [Preflight] trait for all compatible [BlockBuilderStrategy]s.
-impl<N: BlockBuilderStrategy> Preflight<N::TxEssence> for N
-where
-    N::TxEssence: TryFrom<EthersTransaction>,
-    <N::TxEssence as TryFrom<EthersTransaction>>::Error: Debug,
-{
+impl<N: BlockBuilderStrategy> Preflight for N {
     fn preflight_with_external_data(
         chain_spec: &ChainSpec,
         cache_path: Option<PathBuf>,
         rpc_url: Option<String>,
         block_no: u64,
-    ) -> Result<Data<N::TxEssence>> {
+    ) -> Result<Data> {
         let mut provider = new_provider(cache_path, rpc_url)?;
 
         // Fetch the parent block
@@ -100,7 +95,8 @@ where
             parent_block.number.unwrap(),
             parent_block.hash.unwrap()
         );
-        let parent_header: Header = parent_block.try_into().context("invalid parent block")?;
+        let parent_header: Header =
+            from_ethers_block(parent_block).context("invalid parent block")?;
 
         // Fetch the target block
         let block = provider.get_full_block(&BlockQuery { block_no })?;
@@ -121,7 +117,8 @@ where
         // Create the block builder, run the transactions and extract the DB
         Self::preflight_with_local_data(chain_spec, provider_db, input).map(
             move |mut headerless_preflight_data| {
-                headerless_preflight_data.header = Some(block.try_into().expect("invalid block"));
+                headerless_preflight_data.header =
+                    Some(from_ethers_block(block).expect("invalid block"));
                 headerless_preflight_data
             },
         )
@@ -130,8 +127,8 @@ where
     fn preflight_with_local_data(
         chain_spec: &ChainSpec,
         provider_db: ProviderDb,
-        input: BlockBuildInput<N::TxEssence>,
-    ) -> Result<Data<N::TxEssence>> {
+        input: BlockBuildInput,
+    ) -> Result<Data> {
         let parent_header = input.state_input.parent_header.clone();
         let transactions = input.state_input.transactions.clone();
         let withdrawals = input.state_input.withdrawals.clone();
@@ -177,14 +174,10 @@ where
     }
 }
 
-fn new_preflight_input<E>(
+fn new_preflight_input(
     block: EthersBlock<EthersTransaction>,
     parent_header: Header,
-) -> Result<BlockBuildInput<E>>
-where
-    E: TxEssence + TryFrom<EthersTransaction>,
-    <E as TryFrom<EthersTransaction>>::Error: Debug,
-{
+) -> Result<BlockBuildInput> {
     // convert each transaction
     let transactions = block
         .transactions
@@ -211,12 +204,13 @@ where
         state_input: StateInput {
             parent_header,
             beneficiary: from_ethers_h160(block.author.context("author missing")?),
-            gas_limit: from_ethers_u256(block.gas_limit),
-            timestamp: from_ethers_u256(block.timestamp),
+            gas_limit: block.gas_limit.try_into().unwrap(),
+            timestamp: block.timestamp.try_into().unwrap(),
             extra_data: block.extra_data.0.into(),
             mix_hash: from_ethers_h256(block.mix_hash.context("mix_hash missing")?),
             transactions,
             withdrawals,
+            parent_beacon_block_root: block.parent_beacon_block_root.map(from_ethers_h256),
         },
         parent_state_trie: Default::default(),
         parent_storage: Default::default(),
@@ -228,10 +222,10 @@ where
 
 /// Converts the [Data] returned by the [Preflight] into
 /// [BlockBuildInput] required by the [BlockBuilder].
-impl<E: TxEssence> TryFrom<Data<E>> for BlockBuildInput<E> {
+impl TryFrom<Data> for BlockBuildInput {
     type Error = anyhow::Error;
 
-    fn try_from(data: Data<E>) -> Result<BlockBuildInput<E>> {
+    fn try_from(data: Data) -> Result<BlockBuildInput> {
         // collect the code from each account
         let mut contracts = HashSet::new();
         for account in data.db.accounts.values() {
@@ -269,6 +263,7 @@ impl<E: TxEssence> TryFrom<Data<E>> for BlockBuildInput<E> {
                 mix_hash: header.mix_hash,
                 transactions: data.transactions,
                 withdrawals: data.withdrawals,
+                parent_beacon_block_root: header.parent_beacon_block_root,
             },
             parent_state_trie: state_trie,
             parent_storage: storage,
@@ -321,7 +316,7 @@ fn proofs_to_tries(
             continue;
         }
 
-        let mut storage_nodes = HashMap::new();
+        let mut storage_nodes = std::collections::HashMap::new();
         let mut storage_root_node = MptNode::default();
         for storage_proof in &proof.storage_proof {
             let proof_nodes =
@@ -340,7 +335,12 @@ fn proofs_to_tries(
 
         // assure that slots can be deleted from the storage trie
         for storage_proof in &fini_proofs.storage_proof {
-            add_orphaned_leafs(storage_proof.key, &storage_proof.proof, &mut storage_nodes)?;
+            let key = from_ethers_u256(storage_proof.key);
+            add_orphaned_leafs(
+                key.to_be_bytes::<32>(),
+                &storage_proof.proof,
+                &mut storage_nodes,
+            )?;
         }
         // create the storage trie, from all the relevant nodes
         let storage_trie = resolve_nodes(&storage_root_node, &storage_nodes);

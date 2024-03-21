@@ -20,12 +20,8 @@ use revm::primitives::SpecId;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
     batch::{Batch, BatchEssence},
-    transactions::{
-        ethereum::EthereumTxEssence,
-        optimism::{OptimismTxEssence, OPTIMISM_DEPOSITED_TX_TYPE},
-        Transaction,
-    },
-    BlockHash, BlockNumber, U256,
+    transactions::{optimism::OPTIMISM_DEPOSITED_TX_TYPE, TxEnvelope},
+    BlockHash, BlockNumber,
 };
 
 use super::{
@@ -50,8 +46,8 @@ pub struct Epoch {
     pub number: BlockNumber,
     pub hash: BlockHash,
     pub timestamp: u64,
-    pub base_fee_per_gas: U256,
-    pub deposits: Vec<Transaction<OptimismTxEssence>>,
+    pub base_fee_per_gas: u64,
+    pub deposits: Vec<TxEnvelope>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -137,17 +133,13 @@ pub struct Batcher {
 }
 
 impl Batcher {
-    pub fn new(
-        config: ChainConfig,
-        op_head: L2BlockInfo,
-        eth_block: &BlockInput<EthereumTxEssence>,
-    ) -> Result<Self> {
+    pub fn new(config: ChainConfig, op_head: L2BlockInfo, eth_block: &BlockInput) -> Result<Self> {
         let timestamp = eth_block.block_header.timestamp;
-        let spec_id = config.chain_spec.active_fork(0, &timestamp)?;
+        let spec_id = config.chain_spec.active_fork(0, timestamp)?;
 
         let batcher_channel = BatcherChannels::new(&config, spec_id);
 
-        let eth_block_hash = eth_block.block_header.hash();
+        let eth_block_hash = eth_block.block_header.hash_slow();
         let state = State::new(
             eth_block.block_header.number,
             eth_block_hash,
@@ -155,8 +147,8 @@ impl Batcher {
             Epoch {
                 number: eth_block.block_header.number,
                 hash: eth_block_hash,
-                timestamp: timestamp.try_into().unwrap(),
-                base_fee_per_gas: eth_block.block_header.base_fee_per_gas,
+                timestamp,
+                base_fee_per_gas: eth_block.block_header.base_fee_per_gas.unwrap(),
                 deposits: deposits::extract_transactions(&config, eth_block)?,
             },
         );
@@ -175,8 +167,8 @@ impl Batcher {
         &self.config
     }
 
-    pub fn process_l1_block(&mut self, eth_block: &BlockInput<EthereumTxEssence>) -> Result<()> {
-        let eth_block_hash = eth_block.block_header.hash();
+    pub fn process_l1_block(&mut self, eth_block: &BlockInput) -> Result<()> {
+        let eth_block_hash = eth_block.block_header.hash_slow();
 
         // Ensure block has correct parent
         ensure!(
@@ -188,7 +180,7 @@ impl Batcher {
         self.spec_id = self
             .config
             .chain_spec
-            .active_fork(0, &eth_block.block_header.timestamp)?;
+            .active_fork(0, eth_block.block_header.timestamp)?;
 
         if eth_block.receipts.is_some() {
             // Update the system config. From the spec:
@@ -205,8 +197,8 @@ impl Batcher {
         self.state.push_epoch(Epoch {
             number: eth_block.block_header.number,
             hash: eth_block_hash,
-            timestamp: eth_block.block_header.timestamp.try_into().unwrap(),
-            base_fee_per_gas: eth_block.block_header.base_fee_per_gas,
+            timestamp: eth_block.block_header.timestamp,
+            base_fee_per_gas: eth_block.block_header.base_fee_per_gas.unwrap(),
             deposits: deposits::extract_transactions(&self.config, eth_block)?,
         })?;
 

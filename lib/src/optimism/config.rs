@@ -55,7 +55,7 @@ impl ChainConfig {
         Self {
             system_config: SystemConfig {
                 batch_sender: address!("6887246668a3b87f54deb3b94ba47a6f63f32985"),
-                gas_limit: uint!(30_000_000_U256),
+                gas_limit: 30_000_000_u64,
                 l1_fee_overhead: uint!(188_U256),
                 l1_fee_scalar: uint!(684000_U256),
                 unsafe_block_signer: address!("AAAA45d9549EDA09E70937013520214382Ffc4A2"),

@@ -16,10 +16,12 @@ use anyhow::bail;
 #[cfg(target_os = "zkvm")]
 use risc0_zkvm::{guest::env, serde::to_vec, sha::Digest};
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use zeth_primitives::{
-    block::Header,
     mmr,
     mmr::{MerkleMountainRange, MerkleProof},
+    serde_with::RlpBytes,
+    Header,
 };
 
 use crate::optimism::{batcher::BlockId, DeriveOutput};
@@ -44,6 +46,7 @@ pub struct ComposeInput {
     pub eth_chain_merkle_root: mmr::Hash,
 }
 
+#[serde_as]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum ComposeInputOperation {
     /// Takes a chain of ethereum blocks and inserts them into a Merkle-tree,
@@ -52,6 +55,7 @@ pub enum ComposeInputOperation {
     /// mountain range (and corresponding proof) as input if the ethereum chain
     /// is too large for one session.
     PREP {
+        #[serde_as(as = "Vec<RlpBytes>")]
         eth_blocks: Vec<Header>,
         prior_prep: Option<(ComposeOutput, MerkleMountainRange)>,
     },
@@ -161,7 +165,7 @@ impl ComposeInput {
                         assert_eq!(block.parent_hash, parent_hash);
                     }
                     // Derive block's keccak hash
-                    let block_hash = block.hash();
+                    let block_hash = block.hash_slow();
                     // Insert hash into mountain range
                     mountain_range.append_leaf(block_hash.0, None);
                     // Mark block as new tail

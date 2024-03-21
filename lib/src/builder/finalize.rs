@@ -17,11 +17,9 @@ use core::mem;
 use anyhow::Result;
 use revm::{Database, DatabaseCommit};
 use zeth_primitives::{
-    block::Header,
     keccak::keccak,
-    transactions::TxEssence,
     trie::{MptNode, StateAccount},
-    U256,
+    Header, U256,
 };
 
 use crate::{
@@ -35,17 +33,13 @@ where
     D: Database + DatabaseCommit,
     <D as Database>::Error: core::fmt::Debug,
 {
-    fn finalize<E>(block_builder: BlockBuilder<D, E>) -> Result<(Header, MptNode)>
-    where
-        E: TxEssence;
+    fn finalize(block_builder: BlockBuilder<D>) -> Result<(Header, MptNode)>;
 }
 
 pub struct MemDbBlockFinalizeStrategy {}
 
 impl BlockFinalizeStrategy<MemDb> for MemDbBlockFinalizeStrategy {
-    fn finalize<E: TxEssence>(
-        mut block_builder: BlockBuilder<MemDb, E>,
-    ) -> Result<(Header, MptNode)> {
+    fn finalize(mut block_builder: BlockBuilder<MemDb>) -> Result<(Header, MptNode)> {
         let db = block_builder.db.take().expect("DB not initialized");
 
         // apply state updates

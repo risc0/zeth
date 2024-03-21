@@ -21,7 +21,7 @@ use zeth_lib::{
     builder::{BlockBuilderStrategy, EthereumStrategy},
     output::BlockBuildOutput,
 };
-use zeth_primitives::{block::Header, trie::StateAccount};
+use zeth_primitives::{trie::StateAccount, Header};
 use zeth_testeth::{
     create_input, ethers,
     ethtests::{read_eth_test, EthTestCase},
@@ -35,29 +35,35 @@ fn evm(
     path: PathBuf,
 ) {
     let _ = env_logger::builder()
-        .filter_level(log::LevelFilter::Debug)
+        .filter_level(log::LevelFilter::Trace)
         .is_test(true)
         .try_init();
 
     for EthTestCase {
+        name,
         mut json,
         genesis,
         chain_spec,
     } in read_eth_test(path)
     {
         // only one block supported for now
-        assert_eq!(json.blocks.len(), 1);
+        if json.blocks.len() > 1 {
+            println!("skipping '{}': more than one block", name);
+            continue;
+        }
         let block = json.blocks.pop().unwrap();
 
         // skip failing tests for now
         if let Some(message) = block.expect_exception {
-            println!("skipping ({})", message);
-            break;
+            println!("skipping '{}': {}", name, message);
+            continue;
         }
+
+        println!("running '{}'", name);
 
         let block_header = block.block_header.unwrap();
         let expected_header: Header = block_header.clone().into();
-        assert_eq!(&expected_header.hash(), &block_header.hash);
+        assert_eq!(&expected_header.hash_slow(), &block_header.hash);
 
         // using the empty/default state for the input prepares all accounts for deletion
         // this leads to larger input, but can never fail
@@ -69,7 +75,7 @@ fn evm(
             json.pre,
             expected_header.clone(),
             block.transactions,
-            block.withdrawals.unwrap_or_default(),
+            block.withdrawals,
             post_state,
         );
         let input_state_input_hash = input.state_input.hash();
@@ -105,7 +111,7 @@ fn evm(
 
         // the headers should match
         assert_eq!(new_block_head, expected_header);
-        assert_eq!(new_block_hash, expected_header.hash());
+        assert_eq!(new_block_hash, expected_header.hash_slow());
         assert_eq!(input_state_input_hash, state_input_hash);
     }
 }

@@ -16,11 +16,10 @@
 
 use std::path::PathBuf;
 
-use risc0_zkvm::{ExecutorEnv, ExecutorImpl, FileSegmentRef};
+use risc0_zkvm::{ExecutorEnv, ExecutorImpl};
 use rstest::rstest;
-use tempfile::tempdir;
 use zeth_lib::output::BlockBuildOutput;
-use zeth_primitives::block::Header;
+use zeth_primitives::Header;
 use zeth_testeth::{
     create_input,
     ethtests::{read_eth_test, EthTestCase},
@@ -42,6 +41,7 @@ fn executor(
         .try_init();
 
     for EthTestCase {
+        name,
         json,
         genesis,
         chain_spec,
@@ -57,9 +57,11 @@ fn executor(
             break;
         }
 
+        println!("running '{}'", name);
+
         let block_header = block.block_header.unwrap();
         let expected_header: Header = block_header.clone().into();
-        assert_eq!(&expected_header.hash(), &block_header.hash);
+        assert_eq!(&expected_header.hash_slow(), &block_header.hash);
 
         let input = create_input(
             &chain_spec,
@@ -67,7 +69,7 @@ fn executor(
             json.pre,
             expected_header.clone(),
             block.transactions,
-            block.withdrawals.unwrap_or_default(),
+            block.withdrawals,
             json.post.unwrap(),
         );
 
@@ -80,14 +82,9 @@ fn executor(
             .unwrap()
             .build()
             .unwrap();
-        let mut exec = ExecutorImpl::from_elf(env, TEST_GUEST_ELF).unwrap();
 
-        let segment_dir = tempdir().unwrap();
-        let session = exec
-            .run_with_callback(|segment| {
-                Ok(Box::new(FileSegmentRef::new(&segment, segment_dir.path())?))
-            })
-            .unwrap();
+        let mut exec = ExecutorImpl::from_elf(env, TEST_GUEST_ELF).unwrap();
+        let session = exec.run().unwrap();
         println!("Generated {} segments", session.segments.len());
 
         let build_output: BlockBuildOutput = session.journal.unwrap().decode().unwrap();
@@ -99,6 +96,6 @@ fn executor(
             panic!("Block build failed!")
         };
         println!("Block hash (from executor): {}", new_block_hash);
-        assert_eq!(new_block_hash, expected_header.hash());
+        assert_eq!(new_block_hash, expected_header.hash_slow());
     }
 }

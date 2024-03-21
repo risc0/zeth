@@ -16,13 +16,9 @@ use alloy_sol_types::{sol_data, SolType};
 use anyhow::{ensure, Context};
 use zeth_primitives::{
     fixed_bytes, keccak256,
-    receipt::Log,
-    transactions::{
-        ethereum::{EthereumTxEssence, TransactionKind},
-        optimism::{OptimismTxEssence, TxEssenceOptimismDeposited},
-        Transaction,
-    },
-    Address, Bloom, BloomInput, B256, U160, U256,
+    receipt::EvmReceipt,
+    transactions::{optimism::TxOptimismDeposit, TxEnvelope},
+    Address, Bloom, BloomInput, Log, B256, U160, U256,
 };
 
 use super::{batcher_db::BlockInput, config::ChainConfig};
@@ -37,9 +33,9 @@ const TRANSACTION_DEPOSITED_VERSION: B256 = B256::ZERO;
 /// Extracts deposits from the given block.
 pub fn extract_transactions(
     config: &ChainConfig,
-    input: &BlockInput<EthereumTxEssence>,
-) -> anyhow::Result<Vec<Transaction<OptimismTxEssence>>> {
-    let block_hash = input.block_header.hash();
+    input: &BlockInput,
+) -> anyhow::Result<Vec<TxEnvelope>> {
+    let block_hash = input.block_header.hash_slow();
 
     // if the bloom filter does not contain the corresponding topics, we have the guarantee
     // that there are no deposits in the block
@@ -53,11 +49,9 @@ pub fn extract_transactions(
 
     let mut log_index = 0_usize;
     for receipt in receipts {
-        let receipt = &receipt.payload;
-
         // skip failed transactions
-        if !receipt.success {
-            log_index += receipt.logs.len();
+        if !receipt.success() {
+            log_index += receipt.logs().len();
             continue;
         }
         // we could skip the transaction if the Bloom filter does not contain the deposit log, but
@@ -65,9 +59,9 @@ pub fn extract_transactions(
         // logs
 
         // parse all the logs for deposit transactions
-        for log in &receipt.logs {
+        for log in receipt.logs() {
             if log.address == config.deposit_contract
-                && log.topics[0] == TRANSACTION_DEPOSITED_SIGNATURE
+                && log.data.topics()[0] == TRANSACTION_DEPOSITED_SIGNATURE
             {
                 deposits.push(
                     to_deposit_transaction(block_hash, log_index, log)
@@ -100,30 +94,33 @@ fn to_deposit_transaction(
     block_hash: B256,
     log_index: usize,
     log: &Log,
-) -> anyhow::Result<Transaction<OptimismTxEssence>> {
-    let from = U160::try_from_be_slice(&log.topics[1][12..])
+) -> anyhow::Result<TxEnvelope> {
+    let from = U160::try_from_be_slice(&log.data.topics()[1][12..])
         .context("invalid from")?
         .into();
-    let to = U160::try_from_be_slice(&log.topics[2][12..])
+    let to: Address = U160::try_from_be_slice(&log.data.topics()[2][12..])
         .context("invalid to")?
         .into();
 
     // TODO: it is not 100% defined, what happens if the version is not 0
     // it is assumed that this is an error and must not be ignored
     ensure!(
-        log.topics[3] == TRANSACTION_DEPOSITED_VERSION,
+        log.data.topics()[3] == TRANSACTION_DEPOSITED_VERSION,
         "invalid version"
     );
 
     // the log data is just an ABI encoded `bytes` type representing the opaque_data
     let opaque_data: Vec<u8> =
-        sol_data::Bytes::abi_decode(&log.data, true).context("invalid data")?;
+        sol_data::Bytes::abi_decode(&log.data.data, true).context("invalid data")?;
 
     ensure!(opaque_data.len() >= 73, "invalid opaque_data");
     let mint = U256::try_from_be_slice(&opaque_data[0..32]).context("invalid mint")?;
     let value = U256::try_from_be_slice(&opaque_data[32..64]).context("invalid value")?;
-    let gas_limit = U256::try_from_be_slice(&opaque_data[64..72]).context("invalid gas_limit")?;
-    let is_creation = opaque_data[72] != 0;
+    let gas_limit: u64 = U256::try_from_be_slice(&opaque_data[64..72])
+        .unwrap()
+        .try_into()
+        .context("invalid gas_limit")?;
+    let is_call = opaque_data[72] == 0;
     let data = opaque_data[73..].to_vec();
 
     // compute the source hash
@@ -131,23 +128,14 @@ fn to_deposit_transaction(
     let source_hash = keccak256([U256::from(0).to_be_bytes(), h.0].concat());
 
     // construct the transaction
-    let essence = OptimismTxEssence::OptimismDeposited(TxEssenceOptimismDeposited {
+    Ok(TxEnvelope::OptimismDeposit(TxOptimismDeposit {
         source_hash,
         from,
-        to: if is_creation {
-            TransactionKind::Create
-        } else {
-            TransactionKind::Call(to)
-        },
+        to: is_call.then_some(to).into(),
         mint,
         value,
         gas_limit,
         is_system_tx: false,
-        data: data.into(),
-    });
-
-    Ok(Transaction {
-        essence,
-        signature: Default::default(),
-    })
+        input: data.into(),
+    }))
 }

@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use zeth_lib::{
     builder::BlockBuilderStrategy,
     consts::ChainSpec,
-    host::{cache_file_path, preflight::Preflight, verify::Verifier},
+    host::{preflight::Preflight, rpc_db::cache_file_path, verify::Verifier},
     input::BlockBuildInput,
     output::BlockBuildOutput,
 };

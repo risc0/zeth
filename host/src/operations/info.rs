@@ -17,8 +17,8 @@ use log::warn;
 use zeth_lib::{
     consts::Network,
     host::{
-        cache_file_path,
         provider::{new_provider, BlockQuery},
+        rpc_db::cache_file_path,
     },
     optimism::OpSystemInfo,
 };

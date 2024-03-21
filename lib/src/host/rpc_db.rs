@@ -28,11 +28,10 @@ use crate::{
     },
 };
 
-fn cache_file_path(cache_path: &Path, network: &str, block_no: u64, ext: &str) -> PathBuf {
-    cache_path
-        .join(network)
-        .join(block_no.to_string())
-        .with_extension(ext)
+pub fn cache_file_path(cache_path: &Path, network: &str, block_no: u64, ext: &str) -> PathBuf {
+    let dir = cache_path.join(network);
+    std::fs::create_dir_all(&dir).expect("Could not create directory");
+    dir.join(block_no.to_string()).with_extension(ext)
 }
 
 fn eth_cache_path(cache: &Option<PathBuf>, block_no: u64) -> Option<PathBuf> {

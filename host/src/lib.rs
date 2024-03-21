@@ -52,8 +52,9 @@ pub fn save_receipt<T: serde::Serialize>(receipt_label: &String, receipt_data: &
 }
 
 fn zkp_cache_path(receipt_label: &String) -> String {
-    Path::new("cache_zkp")
-        .join(format!("{}.zkp", receipt_label))
+    let dir = Path::new("cache_zkp");
+    std::fs::create_dir_all(&dir).expect("Could not create directory");
+    dir.join(format!("{}.zkp", receipt_label))
         .to_str()
         .unwrap()
         .to_string()

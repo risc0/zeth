@@ -59,7 +59,8 @@ async fn main() -> Result<()> {
     }
 
     // Prevent internal prover from calling Bonsai on its own
-    if !cli.submit_to_bonsai() {
+    if !cli.enable_bonsai() {
+        info!("Disabling BONSAI env vars");
         env::remove_var("BONSAI_API_URL");
         env::remove_var("BONSAI_API_KEY");
     }
@@ -112,7 +113,7 @@ async fn main() -> Result<()> {
             panic!("No STARK data to snarkify!");
         };
 
-        if !cli.submit_to_bonsai() {
+        if !cli.enable_bonsai() {
             panic!("Bonsai submission flag required to create a SNARK!");
         }
 

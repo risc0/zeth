@@ -59,9 +59,11 @@ impl Cli {
         format!("{}_{}", sys_time.as_secs(), self.to_string())
     }
 
-    pub fn submit_to_bonsai(&self) -> bool {
+    pub fn enable_bonsai(&self) -> bool {
         if let Cli::Prove(prove_args) = self {
             prove_args.submit_to_bonsai
+        } else if let Cli::Verify(_) = self {
+            true
         } else {
             false
         }

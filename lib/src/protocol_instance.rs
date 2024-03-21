@@ -96,7 +96,7 @@ pub fn assemble_protocol_instance(
         transition: Transition {
             parentHash: header.parent_hash,
             blockHash: header.hash(),
-            signalRoot: input.taiko.l1_header.state_root,
+            stateRoot: input.taiko.l1_header.state_root,
             graffiti: input.taiko.prover_data.graffiti,
         },
         block_metadata: BlockMetadata {

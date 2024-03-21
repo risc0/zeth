@@ -9,7 +9,10 @@ use anyhow::{anyhow, bail, ensure, Context, Result};
 use once_cell::unsync::Lazy;
 use zeth_primitives::{keccak256, B256};
 
-use crate::input::{decode_anchor, GuestInput};
+use crate::{
+    consts::{get_network_spec, Network},
+    input::{decode_anchor, GuestInput},
+};
 
 pub const ANCHOR_GAS_LIMIT: u64 = 250_000;
 pub const GOLDEN_TOUCH_ACCOUNT: Lazy<Address> = Lazy::new(|| {
@@ -20,62 +23,6 @@ pub const SGX_VERIFIER_ADDRESS: Lazy<Address> = Lazy::new(|| {
     Address::from_str("0xA4702E22F8807Df82Fe5B6dDdd99eB3Fcb0237B0")
         .expect("invalid sgx verifier contract address")
 });
-
-macro_rules! taiko_contracts {
-    ($name:ident) => {{
-        use crate::taiko_utils::$name::*;
-        Ok((*L1_CONTRACT, *L2_CONTRACT))
-    }};
-}
-
-pub fn get_contracts(name: &str) -> Result<(Address, Address)> {
-    match name {
-        "testnet" => taiko_contracts!(testnet),
-        "internal_devnet_a" => taiko_contracts!(internal_devnet_a),
-        "internal_devnet_b" => taiko_contracts!(internal_devnet_b),
-        #[allow(clippy::needless_return)]
-        _ => bail!("invalid chain name: {name}"),
-    }
-}
-
-pub mod testnet {
-    use super::*;
-    pub const CHAIN_ID: u64 = 167008;
-    pub const L1_CONTRACT: Lazy<Address> = Lazy::new(|| {
-        Address::from_str("0xB20BB9105e007Bd3E0F73d63D4D3dA2c8f736b77")
-            .expect("invalid l1 contract address")
-    });
-    pub const L2_CONTRACT: Lazy<Address> = Lazy::new(|| {
-        Address::from_str("0x1670080000000000000000000000000000010001")
-            .expect("invalid l2 contract address")
-    });
-}
-
-pub mod internal_devnet_a {
-    use super::*;
-    pub const CHAIN_ID: u64 = 167001;
-    pub const L1_CONTRACT: Lazy<Address> = Lazy::new(|| {
-        Address::from_str("0x78155FaC733356cbA069245A435Eb114e7fd815d")
-            .expect("invalid l1 contract address")
-    });
-    pub const L2_CONTRACT: Lazy<Address> = Lazy::new(|| {
-        Address::from_str("0x1670010000000000000000000000000000010001")
-            .expect("invalid l2 contract address")
-    });
-}
-
-pub mod internal_devnet_b {
-    use super::*;
-    pub const CHAIN_ID: u64 = 167002;
-    pub const L1_CONTRACT: Lazy<Address> = Lazy::new(|| {
-        Address::from_str("0x674313F932cc0cE272154a288cf3De474D44e14F")
-            .expect("invalid l1 contract address")
-    });
-    pub const L2_CONTRACT: Lazy<Address> = Lazy::new(|| {
-        Address::from_str("0x1670020000000000000000000000000000010001")
-            .expect("invalid l2 contract address")
-    });
-}
 
 pub fn decode_transactions(tx_list: &[u8]) -> Vec<TxEnvelope> {
     alloy_rlp::Decodable::decode(&mut &tx_list.to_owned()[..]).unwrap_or_default()
@@ -155,7 +102,7 @@ pub fn check_anchor_tx(
     input: &GuestInput,
     anchor: &TxEnvelope,
     from: &Address,
-    chain_name: &str,
+    network: Network,
 ) -> Result<()> {
     match anchor {
         TxEnvelope::Eip1559(tx) => {
@@ -175,7 +122,7 @@ pub fn check_anchor_tx(
             );
             // Check that the L2 contract is being called
             ensure!(
-                to == get_contracts(chain_name).unwrap().1,
+                to == get_network_spec(network).l2_contract.unwrap(),
                 "anchor transaction to mismatch"
             );
             // Tx can't have any ETH attached
@@ -201,14 +148,14 @@ pub fn check_anchor_tx(
                 anchor_call.l1Hash == input.taiko.l1_header.hash(),
                 "L1 hash mismatch"
             );
-            if chain_name != "testnet" {
+            if network == Network::TaikoA7 {
                 ensure!(
-                    anchor_call.l1SignalRoot == input.taiko.l1_header.state_root,
+                    anchor_call.l1StateRoot == input.taiko.l1_header.state_root,
                     "L1 state root mismatch"
                 );
             }
             ensure!(
-                anchor_call.l1Height == input.taiko.l1_header.number,
+                anchor_call.l1BlockId == input.taiko.l1_header.number,
                 "L1 block number mismatch"
             );
             // The parent gas used input needs to match the gas used value of the parent block
@@ -237,6 +184,8 @@ impl HeaderHasher for AlloyConsensusHeader {
     }
 }
 
+/// Convert from an Alloy RPC header to an ALloy Consensus Header
+/// which can be serialized and can be used to generate the block hash.
 pub fn to_header(header: &AlloyHeader) -> AlloyConsensusHeader {
     AlloyConsensusHeader {
         parent_hash: header.parent_hash,

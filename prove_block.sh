@@ -9,14 +9,14 @@ rangeStart="$3"
 rangeEnd="$4"
 
 # Check the caain name and set the corresponding RPC values
-if [ "$chain" == "testnet" ]; then
+if [ "$chain" == "taiko_a6" ]; then
   l2Rpc="https://rpc.katla.taiko.xyz"
   l1Rpc="https://l1rpc.katla.taiko.xyz"
-elif [ "$chain" == "internal_devnet_a" ]; then
+elif [ "$chain" == "taiko_a7" ]; then
   l2Rpc="https://rpc.internal.taiko.xyz"
   l1Rpc="https://l1rpc.internal.taiko.xyz"
 else
-  echo "Invalid chain name. Please use 'testnet' or 'internal_devnet_a'."
+  echo "Invalid chain name. Please use 'taiko_a6' or 'taiko_a7'."
   exit 1
 fi
 
@@ -43,7 +43,7 @@ elif [ "$proof" == "risc0-bonsai" ]; then
     }
   }'
 else
-  echo "Invalid proof name. Please use 'native' or 'risc0[-bonsai]'."
+  echo "Invalid proof name. Please use 'native', 'risc0[-bonsai]', or 'succinct'."
   exit 1
 fi
 

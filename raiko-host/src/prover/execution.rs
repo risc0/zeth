@@ -1,8 +1,9 @@
-use std::time::Instant;
+use std::{str::FromStr, time::Instant};
 
 use tracing::{info, warn};
 use zeth_lib::{
     builder::{BlockBuilderStrategy, TaikoStrategy},
+    consts::Network,
     input::{GuestInput, GuestOutput, TaikoProverData},
     protocol_instance::{assemble_protocol_instance, EvidenceType},
     taiko_utils::HeaderHasher,
@@ -136,7 +137,7 @@ pub async fn prepare_input(ctx: &mut Context, req: ProofRequest) -> Result<Guest
             Some(req.l1_rpc),
             Some(req.l2_rpc),
             req.block_number,
-            &req.chain,
+            Network::from_str(&req.chain).unwrap(),
             TaikoProverData {
                 graffiti: req.graffiti,
                 prover: req.prover,

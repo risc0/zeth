@@ -24,7 +24,7 @@ use crate::{
         initialize::{DbInitStrategy, MemDbInitStrategy},
         prepare::{HeaderPrepStrategy, TaikoHeaderPrepStrategy},
     },
-    consts::{get_chain_spec, ChainSpec},
+    consts::{get_network_spec, ChainSpec},
     input::GuestInput,
     mem_db::MemDb,
 };
@@ -51,7 +51,7 @@ where
     /// Creates a new block builder.
     pub fn new(input: &GuestInput) -> BlockBuilder<D> {
         BlockBuilder {
-            chain_spec: get_chain_spec(&input.taiko.chain_spec_name),
+            chain_spec: get_network_spec(input.network),
             db: None,
             header: None,
             input: input.clone(),

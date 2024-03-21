@@ -18,11 +18,12 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 use zeth_lib::{
     builder::{prepare::TaikoHeaderPrepStrategy, BlockBuilder, TkoTxExecStrategy},
+    consts::{get_network_spec, Network},
     input::{
-        decode_anchor, proposeBlockCall, protocol_testnet::BlockProposed as TestnetBlockProposed,
+        decode_anchor, proposeBlockCall, taiko_a6::BlockProposed as TestnetBlockProposed,
         BlockProposed, GuestInput, TaikoGuestInput, TaikoProverData,
     },
-    taiko_utils::{generate_transactions, get_contracts, to_header},
+    taiko_utils::{generate_transactions, to_header},
 };
 use zeth_primitives::mpt::proofs_to_tries;
 
@@ -51,7 +52,7 @@ pub fn preflight(
     l1_rpc_url: Option<String>,
     l2_rpc_url: Option<String>,
     l2_block_no: u64,
-    chain_spec_name: &str,
+    network: Network,
     prover_data: TaikoProverData,
     beacon_rpc_url: Option<String>,
 ) -> Result<GuestInput> {
@@ -71,13 +72,13 @@ pub fn preflight(
     };
     let anchor_call = decode_anchor(anchor_tx.input.as_ref())?;
     // The L1 blocks we need
-    let l1_state_block_no = anchor_call.l1Height;
+    let l1_state_block_no = anchor_call.l1BlockId;
     let l1_inclusion_block_no = l1_state_block_no + 1;
 
     println!("block.hash: {:?}", block.header.hash.unwrap());
     println!("block.parent_hash: {:?}", block.header.parent_hash);
-    println!("anchor L1 block id: {:?}", anchor_call.l1Height);
-    println!("anchor L1 state root: {:?}", anchor_call.l1SignalRoot);
+    println!("anchor L1 block id: {:?}", anchor_call.l1BlockId);
+    println!("anchor L1 state root: {:?}", anchor_call.l1StateRoot);
 
     // Get the L1 state block header so that we can prove the L1 state root
     let l1_inclusion_block = get_block(&provider_l1, l1_inclusion_block_no, false).unwrap();
@@ -88,9 +89,9 @@ pub fn preflight(
     );
 
     // Get the block proposal data
-    let (proposal_tx, proposal_event) = get_log(
+    let (proposal_tx, proposal_event) = get_block_proposed_event(
         l1_rpc_url.clone().unwrap(),
-        chain_spec_name,
+        network,
         l1_inclusion_block.header.hash.unwrap(),
         l2_block_no,
     )?;
@@ -135,7 +136,6 @@ pub fn preflight(
 
     // Create the input struct without the block data set
     let taiko_guest_input = TaikoGuestInput {
-        chain_spec_name: chain_spec_name.to_string(),
         l1_header: to_header(&l1_state_block.header),
         tx_list,
         anchor_tx: serde_json::to_string(&anchor_tx).unwrap(),
@@ -144,6 +144,7 @@ pub fn preflight(
         prover_data,
     };
     let input = GuestInput {
+        network,
         block_hash: block.header.hash.unwrap().0.try_into().unwrap(),
         beneficiary: block.header.miner,
         gas_limit: block.header.gas_limit.try_into().unwrap(),
@@ -375,9 +376,9 @@ pub fn get_block(provider: &HttpProvider, block_number: u64, full: bool) -> Resu
     }
 }
 
-pub fn get_log(
+pub fn get_block_proposed_event(
     rpc_url: String,
-    chain_name: &str,
+    network: Network,
     block_hash: B256,
     l2_block_no: u64,
 ) -> Result<(AlloyRpcTransaction, BlockProposed)> {
@@ -386,10 +387,10 @@ pub fn get_log(
     let tokio_handle = tokio::runtime::Handle::current();
 
     // Get the address that emited the event
-    let l1_address = get_contracts(chain_name).unwrap().0;
+    let l1_address = get_network_spec(network).l1_contract.unwrap();
 
     // Get the event signature (value can differ between chains)
-    let event_signature = if chain_name == "testnet" {
+    let event_signature = if network == Network::TaikoA6 {
         TestnetBlockProposed::SIGNATURE_HASH
     } else {
         BlockProposed::SIGNATURE_HASH
@@ -405,7 +406,7 @@ pub fn get_log(
     // Run over the logs returned to find the matching event for the specified L2 block number
     // (there can be multiple blocks proposed in the same block and even same tx)
     for log in logs {
-        if chain_name == "testnet" {
+        if network == Network::TaikoA6 {
             let event = TestnetBlockProposed::decode_log(
                 &Log::new(log.address, log.topics, log.data).unwrap(),
                 false,

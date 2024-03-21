@@ -71,18 +71,17 @@ const SECP256K1N_HALF: U256 = U256::from_be_bytes([
 // Converts a public key into an ethereum address by hashing the encoded public key with
 // keccak256.
 // pub fn public_key_to_address(public: PublicKey) -> Address {
-// let pubkey_bytes =
-// public.to_encoded_point(false).as_bytes().try_into().expect("The slice has 65 bytes");
-// public_key_bytes_to_address(&pubkey_bytes)
-// strip out the first byte because that should be the SECP256K1_TAG_PUBKEY_UNCOMPRESSED
-// tag returned by libsecp's uncompressed pubkey serialization
-// let hash = keccak256(&public.serialize_uncompressed()[1..]);
-// Address::from_slice(&hash[12..])
+//     let pubkey_bytes =
+//     public.to_encoded_point(false).as_bytes().try_into().expect("The slice has 65
+// bytes");     public_key_bytes_to_address(&pubkey_bytes);
+//     // strip out the first byte because that should be the
+// SECP256K1_TAG_PUBKEY_UNCOMPRESSED     // tag returned by libsecp's uncompressed pubkey
+// serialization     let hash = keccak(&public.serialize_uncompressed()[1..]);
+//     Address::from_slice(&hash[12..])
 // }
-//
+
 // fn public_key_bytes_to_address(public: &[u8; 65]) -> Address {
-// Strip out first byte of sec1 encoded pubkey
-// let hash = keccak(&public[1..]);
-// Address::from_slice(&hash[12..])
+//     // Strip out first byte of sec1 encoded pubkey
+//     let hash = keccak(&public[1..]);
+//     Address::from_slice(&hash[12..])
 // }
-//

@@ -29,9 +29,9 @@ use zeth_primitives::{mpt::MptNode, receipt::Receipt, Bloom, RlpBytes};
 use super::TxExecStrategy;
 use crate::{
     builder::BlockBuilder,
-    consts::GWEI_TO_WEI,
+    consts::{get_network_spec, Network, GWEI_TO_WEI},
     guest_mem_forget,
-    taiko_utils::{check_anchor_tx, generate_transactions, get_contracts},
+    taiko_utils::{check_anchor_tx, generate_transactions},
 };
 
 /// Minimum supported protocol version: Bedrock (Block no. 105235063).
@@ -136,7 +136,7 @@ impl TxExecStrategy for TkoTxExecStrategy {
                     &block_builder.input,
                     &tx,
                     &tx_from,
-                    &block_builder.input.taiko.chain_spec_name,
+                    block_builder.input.network,
                 )
                 .expect("invalid anchor tx");
             }
@@ -154,7 +154,7 @@ impl TxExecStrategy for TkoTxExecStrategy {
 
             // setup the transaction
             fill_eth_tx_env(
-                &block_builder.input.taiko.chain_spec_name,
+                block_builder.input.network,
                 &mut evm.env().tx,
                 &tx,
                 tx_from,
@@ -266,7 +266,7 @@ impl TxExecStrategy for TkoTxExecStrategy {
 }
 
 pub fn fill_eth_tx_env(
-    chain_name: &str,
+    network: Network,
     tx_env: &mut TxEnv,
     tx: &TxEnvelope,
     caller: Address,
@@ -275,7 +275,7 @@ pub fn fill_eth_tx_env(
     // claim the anchor
     tx_env.taiko.is_anchor = is_anchor;
     // set the treasury address
-    tx_env.taiko.treasury = get_contracts(chain_name).unwrap().1;
+    tx_env.taiko.treasury = get_network_spec(network).l2_contract.unwrap();
 
     tx_env.caller = caller;
     match tx {

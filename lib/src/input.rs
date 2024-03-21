@@ -21,6 +21,8 @@ use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{mpt::MptNode, Address, Bytes, FixedBytes, B256, U256};
 
+use crate::consts::Network;
+
 /// Represents the state of an account's storage.
 /// The storage trie together with the used storage slots allow us to reconstruct all the
 /// required values.
@@ -29,6 +31,8 @@ pub type StorageEntry = (MptNode, Vec<U256>);
 /// External block input.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct GuestInput {
+    /// The network to generate the proof for
+    pub network: Network,
     /// Block hash - for reference!
     pub block_hash: B256,
     /// Previous block header
@@ -43,8 +47,6 @@ pub struct GuestInput {
     pub extra_data: Bytes,
     /// Hash previously used for the PoW now containing the RANDAO value.
     pub mix_hash: B256,
-    /// List of transactions for execution
-    // pub transactions: Vec<Transaction<E>>,
     /// List of stake withdrawals for execution
     pub withdrawals: Vec<AlloyWithdrawal>,
     /// State trie of the parent block.
@@ -63,7 +65,6 @@ pub struct GuestInput {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TaikoGuestInput {
-    pub chain_spec_name: String,
     pub l1_header: AlloyConsensusHeader,
     pub tx_list: Vec<u8>,
     pub anchor_tx: String,
@@ -87,10 +88,8 @@ pub enum GuestOutput {
 sol! {
     function anchor(
         bytes32 l1Hash,
-        //bytes32 l1StateRoot,
-        //uint64 l1BlockId,
-        bytes32 l1SignalRoot,
-        uint64 l1Height,
+        bytes32 l1StateRoot,
+        uint64 l1BlockId,
         uint32 parentGasUsed
     )
         external
@@ -148,8 +147,7 @@ sol! {
     struct Transition {
         bytes32 parentHash;
         bytes32 blockHash;
-        bytes32 signalRoot;
-        //bytes32 stateRoot;
+        bytes32 stateRoot;
         bytes32 graffiti;
     }
 
@@ -178,7 +176,7 @@ sol! {
     function proveBlock(uint64 blockId, bytes calldata input) {}
 }
 
-pub mod protocol_testnet {
+pub mod taiko_a6 {
     use alloy_sol_types::sol;
     use serde::{Deserialize, Serialize};
 
@@ -233,7 +231,6 @@ pub mod protocol_testnet {
             bytes32 parentHash;
             bytes32 blockHash;
             bytes32 signalRoot;
-            //bytes32 stateRoot;
             bytes32 graffiti;
         }
 
@@ -263,8 +260,8 @@ pub mod protocol_testnet {
     }
 }
 
-impl From<protocol_testnet::EthDeposit> for EthDeposit {
-    fn from(item: protocol_testnet::EthDeposit) -> Self {
+impl From<taiko_a6::EthDeposit> for EthDeposit {
+    fn from(item: taiko_a6::EthDeposit) -> Self {
         EthDeposit {
             recipient: item.recipient,
             amount: item.amount,
@@ -273,8 +270,8 @@ impl From<protocol_testnet::EthDeposit> for EthDeposit {
     }
 }
 
-impl From<protocol_testnet::BlockProposed> for BlockProposed {
-    fn from(item: protocol_testnet::BlockProposed) -> Self {
+impl From<taiko_a6::BlockProposed> for BlockProposed {
+    fn from(item: taiko_a6::BlockProposed) -> Self {
         BlockProposed {
             blockId: item.blockId,
             assignedProver: item.assignedProver,
@@ -313,6 +310,7 @@ mod tests {
     #[test]
     fn input_serde_roundtrip() {
         let input = GuestInput {
+            network: Default::default(),
             block_hash: Default::default(),
             parent_header: Default::default(),
             beneficiary: Default::default(),
@@ -320,7 +318,6 @@ mod tests {
             timestamp: Default::default(),
             extra_data: Default::default(),
             mix_hash: Default::default(),
-            // transactions: vec![],
             withdrawals: vec![],
             parent_state_trie: Default::default(),
             parent_storage: Default::default(),

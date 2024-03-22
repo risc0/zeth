@@ -47,7 +47,7 @@ thiserror = "1.0"
 sp1-core = { git = "https://github.com/succinctlabs/sp1.git", optional = true }
 risc0-zkvm = { version = "0.20.1", features = ["prove", "getrandom"], optional = true }
 bonsai-sdk = { version = "0.6.0", features = ["async"],  optional = true }
-risc0-guest = { path = "../raiko-guests/risc0", optional = true}
+risc0-guest = { path = "../raiko-guests/risc0", features = ["risc0"], optional = true}
 log = {version = "0.4"}
 typetag ={version = "0.2.15", optional = true}
 reth-primitives = { git = "https://github.com/paradigmxyz/reth.git", branch = "main", features = [

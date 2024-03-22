@@ -85,10 +85,11 @@ pub async fn verify_groth16_snark(
     image_id: Digest,
     snark_receipt: SnarkReceipt,
 ) -> anyhow::Result<()> {
-    let verifier_rpc_url = env!("GROTH16_VERIFIER_RPC_URL");
+    let verifier_rpc_url =
+        std::env::var("GROTH16_VERIFIER_RPC_URL").expect("env GROTH16_VERIFIER_RPC_URL");
     let groth16_verifier_addr = {
-        let addr = env!("GROTH16_VERIFIER_ADDRESS");
-        H160::from_str(addr).unwrap()
+        let addr = std::env::var("GROTH16_VERIFIER_ADDRESS").expect("env GROTH16_VERIFIER_RPC_URL");
+        H160::from_str(&addr).unwrap()
     };
 
     let http_client = Arc::new(Provider::<RetryClient<Http>>::new_client(

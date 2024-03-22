@@ -19,6 +19,8 @@ pub mod host;
 mod metrics;
 mod prover;
 
+use shit::Shit;
+
 #[allow(dead_code)]
 mod rolling;
 use std::{fmt::Debug, path::PathBuf};

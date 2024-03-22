@@ -1,0 +1,15 @@
+[workspace]
+[package]
+version = "0.1.0"
+name = "sp1-script"
+edition = "2021"
+
+[dependencies]
+alloy-primitives = { version = "0.6", default-features = false }
+serde = "1.0"
+serde_json = "1.0"
+zeth-lib = { path = "../../../lib", features = ["taiko", "std"] }
+sp1-core = { git = "https://github.com/succinctlabs/sp1.git" }
+
+[build-dependencies]
+sp1-helper = { git = "https://github.com/succinctlabs/sp1.git" }

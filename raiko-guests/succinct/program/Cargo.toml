@@ -6,8 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-zeth-primitives = { path = "../../primitives", features = ["revm"] }
-zeth-lib = { path = "../../lib", features = ["std", "taiko"] }
+zeth-primitives = { path = "../../../primitives", features = ["revm"] }
+zeth-lib = { path = "../../../lib", features = ["std", "taiko"] }
 sp1-zkvm = { git = "https://github.com/succinctlabs/sp1.git" }
 serde = { version = "1.0.195", features = ["derive"] }
 

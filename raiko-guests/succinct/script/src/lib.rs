@@ -5,19 +5,17 @@ use serde::{Deserialize, Serialize};
 use sp1_core::{utils, SP1Prover, SP1Stdin, SP1Verifier};
 use zeth_lib::input::{GuestInput, GuestOutput};
 
-use crate::prover::{
-    context::Context,
-    request::{ProofRequest, SP1Response, SgxResponse},
-};
+// use crate::prover::{
+//     consts::*,
+//     context::Context,
+//     request::{ProofRequest, SP1Response, SgxResponse},
+// };
 
 const ELF: &[u8] =
-    include_bytes!("../../../../raiko-guests/succinct/elf/riscv32im-succinct-zkvm-elf");
+    include_bytes!("../../program/elf/riscv32im-succinct-zkvm-elf");
 
 pub async fn execute_sp1(
     input: GuestInput,
-    output: GuestOutput,
-    ctx: &mut Context,
-    req: &ProofRequest,
 ) -> Result<SP1Response, String> {
     let config = utils::BabyBearBlake3::new();
     // let config = utils::BabyBearPoseidon2::new();
@@ -53,4 +51,11 @@ pub async fn execute_sp1(
         proof: serde_json::to_string(&proof).unwrap(),
         output,
     })
+}
+
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct SP1Response {
+    pub proof: String,
+    pub output: GuestOutput,
 }

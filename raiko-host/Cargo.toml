@@ -3,6 +3,10 @@ name = "raiko-host"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "shit"
+path = "src/shit.rs"
+
 [dependencies]
 anyhow = "1.0"
 alloy-rlp = { version = "0.3", default-features = false }

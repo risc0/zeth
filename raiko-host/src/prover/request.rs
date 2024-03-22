@@ -7,6 +7,7 @@ use zeth_primitives::{Address, B256};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ProofType {
+    #[cfg(feature = "succinct")]
     Succinct,
     PseZk,
     Powdr,
@@ -53,7 +54,8 @@ pub struct ProofRequest {
 pub enum ProofResponse {
     Sgx(SgxResponse),
     PseZk(PseZkResponse),
-    SP1(SP1Response),
+    #[cfg(feature = "succinct")]
+    SP1(sp1_guest::SP1Response),
     Native(GuestOutput),
     Risc0(Risc0Response),
 }
@@ -69,11 +71,11 @@ pub struct SgxResponse {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PseZkResponse {}
 
-#[derive(Clone, Serialize, Deserialize)]
-pub struct SP1Response {
-    pub proof: String,
-    pub output: GuestOutput,
-}
+// #[derive(Clone, Serialize, Deserialize)]
+// pub struct SP1Response {
+//     pub proof: String,
+//     pub output: GuestOutput,
+// }
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Risc0Response {

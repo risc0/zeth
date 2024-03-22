@@ -4,6 +4,7 @@ members = [
     "lib",
     "primitives",
     "raiko-host",
+    "raiko-guests/succinct/script",
     # "sgx-ra",
     # "tests/*",
 ]

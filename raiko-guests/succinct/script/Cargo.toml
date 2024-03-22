@@ -1,7 +1,6 @@
-[workspace]
 [package]
 version = "0.1.0"
-name = "sp1-script"
+name = "sp1-guest"
 edition = "2021"
 
 [dependencies]

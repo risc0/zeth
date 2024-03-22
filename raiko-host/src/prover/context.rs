@@ -50,6 +50,7 @@ impl Context {
 
     pub fn guest_executable_path(&self, proof_instance: ProofType) -> PathBuf {
         match proof_instance {
+            #[cfg(feature = "succinct")]
             ProofType::Succinct => todo!(),
             ProofType::PseZk => todo!(),
             ProofType::Powdr => todo!(),

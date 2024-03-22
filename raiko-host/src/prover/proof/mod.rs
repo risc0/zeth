@@ -45,14 +45,16 @@ pub mod sgx {
 pub mod succinct;
 #[cfg(not(feature = "succinct"))]
 pub mod succinct {
+    use crate::prover::request::Risc0Response;
+
     use super::*;
-    use crate::prover::request::SP1Response;
     pub async fn execute_sp1(
         input: GuestInput,
         output: GuestOutput,
         ctx: &mut Context,
         req: &ProofRequest,
-    ) -> Result<SP1Response, String> {
+        // TODO: Cecilia
+    ) -> Result<Risc0Response, String> {
         Err("Feature not succinct is enabled".to_string())
     }
 }

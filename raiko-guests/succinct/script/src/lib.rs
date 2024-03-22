@@ -18,7 +18,6 @@ pub async fn execute_sp1(
     input: GuestInput,
 ) -> Result<SP1Response, String> {
     let config = utils::BabyBearBlake3::new();
-    // let config = utils::BabyBearPoseidon2::new();
 
     // Write the input.
     let mut stdin = SP1Stdin::new();

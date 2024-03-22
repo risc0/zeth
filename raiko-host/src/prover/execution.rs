@@ -85,6 +85,7 @@ pub async fn execute(
                 todo!()
             }
             ProofType::PseZk => todo!(),
+            #[cfg(feature = "succinct")]
             ProofType::Succinct => {
                 let bid = req.block_number;
                 let resp = execute_sp1(input, output, ctx, req).await?;
@@ -153,6 +154,7 @@ pub async fn prepare_input(ctx: &mut Context, req: ProofRequest) -> Result<Guest
 impl From<ProofType> for EvidenceType {
     fn from(value: ProofType) -> Self {
         match value {
+            #[cfg(feature = "succinct")]
             ProofType::Succinct => EvidenceType::Succinct,
             ProofType::PseZk => EvidenceType::PseZk,
             ProofType::Powdr => EvidenceType::Powdr,

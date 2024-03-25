@@ -16,9 +16,8 @@
 
 use std::path::PathBuf;
 
-use risc0_zkvm::{ExecutorEnv, ExecutorImpl, FileSegmentRef};
+use risc0_zkvm::{ExecutorEnv, ExecutorImpl};
 use rstest::rstest;
-use tempfile::tempdir;
 use zeth_lib::output::BlockBuildOutput;
 use zeth_primitives::block::Header;
 use zeth_testeth::{

@@ -24,10 +24,8 @@ hex = "0.4.3"
 log = "0.4"
 risc0-zkvm = { workspace = true, features = ["prove"] }
 serde = "1.0"
-tempfile = "3.6"
 tokio = { version = "1.23", features = ["full"] }
 tracing = { version = "0.1", features = ["log"] }
-typetag = "0.2.15"
 zeth-guests = { path = "../guests" }
 zeth-lib = { path = "../lib" }
 zeth-primitives = { path = "../primitives" }

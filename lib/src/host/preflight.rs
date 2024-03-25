@@ -340,9 +340,12 @@ fn proofs_to_tries(
 
         // assure that slots can be deleted from the storage trie
         for storage_proof in &fini_proofs.storage_proof {
-            use ethers_core::abi::ethabi::ethereum_types::BigEndianHash;
-            let storage_proof_key = ethers_core::types::H256::from_uint(&storage_proof.key);
-            add_orphaned_leafs(storage_proof_key, &storage_proof.proof, &mut storage_nodes)?;
+            let key = from_ethers_u256(storage_proof.key);
+            add_orphaned_leafs(
+                key.to_be_bytes::<32>(),
+                &storage_proof.proof,
+                &mut storage_nodes,
+            )?;
         }
         // create the storage trie, from all the relevant nodes
         let storage_trie = resolve_nodes(&storage_root_node, &storage_nodes);

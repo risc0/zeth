@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::Context;
 use zeth_primitives::{
@@ -22,20 +22,16 @@ use zeth_primitives::{
 };
 
 use crate::{
-    host::provider::{new_provider, BlockQuery},
+    host::{
+        cache_file_path,
+        provider::{new_provider, BlockQuery},
+    },
     optimism::{
         batcher_db::{BatcherDb, BlockInput, MemDb},
         config::ChainConfig,
         deposits, system_config,
     },
 };
-
-fn cache_file_path(cache_path: &Path, network: &str, block_no: u64, ext: &str) -> PathBuf {
-    cache_path
-        .join(network)
-        .join(block_no.to_string())
-        .with_extension(ext)
-}
 
 fn eth_cache_path(cache: &Option<PathBuf>, block_no: u64) -> Option<PathBuf> {
     cache

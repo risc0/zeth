@@ -70,8 +70,8 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                 .unwrap();
 
             trace!("Block no. {}", header.number);
-            trace!("  EVM spec ID: {:?}", spec_id);
-            trace!("  Timestamp: {}", dt);
+            trace!("  EVM spec ID: {spec_id:?}");
+            trace!("  Timestamp: {dt}");
             trace!(
                 "  Transactions: {}",
                 block_builder.input.state_input.transactions.len()
@@ -95,7 +95,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             .with_spec_id(spec_id)
             .modify_block_env(|blk_env| {
                 // set the EVM block environment
-                blk_env.number = header.number.try_into().unwrap();
+                blk_env.number = U256::from(header.number);
                 blk_env.coinbase = block_builder.input.state_input.beneficiary;
                 blk_env.timestamp = header.timestamp;
                 blk_env.difficulty = U256::ZERO;
@@ -129,9 +129,9 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             #[cfg(not(target_os = "zkvm"))]
             {
                 let tx_hash = tx.hash();
-                trace!("Tx no. {} (hash: {})", tx_no, tx_hash);
+                trace!("Tx no. {tx_no} (hash: {tx_hash})");
                 trace!("  Type: {}", tx.essence.tx_type());
-                trace!("  Fr: {:?}", tx_from);
+                trace!("  Fr: {tx_from:?}");
                 trace!("  To: {:?}", tx.essence.to().unwrap_or_default());
             }
 
@@ -139,7 +139,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             let block_available_gas =
                 block_builder.input.state_input.gas_limit - cumulative_gas_used;
             if block_available_gas < tx.essence.gas_limit() {
-                bail!("Error at transaction {}: gas exceeds block limit", tx_no);
+                bail!("Error at transaction {tx_no}: gas exceeds block limit");
             }
 
             // cache account nonce if the transaction is a deposit, starting with Canyon
@@ -176,15 +176,15 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
             // process the transaction
             let ResultAndState { result, state } = evm
                 .transact()
-                .map_err(|evm_err| anyhow!("Error at transaction {}: {:?}", tx_no, evm_err))
+                .map_err(|evm_err| anyhow!("Error at transaction {tx_no}: {evm_err:?}"))
                 // todo: change unrecoverable panic to host-side recoverable `Result`
                 .expect("Block construction failure.");
 
-            let gas_used = result.gas_used().try_into().unwrap();
+            let gas_used = U256::from(result.gas_used());
             cumulative_gas_used = cumulative_gas_used.checked_add(gas_used).unwrap();
 
             #[cfg(not(target_os = "zkvm"))]
-            trace!("  Ok: {:?}", result);
+            trace!("  Ok: {result:?}");
 
             // create the receipt from the EVM result
             let mut receipt = Receipt::new(
@@ -203,8 +203,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                 if account.is_touched() {
                     // log account
                     trace!(
-                        "  State {:?} (is_selfdestructed={}, is_loaded_as_not_existing={}, is_created={})",
-                        address,
+                        "  State {address:?} (is_selfdestructed={}, is_loaded_as_not_existing={}, is_created={})",
                         account.is_selfdestructed(),
                         account.is_loaded_as_not_existing(),
                         account.is_created()
@@ -219,7 +218,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
                     // log state changes
                     for (addr, slot) in &account.storage {
                         if slot.is_changed() {
-                            trace!("    Storage address: {:?}", addr);
+                            trace!("    Storage address: {addr:?}");
                             trace!("      Before: {:?}", slot.original_value());
                             trace!("       After: {:?}", slot.present_value());
                         }
@@ -249,11 +248,7 @@ impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
         header.receipts_root = receipt_trie.hash();
         header.logs_bloom = logs_bloom;
         header.gas_used = cumulative_gas_used;
-        header.withdrawals_root = if spec_id < SpecId::CANYON {
-            None
-        } else {
-            Some(EMPTY_ROOT)
-        };
+        header.withdrawals_root = (spec_id >= SpecId::CANYON).then_some(EMPTY_ROOT);
 
         // Leak memory, save cycles
         guest_mem_forget([tx_trie, receipt_trie]);

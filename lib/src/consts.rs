@@ -156,6 +156,17 @@ impl ChainSpec {
     pub fn chain_id(&self) -> ChainId {
         self.chain_id
     }
+    /// Validates a [SpecId].
+    pub fn validate_spec_id(&self, spec_id: SpecId) -> Result<()> {
+        let (min_spec_id, _) = self.hard_forks.first_key_value().unwrap();
+        if spec_id < *min_spec_id {
+            bail!("expected >= {:?}, got {:?}", min_spec_id, spec_id);
+        }
+        if spec_id > self.max_spec_id {
+            bail!("expected <= {:?}, got {:?}", self.max_spec_id, spec_id);
+        }
+        Ok(())
+    }
     /// Returns the [SpecId] for a given block number and timestamp or an error if not
     /// supported.
     pub fn active_fork(&self, block_number: BlockNumber, timestamp: &U256) -> Result<SpecId> {

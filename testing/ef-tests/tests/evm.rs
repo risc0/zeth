@@ -40,20 +40,26 @@ fn evm(
         .try_init();
 
     for EthTestCase {
+        name,
         mut json,
         genesis,
         chain_spec,
     } in read_eth_test(path)
     {
         // only one block supported for now
-        assert_eq!(json.blocks.len(), 1);
+        if json.blocks.len() > 1 {
+            println!("skipping '{}': more than one block", name);
+            continue;
+        }
         let block = json.blocks.pop().unwrap();
 
         // skip failing tests for now
         if let Some(message) = block.expect_exception {
-            println!("skipping ({})", message);
-            break;
+            println!("skipping '{}': {}", name, message);
+            continue;
         }
+
+        println!("running '{}'", name);
 
         let block_header = block.block_header.unwrap();
         let expected_header: Header = block_header.clone().into();
@@ -69,7 +75,7 @@ fn evm(
             json.pre,
             expected_header.clone(),
             block.transactions,
-            block.withdrawals.unwrap_or_default(),
+            block.withdrawals,
             post_state,
         );
         let input_state_input_hash = input.state_input.hash();

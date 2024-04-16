@@ -25,7 +25,7 @@ use zeth::{
 use zeth_guests::*;
 use zeth_lib::{
     builder::{EthereumStrategy, OptimismStrategy},
-    consts::{ETH_MAINNET_CHAIN_SPEC, OP_MAINNET_CHAIN_SPEC},
+    consts::{ANVIL_CHAIN_SPEC, ETH_MAINNET_CHAIN_SPEC, OP_MAINNET_CHAIN_SPEC},
 };
 
 #[tokio::main]
@@ -35,6 +35,7 @@ async fn main() -> Result<()> {
 
     info!("Using the following image ids:");
     info!("  eth-block: {}", Digest::from(ETH_BLOCK_ID));
+    info!("  anvil-block: {}", Digest::from(ANVIL_BLOCK_ID));
     info!("  op-block: {}", Digest::from(OP_BLOCK_ID));
     info!("  op-derive: {}", Digest::from(OP_DERIVE_ID));
     info!("  op-compose: {}", Digest::from(OP_COMPOSE_ID));
@@ -50,6 +51,19 @@ async fn main() -> Result<()> {
                     &cli,
                     rpc_url,
                     &ETH_MAINNET_CHAIN_SPEC,
+                    ETH_BLOCK_ELF,
+                )
+                .await?,
+            )
+        }
+        Network::Anvil => {
+            let rpc_url = build_args.eth_rpc_url.clone();
+            (
+                ETH_BLOCK_ID,
+                build::build_block::<EthereumStrategy>(
+                    &cli,
+                    rpc_url,
+                    &ANVIL_CHAIN_SPEC,
                     ETH_BLOCK_ELF,
                 )
                 .await?,

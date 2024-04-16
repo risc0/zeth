@@ -54,6 +54,14 @@ pub static ETH_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
     gas_constants: BTreeMap::from([(SpecId::LONDON, ETH_MAINNET_EIP1559_CONSTANTS)]),
 });
 
+/// Anvil default chain spec
+pub static ANVIL_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
+    chain_id: 31337,
+    max_spec_id: SpecId::SHANGHAI,
+    hard_forks: BTreeMap::from([(SpecId::SHANGHAI, ForkCondition::Block(0))]),
+    gas_constants: BTreeMap::from([(SpecId::LONDON, ETH_MAINNET_EIP1559_CONSTANTS)]),
+});
+
 /// The Ethereum mainnet EIP-1559 gas constants.
 pub const ETH_MAINNET_EIP1559_CONSTANTS: Eip1559Constants = Eip1559Constants {
     base_fee_change_denominator: uint!(8_U256),

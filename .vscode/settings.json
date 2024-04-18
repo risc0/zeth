@@ -3,7 +3,8 @@
     "rust-analyzer.linkedProjects": [
         "./Cargo.toml",
         "./guests/eth-block/Cargo.toml",
-        "./guests/anvil-block/Cargo.toml",
+        "./guests/ganache-merge-block/Cargo.toml",
+        "./guests/ganache-shanghai-block/Cargo.toml",
         "./guests/op-block/Cargo.toml",
         "./guests/op-compose/Cargo.toml",
         "./guests/op-derive/Cargo.toml",

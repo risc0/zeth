@@ -97,8 +97,10 @@ pub enum Network {
     Optimism,
     /// Optimism Mainnet as derived from the Ethereum Mainnet
     OptimismDerived,
-    /// Anvil Ethereum
-    Anvil,
+    /// Ganaghe Ethereum (Merge fork)
+    GanacheMerge,
+    /// Ganaghe Ethereum (Shanghai fork)
+    GanacheShanghai,
 }
 
 impl fmt::Display for Network {

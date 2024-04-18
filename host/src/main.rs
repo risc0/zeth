@@ -25,7 +25,10 @@ use zeth::{
 use zeth_guests::*;
 use zeth_lib::{
     builder::{EthereumStrategy, OptimismStrategy},
-    consts::{ANVIL_CHAIN_SPEC, ETH_MAINNET_CHAIN_SPEC, OP_MAINNET_CHAIN_SPEC},
+    consts::{
+        ETH_MAINNET_CHAIN_SPEC, GANACHE_MERGE_CHAIN_SPEC, GANACHE_SHANGHAI_CHAIN_SPEC,
+        OP_MAINNET_CHAIN_SPEC,
+    },
 };
 
 #[tokio::main]
@@ -35,7 +38,14 @@ async fn main() -> Result<()> {
 
     info!("Using the following image ids:");
     info!("  eth-block: {}", Digest::from(ETH_BLOCK_ID));
-    info!("  anvil-block: {}", Digest::from(ANVIL_BLOCK_ID));
+    info!(
+        "  ganache-merge-block: {}",
+        Digest::from(GANACHE_MERGE_BLOCK_ID)
+    );
+    info!(
+        "  ganache-shanghai-block: {}",
+        Digest::from(GANACHE_SHANGHAI_BLOCK_ID)
+    );
     info!("  op-block: {}", Digest::from(OP_BLOCK_ID));
     info!("  op-derive: {}", Digest::from(OP_DERIVE_ID));
     info!("  op-compose: {}", Digest::from(OP_COMPOSE_ID));
@@ -56,15 +66,28 @@ async fn main() -> Result<()> {
                 .await?,
             )
         }
-        Network::Anvil => {
+        Network::GanacheMerge => {
             let rpc_url = build_args.eth_rpc_url.clone();
             (
-                ANVIL_BLOCK_ID,
+                GANACHE_MERGE_BLOCK_ID,
                 build::build_block::<EthereumStrategy>(
                     &cli,
                     rpc_url,
-                    &ANVIL_CHAIN_SPEC,
-                    ANVIL_BLOCK_ELF,
+                    &GANACHE_MERGE_CHAIN_SPEC,
+                    GANACHE_MERGE_BLOCK_ELF,
+                )
+                .await?,
+            )
+        }
+        Network::GanacheShanghai => {
+            let rpc_url = build_args.eth_rpc_url.clone();
+            (
+                GANACHE_SHANGHAI_BLOCK_ID,
+                build::build_block::<EthereumStrategy>(
+                    &cli,
+                    rpc_url,
+                    &GANACHE_SHANGHAI_CHAIN_SPEC,
+                    GANACHE_SHANGHAI_BLOCK_ELF,
                 )
                 .await?,
             )

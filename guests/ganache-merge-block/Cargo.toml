@@ -1,5 +1,5 @@
 [package]
-name = "anvil-block"
+name = "ganache-merge-block"
 version = "0.1.0"
 edition = "2021"
 

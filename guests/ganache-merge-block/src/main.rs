@@ -17,7 +17,7 @@
 use risc0_zkvm::guest::env;
 use zeth_lib::{
     builder::{BlockBuilderStrategy, EthereumStrategy},
-    consts::ANVIL_CHAIN_SPEC,
+    consts::GANACHE_MERGE_CHAIN_SPEC,
 };
 
 risc0_zkvm::guest::entry!(main);
@@ -26,7 +26,7 @@ pub fn main() {
     // Read the input previous block and transaction data
     let input = env::read();
     // Build the resulting block
-    let mut output = EthereumStrategy::build_from(&ANVIL_CHAIN_SPEC, input)
+    let mut output = EthereumStrategy::build_from(&GANACHE_MERGE_CHAIN_SPEC, input)
         .expect("Failed to build the resulting block");
     // Abridge successful construction results
     if let Some(replaced_state) = output.replace_state_with_hash() {

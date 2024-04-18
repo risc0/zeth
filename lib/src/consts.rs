@@ -54,6 +54,22 @@ pub static ETH_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
     gas_constants: BTreeMap::from([(SpecId::LONDON, ETH_MAINNET_EIP1559_CONSTANTS)]),
 });
 
+/// Ganache default chain spec (Merge fork)
+pub static GANACHE_MERGE_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
+    chain_id: 1337,
+    max_spec_id: SpecId::MERGE,
+    hard_forks: BTreeMap::from([(SpecId::MERGE, ForkCondition::Block(0))]),
+    gas_constants: BTreeMap::from([(SpecId::LONDON, ETH_MAINNET_EIP1559_CONSTANTS)]),
+});
+
+/// Ganache default chain spec (Shanghai fork)
+pub static GANACHE_SHANGHAI_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
+    chain_id: 1337,
+    max_spec_id: SpecId::SHANGHAI,
+    hard_forks: BTreeMap::from([(SpecId::SHANGHAI, ForkCondition::Block(0))]),
+    gas_constants: BTreeMap::from([(SpecId::LONDON, ETH_MAINNET_EIP1559_CONSTANTS)]),
+});
+
 /// The Ethereum mainnet EIP-1559 gas constants.
 pub const ETH_MAINNET_EIP1559_CONSTANTS: Eip1559Constants = Eip1559Constants {
     base_fee_change_denominator: uint!(8_U256),

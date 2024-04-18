@@ -59,12 +59,12 @@ async fn main() -> Result<()> {
         Network::Anvil => {
             let rpc_url = build_args.eth_rpc_url.clone();
             (
-                ETH_BLOCK_ID,
+                ANVIL_BLOCK_ID,
                 build::build_block::<EthereumStrategy>(
                     &cli,
                     rpc_url,
                     &ANVIL_CHAIN_SPEC,
-                    ETH_BLOCK_ELF,
+                    ANVIL_BLOCK_ELF,
                 )
                 .await?,
             )

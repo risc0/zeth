@@ -57,8 +57,8 @@ pub static ETH_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
 /// Anvil default chain spec
 pub static ANVIL_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
     chain_id: 31337,
-    max_spec_id: SpecId::SHANGHAI,
-    hard_forks: BTreeMap::from([(SpecId::SHANGHAI, ForkCondition::Block(0))]),
+    max_spec_id: SpecId::CANCUN,
+    hard_forks: BTreeMap::from([(SpecId::MERGE, ForkCondition::Block(0))]),
     gas_constants: BTreeMap::from([(SpecId::LONDON, ETH_MAINNET_EIP1559_CONSTANTS)]),
 });
 

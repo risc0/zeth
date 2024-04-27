@@ -16,6 +16,7 @@ use alloy_primitives::{Address, Bytes, B256, U256};
 use alloy_rlp::{Decodable, Encodable};
 use alloy_rlp_derive::{RlpDecodable, RlpEncodable};
 use bytes::{Buf, BufMut};
+use k256::ecdsa::VerifyingKey;
 use serde::{Deserialize, Serialize};
 
 use super::signature::TxSignature;
@@ -122,6 +123,25 @@ impl TxEssence for OptimismTxEssence {
         match self {
             OptimismTxEssence::Ethereum(eth) => eth.to(),
             OptimismTxEssence::OptimismDeposited(op) => op.to.into(),
+        }
+    }
+    /// Recovers the Ethereum address of the sender from the transaction's signature
+    /// using the provided verification key.
+    fn recover_with_vk(
+        &self,
+        signature: &TxSignature,
+        verify_key: &VerifyingKey,
+    ) -> anyhow::Result<Address> {
+        match self {
+            OptimismTxEssence::Ethereum(eth) => eth.recover_with_vk(signature, verify_key),
+            OptimismTxEssence::OptimismDeposited(op) => Ok(op.from),
+        }
+    }
+    /// Recovers the ECDSA verification key of this transaction's signer
+    fn verifying_key(&self, signature: &TxSignature) -> anyhow::Result<VerifyingKey> {
+        match self {
+            OptimismTxEssence::Ethereum(eth) => eth.verifying_key(signature),
+            OptimismTxEssence::OptimismDeposited(_) => anyhow::bail!("Undefined!"),
         }
     }
     /// Recovers the Ethereum address of the sender from the transaction's signature.

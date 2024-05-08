@@ -77,7 +77,7 @@ pub async fn stark2snark(
         }
     };
 
-    let stark_psd = stark_receipt.get_claim()?.post.digest();
+    let stark_psd = stark_receipt.claim()?.post.digest();
     let snark_psd = Digest::try_from(snark_receipt.post_state_digest.as_slice())?;
 
     if stark_psd != snark_psd {
@@ -332,7 +332,7 @@ pub fn prove_locally(
         let mut exec = ExecutorImpl::from_elf(env, elf).unwrap();
         exec.run().unwrap()
     };
-    session.prove().unwrap()
+    session.prove().unwrap().receipt
 }
 
 const NULL_SEGMENT_REF: NullSegmentRef = NullSegmentRef {};

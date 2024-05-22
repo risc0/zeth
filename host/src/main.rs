@@ -14,6 +14,8 @@
 
 extern crate core;
 
+use std::sync::Arc;
+
 use anyhow::Result;
 use clap::Parser;
 use log::info;
@@ -31,7 +33,7 @@ use zeth_lib::{
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
-    let cli = Cli::parse();
+    let cli = Arc::new(Cli::parse());
 
     info!("Using the following image ids:");
     info!("  eth-block: {}", Digest::from(ETH_BLOCK_ID));
@@ -41,15 +43,15 @@ async fn main() -> Result<()> {
 
     // execute the command
     let build_args = cli.build_args();
-    let (image_id, stark) = match build_args.network {
+    let (image_id, starks) = match build_args.network {
         Network::Ethereum => {
             let rpc_url = build_args.eth_rpc_url.clone();
             (
                 ETH_BLOCK_ID,
                 build::build_block::<EthereumStrategy>(
-                    &cli,
+                    cli.clone(),
                     rpc_url,
-                    &ETH_MAINNET_CHAIN_SPEC,
+                    Arc::new(ETH_MAINNET_CHAIN_SPEC.clone()),
                     ETH_BLOCK_ELF,
                 )
                 .await?,
@@ -60,9 +62,9 @@ async fn main() -> Result<()> {
             (
                 OP_BLOCK_ID,
                 build::build_block::<OptimismStrategy>(
-                    &cli,
+                    cli.clone(),
                     rpc_url,
-                    &OP_MAINNET_CHAIN_SPEC,
+                    Arc::new(OP_MAINNET_CHAIN_SPEC.clone()),
                     OP_BLOCK_ELF,
                 )
                 .await?,
@@ -72,30 +74,36 @@ async fn main() -> Result<()> {
             if let Some(composition_size) = build_args.composition {
                 (
                     OP_COMPOSE_ID,
-                    rollups::compose_derived_rollup_blocks(&cli, composition_size).await?,
+                    vec![rollups::compose_derived_rollup_blocks(&cli, composition_size).await?],
                 )
             } else {
-                (OP_DERIVE_ID, rollups::derive_rollup_blocks(&cli).await?)
+                (
+                    OP_DERIVE_ID,
+                    vec![rollups::derive_rollup_blocks(&cli).await?],
+                )
             }
         }
     };
 
     // Create/verify Groth16 SNARK
-    if cli.snark() {
-        let Some((stark_uuid, stark_receipt)) = stark else {
-            panic!("No STARK data to snarkify!");
-        };
+    for stark in starks {
+        if cli.snark() {
+            let Some((stark_uuid, stark_receipt)) = stark else {
+                panic!("No STARK data to snarkify!");
+            };
 
-        if !cli.submit_to_bonsai() {
-            panic!("Bonsai submission flag required to create a SNARK!");
+            if !cli.submit_to_bonsai() {
+                panic!("Bonsai submission flag required to create a SNARK!");
+            }
+
+            let image_id = Digest::from(image_id);
+            let (snark_uuid, snark_receipt) =
+                stark2snark(image_id, stark_uuid, stark_receipt).await?;
+
+            info!("Validating SNARK uuid: {}", snark_uuid);
+
+            verify_groth16_snark(&cli, image_id, snark_receipt).await?;
         }
-
-        let image_id = Digest::from(image_id);
-        let (snark_uuid, snark_receipt) = stark2snark(image_id, stark_uuid, stark_receipt).await?;
-
-        info!("Validating SNARK uuid: {}", snark_uuid);
-
-        verify_groth16_snark(&cli, image_id, snark_receipt).await?;
     }
 
     Ok(())

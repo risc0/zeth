@@ -24,7 +24,7 @@ use risc0_zkvm::{
     compute_image_id,
     serde::to_vec,
     sha::{Digest, Digestible},
-    Assumption, ExecutorEnv, ExecutorImpl, Receipt, Segment, SegmentRef,
+    Assumption, ExecutorEnv, ExecutorImpl, Receipt, Segment, SegmentRef, Session,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use zeth_primitives::keccak::keccak;
@@ -353,7 +353,7 @@ pub fn execute<T: Serialize, O: Eq + Debug + DeserializeOwned>(
     elf: &[u8],
     expected_output: &O,
     profile_reference: &String,
-) {
+) -> Session {
     debug!(
         "Running in executor with segment_limit_po2 = {:?}",
         segment_limit_po2
@@ -390,7 +390,7 @@ pub fn execute<T: Serialize, O: Eq + Debug + DeserializeOwned>(
         session.segments.len() * (1 << segment_limit_po2)
     );
     // verify output
-    let journal = session.journal.unwrap();
+    let journal = session.journal.as_ref().unwrap();
     let output_guest: O = journal.decode().expect("Could not decode journal");
     if expected_output == &output_guest {
         info!("Executor succeeded");
@@ -400,4 +400,6 @@ pub fn execute<T: Serialize, O: Eq + Debug + DeserializeOwned>(
             output_guest, expected_output,
         );
     }
+
+    session
 }

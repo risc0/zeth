@@ -177,6 +177,10 @@ pub struct RunArgs {
     #[clap(short, long, default_value_t = false)]
     /// Whether to profile the zkVM execution
     pub profile: bool,
+
+    /// Optionally export cycles from executing in csv format to the file path.
+    #[clap(long, require_equals = true)]
+    pub export_csv: Option<PathBuf>,
 }
 
 impl Tag for RunArgs {

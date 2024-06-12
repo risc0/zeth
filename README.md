@@ -98,7 +98,6 @@ Commands:
   run      Run the block creation process inside the executor
   prove    Provably create blocks inside the zkVM
   verify   Verify a block creation receipt
-  op-info  Output debug information about an optimism block
   help     Print this message or the help of the given subcommand(s)
 
 Options:
@@ -109,7 +108,7 @@ Options:
 For every command, the `--network` parameter can be set to either `ethereum` or `optimism` for provable construction
 of single blocks from either chain on its own.
 To provably derive Optimism blocks using the data posted on the Ethereum chain, use `--network=optimism-derived`,
-but `optimism-derived` is not supported by the `run` and `op-info` commands.
+but `optimism-derived` is not supported by the `run` commands.
 
 #### build
 *This command only natively builds blocks and does not generate any proofs.*
@@ -327,27 +326,6 @@ Options:
 This command first natively builds the specified block(s), and then validates the correctness of the receipt generated
 on Bonsai specified by the `--bonsai-receipt-uuid=BONSAI_SESSION_UUID` parameter, where `BONSAI_SESSION_UUID` is the
 session UUID returned when proving using `--submit-to-bonsai`.
-
-#### op-info
-```
-RUST_LOG=info ./target/release/zeth op-info --help  
-```
-```
-Output debug information about an optimism block
-
-Usage: zeth op-info [OPTIONS] --block-number=<BLOCK_NUMBER>
-
-Options:
-  -w, --network=<NETWORK>            Network name (ethereum/optimism/optimism-derived) [default: ethereum]
-  -e, --eth-rpc-url=<ETH_RPC_URL>    URL of the Ethereum RPC node
-  -o, --op-rpc-url=<OP_RPC_URL>      URL of the Optimism RPC node
-  -c, --cache[=<CACHE>]              Use a local directory as a cache for RPC calls. Accepts a custom directory. [default: cache_rpc]
-  -b, --block-number=<BLOCK_NUMBER>  Block number to begin from
-  -n, --block-count=<BLOCK_COUNT>    Number of blocks to provably derive [default: 1]
-  -h, --help                         Print help
-```
-This command only outputs debug information for development use.
-
 
 ## Additional resources
 

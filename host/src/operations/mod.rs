@@ -24,7 +24,7 @@ use risc0_zkvm::{
     compute_image_id,
     serde::to_vec,
     sha::{Digest, Digestible},
-    Assumption, ExecutorEnv, ExecutorImpl, Receipt, Segment, SegmentRef,
+    AssumptionReceipt, ExecutorEnv, ExecutorImpl, Receipt, Segment, SegmentRef,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use zeth_primitives::keccak::keccak;
@@ -77,7 +77,7 @@ pub async fn stark2snark(
         }
     };
 
-    let stark_psd = stark_receipt.get_claim()?.post.digest();
+    let stark_psd = stark_receipt.claim()?.value()?.post.digest();
     let snark_psd = Digest::try_from(snark_receipt.post_state_digest.as_slice())?;
 
     if stark_psd != snark_psd {
@@ -178,7 +178,7 @@ pub async fn maybe_prove<I: Serialize, O: Eq + Debug + Serialize + DeserializeOw
     input: &I,
     elf: &[u8],
     expected_output: &O,
-    assumptions: (Vec<Assumption>, Vec<String>),
+    assumptions: (Vec<AssumptionReceipt>, Vec<String>),
 ) -> Option<(String, Receipt)> {
     let Cli::Prove(prove_args) = cli else {
         return None;
@@ -300,7 +300,7 @@ pub fn prove_locally(
     segment_limit_po2: u32,
     encoded_input: Vec<u32>,
     elf: &[u8],
-    assumptions: Vec<Assumption>,
+    assumptions: Vec<AssumptionReceipt>,
     profile: bool,
     profile_reference: &String,
 ) -> Receipt {
@@ -332,7 +332,7 @@ pub fn prove_locally(
         let mut exec = ExecutorImpl::from_elf(env, elf).unwrap();
         exec.run().unwrap()
     };
-    session.prove().unwrap()
+    session.prove().unwrap().receipt
 }
 
 const NULL_SEGMENT_REF: NullSegmentRef = NullSegmentRef {};

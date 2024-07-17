@@ -131,6 +131,10 @@ pub struct BuildArgs {
     /// URL of the Optimism RPC node
     pub op_rpc_url: Option<String>,
 
+    #[clap(long, require_equals = true, num_args = 0..=1, default_missing_value = "true")]
+    /// Whether to export the ELF and input to a file
+    pub export: Option<bool>,
+
     #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "cache_rpc")]
     /// Cache RPC calls locally; the value specifies the cache directory
     ///

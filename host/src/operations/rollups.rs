@@ -16,7 +16,7 @@ use std::collections::VecDeque;
 
 use anyhow::Context;
 use log::{info, trace};
-use risc0_zkvm::{Assumption, Receipt};
+use risc0_zkvm::{AssumptionReceipt, Receipt};
 use zeth_guests::*;
 use zeth_lib::{
     builder::{BlockBuilderStrategy, OptimismStrategy},
@@ -472,8 +472,8 @@ pub async fn compose_derived_rollup_blocks(
 async fn build_op_blocks(
     cli: &Cli,
     op_block_inputs: Vec<BlockBuildInput<OptimismTxEssence>>,
-) -> (Vec<Assumption>, Vec<String>, Vec<BlockBuildOutput>) {
-    let mut assumptions: Vec<Assumption> = vec![];
+) -> (Vec<AssumptionReceipt>, Vec<String>, Vec<BlockBuildOutput>) {
+    let mut assumptions: Vec<AssumptionReceipt> = vec![];
     let mut bonsai_uuids = vec![];
     let mut op_block_outputs = vec![];
     for input in op_block_inputs {

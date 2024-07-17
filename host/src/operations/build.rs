@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
+use std::{fmt::Debug, fs::File, io::Write};
 
 use anyhow::Context;
 use ethers_core::types::Transaction as EthersTransaction;
@@ -70,6 +70,20 @@ where
         .clone()
         .try_into()
         .context("invalid preflight data")?;
+
+    if build_args.export.unwrap_or_default() {
+        // write stuff to disk
+        let encoded_input = risc0_zkvm::serde::to_vec(&input).expect("Could not serialize input");
+        let encoded_input_bytes: &[u8] = bytemuck::cast_slice(encoded_input.as_slice());
+        let mut input_file = File::create("./input.bin")?;
+        input_file.write(encoded_input_bytes)?;
+        input_file.flush()?;
+        let mut elf_file = File::create("./elf.bin")?;
+        elf_file.write(guest_elf)?;
+        elf_file.flush()?;
+        let image_id = compute_image_id(guest_elf)?;
+        println!("EXPORTED DATA UNDER IMAGE ID: {image_id:?}");
+    }
 
     // Verify that the transactions run correctly
     info!("Running from memory ...");

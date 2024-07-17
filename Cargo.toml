@@ -17,11 +17,11 @@ lto = true
 opt-level = 3
 
 [workspace.dependencies]
-bonsai-sdk = { version = "0.6.0", features = ["async"] }
-hashbrown = { version = "0.14.3", features = ["inline-more"] }
-risc0-build = { version = "0.21" }
-risc0-zkvm = { version = "0.21", default-features = false }
-revm-primitives = { version = "2.0", default_features = false }
+bonsai-sdk = { version = "0.8.0", features = ["async"] }
+hashbrown = { version = "0.14.5", features = ["inline-more"] }
+risc0-build = { version = "1.0.3" }
+risc0-zkvm = { version = "1.0.3", default-features = false }
+revm-primitives = { version = "2.0", default-features = false }
 revm = { version = "5.0", default-features = false, features = [
     "std",
     "serde",

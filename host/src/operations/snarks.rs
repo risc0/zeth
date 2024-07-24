@@ -17,10 +17,13 @@ use std::{str::FromStr, sync::Arc};
 use alloy_primitives::U256;
 use alloy_sol_types::{sol, SolValue};
 use anyhow::anyhow;
-use bonsai_sdk::alpha::responses::{Groth16Seal, SnarkReceipt};
+use bonsai_sdk::responses::SnarkReceipt;
 use ethers_contract::abigen;
 use ethers_providers::{Http, Provider, RetryClient};
-use risc0_zkvm::sha::{Digest, Digestible};
+use risc0_zkvm::{
+    sha::{Digest, Digestible},
+    Groth16Seal,
+};
 
 use crate::cli::Cli;
 

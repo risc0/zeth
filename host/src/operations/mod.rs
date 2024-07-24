@@ -18,13 +18,13 @@ pub mod snarks;
 
 use std::fmt::Debug;
 
-use bonsai_sdk::alpha::responses::SnarkReceipt;
+use bonsai_sdk::responses::SnarkReceipt;
 use log::{debug, error, info, warn};
 use risc0_zkvm::{
     compute_image_id,
     serde::to_vec,
     sha::{Digest, Digestible},
-    Assumption, ExecutorEnv, ExecutorImpl, Receipt, Segment, SegmentRef,
+    AssumptionReceipt, ExecutorEnv, ExecutorImpl, Receipt, Segment, SegmentRef,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use zeth_primitives::keccak::keccak;
@@ -55,11 +55,11 @@ pub async fn stark2snark(
         stark_uuid
     };
 
-    let client = bonsai_sdk::alpha_async::get_client_from_env(risc0_zkvm::VERSION).await?;
-    let snark_uuid = client.create_snark(stark_uuid)?;
+    let client = bonsai_sdk::non_blocking::Client::from_env(risc0_zkvm::VERSION)?;
+    let snark_uuid = client.create_snark(stark_uuid).await?;
 
     let snark_receipt = loop {
-        let res = snark_uuid.status(&client)?;
+        let res = snark_uuid.status(&client).await?;
 
         if res.status == "RUNNING" {
             info!("Current status: {} - continue polling...", res.status,);
@@ -77,7 +77,7 @@ pub async fn stark2snark(
         }
     };
 
-    let stark_psd = stark_receipt.get_claim()?.post.digest();
+    let stark_psd = stark_receipt.claim()?.as_value()?.post.digest();
     let snark_psd = Digest::try_from(snark_receipt.post_state_digest.as_slice())?;
 
     if stark_psd != snark_psd {
@@ -106,14 +106,14 @@ pub async fn verify_bonsai_receipt<O: Eq + Debug + DeserializeOwned>(
     max_retries: usize,
 ) -> anyhow::Result<(String, Receipt)> {
     info!("Tracking receipt uuid: {}", uuid);
-    let session = bonsai_sdk::alpha::SessionId { uuid };
+    let session = bonsai_sdk::non_blocking::SessionId { uuid };
 
     loop {
         let mut res = None;
         for attempt in 1..=max_retries {
-            let client = bonsai_sdk::alpha_async::get_client_from_env(risc0_zkvm::VERSION).await?;
+            let client = bonsai_sdk::non_blocking::Client::from_env(risc0_zkvm::VERSION)?;
 
-            match session.status(&client) {
+            match session.status(&client).await {
                 Ok(response) => {
                     res = Some(response);
                     break;
@@ -146,8 +146,8 @@ pub async fn verify_bonsai_receipt<O: Eq + Debug + DeserializeOwned>(
             let receipt_url = res
                 .receipt_url
                 .expect("API error, missing receipt on completed session");
-            let client = bonsai_sdk::alpha_async::get_client_from_env(risc0_zkvm::VERSION).await?;
-            let receipt_buf = client.download(&receipt_url)?;
+            let client = bonsai_sdk::non_blocking::Client::from_env(risc0_zkvm::VERSION)?;
+            let receipt_buf = client.download(&receipt_url).await?;
             let receipt: Receipt = bincode::deserialize(&receipt_buf)?;
             receipt
                 .verify(image_id)
@@ -178,7 +178,7 @@ pub async fn maybe_prove<I: Serialize, O: Eq + Debug + Serialize + DeserializeOw
     input: &I,
     elf: &[u8],
     expected_output: &O,
-    assumptions: (Vec<Assumption>, Vec<String>),
+    assumptions: (Vec<AssumptionReceipt>, Vec<String>),
 ) -> Option<(String, Receipt)> {
     let Cli::Prove(prove_args) = cli else {
         return None;
@@ -263,8 +263,8 @@ pub async fn maybe_prove<I: Serialize, O: Eq + Debug + Serialize + DeserializeOw
 }
 
 pub async fn upload_receipt(receipt: &Receipt) -> anyhow::Result<String> {
-    let client = bonsai_sdk::alpha_async::get_client_from_env(risc0_zkvm::VERSION).await?;
-    Ok(client.upload_receipt(bincode::serialize(receipt)?)?)
+    let client = bonsai_sdk::non_blocking::Client::from_env(risc0_zkvm::VERSION)?;
+    Ok(client.upload_receipt(bincode::serialize(receipt)?).await?)
 }
 
 pub async fn prove_bonsai<O: Eq + Debug + DeserializeOwned>(
@@ -280,16 +280,19 @@ pub async fn prove_bonsai<O: Eq + Debug + DeserializeOwned>(
     // Prepare input data
     let input_data = bytemuck::cast_slice(&encoded_input).to_vec();
 
-    let client = bonsai_sdk::alpha_async::get_client_from_env(risc0_zkvm::VERSION).await?;
-    client.upload_img(&encoded_image_id, elf.to_vec())?;
+    let client = bonsai_sdk::non_blocking::Client::from_env(risc0_zkvm::VERSION)?;
+    client.upload_img(&encoded_image_id, elf.to_vec()).await?;
     // upload input
-    let input_id = client.upload_input(input_data.clone())?;
+    let input_id = client.upload_input(input_data.clone()).await?;
 
-    let session = client.create_session(
-        encoded_image_id.clone(),
-        input_id.clone(),
-        assumption_uuids.clone(),
-    )?;
+    let session = client
+        .create_session(
+            encoded_image_id.clone(),
+            input_id.clone(),
+            assumption_uuids.clone(),
+            false,
+        )
+        .await?;
 
     verify_bonsai_receipt(image_id, expected_output, session.uuid.clone(), 8).await
 }
@@ -300,7 +303,7 @@ pub fn prove_locally(
     segment_limit_po2: u32,
     encoded_input: Vec<u32>,
     elf: &[u8],
-    assumptions: Vec<Assumption>,
+    assumptions: Vec<AssumptionReceipt>,
     profile: bool,
     profile_reference: &String,
 ) -> Receipt {
@@ -332,7 +335,7 @@ pub fn prove_locally(
         let mut exec = ExecutorImpl::from_elf(env, elf).unwrap();
         exec.run().unwrap()
     };
-    session.prove().unwrap()
+    session.prove().unwrap().receipt
 }
 
 const NULL_SEGMENT_REF: NullSegmentRef = NullSegmentRef {};
@@ -385,10 +388,7 @@ pub fn execute<T: Serialize, O: Eq + Debug + DeserializeOwned>(
         exec.run_with_callback(|_| Ok(Box::new(NULL_SEGMENT_REF)))
             .unwrap()
     };
-    println!(
-        "Executor ran in (roughly) {} cycles",
-        session.segments.len() * (1 << segment_limit_po2)
-    );
+    println!("Executor ran in {} cycles", session.total_cycles);
     // verify output
     let journal = session.journal.unwrap();
     let output_guest: O = journal.decode().expect("Could not decode journal");

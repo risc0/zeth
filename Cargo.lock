@@ -1931,9 +1931,9 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.14.3"
+version = "0.14.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "290f1a1d9242c78d09ce40a5e87e7554ee637af1351968159f4952f028f75604"
+checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
 dependencies = [
  "ahash",
  "allocator-api2",
@@ -2270,7 +2270,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "168fb715dda47215e360912c096649d23d58bf392ac62f73919e831745e40f26"
 dependencies = [
  "equivalent",
- "hashbrown 0.14.3",
+ "hashbrown 0.14.5",
  "serde",
 ]
 
@@ -3426,7 +3426,7 @@ dependencies = [
  "c-kzg",
  "cfg-if",
  "enumn",
- "hashbrown 0.14.3",
+ "hashbrown 0.14.5",
  "hex",
  "serde",
 ]
@@ -5422,7 +5422,7 @@ dependencies = [
  "ethers-core",
  "ethers-providers",
  "flate2",
- "hashbrown 0.14.3",
+ "hashbrown 0.14.5",
  "libflate",
  "log",
  "once_cell",
@@ -5468,7 +5468,7 @@ dependencies = [
  "diff",
  "env_logger",
  "ethers-core",
- "hashbrown 0.14.3",
+ "hashbrown 0.14.5",
  "log",
  "revm",
  "risc0-build",

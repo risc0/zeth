@@ -17,7 +17,7 @@ fn main() {
     let cwd = std::env::current_dir().unwrap();
     let root_dir = cwd.parent().map(|d| d.to_path_buf());
     let build_opts = std::collections::HashMap::from_iter(
-        ["eth-block", "op-block", "op-derive", "op-compose"]
+        ["eth-block", "op-block", "op-derive", "op-compose", "reth-block-eth"]
             .into_iter()
             .map(|guest_pkg| {
                 (

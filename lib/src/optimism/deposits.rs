@@ -89,10 +89,7 @@ pub fn can_contain(address: &Address, bloom: &Bloom) -> bool {
         return false;
     }
     let input = BloomInput::Raw(TRANSACTION_DEPOSITED_SIGNATURE.as_slice());
-    if !bloom.contains_input(input) {
-        return false;
-    }
-    true
+    bloom.contains_input(input)
 }
 
 /// Converts a deposit log into a transaction.

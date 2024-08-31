@@ -51,6 +51,8 @@ jobs:
             feature: cuda
           - os: macOS
             feature: default
+          - os: macOS
+            feature: metal
     env:
       FEATURE: ${{ matrix.feature }}
       RISC0_SKIP_BUILD: 1

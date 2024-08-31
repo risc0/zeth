@@ -58,14 +58,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - if: matrix.feature == 'cuda'
-        uses: risc0/risc0/.github/actions/cuda
+        uses: risc0/risc0/.github/actions/cuda@release-0.21
       - uses: risc0/risc0/.github/actions/rustup@release-0.21
       - uses: risc0/risc0/.github/actions/sccache@release-0.21
       - uses: risc0/clippy-action@main
         with:
           reporter: 'github-pr-check'
           fail_on_error: true
-          clippy_flags: --workspace --all-targets -- -Dwarnings
+          clippy_flags: -F $FEATURE --workspace --all-targets -- -Dwarnings
 
   fmt:
     name: fmt

@@ -37,5 +37,5 @@ rstest = "0.18"
 
 [features]
 metal = ["risc0-zkvm/metal"]
-# cuda = ["risc0-zkvm/cuda"]
+cuda = ["risc0-zkvm/cuda"]
 disable-dev-mode = ["risc0-zkvm/disable-dev-mode"]

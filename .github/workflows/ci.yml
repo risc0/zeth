@@ -40,17 +40,32 @@ jobs:
 
   clippy:
     name: clippy
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    runs-on: [self-hosted, prod, "${{ matrix.os }}"]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: Linux
+            feature: default
+          - os: Linux
+            feature: cuda
+          - os: macOS
+            feature: default
+    env:
+      FEATURE: ${{ matrix.feature }}
+      RISC0_SKIP_BUILD: 1
+      RISC0_SKIP_BUILD_KERNELS: 1
     steps:
-    - uses: actions/checkout@v4
-    - uses: risc0/risc0/.github/actions/rustup@release-0.21
-    - uses: risc0/risc0/.github/actions/sccache@release-0.21
-    - uses: risc0/clippy-action@main
-      with:
-        reporter: 'github-pr-check'
-        fail_on_error: true
-        clippy_flags: --workspace --all-targets -- -Dwarnings
+      - uses: actions/checkout@v4
+      - if: matrix.feature == 'cuda'
+        uses: risc0/risc0/.github/actions/cuda
+      - uses: risc0/risc0/.github/actions/rustup@release-0.21
+      - uses: risc0/risc0/.github/actions/sccache@release-0.21
+      - uses: risc0/clippy-action@main
+        with:
+          reporter: 'github-pr-check'
+          fail_on_error: true
+          clippy_flags: --workspace --all-targets -- -Dwarnings
 
   fmt:
     name: fmt

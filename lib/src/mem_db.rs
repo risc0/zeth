@@ -91,12 +91,11 @@ impl MemDb {
     }
 
     pub fn storage_keys(&self) -> HashMap<Address, Vec<U256>> {
-        let mut out = HashMap::new();
-        for (address, account) in &self.accounts {
-            out.insert(*address, account.storage.keys().cloned().collect());
-        }
-
-        out
+        HashMap::from_iter(
+            self.accounts
+                .iter()
+                .map(|(address, account)| (*address, account.storage.keys().cloned().collect())),
+        )
     }
 
     /// Insert account info without overriding its storage.

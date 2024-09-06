@@ -51,16 +51,14 @@ impl HeaderPrepStrategy for EthHeaderPrepStrategy {
             block_builder.input.state_input.parent_header.gas_limit / GAS_LIMIT_BOUND_DIVISOR;
         if diff >= limit {
             bail!(
-                "Invalid gas limit: expected {} +- {}, got {}",
+                "Invalid gas limit: expected {} +- {limit}, got {}",
                 block_builder.input.state_input.parent_header.gas_limit,
-                limit,
                 block_builder.input.state_input.gas_limit,
             );
         }
         if block_builder.input.state_input.gas_limit < MIN_GAS_LIMIT {
             bail!(
-                "Invalid gas limit: expected >= {}, got {}",
-                MIN_GAS_LIMIT,
+                "Invalid gas limit: expected >= {MIN_GAS_LIMIT}, got {}",
                 block_builder.input.state_input.gas_limit,
             );
         }
@@ -76,11 +74,7 @@ impl HeaderPrepStrategy for EthHeaderPrepStrategy {
         // Validate extra data
         let extra_data_bytes = block_builder.input.state_input.extra_data.len();
         if extra_data_bytes > MAX_EXTRA_DATA_BYTES {
-            bail!(
-                "Invalid extra data: expected <= {}, got {}",
-                MAX_EXTRA_DATA_BYTES,
-                extra_data_bytes,
-            )
+            bail!("Invalid extra data: expected <= {MAX_EXTRA_DATA_BYTES}, got {extra_data_bytes}",)
         }
         // Validate number
         let parent_number = block_builder.input.state_input.parent_header.number;
@@ -92,7 +86,7 @@ impl HeaderPrepStrategy for EthHeaderPrepStrategy {
         let spec_id = block_builder
             .chain_spec
             .active_fork(number, &timestamp)
-            .unwrap_or_else(|err| panic!("Invalid version: {:#}", err));
+            .unwrap_or_else(|err| panic!("Invalid version: {err:#}"));
         block_builder.spec_id = Some(spec_id);
         // Derive header
         block_builder.header = Some(Header {

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 pub mod build;
-pub mod rollups;
 pub mod snarks;
 
 use std::fmt::Debug;

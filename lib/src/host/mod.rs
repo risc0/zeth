@@ -20,7 +20,6 @@ pub mod mpt;
 pub mod preflight;
 pub mod provider;
 pub mod provider_db;
-pub mod rpc_db;
 pub mod verify;
 
 pub fn cache_file_path(cache_path: &Path, network: &str, block_no: u64, ext: &str) -> PathBuf {

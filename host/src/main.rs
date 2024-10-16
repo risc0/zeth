@@ -20,7 +20,7 @@ use log::info;
 use risc0_zkvm::sha::Digest;
 use zeth::{
     cli::{Cli, Network},
-    operations::{build, rollups, snarks::verify_groth16_snark, stark2snark},
+    operations::{build, snarks::verify_groth16_snark, stark2snark},
 };
 use zeth_guests::*;
 use zeth_lib::{
@@ -36,8 +36,6 @@ async fn main() -> Result<()> {
     info!("Using the following image ids:");
     info!("  eth-block: {}", Digest::from(ETH_BLOCK_ID));
     info!("  op-block: {}", Digest::from(OP_BLOCK_ID));
-    info!("  op-derive: {}", Digest::from(OP_DERIVE_ID));
-    info!("  op-compose: {}", Digest::from(OP_COMPOSE_ID));
 
     // execute the command
     let build_args = cli.build_args();
@@ -67,16 +65,6 @@ async fn main() -> Result<()> {
                 )
                 .await?,
             )
-        }
-        Network::OptimismDerived => {
-            if let Some(composition_size) = build_args.composition {
-                (
-                    OP_COMPOSE_ID,
-                    rollups::compose_derived_rollup_blocks(&cli, composition_size).await?,
-                )
-            } else {
-                (OP_DERIVE_ID, rollups::derive_rollup_blocks(&cli).await?)
-            }
         }
     };
 

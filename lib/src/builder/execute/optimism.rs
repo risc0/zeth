@@ -38,7 +38,7 @@ use zeth_primitives::{
 use super::{ethereum, TxExecStrategy};
 use crate::{builder::BlockBuilder, consts, guest_mem_forget};
 
-pub struct OpTxExecStrategy {}
+pub struct OpTxExecStrategy;
 
 impl TxExecStrategy<OptimismTxEssence> for OpTxExecStrategy {
     fn execute_transactions<D>(

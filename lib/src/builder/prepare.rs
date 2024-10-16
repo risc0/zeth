@@ -31,7 +31,7 @@ pub trait HeaderPrepStrategy {
         E: TxEssence;
 }
 
-pub struct EthHeaderPrepStrategy {}
+pub struct EthHeaderPrepStrategy;
 
 impl HeaderPrepStrategy for EthHeaderPrepStrategy {
     fn prepare_header<D, E>(mut block_builder: BlockBuilder<D, E>) -> Result<BlockBuilder<D, E>>

@@ -40,7 +40,7 @@ where
         E: TxEssence;
 }
 
-pub struct MemDbBlockFinalizeStrategy {}
+pub struct MemDbBlockFinalizeStrategy;
 
 impl BlockFinalizeStrategy<MemDb> for MemDbBlockFinalizeStrategy {
     fn finalize<E: TxEssence>(

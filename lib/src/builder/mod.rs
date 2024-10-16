@@ -190,7 +190,7 @@ pub trait BlockBuilderStrategy {
 }
 
 /// The [BlockBuilderStrategy] for building an Ethereum block.
-pub struct EthereumStrategy {}
+pub struct EthereumStrategy;
 
 impl BlockBuilderStrategy for EthereumStrategy {
     type TxEssence = EthereumTxEssence;
@@ -201,7 +201,7 @@ impl BlockBuilderStrategy for EthereumStrategy {
 }
 
 /// The [BlockBuilderStrategy] for building an Optimism block.
-pub struct OptimismStrategy {}
+pub struct OptimismStrategy;
 
 impl BlockBuilderStrategy for OptimismStrategy {
     type TxEssence = OptimismTxEssence;

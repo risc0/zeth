@@ -44,7 +44,7 @@ where
         E: TxEssence;
 }
 
-pub struct MemDbInitStrategy {}
+pub struct MemDbInitStrategy;
 
 impl DbInitStrategy<MemDb> for MemDbInitStrategy {
     fn initialize_database<E: TxEssence>(

@@ -37,7 +37,7 @@ use zeth_primitives::{
 use super::TxExecStrategy;
 use crate::{builder::BlockBuilder, consts, guest_mem_forget};
 
-pub struct EthTxExecStrategy {}
+pub struct EthTxExecStrategy;
 
 impl TxExecStrategy<EthereumTxEssence> for EthTxExecStrategy {
     fn execute_transactions<D>(

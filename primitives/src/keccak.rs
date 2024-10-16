@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use alloy_primitives::{b256, B256};
-use sha3::{Digest, Keccak256};
+use tiny_keccak::{Hasher, Keccak};
 
 /// Represents the Keccak-256 hash of an empty byte slice.
 ///
@@ -32,7 +32,9 @@ pub const KECCAK_EMPTY: B256 =
 ///   codebase.
 #[inline]
 pub fn keccak(data: impl AsRef<[u8]>) -> [u8; 32] {
-    // TODO: Remove this benchmarking code once performance testing is complete.
-    // std::hint::black_box(sha2::Sha256::digest(&data));
-    Keccak256::digest(data).into()
+    let mut hasher = Keccak::v256();
+    hasher.update(data.as_ref());
+    let mut output = [0; 32];
+    hasher.finalize(&mut output);
+    output
 }

@@ -28,7 +28,6 @@ tokio = { version = "1.23", features = ["full"] }
 tracing = { version = "0.1", features = ["log"] }
 zeth-guests = { path = "../guests" }
 zeth-lib = { path = "../lib" }
-zeth-primitives = { path = "../primitives" }
 
 [dev-dependencies]
 assert_cmd = "2.0"

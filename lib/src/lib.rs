@@ -23,6 +23,7 @@ pub mod input;
 pub mod mem_db;
 pub mod output;
 
+pub use zeth_primitives::keccak::keccak;
 pub use zeth_primitives::transactions::{ethereum::EthereumTxEssence, optimism::OptimismTxEssence};
 
 /// call forget only if running inside the guest

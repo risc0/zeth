@@ -26,7 +26,7 @@ use risc0_zkvm::{
     AssumptionReceipt, ExecutorEnv, ExecutorImpl, Receipt, Segment, SegmentRef,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use zeth_primitives::keccak::keccak;
+use zeth_lib::keccak;
 
 use crate::{cli::Cli, load_receipt, save_receipt};
 

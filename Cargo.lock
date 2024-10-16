@@ -5645,7 +5645,6 @@ dependencies = [
  "tracing",
  "zeth-guests",
  "zeth-lib",
- "zeth-primitives",
 ]
 
 [[package]]
@@ -5705,6 +5704,7 @@ dependencies = [
  "sha2",
  "sha3",
  "thiserror",
+ "tiny-keccak",
 ]
 
 [[package]]

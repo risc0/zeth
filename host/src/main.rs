@@ -18,7 +18,7 @@ use anyhow::Result;
 use clap::Parser;
 use log::info;
 use risc0_zkvm::sha::Digest;
-use zeth::{
+use zeth_host::{
     cli::{Cli, Network},
     operations::{build, snarks::verify_groth16_snark, stark2snark},
 };

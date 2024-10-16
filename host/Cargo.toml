@@ -1,8 +1,8 @@
 [package]
-name = "zeth"
+name = "zeth-host"
 version = "0.1.0"
 edition = "2021"
-default-run = "zeth"
+default-run = "zeth-host"
 
 [dependencies]
 alloy-primitives = { version = "0.6.2", default-features = false, features = [

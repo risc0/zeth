@@ -24,6 +24,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "allocator-api2"
+version = "0.2.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c6cb57a04249c6480766f7f7cef5467412af1490f8d1e243141daddada3264f"
+
+[[package]]
 name = "alloy-chains"
 version = "0.1.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -47,6 +53,7 @@ dependencies = [
  "alloy-rlp",
  "alloy-serde",
  "auto_impl",
+ "c-kzg",
  "derive_more",
  "serde",
 ]
@@ -1320,6 +1327,8 @@ version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e087f84d4f86bf4b218b927129862374b72199ae7d8657835f1e89000eea4fb"
 dependencies = [
+ "allocator-api2",
+ "equivalent",
  "foldhash",
  "serde",
 ]
@@ -2078,6 +2087,7 @@ dependencies = [
  "reth-primitives",
  "reth-revm",
  "risc0-zkvm",
+ "zeth-core",
 ]
 
 [[package]]
@@ -3635,6 +3645,27 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.79",
+]
+
+[[package]]
+name = "zeth-core"
+version = "0.1.0"
+dependencies = [
+ "alloy-consensus",
+ "alloy-primitives",
+ "alloy-rlp",
+ "anyhow",
+ "hashbrown 0.15.0",
+ "reth-chainspec",
+ "reth-consensus",
+ "reth-ethereum-consensus",
+ "reth-evm",
+ "reth-evm-ethereum",
+ "reth-primitives",
+ "reth-revm",
+ "serde",
+ "thiserror",
+ "tiny-keccak",
 ]
 
 [[package]]

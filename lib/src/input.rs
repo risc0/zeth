@@ -18,7 +18,6 @@ use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use zeth_primitives::{
     block::Header,
-    mmr::Hash,
     transactions::{Transaction, TxEssence},
     trie::MptNode,
     withdrawal::Withdrawal,
@@ -66,7 +65,7 @@ pub struct StateInput<E: TxEssence> {
 }
 
 impl<E: TxEssence + Serialize> StateInput<E> {
-    pub fn hash(&self) -> Hash {
+    pub fn hash(&self) -> [u8; 32] {
         let mut hasher = Sha256::new();
         hasher.update(&alloy_rlp::encode(self));
         hasher.finalize().into()

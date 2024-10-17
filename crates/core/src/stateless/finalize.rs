@@ -15,26 +15,22 @@
 use crate::keccak::keccak;
 use crate::stateless::block::StatelessClientBlock;
 use crate::stateless::client::StatelessClientEngine;
-use crate::stateless::post_exec::{PostExecutionValidationStrategy, RethPostExecStrategy};
 use alloy_consensus::{Account, Header};
-use alloy_primitives::U256;
 use anyhow::bail;
 use core::fmt::Display;
 use core::mem::take;
-use reth_consensus::ConsensusError;
 use reth_evm::execute::ProviderError;
 use reth_primitives::Block;
 use reth_revm::db::BundleState;
 
 pub trait FinalizationStrategy<Block, Header, Database> {
-    type PostExecValidation: PostExecutionValidationStrategy<Block, Header, Database>;
+    type Input;
 
     type Output;
 
     fn finalize(
         stateless_client_engine: &mut StatelessClientEngine<Block, Header, Database>,
-        state_delta: <
-        <Self as FinalizationStrategy<Block, Header, Database>>::PostExecValidation as PostExecutionValidationStrategy<Block, Header, Database>>::Output,
+        state_delta: Self::Input,
     ) -> anyhow::Result<Self::Output>;
 }
 
@@ -45,12 +41,12 @@ impl<Database: reth_revm::Database> FinalizationStrategy<Block, Header, Database
 where
     <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
 {
-    type PostExecValidation = RethPostExecStrategy;
+    type Input = BundleState;
     type Output = ();
 
     fn finalize(
         stateless_client_engine: &mut StatelessClientEngine<Block, Header, Database>,
-        state_delta: BundleState,
+        state_delta: Self::Input,
     ) -> anyhow::Result<Self::Output> {
         let StatelessClientEngine {
             block:

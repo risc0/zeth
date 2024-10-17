@@ -13,21 +13,21 @@
 // limitations under the License.
 
 use crate::stateless::client::StatelessClientEngine;
-use crate::stateless::execute::{RethExecStrategy, TransactionExecutionStrategy};
 use alloy_consensus::Header;
 use reth_evm::execute::{BatchExecutor, ExecutionOutcome, ProviderError};
+use reth_evm_ethereum::execute::EthBatchExecutor;
+use reth_evm_ethereum::EthEvmConfig;
 use reth_primitives::Block;
 use reth_revm::db::BundleState;
 use std::fmt::Display;
 
 pub trait PostExecutionValidationStrategy<Block, Header, Database> {
-    type TransactionExecution: TransactionExecutionStrategy<Block, Header, Database>;
+    type Input;
     type Output;
 
     fn post_execution_validation(
         stateless_client_engine: &mut StatelessClientEngine<Block, Header, Database>,
-        execution_output: <
-        <Self as PostExecutionValidationStrategy<Block, Header, Database>>::TransactionExecution as TransactionExecutionStrategy<Block, Header, Database>>::Output,
+        execution_output: Self::Input,
     ) -> anyhow::Result<Self::Output>;
 }
 
@@ -38,16 +38,12 @@ impl<Database: reth_revm::Database> PostExecutionValidationStrategy<Block, Heade
 where
     <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
 {
-    type TransactionExecution = RethExecStrategy;
+    type Input = EthBatchExecutor<EthEvmConfig, Database>;
     type Output = BundleState;
 
     fn post_execution_validation(
         _: &mut StatelessClientEngine<Block, Header, Database>,
-        execution_output: <RethExecStrategy as TransactionExecutionStrategy<
-            Block,
-            Header,
-            Database,
-        >>::Output,
+        execution_output: Self::Input,
     ) -> anyhow::Result<Self::Output> {
         let ExecutionOutcome { bundle, .. } = execution_output.finalize();
         Ok(bundle)

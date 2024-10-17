@@ -15,11 +15,13 @@
 use alloy::primitives::{Address, Bytes, B256, U256};
 use alloy::rpc::types::{Block, EIP1186AccountProofResponse, Transaction, TransactionReceipt};
 use anyhow::anyhow;
+use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 pub mod cache_provider;
+pub mod db;
 pub mod file_provider;
 pub mod rpc_provider;
 
@@ -99,4 +101,30 @@ pub trait MutProvider: Provider {
     fn insert_balance(&mut self, query: AccountQuery, val: U256);
     fn insert_code(&mut self, query: AccountQuery, val: Bytes);
     fn insert_storage(&mut self, query: StorageQuery, val: U256);
+}
+
+pub fn get_proofs(
+    provider: &mut dyn Provider,
+    block_no: u64,
+    storage_keys: HashMap<Address, Vec<U256>>,
+) -> Result<HashMap<Address, EIP1186AccountProofResponse>, anyhow::Error> {
+    let mut out = HashMap::new();
+
+    for (address, indices) in storage_keys {
+        let proof = {
+            let address: Address = address.into_array().into();
+            let indices: BTreeSet<B256> = indices
+                .into_iter()
+                .map(|x| x.to_be_bytes().into())
+                .collect();
+            provider.get_proof(&ProofQuery {
+                block_no,
+                address,
+                indices,
+            })?
+        };
+        out.insert(address, proof);
+    }
+
+    Ok(out)
 }

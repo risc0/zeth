@@ -5078,6 +5078,7 @@ dependencies = [
  "flate2",
  "hashbrown 0.15.0",
  "log",
+ "reth-revm",
  "serde",
  "serde_json",
  "tokio",

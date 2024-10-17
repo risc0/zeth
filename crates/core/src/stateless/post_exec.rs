@@ -20,26 +20,25 @@ use reth_primitives::Block;
 use reth_revm::db::BundleState;
 use std::fmt::Display;
 
-pub trait PostExecutionValidationStrategy<Block, Header, Database, T>
-where
-    T: TransactionExecutionStrategy<Block, Header, Database>,
-{
+pub trait PostExecutionValidationStrategy<Block, Header, Database> {
+    type TransactionExecution: TransactionExecutionStrategy<Block, Header, Database>;
     type Output;
 
     fn post_execution_validation(
         stateless_client_engine: &mut StatelessClientEngine<Block, Header, Database>,
-        execution_output: T::Output,
+        execution_output: <
+        <Self as PostExecutionValidationStrategy<Block, Header, Database>>::TransactionExecution as TransactionExecutionStrategy<Block, Header, Database>>::Output,
     ) -> anyhow::Result<Self::Output>;
 }
 
 pub struct RethPostExecStrategy;
 
-impl<Database: reth_revm::Database>
-    PostExecutionValidationStrategy<Block, Header, Database, RethExecStrategy>
+impl<Database: reth_revm::Database> PostExecutionValidationStrategy<Block, Header, Database>
     for RethPostExecStrategy
 where
     <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
 {
+    type TransactionExecution = RethExecStrategy;
     type Output = BundleState;
 
     fn post_execution_validation(

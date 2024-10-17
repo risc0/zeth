@@ -14,13 +14,13 @@
 
 use crate::stateless::block::StatelessClientBlock;
 use crate::stateless::execute::TransactionExecutionStrategy;
+use crate::stateless::finalize::FinalizationStrategy;
 use crate::stateless::initialize::InitializationStrategy;
 use crate::stateless::post_exec::PostExecutionValidationStrategy;
 use crate::stateless::pre_exec::PreExecutionValidationStrategy;
 use alloy_primitives::U256;
 use reth_chainspec::ChainSpec;
 use std::sync::{Arc, Mutex};
-// use crate::stateless::finalize::FinalizationStrategy;
 
 type RescueDestination<D> = Arc<Mutex<Option<D>>>;
 
@@ -88,35 +88,37 @@ impl<Block, Header, Database> StatelessClientEngine<Block, Header, Database> {
 
     /// Validates the header after execution.
     pub fn post_execution_validation<
-        T1: TransactionExecutionStrategy<Block, Header, Database>,
-        T2: PostExecutionValidationStrategy<Block, Header, Database, T1>,
+        T: PostExecutionValidationStrategy<Block, Header, Database>,
     >(
         &mut self,
-        execution_output: T1::Output,
-    ) -> anyhow::Result<T2::Output> {
-        T2::post_execution_validation(self, execution_output)
+        execution_output: <T::TransactionExecution as TransactionExecutionStrategy<
+            Block,
+            Header,
+            Database,
+        >>::Output,
+    ) -> anyhow::Result<T::Output> {
+        T::post_execution_validation(self, execution_output)
     }
-    //
-    // /// Finalizes the state trie.
-    // pub fn finalize<
-    //     T: FinalizationStrategy<Block, Header, Database, U>,
-    //     U
-    // >(self) -> anyhow::Result<T::Output> {
-    //     T::finalize(self)
-    // }
+
+    /// Finalizes the state trie.
+    pub fn finalize<T: FinalizationStrategy<Block, Header, Database>>(
+        &mut self,
+        state_delta: <T::PostExecValidation as PostExecutionValidationStrategy<
+            Block,
+            Header,
+            Database,
+        >>::Output,
+    ) -> anyhow::Result<T::Output> {
+        T::finalize(self, state_delta)
+    }
 }
 
 pub trait StatelessClientStrategy<Block, Header, Database> {
     type Initialization: InitializationStrategy<Block, Header, Database>;
     type PreExecValidation: PreExecutionValidationStrategy<Block, Header, Database>;
     type TransactionExecution: TransactionExecutionStrategy<Block, Header, Database>;
-    type PostExecValidation: PostExecutionValidationStrategy<
-        Block,
-        Header,
-        Database,
-        Self::TransactionExecution,
-    >;
-    // type Finalization: FinalizationStrategy<Block, Header, Database, Self::PostExecValidation>;
+    type PostExecValidation: PostExecutionValidationStrategy<Block, Header, Database>;
+    // type Finalization: FinalizationStrategy<Block, Header, Database>;
 
     fn validate_block(
         chain_spec: Arc<ChainSpec>,
@@ -132,16 +134,19 @@ pub trait StatelessClientStrategy<Block, Header, Database> {
         );
         engine.initialize_database::<Self::Initialization>()?;
         engine.pre_execution_validation::<Self::PreExecValidation>()?;
-        let execution_output = engine.execute_transactions::<Self::TransactionExecution>()?;
+        let execution_output = engine
+            .execute_transactions::<<Self::PostExecValidation as PostExecutionValidationStrategy<
+            Block,
+            Header,
+            Database,
+        >>::TransactionExecution>()?;
 
         // todo: when testing this function, implement tests at each fork that mess with the
         // intermediate inputs/outputs to check whether all header fields (e.g. receipts/txn/state trie roots) are
         // properly validated
 
-        let state_delta = engine
-            .post_execution_validation::<Self::TransactionExecution, Self::PostExecValidation>(
-                execution_output,
-            )?;
+        let state_delta =
+            engine.post_execution_validation::<Self::PostExecValidation>(execution_output)?;
 
         // engine.finalize::<Self::Finalization, Self::PostExecValidation>()?;
         Ok(())

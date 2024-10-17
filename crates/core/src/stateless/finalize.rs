@@ -12,15 +12,110 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// use crate::stateless::client::StatelessClientEngine;
-// use crate::stateless::post_exec::PostExecutionValidationStrategy;
-//
-// pub trait FinalizationStrategy<Block, Header, Database, T>
-// where T: PostExecutionValidationStrategy<Block, Header, Database, _>
-// {
-//     type Output;
-//
-//     fn finalize(
-//         stateless_client_engine: StatelessClientEngine<Block, Header, Database>,
-//     ) -> anyhow::Result<Self::Output>;
-// }
+use crate::keccak::keccak;
+use crate::stateless::block::StatelessClientBlock;
+use crate::stateless::client::StatelessClientEngine;
+use crate::stateless::post_exec::{PostExecutionValidationStrategy, RethPostExecStrategy};
+use alloy_consensus::{Account, Header};
+use alloy_primitives::U256;
+use anyhow::bail;
+use core::fmt::Display;
+use core::mem::take;
+use reth_consensus::ConsensusError;
+use reth_evm::execute::ProviderError;
+use reth_primitives::Block;
+use reth_revm::db::BundleState;
+
+pub trait FinalizationStrategy<Block, Header, Database> {
+    type PostExecValidation: PostExecutionValidationStrategy<Block, Header, Database>;
+
+    type Output;
+
+    fn finalize(
+        stateless_client_engine: &mut StatelessClientEngine<Block, Header, Database>,
+        state_delta: <
+        <Self as FinalizationStrategy<Block, Header, Database>>::PostExecValidation as PostExecutionValidationStrategy<Block, Header, Database>>::Output,
+    ) -> anyhow::Result<Self::Output>;
+}
+
+pub struct RethFinalizationStrategy;
+
+impl<Database: reth_revm::Database> FinalizationStrategy<Block, Header, Database>
+    for RethFinalizationStrategy
+where
+    <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
+{
+    type PostExecValidation = RethPostExecStrategy;
+    type Output = ();
+
+    fn finalize(
+        stateless_client_engine: &mut StatelessClientEngine<Block, Header, Database>,
+        state_delta: BundleState,
+    ) -> anyhow::Result<Self::Output> {
+        let StatelessClientEngine {
+            block:
+                StatelessClientBlock {
+                    block,
+                    parent_state_trie,
+                    parent_storage,
+                    ..
+                },
+            ..
+        } = stateless_client_engine;
+        // Apply state updates
+        let mut state_trie = take(parent_state_trie);
+        for (address, account) in state_delta.state {
+            // if the account has not been touched, it can be ignored
+            if account.status.is_not_modified() {
+                continue;
+            }
+            // compute the index of the current account in the state trie
+            let state_trie_index = keccak(address);
+            // remove deleted accounts from the state trie
+            if account.info.is_none() {
+                state_trie.delete(&state_trie_index)?;
+                continue;
+            }
+            // otherwise, compute the updated storage root for that account
+            let state_storage = &account.storage;
+            let storage_root = {
+                // getting a mutable reference is more efficient than calling remove
+                // every account must have an entry, even newly created accounts
+                let (storage_trie, _) = parent_storage.get_mut(&address).unwrap();
+                // for cleared accounts always start from the empty trie
+                let is_storage_cleared = account.was_destroyed();
+                if is_storage_cleared {
+                    storage_trie.clear();
+                }
+                // apply all new storage entries for the current account (address)
+                for (key, slot) in state_storage {
+                    if slot.present_value.is_zero() && is_storage_cleared {
+                        continue;
+                    }
+                    let storage_trie_index = keccak(key.to_be_bytes::<32>());
+                    if slot.present_value.is_zero() {
+                        storage_trie.delete(&storage_trie_index)?;
+                    } else {
+                        storage_trie.insert_rlp(&storage_trie_index, slot.present_value)?;
+                    }
+                }
+                storage_trie.hash()
+            };
+
+            let info = account.info.unwrap();
+            let state_account = Account {
+                nonce: info.nonce,
+                balance: info.balance,
+                storage_root,
+                code_hash: info.code_hash,
+            };
+            state_trie.insert_rlp(&state_trie_index, state_account)?;
+        }
+        // Validate final state trie
+        if block.header.state_root != state_trie.hash() {
+            bail!("Unexpected state root");
+        }
+
+        Ok(())
+    }
+}

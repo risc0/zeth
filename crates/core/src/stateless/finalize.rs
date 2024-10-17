@@ -16,6 +16,7 @@ use crate::keccak::keccak;
 use crate::stateless::block::StatelessClientBlock;
 use crate::stateless::client::StatelessClientEngine;
 use alloy_consensus::{Account, Header};
+use alloy_primitives::B256;
 use anyhow::bail;
 use core::fmt::Display;
 use core::mem::take;
@@ -42,7 +43,7 @@ where
     <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
 {
     type Input = BundleState;
-    type Output = ();
+    type Output = B256;
 
     fn finalize(
         stateless_client_engine: &mut StatelessClientEngine<Block, Header, Database>,
@@ -112,6 +113,6 @@ where
             bail!("Unexpected state root");
         }
 
-        Ok(())
+        Ok(block.hash_slow())
     }
 }

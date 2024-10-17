@@ -13,13 +13,16 @@
 // limitations under the License.
 
 use crate::stateless::block::StatelessClientBlock;
-use crate::stateless::execute::TransactionExecutionStrategy;
-use crate::stateless::finalize::FinalizationStrategy;
-use crate::stateless::initialize::InitializationStrategy;
-use crate::stateless::post_exec::PostExecutionValidationStrategy;
-use crate::stateless::pre_exec::PreExecutionValidationStrategy;
+use crate::stateless::execute::{RethExecStrategy, TransactionExecutionStrategy};
+use crate::stateless::finalize::{FinalizationStrategy, RethFinalizationStrategy};
+use crate::stateless::initialize::{InMemoryDbStrategy, InitializationStrategy};
+use crate::stateless::post_exec::{PostExecutionValidationStrategy, RethPostExecStrategy};
+use crate::stateless::pre_exec::{PreExecutionValidationStrategy, RethPreExecStrategy};
+use alloy_consensus::Header;
 use alloy_primitives::U256;
 use reth_chainspec::ChainSpec;
+use reth_primitives::Block;
+use reth_revm::InMemoryDB;
 use std::sync::{Arc, Mutex};
 
 type RescueDestination<D> = Arc<Mutex<Option<D>>>;
@@ -105,7 +108,7 @@ impl<Block, Header, Database> StatelessClientEngine<Block, Header, Database> {
     }
 }
 
-pub trait StatelessClientStrategy<Block, Header, Database> {
+pub trait StatelessClient<Block, Header, Database> {
     type Initialization: InitializationStrategy<Block, Header, Database>;
     type PreExecValidation: PreExecutionValidationStrategy<Block, Header, Database>;
     type TransactionExecution: TransactionExecutionStrategy<
@@ -151,4 +154,14 @@ pub trait StatelessClientStrategy<Block, Header, Database> {
 
         engine.finalize::<Self::Finalization>(state_delta)
     }
+}
+
+pub struct RethStatelessClient;
+
+impl StatelessClient<Block, Header, InMemoryDB> for RethStatelessClient {
+    type Initialization = InMemoryDbStrategy;
+    type PreExecValidation = RethPreExecStrategy;
+    type TransactionExecution = RethExecStrategy;
+    type PostExecValidation = RethPostExecStrategy;
+    type Finalization = RethFinalizationStrategy;
 }

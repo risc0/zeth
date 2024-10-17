@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use crate::keccak::keccak;
-use crate::stateless::block::StatelessClientBlock;
 use crate::stateless::client::StatelessClientEngine;
+use crate::stateless::data::StatelessClientData;
 use alloy_consensus::{Account, Header};
 use alloy_primitives::B256;
 use anyhow::bail;
@@ -50,8 +50,8 @@ where
         state_delta: Self::Input,
     ) -> anyhow::Result<Self::Output> {
         let StatelessClientEngine {
-            block:
-                StatelessClientBlock {
+            data:
+                StatelessClientData {
                     block,
                     parent_state_trie,
                     parent_storage,

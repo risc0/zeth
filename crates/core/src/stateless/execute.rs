@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::stateless::block::StatelessClientBlock;
 use crate::stateless::client::StatelessClientEngine;
+use crate::stateless::data::StatelessClientData;
 use alloy_consensus::Header;
 use core::fmt::Display;
 use core::mem::take;
@@ -44,7 +44,7 @@ where
         // Unpack client instance
         let StatelessClientEngine {
             chain_spec,
-            block: StatelessClientBlock { block, .. },
+            data: StatelessClientData { block, .. },
             total_difficulty,
             db,
             ..

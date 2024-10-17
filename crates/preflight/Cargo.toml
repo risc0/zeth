@@ -11,7 +11,10 @@ hashbrown.workspace = true
 log.workspace = true
 serde.workspace = true
 flate2.workspace = true
+
+reth-chainspec.workspace = true
 reth-revm.workspace = true
+
 serde_json.workspace = true
 tokio.workspace = true
 tracing.workspace = true

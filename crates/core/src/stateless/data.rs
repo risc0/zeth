@@ -24,7 +24,7 @@ pub type StorageEntry = (MptNode, Vec<U256>);
 
 /// External block input.
 #[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize, Serialize)]
-pub struct StatelessClientBlock<Block, Header> {
+pub struct StatelessClientData<Block, Header> {
     /// Block and transaction data to execute
     pub block: Block,
     /// State trie of the parent block.

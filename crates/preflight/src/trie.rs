@@ -21,7 +21,7 @@ use zeth_core::mpt::{
     is_not_included, mpt_from_proof, parse_proof, resolve_nodes, shorten_node_path, MptNode,
     MptNodeReference,
 };
-use zeth_core::stateless::block::StorageEntry;
+use zeth_core::stateless::data::StorageEntry;
 
 pub fn proofs_to_tries(
     state_root: B256,

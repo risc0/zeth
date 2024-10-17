@@ -21,6 +21,18 @@ use reth_revm::db::CacheDB;
 
 pub type PreflightDb = CacheDB<CacheDB<ProviderDb>>;
 
+// impl Into<PreflightDb> for ProviderDb {
+//     fn into(self) -> PreflightDb {
+//         CacheDB::new(CacheDB::new(self))
+//     }
+// }
+
+impl From<ProviderDb> for PreflightDb {
+    fn from(value: ProviderDb) -> Self {
+        CacheDB::new(CacheDB::new(value))
+    }
+}
+
 pub fn enumerate_storage_keys<T>(db: &CacheDB<T>) -> HashMap<Address, Vec<U256>> {
     db.accounts
         .iter()

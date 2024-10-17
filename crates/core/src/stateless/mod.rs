@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod block;
 pub mod client;
+pub mod data;
 pub mod execute;
 pub mod finalize;
 pub mod initialize;

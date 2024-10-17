@@ -40,7 +40,7 @@ impl<Block> InitializationStrategy<Block, Header, InMemoryDB> for InMemoryDbStra
     fn initialize_database(
         stateless_client_engine: &mut StatelessClientEngine<Block, Header, InMemoryDB>,
     ) -> anyhow::Result<Self::Output> {
-        let block = &mut stateless_client_engine.block;
+        let block = &mut stateless_client_engine.data;
         // Verify starting state trie root
         if block.parent_header.state_root != block.parent_state_trie.hash() {
             bail!(

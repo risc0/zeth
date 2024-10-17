@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::stateless::block::StatelessClientBlock;
+use crate::stateless::data::StatelessClientData;
 use crate::stateless::execute::{RethExecStrategy, TransactionExecutionStrategy};
 use crate::stateless::finalize::{FinalizationStrategy, RethFinalizationStrategy};
 use crate::stateless::initialize::{InMemoryDbStrategy, InitializationStrategy};
@@ -25,13 +25,13 @@ use reth_primitives::Block;
 use reth_revm::InMemoryDB;
 use std::sync::{Arc, Mutex};
 
-type RescueDestination<D> = Arc<Mutex<Option<D>>>;
+pub type RescueDestination<D> = Arc<Mutex<Option<D>>>;
 
 /// A generic builder for building a block.
 #[derive(Clone, Debug)]
 pub struct StatelessClientEngine<Block, Header, Database> {
     pub chain_spec: Arc<ChainSpec>,
-    pub block: StatelessClientBlock<Block, Header>,
+    pub data: StatelessClientData<Block, Header>,
     pub total_difficulty: U256,
     pub db: Option<Database>,
     pub db_rescue: Option<RescueDestination<Database>>,
@@ -54,14 +54,14 @@ impl<Block, Header, Database> StatelessClientEngine<Block, Header, Database> {
     /// Creates a new stateless validator
     pub fn new(
         chain_spec: Arc<ChainSpec>,
-        block: StatelessClientBlock<Block, Header>,
+        data: StatelessClientData<Block, Header>,
         total_difficulty: U256,
         db: Option<Database>,
         db_rescue: Option<RescueDestination<Database>>,
     ) -> Self {
         Self {
             chain_spec,
-            block,
+            data,
             total_difficulty,
             db,
             db_rescue,
@@ -134,13 +134,13 @@ pub trait StatelessClient<Block, Header, Database> {
     // properly validated
     fn validate_block(
         chain_spec: Arc<ChainSpec>,
-        block: StatelessClientBlock<Block, Header>,
+        data: StatelessClientData<Block, Header>,
         total_difficulty: U256,
     ) -> anyhow::Result<<Self::Finalization as FinalizationStrategy<Block, Header, Database>>::Output>
     {
         let mut engine = StatelessClientEngine::<Block, Header, Database>::new(
             chain_spec,
-            block,
+            data,
             total_difficulty,
             None,
             None,

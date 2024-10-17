@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::stateless::block::StatelessClientBlock;
 use crate::stateless::client::StatelessClientEngine;
+use crate::stateless::data::StatelessClientData;
 use alloy_consensus::Header;
 use alloy_primitives::Sealable;
 use core::mem::take;
@@ -39,8 +39,8 @@ impl<Database> PreExecutionValidationStrategy<Block, Header, Database> for RethP
         // Unpack client instance
         let StatelessClientEngine {
             chain_spec,
-            block:
-                StatelessClientBlock {
+            data:
+                StatelessClientData {
                     block,
                     parent_header,
                     ..

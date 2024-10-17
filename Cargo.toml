@@ -37,10 +37,8 @@ default-features = false
 
 # External
 [workspace.dependencies]
-anyhow = "1.0.89"
-hashbrown = { version = "0.15.0", features = ["inline-more"] }
-
 # Alloy
+alloy = { version = "0.4.2", features = ["full"] }
 alloy-consensus = "0.4.2"
 alloy-primitives = "0.8.8"
 alloy-rlp = "0.3.8"
@@ -54,6 +52,19 @@ reth-evm-ethereum = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zs
 reth-primitives = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false, features = ["std"] }
 reth-revm = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false, features = ["std"] }
 
+# Zeth
+zeth-core = { path = "crates/core" }
+zeth-preflight = { path = "crates/preflight" }
+
+# Others
+anyhow = "1.0.89"
+env_logger = "0.11.5"
+hashbrown = { version = "0.15.0", features = ["inline-more"] }
+log = "0.4.22"
+flate2 = "1.0.34"
 serde = { version = "1.0.210", features = ["derive"] }
+serde_json = { version = "1.0.128", features = ["alloc"] }
 thiserror = "1.0.64"
 tiny-keccak = "2.0.2"
+tokio = { version = "1.40.0", features = ["full"] }
+tracing = { version = "0.1.40", features = ["log"] }

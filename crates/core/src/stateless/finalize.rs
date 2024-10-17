@@ -12,10 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod block;
-pub mod client;
-pub mod execute;
-pub mod finalize;
-pub mod initialize;
-pub mod post_exec;
-pub mod pre_exec;
+// use crate::stateless::client::StatelessClientEngine;
+// use crate::stateless::post_exec::PostExecutionValidationStrategy;
+//
+// pub trait FinalizationStrategy<Block, Header, Database, T>
+// where T: PostExecutionValidationStrategy<Block, Header, Database, _>
+// {
+//     type Output;
+//
+//     fn finalize(
+//         stateless_client_engine: StatelessClientEngine<Block, Header, Database>,
+//     ) -> anyhow::Result<Self::Output>;
+// }

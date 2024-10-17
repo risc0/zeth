@@ -26,44 +26,44 @@ use reth_revm::primitives::AccountInfo;
 use reth_revm::InMemoryDB;
 
 pub trait InitializationStrategy<Block, Header, Database> {
+    type Output;
     fn initialize_database(
-        stateless_client_engine: StatelessClientEngine<Block, Header, Database>,
-    ) -> anyhow::Result<StatelessClientEngine<Block, Header, Database>>;
+        stateless_client_engine: &mut StatelessClientEngine<Block, Header, Database>,
+    ) -> anyhow::Result<Self::Output>;
 }
 
 pub struct InMemoryDbStrategy;
 
 impl<Block> InitializationStrategy<Block, Header, InMemoryDB> for InMemoryDbStrategy {
+    type Output = ();
+
     fn initialize_database(
-        mut stateless_client_engine: StatelessClientEngine<Block, Header, InMemoryDB>,
-    ) -> anyhow::Result<StatelessClientEngine<Block, Header, InMemoryDB>> {
+        stateless_client_engine: &mut StatelessClientEngine<Block, Header, InMemoryDB>,
+    ) -> anyhow::Result<Self::Output> {
+        let block = &mut stateless_client_engine.block;
         // Verify starting state trie root
-        if stateless_client_engine.block.parent_header.state_root
-            != stateless_client_engine.block.parent_state_trie.hash()
-        {
+        if block.parent_header.state_root != block.parent_state_trie.hash() {
             bail!(
                 "Invalid state trie: expected {}, got {}",
-                stateless_client_engine.block.parent_header.state_root,
-                stateless_client_engine.block.parent_state_trie.hash()
+                block.parent_header.state_root,
+                block.parent_state_trie.hash()
             );
         }
 
         // hash all the contract code
-        let contracts: HashMap<B256, Bytes> = take(&mut stateless_client_engine.block.contracts)
+        let contracts: HashMap<B256, Bytes> = take(&mut block.contracts)
             .into_iter()
             .map(|bytes| (keccak(&bytes).into(), bytes))
             .collect();
 
         // Load account data into db
-        let mut accounts =
-            HashMap::with_capacity(stateless_client_engine.block.parent_storage.len());
-        for (address, (storage_trie, slots)) in &mut stateless_client_engine.block.parent_storage {
+        let mut accounts = HashMap::with_capacity(block.parent_storage.len());
+        for (address, (storage_trie, slots)) in &mut block.parent_storage {
             // consume the slots, as they are no longer needed afterward
             let slots = take(slots);
 
             // load the account from the state trie or empty if it does not exist
-            let state_account = stateless_client_engine
-                .block
+            let state_account = block
                 .parent_state_trie
                 .get_rlp::<Account>(&keccak(address))?
                 .unwrap_or_default();
@@ -111,13 +111,13 @@ impl<Block> InitializationStrategy<Block, Header, InMemoryDB> for InMemoryDbStra
 
         // prepare block hash history
         let mut block_hashes: HashMap<U256, B256> =
-            HashMap::with_capacity(stateless_client_engine.block.ancestor_headers.len() + 1);
+            HashMap::with_capacity(block.ancestor_headers.len() + 1);
         block_hashes.insert(
-            U256::from(stateless_client_engine.block.parent_header.number),
-            stateless_client_engine.block.parent_header.hash_slow(),
+            U256::from(block.parent_header.number),
+            block.parent_header.hash_slow(),
         );
-        let mut prev = &stateless_client_engine.block.parent_header;
-        for current in &stateless_client_engine.block.ancestor_headers {
+        let mut prev = &block.parent_header;
+        for current in &block.ancestor_headers {
             let current_hash = current.hash_slow();
             if prev.parent_hash != current_hash {
                 bail!(
@@ -126,8 +126,8 @@ impl<Block> InitializationStrategy<Block, Header, InMemoryDB> for InMemoryDbStra
                     prev.number
                 );
             }
-            if stateless_client_engine.block.parent_header.number < current.number
-                || stateless_client_engine.block.parent_header.number - current.number >= 256
+            if block.parent_header.number < current.number
+                || block.parent_header.number - current.number >= 256
             {
                 bail!(
                     "Invalid chain: {} is not one of the {} most recent blocks",
@@ -144,6 +144,6 @@ impl<Block> InitializationStrategy<Block, Header, InMemoryDB> for InMemoryDbStra
         db.accounts = accounts;
         db.block_hashes = block_hashes;
         stateless_client_engine.db = Some(db);
-        Ok(stateless_client_engine)
+        Ok(())
     }
 }

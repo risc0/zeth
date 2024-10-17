@@ -15,72 +15,59 @@
 use crate::stateless::block::StatelessClientBlock;
 use crate::stateless::client::StatelessClientEngine;
 use alloy_consensus::Header;
-use reth_chainspec::MAINNET;
-use reth_evm::execute::{BatchExecutor, BlockExecutionInput, BlockExecutorProvider};
-use reth_evm_ethereum::execute::EthExecutorProvider;
-use reth_primitives::{Block, BlockWithSenders};
-use reth_revm::Database;
+use core::fmt::Display;
+use core::mem::take;
+use reth_evm::execute::{BatchExecutor, BlockExecutionInput, BlockExecutorProvider, ProviderError};
+use reth_evm_ethereum::execute::{EthBatchExecutor, EthExecutorProvider};
+use reth_evm_ethereum::EthEvmConfig;
+use reth_primitives::Block;
 
 pub trait TransactionExecutionStrategy<Block, Header, Database> {
+    type Output;
     fn execute_transactions(
-        stateless_client_engine: StatelessClientEngine<Block, Header, Database>,
-    ) -> anyhow::Result<StatelessClientEngine<Block, Header, Database>>;
+        stateless_client_engine: &mut StatelessClientEngine<Block, Header, Database>,
+    ) -> anyhow::Result<Self::Output>;
 }
 
 pub struct RethExecStrategy;
 
-impl<Database: Database> TransactionExecutionStrategy<Block, Header, Database>
+impl<Database: reth_revm::Database> TransactionExecutionStrategy<Block, Header, Database>
     for RethExecStrategy
+where
+    <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
 {
+    type Output = EthBatchExecutor<EthEvmConfig, Database>;
+
     fn execute_transactions(
-        stateless_client_engine: StatelessClientEngine<Block, Header, Database>,
-    ) -> anyhow::Result<StatelessClientEngine<Block, Header, Database>> {
+        stateless_client_engine: &mut StatelessClientEngine<Block, Header, Database>,
+    ) -> anyhow::Result<Self::Output> {
         // Unpack client instance
         let StatelessClientEngine {
             chain_spec,
-            block:
-                StatelessClientBlock {
-                    block,
-                    parent_state_trie,
-                    parent_storage,
-                    contracts,
-                    parent_header,
-                    ancestor_headers,
-                },
+            block: StatelessClientBlock { block, .. },
             total_difficulty,
             db,
-            db_rescue,
+            ..
         } = stateless_client_engine;
         // Instantiate execution engine
-        let mut executor = EthExecutorProvider::ethereum(chain_spec.clone()).batch_executor(db);
+        let mut executor = EthExecutorProvider::ethereum(chain_spec.clone())
+            .batch_executor(db.take().expect("Missing database."));
         // Execute transactions
-        let block_with_senders = BlockWithSenders {
-            block,
-            senders: vec![], // todo: recover signers with non-det hints
-        };
+        // let block_with_senders = BlockWithSenders {
+        //     block,
+        //     senders: vec![], // todo: recover signers with non-det hints
+        // };
+        let block_with_senders = take(block)
+            .with_recovered_senders()
+            .expect("Senders recovery failed");
         executor
             .execute_and_verify_one(BlockExecutionInput {
                 block: &block_with_senders,
-                total_difficulty,
+                total_difficulty: *total_difficulty,
             })
             .expect("Execution failed");
 
-        let outcome = executor.finalize();
-
-        // Repack client values
-        Ok(StatelessClientEngine {
-            chain_spec,
-            block: StatelessClientBlock {
-                block: block_with_senders.block,
-                parent_state_trie,
-                parent_storage,
-                contracts,
-                parent_header,
-                ancestor_headers,
-            },
-            total_difficulty,
-            db,
-            db_rescue,
-        })
+        *block = block_with_senders.block;
+        Ok(executor)
     }
 }

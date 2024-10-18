@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cell::RefCell;
-use std::convert::Infallible;
 use crate::provider::{AccountQuery, BlockQuery, Provider, StorageQuery};
 use alloy::primitives::map::HashMap;
 use alloy::primitives::{Address, B256, U256};
 use reth_revm::primitives::{Account, AccountInfo, Bytecode};
 use reth_revm::{Database, DatabaseCommit, DatabaseRef};
+use std::cell::RefCell;
+use std::convert::Infallible;
 
 pub struct ProviderDb {
     pub provider: RefCell<Box<dyn Provider>>,
@@ -89,7 +89,11 @@ impl DatabaseRef for ProviderDb {
             block_no: self.block_no,
             address: address.into_array().into(),
         };
-        let nonce = self.provider.borrow_mut().get_transaction_count(&query).unwrap();
+        let nonce = self
+            .provider
+            .borrow_mut()
+            .get_transaction_count(&query)
+            .unwrap();
         let balance = self.provider.borrow_mut().get_balance(&query).unwrap();
         let code = self.provider.borrow_mut().get_code(&query).unwrap();
         let bytecode = Bytecode::new_raw(code);
@@ -110,13 +114,15 @@ impl DatabaseRef for ProviderDb {
         let bytes = index.to_be_bytes::<32>();
         let index = U256::from_be_bytes(bytes);
 
-        Ok(
-            self.provider.borrow_mut().get_storage(&StorageQuery {
+        Ok(self
+            .provider
+            .borrow_mut()
+            .get_storage(&StorageQuery {
                 block_no: self.block_no,
                 address: address.into_array().into(),
                 index,
-            }).unwrap()
-        )
+            })
+            .unwrap())
     }
 
     fn block_hash_ref(&self, block_no: u64) -> Result<B256, Self::Error> {

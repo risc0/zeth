@@ -51,7 +51,9 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader> {
         let parent_header = parent_block.header;
 
         // Fetch the target block
-        let block = provider.get_mut().get_full_block(&BlockQuery { block_no })?;
+        let block = provider
+            .get_mut()
+            .get_full_block(&BlockQuery { block_no })?;
 
         debug!(
             "Final block number: {:?} ({:?})",

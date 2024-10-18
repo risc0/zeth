@@ -3,6 +3,9 @@ name = "zeth-preflight"
 version = "0.1.0"
 edition = "2021"
 
+[dependencies.zeth-core]
+workspace = true
+
 [dependencies]
 alloy.workspace = true
 anyhow.workspace = true
@@ -19,4 +22,3 @@ reth-primitives.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-zeth-core.workspace = true

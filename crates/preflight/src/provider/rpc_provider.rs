@@ -59,7 +59,7 @@ impl Provider for RpcProvider {
 
         let response = self.tokio_handle.block_on(
             self.http_client
-                .get_uncle(query.uncle_hash.into(), query.block_no.into()),
+                .get_uncle(query.uncle_hash.into(), query.index_number.into()),
         )?;
 
         match response {

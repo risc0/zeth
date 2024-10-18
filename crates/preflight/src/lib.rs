@@ -12,35 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::db::PreflightDb;
+use crate::db::{get_ancestor_headers, get_initial_proofs, get_latest_proofs, PreflightDb};
+use crate::derive::{RPCDerivableBlock, RPCDerivableData, RPCDerivableHeader};
 use crate::provider::db::ProviderDb;
 use crate::provider::{new_provider, BlockQuery};
+use crate::trie::proofs_to_tries;
 use alloy::primitives::U256;
 use alloy::rpc::types::{Block, Header};
-use log::debug;
+use anyhow::Context;
+use hashbrown::HashSet;
+use log::{debug, info};
 use reth_chainspec::ChainSpec;
-use reth_revm::InMemoryDB;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use zeth_core::stateless::client::{StatelessClient, StatelessClientEngine};
+use zeth_core::stateless::client::StatelessClientEngine;
 use zeth_core::stateless::data::StatelessClientData;
+use zeth_core::stateless::execute::TransactionExecutionStrategy;
+use zeth_core::stateless::post_exec::PostExecutionValidationStrategy;
+use zeth_core::stateless::pre_exec::PreExecutionValidationStrategy;
 
 pub mod db;
+pub mod derive;
 pub mod provider;
 pub mod trie;
-
-// /// The initial data required to build a block as returned by the [Preflight].
-// #[derive(Debug, Clone)]
-// pub struct Data<E: TxEssence> {
-//     pub db: MemDb,
-//     pub parent_header: Header,
-//     pub parent_proofs: HashMap<Address, EIP1186ProofResponse>,
-//     pub header: Option<Header>,
-//     pub transactions: Vec<Transaction<E>>,
-//     pub withdrawals: Vec<Withdrawal>,
-//     pub proofs: HashMap<Address, EIP1186ProofResponse>,
-//     pub ancestor_headers: Vec<Header>,
-// }
 
 pub trait PreflightClient<B, H> {
     /// Executes the complete block using the input and state from the RPC provider.
@@ -59,10 +53,16 @@ pub trait PreflightClient<B, H> {
     ) -> anyhow::Result<StatelessClientData<B, H>>;
 }
 
-impl<T, B, H> PreflightClient<B, H> for T
+impl<T, B: RPCDerivableBlock, H: RPCDerivableHeader> PreflightClient<B, H> for T
 where
-    T: StatelessClient<B, H, InMemoryDB>,
-    StatelessClientData<B, H>: From<StatelessClientData<Block, Header>>,
+    T: PreExecutionValidationStrategy<B, H, PreflightDb>
+        + TransactionExecutionStrategy<
+            B,
+            H,
+            PreflightDb,
+            Output = <T as PostExecutionValidationStrategy<B, H, PreflightDb>>::Input,
+        > + PostExecutionValidationStrategy<B, H, PreflightDb>,
+    StatelessClientData<B, H>: RPCDerivableData,
 {
     fn preflight_with_rpc(
         chain_spec: Arc<ChainSpec>,
@@ -113,29 +113,72 @@ where
         preflight_db: PreflightDb,
         data: StatelessClientData<Block, Header>,
     ) -> anyhow::Result<StatelessClientData<B, H>> {
-        let parent_header = data.parent_header.clone();
-        let transactions = data.block.transactions.clone();
-        let withdrawals = data.block.withdrawals.clone();
-        // Run the engine and extract the DB even if run fails
-        let db_backup = Arc::new(Mutex::new(None));
-        let mut engine = StatelessClientEngine::<B, H, PreflightDb>::new(
+        // Instantiate the engine with a rescue for the DB
+        let preflight_db_rescue = Arc::new(Mutex::new(None));
+        let mut engine = StatelessClientEngine::new(
             chain_spec,
-            data.into(),
+            StatelessClientData::<B, H>::derive(data.clone()),
             U256::ZERO, // todo query for correct total difficulty
             Some(preflight_db),
-            Some(db_backup.clone()),
+            Some(preflight_db_rescue.clone()),
         );
-        // todo: take db from engine
-        // let mut preflight_db = match engine.pre_execution_validation() {
-        //     Ok(_) => match engine.execute_transactions() {
-        //         Ok(_) => engine.take_db().unwrap(),
-        //         Err(_) => db_backup.lock().unwrap().take().unwrap(),
-        //     },
-        //     Err(_) => db_backup.lock().unwrap().take().unwrap(),
-        // };
+        // Run the engine and extract the DB when its dropped even on failure
+        if let Ok(_) = engine.pre_execution_validation::<Self>() {
+            if let Ok(execution_output) = engine.execute_transactions::<Self>() {
+                let _ = engine.post_execution_validation::<Self>(execution_output);
+            }
+        }
+        let mut preflight_db = preflight_db_rescue.lock().unwrap().take().unwrap();
 
-        // let x: alloy::consensus::Block<alloy::consensus::TypedTransaction> = data.block.into();
+        info!("Gathering inclusion proofs ...");
 
-        todo!()
+        // Gather inclusion proofs for the initial and final state
+        let parent_proofs = get_initial_proofs(&mut preflight_db)?;
+        let latest_proofs = get_latest_proofs(&mut preflight_db)?;
+
+        // Gather proofs for block history
+        let ancestor_headers = get_ancestor_headers(&mut preflight_db)?;
+
+        info!("Saving provider cache ...");
+
+        // Save the provider cache
+        preflight_db.db.db.save_provider()?;
+
+        info!("Provider-backed execution is Done!");
+
+        // collect the code from each account
+        let mut contracts = HashSet::new();
+        let initial_db = &preflight_db.db;
+        for account in initial_db.accounts.values() {
+            let code = account.info.code.clone().context("missing code")?;
+            if !code.is_empty() {
+                contracts.insert(code);
+            }
+        }
+
+        // construct the sparse MPTs from the inclusion proofs
+        let (parent_state_trie, parent_storage) =
+            proofs_to_tries(data.parent_header.state_root, parent_proofs, latest_proofs)?;
+
+        debug!(
+            "The partial state trie consists of {} nodes",
+            parent_state_trie.size()
+        );
+        debug!(
+            "The partial storage tries consist of {} nodes",
+            parent_storage
+                .values()
+                .map(|(n, _)| n.size())
+                .sum::<usize>()
+        );
+
+        Ok(StatelessClientData::<B, H> {
+            block: B::derive(data.block),
+            parent_state_trie,
+            parent_storage,
+            contracts: contracts.into_iter().map(|b| b.bytes()).collect(),
+            parent_header: H::derive(data.parent_header),
+            ancestor_headers: ancestor_headers.into_iter().map(|h| H::derive(h)).collect(),
+        })
     }
 }

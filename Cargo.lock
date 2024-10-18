@@ -5079,6 +5079,7 @@ dependencies = [
  "hashbrown 0.15.0",
  "log",
  "reth-chainspec",
+ "reth-primitives",
  "reth-revm",
  "serde",
  "serde_json",

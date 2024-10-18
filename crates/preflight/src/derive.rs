@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloy::consensus::{Block, BlockBody, Header, TxEnvelope, TypedTransaction};
+use alloy::consensus::{Block, BlockBody, Header, TxEip4844Variant, TxEnvelope, TypedTransaction};
+use alloy::network::TransactionResponse;
 use alloy::rpc::types::{Block as RPCBlock, Header as RPCHeader, Transaction as RPCTransaction};
+use reth_primitives::Withdrawals;
 use zeth_core::stateless::data::StatelessClientData;
 
 pub trait RPCDerivableTransaction {
@@ -23,6 +25,32 @@ pub trait RPCDerivableTransaction {
 impl RPCDerivableTransaction for TypedTransaction {
     fn derive(transaction: RPCTransaction) -> Self {
         TxEnvelope::try_from(transaction).unwrap().into()
+    }
+}
+
+impl RPCDerivableTransaction for reth_primitives::Transaction {
+    fn derive(transaction: RPCTransaction) -> Self {
+        match TypedTransaction::derive(transaction) {
+            TypedTransaction::Legacy(t) => Self::Legacy(t),
+            TypedTransaction::Eip2930(t) => Self::Eip2930(t),
+            TypedTransaction::Eip1559(t) => Self::Eip1559(t),
+            TypedTransaction::Eip4844(t) => match t {
+                TxEip4844Variant::TxEip4844(t) => Self::Eip4844(t),
+                TxEip4844Variant::TxEip4844WithSidecar(t) => Self::Eip4844(t.tx),
+            },
+            TypedTransaction::Eip7702(t) => Self::Eip7702(t),
+        }
+    }
+}
+
+impl RPCDerivableTransaction for reth_primitives::TransactionSigned {
+    fn derive(transaction: RPCTransaction) -> Self {
+        let signature = transaction.signature().unwrap();
+        Self {
+            hash: transaction.hash,
+            signature: signature.try_into().unwrap(),
+            transaction: reth_primitives::Transaction::derive(transaction),
+        }
     }
 }
 
@@ -50,11 +78,26 @@ impl RPCDerivableBlock for Block<TypedTransaction> {
                     .into_transactions()
                     .map(TypedTransaction::derive)
                     .collect(),
-                ommers: ommers
-                    .into_iter()
-                    .map(Header::derive)
-                    .collect(),
+                ommers: ommers.into_iter().map(Header::derive).collect(),
                 withdrawals: block.withdrawals,
+                requests: None,
+            },
+        }
+    }
+}
+
+impl RPCDerivableBlock for reth_primitives::Block {
+    fn derive(block: RPCBlock, ommers: Vec<RPCHeader>) -> Self {
+        Self {
+            header: Header::derive(block.header),
+            body: reth_primitives::BlockBody {
+                transactions: block
+                    .transactions
+                    .into_transactions()
+                    .map(reth_primitives::TransactionSigned::derive)
+                    .collect(),
+                ommers: ommers.into_iter().map(Header::derive).collect(),
+                withdrawals: block.withdrawals.map(|w| Withdrawals::new(w)),
                 requests: None,
             },
         }

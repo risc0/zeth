@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::RefCell;
 use alloy::primitives::{Address, Bytes, B256, U256};
 use alloy::rpc::types::{Block, EIP1186AccountProofResponse, Transaction, TransactionReceipt};
 use anyhow::anyhow;
@@ -25,27 +26,27 @@ pub mod db;
 pub mod file_provider;
 pub mod rpc_provider;
 
-pub fn new_file_provider(file_path: PathBuf) -> anyhow::Result<Box<dyn Provider>> {
-    Ok(Box::new(file_provider::FileProvider::new(file_path)?))
+pub fn new_file_provider(file_path: PathBuf) -> anyhow::Result<RefCell<Box<dyn Provider>>> {
+    Ok(RefCell::new(Box::new(file_provider::FileProvider::new(file_path)?)))
 }
 
-pub fn new_rpc_provider(rpc_url: String) -> anyhow::Result<Box<dyn Provider>> {
-    Ok(Box::new(rpc_provider::RpcProvider::new(rpc_url)?))
+pub fn new_rpc_provider(rpc_url: String) -> anyhow::Result<RefCell<Box<dyn Provider>>> {
+    Ok(RefCell::new(Box::new(rpc_provider::RpcProvider::new(rpc_url)?)))
 }
 
 pub fn new_cached_rpc_provider(
     cache_path: PathBuf,
     rpc_url: String,
-) -> anyhow::Result<Box<dyn Provider>> {
-    Ok(Box::new(cache_provider::CachedRpcProvider::new(
+) -> anyhow::Result<RefCell<Box<dyn Provider>>> {
+    Ok(RefCell::new(Box::new(cache_provider::CachedRpcProvider::new(
         cache_path, rpc_url,
-    )?))
+    )?)))
 }
 
 pub fn new_provider(
     cache_path: Option<PathBuf>,
     rpc_url: Option<String>,
-) -> anyhow::Result<Box<dyn Provider>> {
+) -> anyhow::Result<RefCell<Box<dyn Provider>>> {
     match (cache_path, rpc_url) {
         (Some(cache_path), Some(rpc_url)) => new_cached_rpc_provider(cache_path, rpc_url),
         (Some(cache_path), None) => new_file_provider(cache_path),

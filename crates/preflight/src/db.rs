@@ -40,7 +40,7 @@ pub fn get_initial_proofs(
     let initial_db = &db.db;
     let storage_keys = enumerate_storage_keys(initial_db);
 
-    get_proofs(db.db.db.provider.as_mut(), db.db.db.block_no, storage_keys)
+    get_proofs(db.db.db.provider.get_mut().as_mut(), db.db.db.block_no, storage_keys)
 }
 
 pub fn get_latest_proofs(
@@ -60,7 +60,7 @@ pub fn get_latest_proofs(
     }
     // return proofs as of next block
     get_proofs(
-        db.db.db.provider.as_mut(),
+        db.db.db.provider.get_mut().as_mut(),
         db.db.db.block_no + 1,
         storage_keys,
     )
@@ -82,6 +82,7 @@ pub fn get_ancestor_headers(db: &mut PreflightDb) -> anyhow::Result<Vec<Header>>
             db.db
                 .db
                 .provider
+                .get_mut()
                 .get_full_block(&BlockQuery { block_no })
                 .expect("Failed to retrieve ancestor block")
                 .header
@@ -92,7 +93,7 @@ pub fn get_ancestor_headers(db: &mut PreflightDb) -> anyhow::Result<Vec<Header>>
 
 pub fn get_uncles(db: &mut PreflightDb, uncle_hashes: &Vec<B256>) -> anyhow::Result<Vec<Header>> {
     let block_no = db.db.db.block_no;
-    let provider = db.db.db.provider.as_mut();
+    let provider = db.db.db.provider.get_mut().as_mut();
     let ommers = uncle_hashes
         .into_iter()
         .map(|uncle_hash| {

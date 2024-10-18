@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::db::{get_ancestor_headers, get_initial_proofs, get_latest_proofs, PreflightDb};
+use crate::db::{
+    get_ancestor_headers, get_initial_proofs, get_latest_proofs, get_uncles, PreflightDb,
+};
 use crate::derive::{RPCDerivableBlock, RPCDerivableData, RPCDerivableHeader};
 use crate::provider::db::ProviderDb;
 use crate::provider::{new_provider, BlockQuery};
@@ -110,14 +112,17 @@ where
 
     fn preflight_with_db(
         chain_spec: Arc<ChainSpec>,
-        preflight_db: PreflightDb,
+        mut preflight_db: PreflightDb,
         data: StatelessClientData<Block, Header>,
     ) -> anyhow::Result<StatelessClientData<B, H>> {
+        info!("Grabbing uncles ...");
+        let ommers = get_uncles(&mut preflight_db, &data.block.uncles)?;
         // Instantiate the engine with a rescue for the DB
+        info!("Running block execution engine ...");
         let preflight_db_rescue = Arc::new(Mutex::new(None));
         let mut engine = StatelessClientEngine::new(
             chain_spec,
-            StatelessClientData::<B, H>::derive(data.clone()),
+            StatelessClientData::<B, H>::derive(data.clone(), ommers.clone()),
             U256::ZERO, // todo query for correct total difficulty
             Some(preflight_db),
             Some(preflight_db_rescue.clone()),
@@ -130,18 +135,16 @@ where
         }
         let mut preflight_db = preflight_db_rescue.lock().unwrap().take().unwrap();
 
-        info!("Gathering inclusion proofs ...");
-
         // Gather inclusion proofs for the initial and final state
+        info!("Gathering proofs ...");
         let parent_proofs = get_initial_proofs(&mut preflight_db)?;
         let latest_proofs = get_latest_proofs(&mut preflight_db)?;
 
         // Gather proofs for block history
         let ancestor_headers = get_ancestor_headers(&mut preflight_db)?;
 
-        info!("Saving provider cache ...");
-
         // Save the provider cache
+        info!("Saving provider cache ...");
         preflight_db.db.db.save_provider()?;
 
         info!("Provider-backed execution is Done!");
@@ -173,7 +176,7 @@ where
         );
 
         Ok(StatelessClientData::<B, H> {
-            block: B::derive(data.block),
+            block: B::derive(data.block, ommers),
             parent_state_trie,
             parent_storage,
             contracts: contracts.into_iter().map(|b| b.bytes()).collect(),

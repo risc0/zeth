@@ -54,6 +54,20 @@ impl Provider for RpcProvider {
         }
     }
 
+    fn get_uncle_block(&mut self, query: &UncleQuery) -> anyhow::Result<Block<Transaction>> {
+        debug!("Querying RPC for uncle block: {:?}", query);
+
+        let response = self.tokio_handle.block_on(
+            self.http_client
+                .get_uncle(query.uncle_hash.into(), query.block_no.into()),
+        )?;
+
+        match response {
+            Some(out) => Ok(out.into()),
+            None => Err(anyhow!("No data for {:?}", query)),
+        }
+    }
+
     fn get_block_receipts(
         &mut self,
         query: &BlockQuery,

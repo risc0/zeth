@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloy::primitives::{Bytes, B256, U256};
+use alloy::primitives::{Bytes, U256};
 use alloy::rpc::types::{Block, EIP1186AccountProofResponse, Transaction, TransactionReceipt};
 use anyhow::{anyhow, Context};
 use flate2::{read::GzDecoder, write::GzEncoder, Compression};
@@ -25,7 +25,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::{AccountQuery, BlockQuery, MutProvider, ProofQuery, Provider, StorageQuery};
+use super::{
+    AccountQuery, BlockQuery, MutProvider, ProofQuery, Provider, StorageQuery, UncleQuery,
+};
 
 #[derive(Clone, Default, Deserialize, Serialize)]
 pub struct FileProvider {
@@ -36,7 +38,7 @@ pub struct FileProvider {
     #[serde(with = "ordered_map")]
     full_blocks: HashMap<BlockQuery, Block<Transaction>>,
     #[serde(with = "ordered_map")]
-    partial_blocks: HashMap<BlockQuery, Block<B256>>,
+    uncle_blocks: HashMap<UncleQuery, Block<Transaction>>,
     #[serde(default)]
     #[serde(with = "ordered_map")]
     receipts: HashMap<BlockQuery, Vec<TransactionReceipt>>,
@@ -146,6 +148,13 @@ impl Provider for FileProvider {
         }
     }
 
+    fn get_uncle_block(&mut self, query: &UncleQuery) -> anyhow::Result<Block<Transaction>> {
+        match self.uncle_blocks.get(query) {
+            Some(val) => Ok(val.clone()),
+            None => Err(anyhow!("No data for {:?}", query)),
+        }
+    }
+
     fn get_block_receipts(
         &mut self,
         query: &BlockQuery,
@@ -198,8 +207,8 @@ impl MutProvider for FileProvider {
         self.dirty = true;
     }
 
-    fn insert_partial_block(&mut self, query: BlockQuery, val: Block<B256>) {
-        self.partial_blocks.insert(query, val);
+    fn insert_uncle_block(&mut self, query: UncleQuery, val: Block<Transaction>) {
+        self.uncle_blocks.insert(query, val);
         self.dirty = true;
     }
 

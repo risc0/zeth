@@ -66,6 +66,12 @@ pub struct BlockQuery {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
+pub struct UncleQuery {
+    pub block_no: u64,
+    pub uncle_hash: B256,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
 pub struct ProofQuery {
     pub block_no: u64,
     pub address: Address,
@@ -83,6 +89,7 @@ pub trait Provider: Send {
     fn save(&self) -> anyhow::Result<()>;
 
     fn get_full_block(&mut self, query: &BlockQuery) -> anyhow::Result<Block<Transaction>>;
+    fn get_uncle_block(&mut self, query: &UncleQuery) -> anyhow::Result<Block<Transaction>>;
     fn get_block_receipts(&mut self, query: &BlockQuery)
         -> anyhow::Result<Vec<TransactionReceipt>>;
     fn get_proof(&mut self, query: &ProofQuery) -> anyhow::Result<EIP1186AccountProofResponse>;
@@ -94,7 +101,7 @@ pub trait Provider: Send {
 
 pub trait MutProvider: Provider {
     fn insert_full_block(&mut self, query: BlockQuery, val: Block<Transaction>);
-    fn insert_partial_block(&mut self, query: BlockQuery, val: Block<B256>);
+    fn insert_uncle_block(&mut self, query: UncleQuery, val: Block<Transaction>);
     fn insert_block_receipts(&mut self, query: BlockQuery, val: Vec<TransactionReceipt>);
     fn insert_proof(&mut self, query: ProofQuery, val: EIP1186AccountProofResponse);
     fn insert_transaction_count(&mut self, query: AccountQuery, val: U256);

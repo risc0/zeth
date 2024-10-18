@@ -13,19 +13,13 @@
 // limitations under the License.
 
 use crate::provider::db::ProviderDb;
-use crate::provider::{get_proofs, BlockQuery};
-use alloy::primitives::{Address, U256};
+use crate::provider::{get_proofs, BlockQuery, UncleQuery};
+use alloy::primitives::{Address, B256, U256};
 use alloy::rpc::types::{EIP1186AccountProofResponse, Header};
 use hashbrown::HashMap;
 use reth_revm::db::CacheDB;
 
 pub type PreflightDb = CacheDB<CacheDB<ProviderDb>>;
-
-// impl Into<PreflightDb> for ProviderDb {
-//     fn into(self) -> PreflightDb {
-//         CacheDB::new(CacheDB::new(self))
-//     }
-// }
 
 impl From<ProviderDb> for PreflightDb {
     fn from(value: ProviderDb) -> Self {
@@ -94,4 +88,22 @@ pub fn get_ancestor_headers(db: &mut PreflightDb) -> anyhow::Result<Vec<Header>>
         })
         .collect();
     Ok(headers)
+}
+
+pub fn get_uncles(db: &mut PreflightDb, uncle_hashes: &Vec<B256>) -> anyhow::Result<Vec<Header>> {
+    let block_no = db.db.db.block_no;
+    let provider = db.db.db.provider.as_mut();
+    let ommers = uncle_hashes
+        .into_iter()
+        .map(|uncle_hash| {
+            provider
+                .get_uncle_block(&UncleQuery {
+                    block_no,
+                    uncle_hash: *uncle_hash,
+                })
+                .expect("Failed to retrieve uncle block")
+                .header
+        })
+        .collect();
+    Ok(ommers)
 }

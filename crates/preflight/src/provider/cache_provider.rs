@@ -49,6 +49,18 @@ impl Provider for CachedRpcProvider {
         Ok(out)
     }
 
+    fn get_uncle_block(&mut self, query: &UncleQuery) -> anyhow::Result<Block<Transaction>> {
+        let cache_out = self.cache.get_uncle_block(query);
+        if cache_out.is_ok() {
+            return cache_out;
+        }
+
+        let out = self.rpc.get_uncle_block(query)?;
+        self.cache.insert_uncle_block(query.clone(), out.clone());
+
+        Ok(out)
+    }
+
     fn get_block_receipts(
         &mut self,
         query: &BlockQuery,

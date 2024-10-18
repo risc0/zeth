@@ -12,45 +12,48 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloy::consensus::{TxEnvelope, TypedTransaction};
-use alloy::rpc::types::{Block, Header, Transaction};
+use alloy::consensus::{Block, BlockBody, Header, TxEnvelope, TypedTransaction};
+use alloy::rpc::types::{Block as RPCBlock, Header as RPCHeader, Transaction as RPCTransaction};
 use zeth_core::stateless::data::StatelessClientData;
 
 pub trait RPCDerivableTransaction {
-    fn derive(transaction: Transaction) -> Self;
+    fn derive(transaction: RPCTransaction) -> Self;
 }
 
-impl RPCDerivableTransaction for alloy::consensus::TypedTransaction {
-    fn derive(transaction: Transaction) -> Self {
+impl RPCDerivableTransaction for TypedTransaction {
+    fn derive(transaction: RPCTransaction) -> Self {
         TxEnvelope::try_from(transaction).unwrap().into()
     }
 }
 
 pub trait RPCDerivableHeader {
-    fn derive(header: Header) -> Self;
+    fn derive(header: RPCHeader) -> Self;
 }
 
-impl RPCDerivableHeader for alloy::consensus::Header {
-    fn derive(header: Header) -> Self {
+impl RPCDerivableHeader for Header {
+    fn derive(header: RPCHeader) -> Self {
         Self::try_from(header).unwrap()
     }
 }
 
 pub trait RPCDerivableBlock {
-    fn derive(block: Block) -> Self;
+    fn derive(block: RPCBlock, ommers: Vec<RPCHeader>) -> Self;
 }
 
-impl RPCDerivableBlock for alloy::consensus::Block<TypedTransaction> {
-    fn derive(block: Block) -> Self {
+impl RPCDerivableBlock for Block<TypedTransaction> {
+    fn derive(block: RPCBlock, ommers: Vec<RPCHeader>) -> Self {
         Self {
-            header: alloy::consensus::Header::derive(block.header),
-            body: alloy::consensus::BlockBody {
+            header: Header::derive(block.header),
+            body: BlockBody {
                 transactions: block
                     .transactions
                     .into_transactions()
                     .map(TypedTransaction::derive)
                     .collect(),
-                ommers: vec![], // todo
+                ommers: ommers
+                    .into_iter()
+                    .map(Header::derive)
+                    .collect(),
                 withdrawals: block.withdrawals,
                 requests: None,
             },
@@ -59,13 +62,13 @@ impl RPCDerivableBlock for alloy::consensus::Block<TypedTransaction> {
 }
 
 pub trait RPCDerivableData {
-    fn derive(data: StatelessClientData<Block, Header>) -> Self;
+    fn derive(data: StatelessClientData<RPCBlock, RPCHeader>, ommers: Vec<RPCHeader>) -> Self;
 }
 
 impl<B: RPCDerivableBlock, H: RPCDerivableHeader> RPCDerivableData for StatelessClientData<B, H> {
-    fn derive(data: StatelessClientData<Block, Header>) -> Self {
+    fn derive(data: StatelessClientData<RPCBlock, RPCHeader>, ommers: Vec<RPCHeader>) -> Self {
         StatelessClientData {
-            block: B::derive(data.block),
+            block: B::derive(data.block, ommers),
             parent_state_trie: data.parent_state_trie,
             parent_storage: data.parent_storage,
             contracts: data.contracts,

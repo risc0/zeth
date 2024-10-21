@@ -1,8 +1,6 @@
-use crate::db::{
-    get_ancestor_headers, get_initial_proofs, get_latest_proofs, get_uncles, PreflightDb,
-};
+use crate::db::PreflightDB;
 use crate::derive::{RPCDerivableBlock, RPCDerivableData, RPCDerivableHeader};
-use crate::provider::db::ProviderDb;
+use crate::provider::db::ProviderDB;
 use crate::provider::{new_provider, BlockQuery};
 use crate::trie::proofs_to_tries;
 use alloy::primitives::U256;
@@ -12,7 +10,7 @@ use hashbrown::HashSet;
 use log::{debug, info};
 use reth_chainspec::ChainSpec;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 use zeth_core::stateless::client::StatelessClientEngine;
 use zeth_core::stateless::data::StatelessClientData;
 use zeth_core::stateless::execute::{RethExecStrategy, TransactionExecutionStrategy};
@@ -20,18 +18,18 @@ use zeth_core::stateless::post_exec::{PostExecutionValidationStrategy, RethPostE
 use zeth_core::stateless::pre_exec::{PreExecutionValidationStrategy, RethPreExecStrategy};
 
 pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader> {
-    type PreExecValidation: PreExecutionValidationStrategy<B, H, PreflightDb>;
+    type PreExecValidation: PreExecutionValidationStrategy<B, H, PreflightDB>;
     type TransactionExecution: TransactionExecutionStrategy<
         B,
         H,
-        PreflightDb,
+        PreflightDB,
         Output = <Self::PostExecValidation as PostExecutionValidationStrategy<
             B,
             H,
-            PreflightDb,
+            PreflightDB,
         >>::Input,
     >;
-    type PostExecValidation: PostExecutionValidationStrategy<B, H, PreflightDb>;
+    type PostExecValidation: PostExecutionValidationStrategy<B, H, PreflightDB>;
 
     fn preflight_with_rpc(
         chain_spec: Arc<ChainSpec>,
@@ -39,9 +37,9 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader> {
         rpc_url: Option<String>,
         block_no: u64,
     ) -> anyhow::Result<StatelessClientData<B, H>> {
-        let mut provider = new_provider(cache_path, rpc_url)?;
+        let provider = new_provider(cache_path, rpc_url)?;
         // Fetch the parent block
-        let parent_block = provider.get_mut().get_full_block(&BlockQuery {
+        let parent_block = provider.borrow_mut().get_full_block(&BlockQuery {
             block_no: block_no - 1,
         })?;
         debug!(
@@ -52,7 +50,7 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader> {
 
         // Fetch the target block
         let block = provider
-            .get_mut()
+            .borrow_mut()
             .get_full_block(&BlockQuery { block_no })?;
 
         debug!(
@@ -62,8 +60,8 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader> {
         debug!("Transaction count: {:?}", block.transactions.len());
 
         // Create the provider DB
-        let provider_db = ProviderDb::new(provider, parent_header.number);
-        let preflight_db = PreflightDb::from(provider_db);
+        let provider_db = ProviderDB::new(provider, parent_header.number);
+        let preflight_db = PreflightDB::from(provider_db);
 
         // Create the input data
         let data = StatelessClientData {
@@ -81,44 +79,53 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader> {
 
     fn preflight_with_db(
         chain_spec: Arc<ChainSpec>,
-        mut preflight_db: PreflightDb,
+        mut preflight_db: PreflightDB,
         data: StatelessClientData<Block, Header>,
     ) -> anyhow::Result<StatelessClientData<B, H>> {
+        let preflight_db_rescue = preflight_db.get_rescue();
         info!("Grabbing uncles ...");
-        let ommers = get_uncles(&mut preflight_db, &data.block.uncles)?;
+        let ommers = preflight_db.get_uncles(&data.block.uncles)?;
         // Instantiate the engine with a rescue for the DB
         info!("Running block execution engine ...");
-        let preflight_db_rescue = Arc::new(Mutex::new(None));
         let mut engine = StatelessClientEngine::new(
             chain_spec,
             StatelessClientData::<B, H>::derive(data.clone(), ommers.clone()),
             U256::ZERO, // todo query for correct total difficulty
             Some(preflight_db),
-            Some(preflight_db_rescue.clone()),
         );
-        // Run the engine and extract the DB when its dropped even on failure
+        // Run the engine
+        info!("Pre execution validation ...");
         if let Ok(_) =
             engine.pre_execution_validation::<<Self as PreflightClient<B, H>>::PreExecValidation>()
         {
+            info!("Executing transactions ...");
             if let Ok(execution_output) = engine
                 .execute_transactions::<<Self as PreflightClient<B, H>>::TransactionExecution>(
             ) {
+                info!("Post execution validation ...");
                 let _ = engine.post_execution_validation::<<Self as PreflightClient<B, H>>::PostExecValidation>(execution_output);
             }
         }
-        let mut preflight_db = preflight_db_rescue.lock().unwrap().take().unwrap();
-
-        // Gather inclusion proofs for the initial and final state
-        info!("Gathering proofs ...");
-        let parent_proofs = get_initial_proofs(&mut preflight_db)?;
-        let latest_proofs = get_latest_proofs(&mut preflight_db)?;
-
-        // Gather proofs for block history
-        let ancestor_headers = get_ancestor_headers(&mut preflight_db)?;
+        // Rescue the dropped DB
+        let mut preflight_db = PreflightDB::from(preflight_db_rescue);
 
         // Save the provider cache
         info!("Saving provider cache ...");
-        preflight_db.db.db.save_provider()?;
+        preflight_db.save_provider()?;
+
+        // Gather inclusion proofs for the initial and final state
+        info!("Gathering initial proofs ...");
+        let parent_proofs = preflight_db.get_initial_proofs()?;
+        info!("Gathering final proofs ...");
+        let latest_proofs = preflight_db.get_latest_proofs()?;
+
+        // Gather proofs for block history
+        info!("Gathering ancestor headers ...");
+        let ancestor_headers = preflight_db.get_ancestor_headers()?;
+
+        // Save the provider cache (again)
+        info!("Saving provider cache post proof collection ...");
+        preflight_db.save_provider()?;
 
         info!("Provider-backed execution is Done!");
 

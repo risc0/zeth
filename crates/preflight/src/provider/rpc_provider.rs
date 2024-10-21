@@ -18,6 +18,7 @@ use anyhow::anyhow;
 use log::debug;
 use std::future::IntoFuture;
 
+#[derive(Clone, Debug)]
 pub struct RpcProvider {
     http_client: ReqwestProvider,
     tokio_handle: tokio::runtime::Handle,

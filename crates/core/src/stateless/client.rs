@@ -34,20 +34,6 @@ pub struct StatelessClientEngine<Block, Header, Database> {
     pub data: StatelessClientData<Block, Header>,
     pub total_difficulty: U256,
     pub db: Option<Database>,
-    pub db_rescue: Option<RescueDestination<Database>>,
-}
-
-// This implementation allows us to recover data during erroneous block builds
-impl<Block, Header, Database> Drop for StatelessClientEngine<Block, Header, Database> {
-    fn drop(&mut self) {
-        if let Some(backup_target) = &mut self.db_rescue {
-            if let Some(dropped_db) = self.db.take() {
-                if let Ok(mut target_option) = backup_target.lock() {
-                    target_option.replace(dropped_db);
-                }
-            }
-        }
-    }
 }
 
 impl<Block, Header, Database> StatelessClientEngine<Block, Header, Database> {
@@ -57,14 +43,12 @@ impl<Block, Header, Database> StatelessClientEngine<Block, Header, Database> {
         data: StatelessClientData<Block, Header>,
         total_difficulty: U256,
         db: Option<Database>,
-        db_rescue: Option<RescueDestination<Database>>,
     ) -> Self {
         Self {
             chain_spec,
             data,
             total_difficulty,
             db,
-            db_rescue,
         }
     }
 
@@ -142,7 +126,6 @@ pub trait StatelessClient<Block, Header, Database> {
             chain_spec,
             data,
             total_difficulty,
-            None,
             None,
         );
         engine.initialize_database::<Self::Initialization>()?;

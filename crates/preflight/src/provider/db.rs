@@ -19,15 +19,17 @@ use reth_revm::primitives::{Account, AccountInfo, Bytecode};
 use reth_revm::{Database, DatabaseCommit, DatabaseRef};
 use std::cell::RefCell;
 use std::convert::Infallible;
+use std::sync::Arc;
 
-pub struct ProviderDb {
-    pub provider: RefCell<Box<dyn Provider>>,
+#[derive(Clone)]
+pub struct ProviderDB {
+    pub provider: Arc<RefCell<dyn Provider>>,
     pub block_no: u64,
 }
 
-impl ProviderDb {
-    pub fn new(provider: RefCell<Box<dyn Provider>>, block_no: u64) -> Self {
-        ProviderDb { provider, block_no }
+impl ProviderDB {
+    pub fn new(provider: Arc<RefCell<dyn Provider>>, block_no: u64) -> Self {
+        ProviderDB { provider, block_no }
     }
 
     pub fn save_provider(&self) -> anyhow::Result<()> {
@@ -35,7 +37,7 @@ impl ProviderDb {
     }
 }
 
-impl Database for ProviderDb {
+impl Database for ProviderDB {
     type Error = anyhow::Error;
 
     fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
@@ -43,9 +45,9 @@ impl Database for ProviderDb {
             block_no: self.block_no,
             address: address.into_array().into(),
         };
-        let nonce = self.provider.get_mut().get_transaction_count(&query)?;
-        let balance = self.provider.get_mut().get_balance(&query)?;
-        let code = self.provider.get_mut().get_code(&query)?;
+        let nonce = self.provider.borrow_mut().get_transaction_count(&query)?;
+        let balance = self.provider.borrow_mut().get_balance(&query)?;
+        let code = self.provider.borrow_mut().get_code(&query)?;
         let bytecode = Bytecode::new_raw(code);
         Ok(Some(AccountInfo::new(
             balance,
@@ -64,7 +66,7 @@ impl Database for ProviderDb {
         let bytes = index.to_be_bytes::<32>();
         let index = U256::from_be_bytes(bytes);
 
-        self.provider.get_mut().get_storage(&StorageQuery {
+        self.provider.borrow_mut().get_storage(&StorageQuery {
             block_no: self.block_no,
             address: address.into_array().into(),
             index,
@@ -74,14 +76,14 @@ impl Database for ProviderDb {
     fn block_hash(&mut self, block_no: u64) -> Result<B256, Self::Error> {
         Ok(self
             .provider
-            .get_mut()
+            .borrow_mut()
             .get_full_block(&BlockQuery { block_no })?
             .header
             .hash)
     }
 }
 
-impl DatabaseRef for ProviderDb {
+impl DatabaseRef for ProviderDB {
     type Error = Infallible;
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
@@ -136,6 +138,6 @@ impl DatabaseRef for ProviderDb {
     }
 }
 
-impl DatabaseCommit for ProviderDb {
+impl DatabaseCommit for ProviderDB {
     fn commit(&mut self, _changes: HashMap<Address, Account>) {}
 }

@@ -18,6 +18,7 @@ use crate::provider::*;
 use anyhow::Context;
 use std::path::{Path, PathBuf};
 
+#[derive(Clone, Debug)]
 pub struct CachedRpcProvider {
     cache: FileProvider,
     rpc: RpcProvider,

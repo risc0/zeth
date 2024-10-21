@@ -29,7 +29,7 @@ use super::{
     AccountQuery, BlockQuery, MutProvider, ProofQuery, Provider, StorageQuery, UncleQuery,
 };
 
-#[derive(Clone, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct FileProvider {
     #[serde(skip)]
     file_path: PathBuf,

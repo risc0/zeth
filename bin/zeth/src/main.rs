@@ -15,7 +15,7 @@
 use clap::Parser;
 use reth_chainspec::MAINNET;
 use zeth::cli::{Cli, Network};
-use zeth::client::RethZethClient;
+use zeth::client::{RethZethClient, ZethClient};
 use zeth_guests::{RETH_ELF, RETH_ID};
 
 #[tokio::main]
@@ -25,18 +25,12 @@ async fn main() -> anyhow::Result<()> {
 
     // execute the command
     let build_args = cli.build_args();
-    let (image_id, stark) = match build_args.network {
+    let (_image_id, _stark) = match build_args.network {
         Network::Ethereum => {
             let rpc_url = build_args.eth_rpc_url.clone();
             (
                 RETH_ID,
-                zeth::operations::build::build_block::<RethZethClient>(
-                    &cli,
-                    rpc_url,
-                    MAINNET.clone(),
-                    RETH_ELF,
-                )
-                .await?,
+                RethZethClient::build_block(&cli, rpc_url, MAINNET.clone(), RETH_ELF).await?,
             )
         }
         Network::Optimism => todo!(),

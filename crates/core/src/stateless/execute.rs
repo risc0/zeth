@@ -49,9 +49,9 @@ where
             db,
             ..
         } = stateless_client_engine;
+        let db = db.take().expect("Missing database.");
         // Instantiate execution engine
-        let mut executor = EthExecutorProvider::ethereum(chain_spec.clone())
-            .batch_executor(db.take().expect("Missing database."));
+        let mut executor = EthExecutorProvider::ethereum(chain_spec.clone()).batch_executor(db);
         // Execute transactions
         // let block_with_senders = BlockWithSenders {
         //     block,

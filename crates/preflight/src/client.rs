@@ -106,6 +106,8 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader> {
                 let _ = engine.post_execution_validation::<<Self as PreflightClient<B, H>>::PostExecValidation>(execution_output);
             }
         }
+        info!("Provider-backed execution is Done!");
+
         // Rescue the dropped DB
         let mut preflight_db = PreflightDB::from(preflight_db_rescue);
 
@@ -127,11 +129,10 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader> {
         info!("Saving provider cache post proof collection ...");
         preflight_db.save_provider()?;
 
-        info!("Provider-backed execution is Done!");
-
         // collect the code from each account
+        info!("Collecting contracts ...");
         let mut contracts = HashSet::new();
-        let initial_db = &preflight_db.db.db;
+        let initial_db = &preflight_db.db.db.db.borrow();
         for account in initial_db.accounts.values() {
             let code = account.info.code.clone().context("missing code")?;
             if !code.is_empty() {
@@ -140,14 +141,15 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader> {
         }
 
         // construct the sparse MPTs from the inclusion proofs
+        info!("Deriving tries from proofs ...");
         let (parent_state_trie, parent_storage) =
             proofs_to_tries(data.parent_header.state_root, initial_proofs, latest_proofs)?;
 
-        debug!(
+        info!(
             "The partial state trie consists of {} nodes",
             parent_state_trie.size()
         );
-        debug!(
+        info!(
             "The partial storage tries consist of {} nodes",
             parent_storage
                 .values()

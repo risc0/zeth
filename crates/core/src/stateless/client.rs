@@ -20,6 +20,7 @@ use crate::stateless::post_exec::{PostExecutionValidationStrategy, RethPostExecS
 use crate::stateless::pre_exec::{PreExecutionValidationStrategy, RethPreExecStrategy};
 use alloy_consensus::Header;
 use alloy_primitives::U256;
+use anyhow::Context;
 use reth_chainspec::ChainSpec;
 use reth_primitives::Block;
 use reth_revm::InMemoryDB;
@@ -56,21 +57,21 @@ impl<Block, Header, Database> StatelessClientEngine<Block, Header, Database> {
     pub fn initialize_database<T: InitializationStrategy<Block, Header, Database>>(
         &mut self,
     ) -> anyhow::Result<T::Output> {
-        T::initialize_database(self)
+        T::initialize_database(self).context("StatelessClientEngine::initialize_database")
     }
 
     /// Validates the header before execution.
     pub fn pre_execution_validation<T: PreExecutionValidationStrategy<Block, Header, Database>>(
         &mut self,
     ) -> anyhow::Result<T::Output> {
-        T::pre_execution_validation(self)
+        T::pre_execution_validation(self).context("StatelessClientEngine::pre_execution_validation")
     }
 
     /// Executes transactions.
     pub fn execute_transactions<T: TransactionExecutionStrategy<Block, Header, Database>>(
         &mut self,
     ) -> anyhow::Result<T::Output> {
-        T::execute_transactions(self)
+        T::execute_transactions(self).context("StatelessClientEngine::execute_transactions")
     }
 
     /// Validates the header after execution.
@@ -81,6 +82,7 @@ impl<Block, Header, Database> StatelessClientEngine<Block, Header, Database> {
         execution_output: T::Input,
     ) -> anyhow::Result<T::Output> {
         T::post_execution_validation(self, execution_output)
+            .context("StatelessClientEngine::post_execution_validation")
     }
 
     /// Finalizes the state trie.
@@ -88,7 +90,7 @@ impl<Block, Header, Database> StatelessClientEngine<Block, Header, Database> {
         &mut self,
         state_delta: T::Input,
     ) -> anyhow::Result<T::Output> {
-        T::finalize(self, state_delta)
+        T::finalize(self, state_delta).context("StatelessClientEngine::finalize")
     }
 }
 

@@ -54,7 +54,7 @@ pub fn proofs_to_tries(
 
         let finalization_proof = finalization_proofs
             .get(&address)
-            .with_context(|| format!("missing initialization_proof for address {:#}", &address))?;
+            .with_context(|| format!("missing finalization proof for address {:#}", &address))?;
 
         // assure that addresses can be deleted from the state trie
         add_orphaned_leafs(address, &finalization_proof.account_proof, &mut state_nodes)?;

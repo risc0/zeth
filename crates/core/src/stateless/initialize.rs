@@ -44,7 +44,7 @@ impl<Block> InitializationStrategy<Block, Header, InMemoryDB> for InMemoryDbStra
         // Verify starting state trie root
         if block.parent_header.state_root != block.parent_state_trie.hash() {
             bail!(
-                "Invalid state trie: expected {}, got {}",
+                "Invalid initial state trie: expected {}, got {}",
                 block.parent_header.state_root,
                 block.parent_state_trie.hash()
             );

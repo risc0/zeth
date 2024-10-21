@@ -92,7 +92,7 @@ pub fn proofs_to_tries(
         }
         // create the storage trie, from all the relevant nodes
         let storage_trie = resolve_nodes(&storage_root_node, &storage_nodes);
-        assert_eq!(storage_trie.hash(), finalization_proof.storage_hash);
+        assert_eq!(storage_trie.hash(), initialization_proof.storage_hash);
 
         // convert the slots to a vector of U256
         let slots = initialization_proof

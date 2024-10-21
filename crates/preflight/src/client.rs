@@ -10,7 +10,7 @@ use hashbrown::HashSet;
 use log::{debug, info};
 use reth_chainspec::ChainSpec;
 use std::path::PathBuf;
-use std::sync::{Arc};
+use std::sync::Arc;
 use zeth_core::stateless::client::StatelessClientEngine;
 use zeth_core::stateless::data::StatelessClientData;
 use zeth_core::stateless::execute::{RethExecStrategy, TransactionExecutionStrategy};
@@ -115,7 +115,7 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader> {
 
         // Gather inclusion proofs for the initial and final state
         info!("Gathering initial proofs ...");
-        let parent_proofs = preflight_db.get_initial_proofs()?;
+        let initial_proofs = preflight_db.get_initial_proofs()?;
         info!("Gathering final proofs ...");
         let latest_proofs = preflight_db.get_latest_proofs()?;
 
@@ -131,7 +131,7 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader> {
 
         // collect the code from each account
         let mut contracts = HashSet::new();
-        let initial_db = &preflight_db.db;
+        let initial_db = &preflight_db.db.db;
         for account in initial_db.accounts.values() {
             let code = account.info.code.clone().context("missing code")?;
             if !code.is_empty() {
@@ -141,7 +141,7 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader> {
 
         // construct the sparse MPTs from the inclusion proofs
         let (parent_state_trie, parent_storage) =
-            proofs_to_tries(data.parent_header.state_root, parent_proofs, latest_proofs)?;
+            proofs_to_tries(data.parent_header.state_root, initial_proofs, latest_proofs)?;
 
         debug!(
             "The partial state trie consists of {} nodes",

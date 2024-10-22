@@ -66,6 +66,7 @@ log = "0.4.22"
 flate2 = "1.0.34"
 serde = { version = "1.0.210", features = ["derive"] }
 serde_json = { version = "1.0.128", features = ["alloc"] }
+serde-brief = "0.1.0"
 thiserror = "1.0.64"
 tiny-keccak = "2.0.2"
 tokio = { version = "1.40.0", features = ["full"] }

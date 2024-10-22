@@ -13,29 +13,60 @@
 // limitations under the License.
 
 use clap::Parser;
+use log::info;
 use reth_chainspec::MAINNET;
+use risc0_zkvm::{default_executor, default_prover, ProverOpts};
 use zeth::cli::{Cli, Network};
 use zeth::client::{RethZethClient, ZethClient};
+use zeth::executor::build_executor_env;
 use zeth_guests::{RETH_ELF, RETH_ID};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
     let cli = Cli::parse();
-
-    // execute the command
     let build_args = cli.build_args();
-    let (_image_id, _stark) = match build_args.network {
+
+    // select a gues
+    let (_image_id, elf) = match build_args.network {
+        Network::Ethereum => (RETH_ID, RETH_ELF),
+        Network::Optimism => todo!(),
+    };
+
+    if !cli.should_build() {
+        // todo: verify receipt
+        return Ok(());
+    }
+
+    // preflight the block building process
+    let input = match build_args.network {
         Network::Ethereum => {
-            let rpc_url = build_args.eth_rpc_url.clone();
-            (
-                RETH_ID,
-                RethZethClient::build_block(&cli, rpc_url, MAINNET.clone(), RETH_ELF).await?,
-            )
+            RethZethClient::build_block(&cli, build_args.eth_rpc_url.clone(), MAINNET.clone())
+                .await?
         }
         Network::Optimism => todo!(),
     };
-    //
+
+    if !cli.should_execute() {
+        return Ok(());
+    }
+
+    // use the zkvm
+    let exec_env = build_executor_env(&cli, &input)?;
+    if cli.should_prove() {
+        info!("Proving ...");
+        // run prover
+        let prover = default_prover();
+        let _prove_info = prover.prove_with_opts(exec_env, elf, &ProverOpts::succinct())?;
+    } else {
+        info!("Executing ...");
+        // run executor only
+        let executor = default_executor();
+        let _session_info = executor.execute(exec_env, elf)?;
+    }
+
+    // todo: bonsai
+
     // // Create/verify Groth16 SNARK
     // if cli.snark() {
     //     let Some((stark_uuid, stark_receipt)) = stark else {

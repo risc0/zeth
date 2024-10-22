@@ -2070,6 +2070,7 @@ dependencies = [
  "lazy_static",
  "reth-chainspec",
  "risc0-zkvm",
+ "serde-brief",
  "zeth-core",
 ]
 
@@ -2896,6 +2897,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8e3592472072e6e22e0a54d5904d9febf8508f65fb8552499a1abc7d1078c3a"
 dependencies = [
  "serde_derive",
+]
+
+[[package]]
+name = "serde-brief"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d3ebe2a279beb0833037245a36adbbf71239fdaefc0f670122aff9922bcaf0b"
+dependencies = [
+ "serde",
+ "tracing",
 ]
 
 [[package]]

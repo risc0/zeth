@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies.risc0-zkvm]
 workspace = true
-features = ["std"]
+features = ["std", "client"]
 
 [dependencies.zeth-core]
 workspace = true
@@ -30,6 +30,7 @@ reth-primitives.workspace = true
 reth-revm.workspace = true
 
 serde.workspace = true
+serde-brief = { workspace = true, features = ["std"] }
 tokio.workspace = true
 tracing.workspace = true
 

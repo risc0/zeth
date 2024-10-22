@@ -4811,6 +4811,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-brief"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d3ebe2a279beb0833037245a36adbbf71239fdaefc0f670122aff9922bcaf0b"
+dependencies = [
+ "serde",
+ "tracing",
+]
+
+[[package]]
 name = "serde_derive"
 version = "1.0.210"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6105,6 +6115,7 @@ dependencies = [
  "reth-revm",
  "risc0-zkvm",
  "serde",
+ "serde-brief",
  "tokio",
  "tracing",
  "zeth-core",

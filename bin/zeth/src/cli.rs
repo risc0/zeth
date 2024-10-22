@@ -35,10 +35,30 @@ pub enum Cli {
 impl Cli {
     pub fn build_args(&self) -> &BuildArgs {
         match &self {
-            Cli::Build(build_args) => build_args,
-            Cli::Run(run_args) => &run_args.build_args,
-            Cli::Prove(prove_args) => &prove_args.run_args.build_args,
+            Cli::Build(args) => args,
+            Cli::Run(args) => &args.build_args,
+            Cli::Prove(args) => &args.run_args.build_args,
             Cli::Verify(..) => unimplemented!(),
+        }
+    }
+
+    pub fn should_build(&self) -> bool {
+        !matches!(self, Cli::Verify(..))
+    }
+
+    pub fn should_execute(&self) -> bool {
+        !matches!(self, Cli::Build(..) | Cli::Verify(..))
+    }
+
+    pub fn should_prove(&self) -> bool {
+        matches!(self, Cli::Prove(..))
+    }
+
+    pub fn run_args(&self) -> &RunArgs {
+        match &self {
+            Cli::Build(_) | Cli::Verify(_) => unreachable!(),
+            Cli::Run(args) => args,
+            Cli::Prove(args) => &args.run_args,
         }
     }
 
@@ -172,9 +192,11 @@ pub struct RunArgs {
     /// The maximum cycle count of a segment as a power of 2
     pub execution_po2: u32,
 
-    #[clap(short, long, default_value_t = false)]
-    /// Whether to profile the zkVM execution
-    pub profile: bool,
+    #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "profiles")]
+    /// Profile zkVM executions; the value specifies the output directory
+    ///
+    /// [default when the flag is present: profiles]
+    pub profile: Option<PathBuf>,
 }
 
 impl Tag for RunArgs {

@@ -15,6 +15,7 @@
 use reth_chainspec::MAINNET;
 // use c_kzg::KzgSettings;
 use risc0_zkvm::guest::env;
+use risc0_zkvm::guest::env::stdin;
 use zeth_core::stateless::client::{RethStatelessClient, StatelessClient};
 // todo: use this instead of the alloy KzgEnv to save cycles
 // lazy_static::lazy_static! {
@@ -33,13 +34,18 @@ pub extern "C" fn __ctzsi2(x: u32) -> usize {
 
 fn main() {
     // todo: load up revm with hashbrown feat
-    let stateless_client_block = env::read();
-
-    let block_hash = RethStatelessClient::validate_block(
-        MAINNET.clone(),
-        stateless_client_block,
+    let stateless_client_block = serde_brief::from_reader_with_config(
+        stdin(),
+        serde_brief::Config {
+            use_indices: true,
+            error_on_excess_data: false,
+            max_size: None,
+        },
     )
-    .expect("block validation failed");
+    .unwrap();
+    env::log("Validating block");
+    let block_hash = RethStatelessClient::validate_block(MAINNET.clone(), stateless_client_block)
+        .expect("block validation failed");
 
     // todo: commit total chain difficulty
     env::commit_slice(&block_hash.0)

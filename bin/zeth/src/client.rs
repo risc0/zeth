@@ -18,9 +18,11 @@ use log::{info, warn};
 use reth_chainspec::ChainSpec;
 use reth_primitives::{Block, Header};
 use reth_revm::InMemoryDB;
-use risc0_zkvm::Receipt;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use std::sync::Arc;
 use zeth_core::stateless::client::{RethStatelessClient, StatelessClient};
+use zeth_core::stateless::data::StatelessClientData;
 use zeth_preflight::client::{PreflightClient, RethPreflightClient};
 use zeth_preflight::derive::{RPCDerivableBlock, RPCDerivableHeader};
 use zeth_preflight::provider::cache_provider::cache_file_path;
@@ -28,18 +30,17 @@ use zeth_preflight::provider::cache_provider::cache_file_path;
 #[async_trait::async_trait]
 pub trait ZethClient<B, H, D>
 where
-    B: RPCDerivableBlock + Send + 'static,
-    H: RPCDerivableHeader + Send + 'static,
+    B: RPCDerivableBlock + Send + Serialize + DeserializeOwned + 'static,
+    H: RPCDerivableHeader + Send + Serialize + DeserializeOwned + 'static,
 {
     type PreflightClient: PreflightClient<B, H>;
     type StatelessClient: StatelessClient<B, H, D>;
 
-    async fn build_block<'a>(
-        cli: &'a Cli,
+    async fn build_block(
+        cli: &Cli,
         rpc_url: Option<String>,
         chain_spec: Arc<ChainSpec>,
-        _guest_elf: &'a [u8],
-    ) -> anyhow::Result<Option<(String, Receipt)>> {
+    ) -> anyhow::Result<Vec<u8>> {
         let build_args = cli.build_args().clone();
         if build_args.block_count > 1 {
             warn!("Building multiple blocks is not supported. Only the first block will be built.");
@@ -66,12 +67,23 @@ where
         })
         .await?;
         let preflight_data = preflight_result.context("preflight failed")?;
+        let brief_config = serde_brief::Config {
+            use_indices: true,
+            error_on_excess_data: false,
+            max_size: None,
+        };
+        let briefed_input = serde_brief::to_vec_with_config(&preflight_data, brief_config)
+            .context("brief serialization failed")?;
+        let _: StatelessClientData<B, H> =
+            serde_brief::from_slice_with_config(&briefed_input, brief_config)
+                .context("brief deserialization failed")?;
 
         // Verify that the transactions run correctly
-        info!("Running from memory ...");
+        info!("Running from memory (Input size: {} bytes) ...", briefed_input.len());
         <Self::StatelessClient>::validate_block(chain_spec.clone(), preflight_data)
             .expect("Block validation failed");
-        Ok(None)
+        info!("Memory run successful ...");
+        Ok(briefed_input)
     }
 }
 

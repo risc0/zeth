@@ -79,7 +79,10 @@ where
                 .context("brief deserialization failed")?;
 
         // Verify that the transactions run correctly
-        info!("Running from memory (Input size: {} bytes) ...", briefed_input.len());
+        info!(
+            "Running from memory (Input size: {} bytes) ...",
+            briefed_input.len()
+        );
         <Self::StatelessClient>::validate_block(chain_spec.clone(), preflight_data)
             .expect("Block validation failed");
         info!("Memory run successful ...");

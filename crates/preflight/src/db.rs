@@ -130,14 +130,7 @@ impl PreflightDB {
 
     pub fn apply_changeset(&mut self, state_changeset: StateChangeset) -> anyhow::Result<()> {
         let latest_db = &mut self.db;
-        for (address, account_info) in state_changeset.accounts {
-            if account_info.is_none() {
-                latest_db.accounts.remove(&address);
-                continue;
-            }
-            let db_account = latest_db.accounts.get_mut(&address).unwrap();
-            db_account.info = account_info.unwrap();
-        }
+        // Update account storages
         for storage in state_changeset.storage {
             let db_account = latest_db.accounts.get_mut(&storage.address).unwrap();
             if storage.wipe_storage {
@@ -146,6 +139,15 @@ impl PreflightDB {
             for (key, val) in storage.storage {
                 db_account.storage.insert(key, val);
             }
+        }
+        // Update accounts in state trie
+        for (address, account_info) in state_changeset.accounts {
+            if account_info.is_none() {
+                latest_db.accounts.remove(&address);
+                continue;
+            }
+            let db_account = latest_db.accounts.get_mut(&address).unwrap();
+            db_account.info = account_info.unwrap();
         }
         Ok(())
     }

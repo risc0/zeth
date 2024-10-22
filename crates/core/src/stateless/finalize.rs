@@ -24,16 +24,13 @@ use reth_evm::execute::ProviderError;
 use reth_primitives::Block;
 use reth_revm::db::states::StateChangeset;
 use reth_revm::db::{BundleState, OriginalValuesKnown};
-use std::iter::zip;
 
 pub trait FinalizationStrategy<Block, Header, Database> {
-    type Input;
-
     type Output;
 
     fn finalize(
         stateless_client_engine: &mut StatelessClientEngine<Block, Header, Database>,
-        state_delta: Self::Input,
+        state_delta: BundleState,
     ) -> anyhow::Result<Self::Output>;
 }
 
@@ -44,12 +41,11 @@ impl<Database: reth_revm::Database> FinalizationStrategy<Block, Header, Database
 where
     <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
 {
-    type Input = BundleState;
     type Output = B256;
 
     fn finalize(
         stateless_client_engine: &mut StatelessClientEngine<Block, Header, Database>,
-        state_delta: Self::Input,
+        state_delta: BundleState,
     ) -> anyhow::Result<Self::Output> {
         let StatelessClientEngine {
             data:
@@ -69,7 +65,31 @@ where
         let StateChangeset {
             accounts, storage, ..
         } = state_delta.into_plain_state(OriginalValuesKnown::Yes);
-        for ((address, account_info), storage) in zip(accounts.into_iter(), storage.into_iter()) {
+        // Apply storage trie changes
+        for storage_change in storage.into_iter() {
+            // getting a mutable reference is more efficient than calling remove
+            // every account must have an entry, even newly created accounts
+            let (storage_trie, _) = parent_storage.get_mut(&storage_change.address).unwrap();
+            // for cleared accounts always start from the empty trie
+            if storage_change.wipe_storage {
+                storage_trie.clear();
+            }
+            // apply all new storage entries for the current account (address)
+            for (key, value) in &storage_change.storage {
+                let storage_trie_index = keccak(key.to_be_bytes::<32>());
+                if value.is_zero() {
+                    storage_trie
+                        .delete(&storage_trie_index)
+                        .context("storage_trie.delete")?;
+                } else {
+                    storage_trie
+                        .insert_rlp(&storage_trie_index, value)
+                        .context("storage_trie.insert_rlp")?;
+                }
+            }
+        }
+        // Apply account info changes
+        for (address, account_info) in accounts.into_iter() {
             let state_trie_index = keccak(address);
             if account_info.is_none() {
                 state_trie
@@ -78,26 +98,7 @@ where
                 continue;
             }
             let storage_root = {
-                // getting a mutable reference is more efficient than calling remove
-                // every account must have an entry, even newly created accounts
-                let (storage_trie, _) = parent_storage.get_mut(&address).unwrap();
-                // for cleared accounts always start from the empty trie
-                if storage.wipe_storage {
-                    storage_trie.clear();
-                }
-                // apply all new storage entries for the current account (address)
-                for (key, value) in &storage.storage {
-                    let storage_trie_index = keccak(key.to_be_bytes::<32>());
-                    if value.is_zero() {
-                        storage_trie
-                            .delete(&storage_trie_index)
-                            .context("storage_trie.delete")?;
-                    } else {
-                        storage_trie
-                            .insert_rlp(&storage_trie_index, value)
-                            .context("storage_trie.insert_rlp")?;
-                    }
-                }
+                let (storage_trie, _) = parent_storage.remove(&address).unwrap();
                 storage_trie.hash()
             };
 
@@ -112,56 +113,25 @@ where
                 .insert_rlp(&state_trie_index, state_account)
                 .context("state_trie.insert_rlp")?;
         }
+        // Apply storage root updates
+        for (address, (storage_trie, _)) in parent_storage {
+            if storage_trie.is_reference_cached() {
+                continue;
+            }
+            let state_trie_index = keccak(address);
+            let mut state_account = state_trie
+                .get_rlp::<Account>(&state_trie_index)
+                .context("state_trie.get_rlp")?
+                .unwrap_or_default();
+            let new_storage_root = storage_trie.hash();
+            if state_account.storage_root != new_storage_root {
+                state_account.storage_root = storage_trie.hash();
+                state_trie
+                    .insert_rlp(&state_trie_index, state_account)
+                    .context("state_trie.insert_rlp (2)")?;
+            }
+        }
 
-        // for (address, account) in state_delta.state {
-        //     // if the account has not been touched, it can be ignored
-        //     if account.status.is_not_modified() {
-        //         dbg!(&account.info);
-        //         dbg!(&account.original_info);
-        //         continue;
-        //     }
-        //     // compute the index of the current account in the state trie
-        //     let state_trie_index = keccak(address);
-        //     // remove deleted accounts from the state trie
-        //     if account.info.is_none() {
-        //         state_trie.delete(&state_trie_index)?;
-        //         continue;
-        //     }
-        //     // otherwise, compute the updated storage root for that account
-        //     let state_storage = &account.storage;
-        //     let storage_root = {
-        //         // getting a mutable reference is more efficient than calling remove
-        //         // every account must have an entry, even newly created accounts
-        //         let (storage_trie, _) = parent_storage.get_mut(&address).unwrap();
-        //         // for cleared accounts always start from the empty trie
-        //         let is_storage_cleared = account.was_destroyed();
-        //         if is_storage_cleared {
-        //             storage_trie.clear();
-        //         }
-        //         // apply all new storage entries for the current account (address)
-        //         for (key, slot) in state_storage {
-        //             if slot.present_value.is_zero() && is_storage_cleared {
-        //                 continue;
-        //             }
-        //             let storage_trie_index = keccak(key.to_be_bytes::<32>());
-        //             if slot.present_value.is_zero() {
-        //                 storage_trie.delete(&storage_trie_index)?;
-        //             } else {
-        //                 storage_trie.insert_rlp(&storage_trie_index, slot.present_value)?;
-        //             }
-        //         }
-        //         storage_trie.hash()
-        //     };
-        //
-        //     let info = account.info.unwrap();
-        //     let state_account = Account {
-        //         nonce: info.nonce,
-        //         balance: info.balance,
-        //         storage_root,
-        //         code_hash: info.code_hash,
-        //     };
-        //     state_trie.insert_rlp(&state_trie_index, state_account)?;
-        // }
         // Validate final state trie
         if block.header.state_root != state_trie.hash() {
             bail!(

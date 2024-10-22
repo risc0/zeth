@@ -18,6 +18,7 @@ use alloy::primitives::{Address, B256, U256};
 use alloy::rpc::types::{EIP1186AccountProofResponse, Header};
 use hashbrown::HashMap;
 use reth_primitives::revm_primitives::{Account, AccountInfo, Bytecode};
+use reth_revm::db::states::StateChangeset;
 use reth_revm::db::CacheDB;
 use reth_revm::{Database, DatabaseCommit, DatabaseRef};
 use std::cell::RefCell;
@@ -127,6 +128,28 @@ impl PreflightDB {
         self.db.db.db.borrow_mut().db.save_provider()
     }
 
+    pub fn apply_changeset(&mut self, state_changeset: StateChangeset) -> anyhow::Result<()> {
+        let latest_db = &mut self.db;
+        for (address, account_info) in state_changeset.accounts {
+            if account_info.is_none() {
+                latest_db.accounts.remove(&address);
+                continue;
+            }
+            let db_account = latest_db.accounts.get_mut(&address).unwrap();
+            db_account.info = account_info.unwrap();
+        }
+        for storage in state_changeset.storage {
+            let db_account = latest_db.accounts.get_mut(&storage.address).unwrap();
+            if storage.wipe_storage {
+                db_account.storage.clear();
+            }
+            for (key, val) in storage.storage {
+                db_account.storage.insert(key, val);
+            }
+        }
+        Ok(())
+    }
+
     pub fn get_initial_proofs(
         &mut self,
     ) -> anyhow::Result<HashMap<Address, EIP1186AccountProofResponse>> {
@@ -170,7 +193,7 @@ impl PreflightDB {
     }
 
     pub fn get_ancestor_headers(&mut self) -> anyhow::Result<Vec<Header>> {
-        let initial_db = &self.db.db.db.borrow();
+        let initial_db = &self.db.db.db.borrow_mut();
         let db_block_number = initial_db.db.block_no;
         let earliest_block = initial_db
             .block_hashes
@@ -179,16 +202,11 @@ impl PreflightDB {
             .copied()
             .map(|v| v.to())
             .unwrap_or(db_block_number);
+        let mut provider = initial_db.db.provider.borrow_mut();
         let headers = (earliest_block..db_block_number)
             .rev()
             .map(|block_no| {
-                self.db
-                    .db
-                    .db
-                    .borrow_mut()
-                    .db
-                    .provider
-                    .borrow_mut()
+                provider
                     .get_full_block(&BlockQuery { block_no })
                     .expect("Failed to retrieve ancestor block")
                     .header

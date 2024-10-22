@@ -44,8 +44,12 @@ where
         // Unpack client instance
         let StatelessClientEngine {
             chain_spec,
-            data: StatelessClientData { block, .. },
-            total_difficulty,
+            data:
+                StatelessClientData {
+                    block,
+                    total_difficulty,
+                    ..
+                },
             db,
             ..
         } = stateless_client_engine;

@@ -23,12 +23,11 @@ use std::fmt::Display;
 
 pub trait PostExecutionValidationStrategy<Block, Header, Database> {
     type Input;
-    type Output;
 
     fn post_execution_validation(
         stateless_client_engine: &mut StatelessClientEngine<Block, Header, Database>,
         execution_output: Self::Input,
-    ) -> anyhow::Result<Self::Output>;
+    ) -> anyhow::Result<BundleState>;
 }
 
 pub struct RethPostExecStrategy;
@@ -39,12 +38,11 @@ where
     <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
 {
     type Input = EthBatchExecutor<EthEvmConfig, Database>;
-    type Output = BundleState;
 
     fn post_execution_validation(
         _: &mut StatelessClientEngine<Block, Header, Database>,
         execution_output: Self::Input,
-    ) -> anyhow::Result<Self::Output> {
+    ) -> anyhow::Result<BundleState> {
         let ExecutionOutcome { bundle, .. } = execution_output.finalize();
         Ok(bundle)
     }

@@ -19,10 +19,10 @@ use crate::stateless::initialize::{InMemoryDbStrategy, InitializationStrategy};
 use crate::stateless::post_exec::{PostExecutionValidationStrategy, RethPostExecStrategy};
 use crate::stateless::pre_exec::{PreExecutionValidationStrategy, RethPreExecStrategy};
 use alloy_consensus::Header;
-use alloy_primitives::U256;
 use anyhow::Context;
 use reth_chainspec::ChainSpec;
 use reth_primitives::Block;
+use reth_revm::db::BundleState;
 use reth_revm::InMemoryDB;
 use std::sync::{Arc, Mutex};
 
@@ -33,7 +33,6 @@ pub type RescueDestination<D> = Arc<Mutex<Option<D>>>;
 pub struct StatelessClientEngine<Block, Header, Database> {
     pub chain_spec: Arc<ChainSpec>,
     pub data: StatelessClientData<Block, Header>,
-    pub total_difficulty: U256,
     pub db: Option<Database>,
 }
 
@@ -42,13 +41,11 @@ impl<Block, Header, Database> StatelessClientEngine<Block, Header, Database> {
     pub fn new(
         chain_spec: Arc<ChainSpec>,
         data: StatelessClientData<Block, Header>,
-        total_difficulty: U256,
         db: Option<Database>,
     ) -> Self {
         Self {
             chain_spec,
             data,
-            total_difficulty,
             db,
         }
     }
@@ -80,7 +77,7 @@ impl<Block, Header, Database> StatelessClientEngine<Block, Header, Database> {
     >(
         &mut self,
         execution_output: T::Input,
-    ) -> anyhow::Result<T::Output> {
+    ) -> anyhow::Result<BundleState> {
         T::post_execution_validation(self, execution_output)
             .context("StatelessClientEngine::post_execution_validation")
     }
@@ -88,7 +85,7 @@ impl<Block, Header, Database> StatelessClientEngine<Block, Header, Database> {
     /// Finalizes the state trie.
     pub fn finalize<T: FinalizationStrategy<Block, Header, Database>>(
         &mut self,
-        state_delta: T::Input,
+        state_delta: BundleState,
     ) -> anyhow::Result<T::Output> {
         T::finalize(self, state_delta).context("StatelessClientEngine::finalize")
     }
@@ -107,12 +104,7 @@ pub trait StatelessClient<Block, Header, Database> {
             Database,
         >>::Input,
     >;
-    type PostExecValidation: PostExecutionValidationStrategy<
-        Block,
-        Header,
-        Database,
-        Output = <Self::Finalization as FinalizationStrategy<Block, Header, Database>>::Input,
-    >;
+    type PostExecValidation: PostExecutionValidationStrategy<Block, Header, Database>;
     type Finalization: FinalizationStrategy<Block, Header, Database>;
 
     // todo: when testing this function, implement tests at each fork that mess with the
@@ -121,15 +113,10 @@ pub trait StatelessClient<Block, Header, Database> {
     fn validate_block(
         chain_spec: Arc<ChainSpec>,
         data: StatelessClientData<Block, Header>,
-        total_difficulty: U256,
     ) -> anyhow::Result<<Self::Finalization as FinalizationStrategy<Block, Header, Database>>::Output>
     {
-        let mut engine = StatelessClientEngine::<Block, Header, Database>::new(
-            chain_spec,
-            data,
-            total_difficulty,
-            None,
-        );
+        let mut engine =
+            StatelessClientEngine::<Block, Header, Database>::new(chain_spec, data, None);
         engine.initialize_database::<Self::Initialization>()?;
         engine.pre_execution_validation::<Self::PreExecValidation>()?;
         let execution_output = engine.execute_transactions::<Self::TransactionExecution>()?;

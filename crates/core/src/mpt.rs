@@ -299,6 +299,11 @@ impl MptNode {
         &self.data
     }
 
+    #[inline]
+    pub fn is_reference_cached(&self) -> bool {
+        self.cached_reference.borrow().is_some()
+    }
+
     /// Retrieves the [MptNodeReference] reference of the node when it's referenced inside
     /// another node.
     ///

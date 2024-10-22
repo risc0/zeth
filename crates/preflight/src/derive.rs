@@ -121,6 +121,7 @@ impl<B: RPCDerivableBlock, H: RPCDerivableHeader> RPCDerivableData for Stateless
                 .into_iter()
                 .map(|h| H::derive(h))
                 .collect(),
+            total_difficulty: data.total_difficulty,
         }
     }
 }

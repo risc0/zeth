@@ -43,9 +43,9 @@ impl<Database> PreExecutionValidationStrategy<Block, Header, Database> for RethP
                 StatelessClientData {
                     block,
                     parent_header,
+                    total_difficulty,
                     ..
                 },
-            total_difficulty,
             ..
         } = stateless_client_engine;
         // Instantiate consensus engine

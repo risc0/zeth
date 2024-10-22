@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use crate::cli::Cli;
-use alloy::primitives::U256;
 use anyhow::Context;
 use log::{info, warn};
 use reth_chainspec::ChainSpec;
@@ -70,64 +69,8 @@ where
 
         // Verify that the transactions run correctly
         info!("Running from memory ...");
-        <Self::StatelessClient>::validate_block(
-            chain_spec.clone(),
-            preflight_data,
-            U256::ZERO, // todo: load this up
-        )
-        .expect("Block validation failed");
-
-        // let output = N::build_from(chain_spec, input.clone()).context("Error while building block")?;
-        //
-        // match &output {
-        //     BlockBuildOutput::SUCCESS {
-        //         hash, head, state, ..
-        //     } => {
-        //         info!("Verifying final state using provider data ...");
-        //         preflight_data.verify_block(head, state)?;
-        //
-        //         info!("Final block hash derived successfully. {}", hash);
-        //     }
-        //     BlockBuildOutput::FAILURE { .. } => {
-        //         warn!("Proving bad block construction!")
-        //     }
-        // }
-        //
-        // let compressed_output = output.with_state_hashed();
-        // let result = match cli {
-        //     Cli::Build(..) => None,
-        //     Cli::Run(run_args) => {
-        //         execute(
-        //             &input,
-        //             run_args.execution_po2,
-        //             run_args.profile,
-        //             guest_elf,
-        //             &compressed_output,
-        //             &cli.execution_tag(),
-        //         );
-        //         None
-        //     }
-        //     Cli::Prove(..) => {
-        //         maybe_prove(
-        //             cli,
-        //             &input,
-        //             guest_elf,
-        //             &compressed_output,
-        //             Default::default(),
-        //         )
-        //         .await
-        //     }
-        //     Cli::Verify(verify_args) => Some(
-        //         verify_bonsai_receipt(
-        //             compute_image_id(guest_elf)?,
-        //             &compressed_output,
-        //             verify_args.bonsai_receipt_uuid.clone(),
-        //             4,
-        //         )
-        //         .await?,
-        //     ),
-        // };
-
+        <Self::StatelessClient>::validate_block(chain_spec.clone(), preflight_data)
+            .expect("Block validation failed");
         Ok(None)
     }
 }

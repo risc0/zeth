@@ -37,4 +37,6 @@ pub struct StatelessClientData<Block, Header> {
     pub parent_header: Header,
     /// List of at most 256 previous block headers
     pub ancestor_headers: Vec<Header>,
+    /// Total difficulty before executing block
+    pub total_difficulty: U256,
 }

@@ -34,12 +34,10 @@ pub extern "C" fn __ctzsi2(x: u32) -> usize {
 fn main() {
     // todo: load up revm with hashbrown feat
     let stateless_client_block = env::read();
-    let total_difficulty = env::read();
 
     let block_hash = RethStatelessClient::validate_block(
         MAINNET.clone(),
         stateless_client_block,
-        total_difficulty,
     )
     .expect("block validation failed");
 

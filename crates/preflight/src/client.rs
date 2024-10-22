@@ -3,12 +3,12 @@ use crate::derive::{RPCDerivableBlock, RPCDerivableData, RPCDerivableHeader};
 use crate::provider::db::ProviderDB;
 use crate::provider::{new_provider, BlockQuery};
 use crate::trie::proofs_to_tries;
-use alloy::primitives::U256;
 use alloy::rpc::types::{Block, Header};
 use anyhow::Context;
 use hashbrown::HashSet;
 use log::{debug, info};
 use reth_chainspec::ChainSpec;
+use reth_revm::db::OriginalValuesKnown;
 use std::path::PathBuf;
 use std::sync::Arc;
 use zeth_core::stateless::client::StatelessClientEngine;
@@ -64,6 +64,9 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader> {
         let preflight_db = PreflightDB::from(provider_db);
 
         // Create the input data
+        let total_difficulty = parent_header
+            .total_difficulty
+            .expect("Missing total difficulty");
         let data = StatelessClientData {
             block,
             parent_state_trie: Default::default(),
@@ -71,6 +74,7 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader> {
             contracts: vec![],
             parent_header,
             ancestor_headers: vec![],
+            total_difficulty,
         };
 
         // Create the block builder, run the transactions and extract the DB
@@ -90,26 +94,39 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader> {
         let mut engine = StatelessClientEngine::new(
             chain_spec,
             StatelessClientData::<B, H>::derive(data.clone(), ommers.clone()),
-            U256::ZERO, // todo query for correct total difficulty
             Some(preflight_db),
         );
         // Run the engine
         info!("Pre execution validation ...");
-        if let Ok(_) =
-            engine.pre_execution_validation::<<Self as PreflightClient<B, H>>::PreExecValidation>()
-        {
-            info!("Executing transactions ...");
-            if let Ok(execution_output) = engine
-                .execute_transactions::<<Self as PreflightClient<B, H>>::TransactionExecution>(
-            ) {
-                info!("Post execution validation ...");
-                let _ = engine.post_execution_validation::<<Self as PreflightClient<B, H>>::PostExecValidation>(execution_output);
-            }
-        }
+        engine.pre_execution_validation::<<Self as PreflightClient<B, H>>::PreExecValidation>()?;
+        info!("Executing transactions ...");
+        let execution_output = engine
+            .execute_transactions::<<Self as PreflightClient<B, H>>::TransactionExecution>()?;
+        info!("Post execution validation ...");
+        let state_changeset = engine
+            .post_execution_validation::<<Self as PreflightClient<B, H>>::PostExecValidation>(
+                execution_output,
+            )?
+            .into_plain_state(OriginalValuesKnown::Yes);
         info!("Provider-backed execution is Done!");
 
-        // Rescue the dropped DB
+        // Rescue the dropped DB and apply the state changeset
         let mut preflight_db = PreflightDB::from(preflight_db_rescue);
+        preflight_db.apply_changeset(state_changeset)?;
+        {
+            let init_db = preflight_db.db.db.db.borrow_mut();
+            let mut provider_db = init_db.db.clone();
+            provider_db.block_no += 1;
+            for (address, db_account) in &preflight_db.db.accounts {
+                use reth_revm::Database;
+                let provider_info = provider_db.basic(*address)?.unwrap();
+                if db_account.info != provider_info {
+                    dbg!(&address);
+                    dbg!(&db_account.info);
+                    dbg!(&provider_info);
+                }
+            }
+        }
 
         // Save the provider cache
         info!("Saving provider cache ...");
@@ -118,15 +135,17 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader> {
         // Gather inclusion proofs for the initial and final state
         info!("Gathering initial proofs ...");
         let initial_proofs = preflight_db.get_initial_proofs()?;
+        info!("Saving provider cache ...");
+        preflight_db.save_provider()?;
         info!("Gathering final proofs ...");
         let latest_proofs = preflight_db.get_latest_proofs()?;
+        info!("Saving provider cache ...");
+        preflight_db.save_provider()?;
 
         // Gather proofs for block history
         info!("Gathering ancestor headers ...");
         let ancestor_headers = preflight_db.get_ancestor_headers()?;
-
-        // Save the provider cache (again)
-        info!("Saving provider cache post proof collection ...");
+        info!("Saving provider cache ...");
         preflight_db.save_provider()?;
 
         // collect the code from each account
@@ -164,6 +183,7 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader> {
             contracts: contracts.into_iter().map(|b| b.bytes()).collect(),
             parent_header: H::derive(data.parent_header),
             ancestor_headers: ancestor_headers.into_iter().map(|h| H::derive(h)).collect(),
+            total_difficulty: data.total_difficulty,
         })
     }
 }

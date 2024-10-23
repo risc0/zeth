@@ -20,5 +20,6 @@ reth-primitives.workspace = true
 reth-revm.workspace = true
 
 serde.workspace = true
+serde-brief.workspace = true
 thiserror.workspace = true
 tiny-keccak.workspace = true

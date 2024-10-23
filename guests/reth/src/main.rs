@@ -16,6 +16,7 @@ use reth_chainspec::MAINNET;
 // use c_kzg::KzgSettings;
 use risc0_zkvm::guest::env;
 use risc0_zkvm::guest::env::stdin;
+use zeth_core::SERDE_BRIEF_CFG;
 use zeth_core::stateless::client::{RethStatelessClient, StatelessClient};
 // todo: use this instead of the alloy KzgEnv to save cycles
 // lazy_static::lazy_static! {
@@ -36,11 +37,7 @@ fn main() {
     // todo: load up revm with hashbrown feat
     let stateless_client_block = serde_brief::from_reader_with_config(
         stdin(),
-        serde_brief::Config {
-            use_indices: true,
-            error_on_excess_data: false,
-            max_size: None,
-        },
+        SERDE_BRIEF_CFG
     )
     .unwrap();
     env::log("Validating block");

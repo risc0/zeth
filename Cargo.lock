@@ -6107,6 +6107,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bincode",
+ "bytemuck",
  "clap",
  "env_logger",
  "log",
@@ -6140,6 +6141,7 @@ dependencies = [
  "reth-primitives",
  "reth-revm",
  "serde",
+ "serde-brief",
  "thiserror",
  "tiny-keccak",
 ]
@@ -6165,6 +6167,7 @@ dependencies = [
  "reth-primitives",
  "reth-revm",
  "serde",
+ "serde-brief",
  "serde_json",
  "tokio",
  "tracing",

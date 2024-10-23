@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use crate::cli::Cli;
+use crate::result::BuildResult;
 use anyhow::Context;
 use log::{info, warn};
 use reth_chainspec::ChainSpec;
@@ -23,6 +24,7 @@ use serde::Serialize;
 use std::sync::Arc;
 use zeth_core::stateless::client::{RethStatelessClient, StatelessClient};
 use zeth_core::stateless::data::StatelessClientData;
+use zeth_core::SERDE_BRIEF_CFG;
 use zeth_preflight::client::{PreflightClient, RethPreflightClient};
 use zeth_preflight::derive::{RPCDerivableBlock, RPCDerivableHeader};
 use zeth_preflight::provider::cache_provider::cache_file_path;
@@ -32,6 +34,7 @@ pub trait ZethClient<B, H, D>
 where
     B: RPCDerivableBlock + Send + Serialize + DeserializeOwned + 'static,
     H: RPCDerivableHeader + Send + Serialize + DeserializeOwned + 'static,
+    BuildResult: From<StatelessClientData<B, H>>,
 {
     type PreflightClient: PreflightClient<B, H>;
     type StatelessClient: StatelessClient<B, H, D>;
@@ -40,7 +43,7 @@ where
         cli: &Cli,
         rpc_url: Option<String>,
         chain_spec: Arc<ChainSpec>,
-    ) -> anyhow::Result<Vec<u8>> {
+    ) -> anyhow::Result<BuildResult> {
         let build_args = cli.build_args().clone();
         if build_args.block_count > 1 {
             warn!("Building multiple blocks is not supported. Only the first block will be built.");
@@ -67,26 +70,20 @@ where
         })
         .await?;
         let preflight_data = preflight_result.context("preflight failed")?;
-        let brief_config = serde_brief::Config {
-            use_indices: true,
-            error_on_excess_data: false,
-            max_size: None,
-        };
-        let briefed_input = serde_brief::to_vec_with_config(&preflight_data, brief_config)
-            .context("brief serialization failed")?;
-        let _: StatelessClientData<B, H> =
-            serde_brief::from_slice_with_config(&briefed_input, brief_config)
-                .context("brief deserialization failed")?;
+        let build_result = BuildResult::from(preflight_data);
 
         // Verify that the transactions run correctly
         info!(
             "Running from memory (Input size: {} bytes) ...",
-            briefed_input.len()
+            build_result.encoded_input.len()
         );
-        <Self::StatelessClient>::validate_block(chain_spec.clone(), preflight_data)
+        let deserialized_preflight_data: StatelessClientData<B, H> =
+            serde_brief::from_slice_with_config(&build_result.encoded_input, SERDE_BRIEF_CFG)
+                .context("brief deserialization failed")?;
+        <Self::StatelessClient>::validate_block(chain_spec.clone(), deserialized_preflight_data)
             .expect("Block validation failed");
         info!("Memory run successful ...");
-        Ok(briefed_input)
+        Ok(build_result)
     }
 }
 

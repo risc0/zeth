@@ -12,3 +12,4 @@ log.txt
 *.zip
 *.bin
 *.txt
+*.fake

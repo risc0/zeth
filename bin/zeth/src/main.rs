@@ -15,10 +15,14 @@
 use clap::Parser;
 use log::info;
 use reth_chainspec::MAINNET;
-use risc0_zkvm::{default_executor, default_prover, ProverOpts};
+use risc0_zkvm::{default_executor, default_prover, ProverOpts, Receipt};
+use std::path::Path;
+use tokio::fs::File;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use zeth::cli::{Cli, Network};
 use zeth::client::{RethZethClient, ZethClient};
 use zeth::executor::build_executor_env;
+use zeth::proof_file_name;
 use zeth_guests::{RETH_ELF, RETH_ID};
 
 #[tokio::main]
@@ -28,7 +32,7 @@ async fn main() -> anyhow::Result<()> {
     let build_args = cli.build_args();
 
     // select a gues
-    let (_image_id, elf) = match build_args.network {
+    let (image_id, elf) = match build_args.network {
         Network::Ethereum => (RETH_ID, RETH_ELF),
         Network::Optimism => todo!(),
     };
@@ -39,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // preflight the block building process
-    let input = match build_args.network {
+    let build_result = match build_args.network {
         Network::Ethereum => {
             RethZethClient::build_block(&cli, build_args.eth_rpc_url.clone(), MAINNET.clone())
                 .await?
@@ -52,17 +56,57 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // use the zkvm
-    let exec_env = build_executor_env(&cli, &input)?;
+    let exec_env = build_executor_env(&cli, &build_result.encoded_input)?;
     if cli.should_prove() {
         info!("Proving ...");
-        // run prover
-        let prover = default_prover();
-        let _prove_info = prover.prove_with_opts(exec_env, elf, &ProverOpts::succinct())?;
+        let file_name = proof_file_name(
+            build_result.validated_tail,
+            build_result.validated_tip,
+            image_id,
+        );
+        let receipt = if let Ok(true) = Path::new(&file_name).try_exists() {
+            info!("Proving skipped. Receipt file {file_name} already exists.");
+            let mut receipt_file = File::open(file_name).await?;
+            let mut receipt_data = Vec::new();
+            receipt_file.read_to_end(&mut receipt_data).await?;
+            bincode::deserialize::<Receipt>(&receipt_data)?
+        } else {
+            info!("Computing uncached receipt. This might take some time.");
+            // run prover
+            let prover = default_prover();
+            let prover_opts = if cli.snark() {
+                ProverOpts::groth16()
+            } else {
+                ProverOpts::succinct()
+            };
+            let prove_info = prover.prove_with_opts(exec_env, elf, &prover_opts)?;
+            info!(
+                "Proof of {} total cycles ({} user cycles) computed.",
+                prove_info.stats.total_cycles, prove_info.stats.user_cycles
+            );
+            let mut output_file = File::create(file_name).await?;
+            // Write receipt data to file
+            let receipt_bytes =
+                bincode::serialize(&prove_info.receipt).expect("Could not serialize receipt.");
+            output_file
+                .write_all(receipt_bytes.as_slice())
+                .await
+                .expect("Failed to write receipt to file");
+            output_file
+                .flush()
+                .await
+                .expect("Failed to flush receipt output file data.");
+            prove_info.receipt
+        };
+
+        receipt.verify(image_id).expect("Failed to verify proof.");
+        info!("Verified computed proof.")
     } else {
         info!("Executing ...");
         // run executor only
         let executor = default_executor();
-        let _session_info = executor.execute(exec_env, elf)?;
+        let session_info = executor.execute(exec_env, elf)?;
+        info!("{} user cycles executed.", session_info.cycles());
     }
 
     // todo: bonsai

@@ -15,3 +15,9 @@
 pub mod keccak;
 pub mod mpt;
 pub mod stateless;
+
+pub const SERDE_BRIEF_CFG: serde_brief::Config = serde_brief::Config {
+    use_indices: true,
+    error_on_excess_data: false,
+    max_size: None,
+};

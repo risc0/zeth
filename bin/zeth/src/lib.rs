@@ -12,15 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloy::primitives::B256;
 use log::debug;
 use risc0_zkvm::is_dev_mode;
 use std::fs;
 use std::path::Path;
+use zeth_core::keccak::keccak;
 
 pub mod cli;
 pub mod client;
 pub mod executor;
 pub mod operations;
+pub mod result;
 
 pub fn load_receipt<T: serde::de::DeserializeOwned>(
     file_name: &String,
@@ -59,4 +62,21 @@ fn zkp_cache_path(receipt_label: &String) -> String {
         .to_str()
         .unwrap()
         .to_string()
+}
+
+pub fn proof_file_name(
+    first_block_hash: B256,
+    last_block_hash: B256,
+    image_id: [u32; 8],
+) -> String {
+    let version = risc0_zkvm::get_version().unwrap();
+    let suffix = if is_dev_mode() { "fake" } else { "zkp" };
+    let data = [
+        bytemuck::cast::<_, [u8; 32]>(image_id).as_slice(),
+        first_block_hash.as_slice(),
+        last_block_hash.as_slice(),
+    ]
+    .concat();
+    let file_name = B256::from(keccak(data));
+    format!("risc0-{}-{file_name}.{suffix}", version.to_string())
 }

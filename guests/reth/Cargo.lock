@@ -3658,6 +3658,7 @@ dependencies = [
  "reth-primitives",
  "reth-revm",
  "serde",
+ "serde-brief",
  "thiserror",
  "tiny-keccak",
 ]

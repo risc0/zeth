@@ -28,6 +28,7 @@ use zeth_core::SERDE_BRIEF_CFG;
 use zeth_preflight::client::{PreflightClient, RethPreflightClient};
 use zeth_preflight::derive::{RPCDerivableBlock, RPCDerivableHeader};
 use zeth_preflight::provider::cache_provider::cache_file_path;
+use zeth_preflight::provider::{new_provider, BlockQuery};
 
 #[async_trait::async_trait]
 pub trait ZethClient<B, H, D>
@@ -39,11 +40,7 @@ where
     type PreflightClient: PreflightClient<B, H>;
     type StatelessClient: StatelessClient<B, H, D>;
 
-    async fn build_block(
-        cli: &Cli,
-        rpc_url: Option<String>,
-        chain_spec: Arc<ChainSpec>,
-    ) -> anyhow::Result<BuildResult> {
+    async fn build_block(cli: &Cli, chain_spec: Arc<ChainSpec>) -> anyhow::Result<BuildResult> {
         let build_args = cli.build_args().clone();
         if build_args.block_count > 1 {
             warn!("Building multiple blocks is not supported. Only the first block will be built.");
@@ -64,7 +61,7 @@ where
             <Self::PreflightClient>::preflight_with_rpc(
                 preflight_chain_spec,
                 rpc_cache,
-                rpc_url,
+                build_args.rpc_url,
                 build_args.block_number,
             )
         })
@@ -92,4 +89,33 @@ pub struct RethZethClient;
 impl ZethClient<Block, Header, InMemoryDB> for RethZethClient {
     type PreflightClient = RethPreflightClient;
     type StatelessClient = RethStatelessClient;
+}
+
+pub async fn build_journal(cli: &Cli) -> anyhow::Result<Vec<u8>> {
+    let build_args = cli.build_args().clone();
+    if build_args.block_count > 1 {
+        warn!("Building multiple blocks is not supported. Only the first block will be built.");
+    }
+
+    // Fetch all of the initial data
+    let cache_path = build_args.cache.as_ref().map(|dir| {
+        cache_file_path(
+            dir,
+            &build_args.network.to_string(),
+            build_args.block_number,
+            "json.gz",
+        )
+    });
+
+    let provider = new_provider(cache_path, build_args.rpc_url)?;
+
+    // Fetch the block
+    let block = provider.borrow_mut().get_full_block(&BlockQuery {
+        block_no: build_args.block_number,
+    })?;
+
+    let total_difficulty = block.header.total_difficulty.unwrap() - block.header.difficulty;
+    let journal = [block.header.hash.0, total_difficulty.to_be_bytes::<32>()].concat();
+
+    Ok(journal)
 }

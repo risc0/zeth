@@ -77,7 +77,7 @@ pub fn proof_file_name(
         bytemuck::cast::<_, [u8; 32]>(image_id).as_slice(),
         first_block_hash.as_slice(),
         last_block_hash.as_slice(),
-        prover_opts.as_slice()
+        prover_opts.as_slice(),
     ]
     .concat();
     let file_name = B256::from(keccak(data));

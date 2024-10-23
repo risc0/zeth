@@ -13,14 +13,14 @@
 // limitations under the License.
 
 use clap::Parser;
-use log::info;
+use log::{error, info};
 use reth_chainspec::MAINNET;
 use risc0_zkvm::{default_executor, default_prover, ProverOpts, Receipt};
 use std::path::Path;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use zeth::cli::{Cli, Network};
-use zeth::client::{RethZethClient, ZethClient};
+use zeth::client::{build_journal, RethZethClient, ZethClient};
 use zeth::executor::build_executor_env;
 use zeth::proof_file_name;
 use zeth_guests::{RETH_ELF, RETH_ID};
@@ -31,23 +31,46 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let build_args = cli.build_args();
 
-    // select a gues
+    // select a guest program
     let (image_id, elf) = match build_args.network {
         Network::Ethereum => (RETH_ID, RETH_ELF),
         Network::Optimism => todo!(),
     };
 
     if !cli.should_build() {
-        // todo: verify receipt
+        let verify_args = cli.verify_args();
+        let expected_journal = build_journal(&cli).await?;
+        info!(
+            "Verifying receipt file {} for block {}.",
+            verify_args.file.display(),
+            build_args.block_number
+        );
+        let mut receipt_file = File::open(&verify_args.file).await?;
+        let mut receipt_data = Vec::new();
+        receipt_file.read_to_end(&mut receipt_data).await?;
+        let receipt = bincode::deserialize::<Receipt>(&receipt_data)?;
+        // Fail if the receipt is unverifiable or has a wrong journal
+        let mut err = false;
+        if &receipt.journal.bytes != &expected_journal {
+            error!("Invalid journal.");
+            dbg!(&receipt.journal.bytes);
+            dbg!(&expected_journal);
+            err = true;
+        }
+        if let Err(_) = receipt.verify(image_id) {
+            error!("Invalid proof.");
+            err = true;
+        };
+        if err {
+            panic!("Verification error.");
+        }
+        info!("Receipt verified successfully.");
         return Ok(());
     }
 
     // preflight the block building process
     let build_result = match build_args.network {
-        Network::Ethereum => {
-            RethZethClient::build_block(&cli, build_args.eth_rpc_url.clone(), MAINNET.clone())
-                .await?
-        }
+        Network::Ethereum => RethZethClient::build_block(&cli, MAINNET.clone()).await?,
         Network::Optimism => todo!(),
     };
 
@@ -57,7 +80,7 @@ async fn main() -> anyhow::Result<()> {
 
     // use the zkvm
     let exec_env = build_executor_env(&cli, &build_result.encoded_input)?;
-    if cli.should_prove() {
+    let computed_journal = if cli.should_prove() {
         info!("Proving ...");
         let prover_opts = if cli.snark() {
             ProverOpts::groth16()
@@ -68,7 +91,7 @@ async fn main() -> anyhow::Result<()> {
             build_result.validated_tail,
             build_result.validated_tip,
             image_id,
-            &prover_opts
+            &prover_opts,
         );
         let receipt = if let Ok(true) = Path::new(&file_name).try_exists() {
             info!("Proving skipped. Receipt file {file_name} already exists.");
@@ -101,34 +124,19 @@ async fn main() -> anyhow::Result<()> {
         };
 
         receipt.verify(image_id).expect("Failed to verify proof.");
-        info!("Verified computed proof.")
+        info!("Verified computed proof.");
+        receipt.journal.bytes
     } else {
         info!("Executing ...");
         // run executor only
         let executor = default_executor();
         let session_info = executor.execute(exec_env, elf)?;
         info!("{} user cycles executed.", session_info.cycles());
-    }
-
-    // todo: bonsai
-
-    // // Create/verify Groth16 SNARK
-    // if cli.snark() {
-    //     let Some((stark_uuid, stark_receipt)) = stark else {
-    //         panic!("No STARK data to snarkify!");
-    //     };
-    //
-    //     if !cli.submit_to_bonsai() {
-    //         panic!("Bonsai submission flag required to create a SNARK!");
-    //     }
-    //
-    //     let image_id = Digest::from(image_id);
-    //     let (snark_uuid, snark_receipt) = stark2snark(image_id, stark_uuid, stark_receipt).await?;
-    //
-    //     info!("Validating SNARK uuid: {}", snark_uuid);
-    //
-    //     verify_groth16_snark(&cli, image_id, snark_receipt).await?;
-    // }
+        session_info.journal.bytes
+    };
+    // sanity check
+    let expected_journal = build_journal(&cli).await?;
+    assert_eq!(expected_journal, computed_journal);
 
     Ok(())
 }

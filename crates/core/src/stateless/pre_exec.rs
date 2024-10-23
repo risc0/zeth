@@ -36,7 +36,7 @@ impl<Database> PreExecutionValidationStrategy<Block, Header, Database> for RethP
     fn pre_execution_validation(
         stateless_client_engine: &mut StatelessClientEngine<Block, Header, Database>,
     ) -> anyhow::Result<Self::Output> {
-        // Unpack client instance
+        // Unpack engine instance
         let StatelessClientEngine {
             chain_spec,
             data:

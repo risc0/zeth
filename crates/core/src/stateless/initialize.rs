@@ -14,6 +14,7 @@
 
 use crate::keccak::keccak;
 use crate::stateless::client::StatelessClientEngine;
+use crate::stateless::data::StatelessClientData;
 use alloy_consensus::Account;
 use alloy_primitives::map::HashMap;
 use alloy_primitives::{Bytes, B256, U256};
@@ -40,31 +41,42 @@ impl<Block> InitializationStrategy<Block, Header, InMemoryDB> for InMemoryDbStra
     fn initialize_database(
         stateless_client_engine: &mut StatelessClientEngine<Block, Header, InMemoryDB>,
     ) -> anyhow::Result<Self::Output> {
-        let block = &mut stateless_client_engine.data;
+        // Unpack engine instance
+        let StatelessClientEngine {
+            data:
+                StatelessClientData {
+                    parent_state_trie,
+                    parent_storage,
+                    contracts,
+                    parent_header,
+                    ancestor_headers,
+                    ..
+                },
+            ..
+        } = stateless_client_engine;
         // Verify starting state trie root
-        if block.parent_header.state_root != block.parent_state_trie.hash() {
+        if parent_header.state_root != parent_state_trie.hash() {
             bail!(
                 "Invalid initial state trie: expected {}, got {}",
-                block.parent_header.state_root,
-                block.parent_state_trie.hash()
+                parent_header.state_root,
+                parent_state_trie.hash()
             );
         }
 
         // hash all the contract code
-        let contracts: HashMap<B256, Bytes> = take(&mut block.contracts)
+        let contracts: HashMap<B256, Bytes> = take(contracts)
             .into_iter()
             .map(|bytes| (keccak(&bytes).into(), bytes))
             .collect();
 
         // Load account data into db
-        let mut accounts = HashMap::with_capacity(block.parent_storage.len());
-        for (address, (storage_trie, slots)) in &mut block.parent_storage {
+        let mut accounts = HashMap::with_capacity(parent_storage.len());
+        for (address, (storage_trie, slots)) in parent_storage {
             // consume the slots, as they are no longer needed afterward
             let slots = take(slots);
 
             // load the account from the state trie or empty if it does not exist
-            let state_account = block
-                .parent_state_trie
+            let state_account = parent_state_trie
                 .get_rlp::<Account>(&keccak(address))?
                 .unwrap_or_default();
             // Verify storage trie root
@@ -111,13 +123,10 @@ impl<Block> InitializationStrategy<Block, Header, InMemoryDB> for InMemoryDbStra
 
         // prepare block hash history
         let mut block_hashes: HashMap<U256, B256> =
-            HashMap::with_capacity(block.ancestor_headers.len() + 1);
-        block_hashes.insert(
-            U256::from(block.parent_header.number),
-            block.parent_header.hash_slow(),
-        );
-        let mut prev = &block.parent_header;
-        for current in &block.ancestor_headers {
+            HashMap::with_capacity(ancestor_headers.len() + 1);
+        block_hashes.insert(U256::from(parent_header.number), parent_header.hash_slow());
+        let mut prev = &*parent_header;
+        for current in ancestor_headers.iter() {
             let current_hash = current.hash_slow();
             if prev.parent_hash != current_hash {
                 bail!(
@@ -126,8 +135,7 @@ impl<Block> InitializationStrategy<Block, Header, InMemoryDB> for InMemoryDbStra
                     prev.number
                 );
             }
-            if block.parent_header.number < current.number
-                || block.parent_header.number - current.number >= 256
+            if parent_header.number < current.number || parent_header.number - current.number >= 256
             {
                 bail!(
                     "Invalid chain: {} is not one of the {} most recent blocks",

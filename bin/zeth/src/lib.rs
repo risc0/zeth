@@ -22,7 +22,6 @@ use zeth_core::keccak::keccak;
 pub mod cli;
 pub mod client;
 pub mod executor;
-pub mod operations;
 pub mod result;
 
 pub fn load_receipt<T: serde::de::DeserializeOwned>(

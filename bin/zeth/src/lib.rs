@@ -14,7 +14,7 @@
 
 use alloy::primitives::B256;
 use log::debug;
-use risc0_zkvm::is_dev_mode;
+use risc0_zkvm::{is_dev_mode, ProverOpts};
 use std::fs;
 use std::path::Path;
 use zeth_core::keccak::keccak;
@@ -68,13 +68,16 @@ pub fn proof_file_name(
     first_block_hash: B256,
     last_block_hash: B256,
     image_id: [u32; 8],
+    prover_opts: &ProverOpts,
 ) -> String {
+    let prover_opts = bincode::serialize(prover_opts).unwrap();
     let version = risc0_zkvm::get_version().unwrap();
     let suffix = if is_dev_mode() { "fake" } else { "zkp" };
     let data = [
         bytemuck::cast::<_, [u8; 32]>(image_id).as_slice(),
         first_block_hash.as_slice(),
         last_block_hash.as_slice(),
+        prover_opts.as_slice()
     ]
     .concat();
     let file_name = B256::from(keccak(data));

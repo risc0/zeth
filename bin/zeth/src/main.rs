@@ -59,10 +59,16 @@ async fn main() -> anyhow::Result<()> {
     let exec_env = build_executor_env(&cli, &build_result.encoded_input)?;
     if cli.should_prove() {
         info!("Proving ...");
+        let prover_opts = if cli.snark() {
+            ProverOpts::groth16()
+        } else {
+            ProverOpts::succinct()
+        };
         let file_name = proof_file_name(
             build_result.validated_tail,
             build_result.validated_tip,
             image_id,
+            &prover_opts
         );
         let receipt = if let Ok(true) = Path::new(&file_name).try_exists() {
             info!("Proving skipped. Receipt file {file_name} already exists.");
@@ -74,11 +80,6 @@ async fn main() -> anyhow::Result<()> {
             info!("Computing uncached receipt. This might take some time.");
             // run prover
             let prover = default_prover();
-            let prover_opts = if cli.snark() {
-                ProverOpts::groth16()
-            } else {
-                ProverOpts::succinct()
-            };
             let prove_info = prover.prove_with_opts(exec_env, elf, &prover_opts)?;
             info!(
                 "Proof of {} total cycles ({} user cycles) computed.",

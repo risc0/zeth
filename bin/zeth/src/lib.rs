@@ -16,10 +16,10 @@ use alloy::primitives::B256;
 use risc0_zkvm::{is_dev_mode, ProverOpts};
 use zeth_core::keccak::keccak;
 
+pub mod chain;
 pub mod cli;
 pub mod client;
 pub mod executor;
-pub mod result;
 
 pub fn proof_file_name(
     first_block_hash: B256,

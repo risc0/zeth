@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::chain::Witness;
 use crate::cli::Cli;
-use crate::result::BuildResult;
 use alloy::primitives::U256;
 use anyhow::Context;
 use log::{info, warn};
@@ -36,12 +36,13 @@ pub trait ZethClient<B, H, D>
 where
     B: RPCDerivableBlock + Send + Serialize + DeserializeOwned + 'static,
     H: RPCDerivableHeader + Send + Serialize + DeserializeOwned + 'static,
-    BuildResult: From<StatelessClientData<B, H>>,
+    D: 'static,
+    Witness: From<StatelessClientData<B, H>>,
 {
     type PreflightClient: PreflightClient<B, H>;
     type StatelessClient: StatelessClient<B, H, D>;
 
-    async fn build_block(cli: &Cli, chain_spec: Arc<ChainSpec>) -> anyhow::Result<BuildResult> {
+    async fn build_block(cli: &Cli, chain_spec: Arc<ChainSpec>) -> anyhow::Result<Witness> {
         let build_args = cli.build_args().clone();
         if build_args.block_count > 1 {
             warn!("Building multiple blocks is not supported. Only the first block will be built.");
@@ -68,7 +69,7 @@ where
         })
         .await?;
         let preflight_data = preflight_result.context("preflight failed")?;
-        let build_result = BuildResult::from(preflight_data);
+        let build_result = Witness::from(preflight_data);
 
         // Verify that the transactions run correctly
         info!(

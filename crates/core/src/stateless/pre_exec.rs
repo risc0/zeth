@@ -22,21 +22,22 @@ use reth_ethereum_consensus::EthBeaconConsensus;
 use reth_primitives::{Block, SealedHeader};
 
 pub trait PreExecutionValidationStrategy<Block, Header, Database> {
-    type Output;
-    fn pre_execution_validation(
-        stateless_client_engine: &mut StatelessClientEngine<Block, Header, Database>,
-    ) -> anyhow::Result<Self::Output>;
+    type Input<'a>;
+    type Output<'b>;
+    fn pre_execution_validation(input: Self::Input<'_>) -> anyhow::Result<Self::Output<'_>>;
 }
 
 pub struct RethPreExecStrategy;
 
-impl<Database> PreExecutionValidationStrategy<Block, Header, Database> for RethPreExecStrategy {
-    type Output = ();
+impl<Database> PreExecutionValidationStrategy<Block, Header, Database> for RethPreExecStrategy
+where
+    Database: 'static,
+{
+    type Input<'a> = &'a mut StatelessClientEngine<Block, Header, Database>;
+    type Output<'b> = ();
 
-    fn pre_execution_validation(
-        stateless_client_engine: &mut StatelessClientEngine<Block, Header, Database>,
-    ) -> anyhow::Result<Self::Output> {
-        // Unpack engine instance
+    fn pre_execution_validation(input: Self::Input<'_>) -> anyhow::Result<Self::Output<'_>> {
+        // Unpack input
         let StatelessClientEngine {
             chain_spec,
             data:
@@ -47,7 +48,7 @@ impl<Database> PreExecutionValidationStrategy<Block, Header, Database> for RethP
                     ..
                 },
             ..
-        } = stateless_client_engine;
+        } = input;
         // Instantiate consensus engine
         let consensus = EthBeaconConsensus::new(chain_spec.clone());
         // Validate total difficulty

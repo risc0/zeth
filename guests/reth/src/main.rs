@@ -41,7 +41,7 @@ fn main() {
     let (block_hash, total_difficulty, validation_depth) =
         RethStatelessClient::validate(MAINNET.clone(), stateless_client_data)
             .expect("block validation failed");
-
+    // Build the journal (todo: make this a strategy)
     let journal = [
         block_hash.0,
         total_difficulty.to_be_bytes::<32>(),

@@ -8,7 +8,7 @@ use anyhow::Context;
 use hashbrown::HashSet;
 use log::{debug, info};
 use reth_chainspec::ChainSpec;
-use reth_revm::db::OriginalValuesKnown;
+use reth_revm::db::{BundleState, OriginalValuesKnown};
 use std::path::PathBuf;
 use std::sync::Arc;
 use zeth_core::stateless::client::StatelessClientEngine;
@@ -18,18 +18,29 @@ use zeth_core::stateless::post_exec::{PostExecutionValidationStrategy, RethPostE
 use zeth_core::stateless::pre_exec::{PreExecutionValidationStrategy, RethPreExecStrategy};
 
 pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader> {
-    type PreExecValidation: PreExecutionValidationStrategy<B, H, PreflightDB>;
-    type TransactionExecution: TransactionExecutionStrategy<
+    type PreExecValidation: for<'a> PreExecutionValidationStrategy<
         B,
         H,
         PreflightDB,
-        Output = <Self::PostExecValidation as PostExecutionValidationStrategy<
+        Input<'a> = &'a mut StatelessClientEngine<B, H, PreflightDB>,
+    >;
+    type TransactionExecution: for<'a> TransactionExecutionStrategy<
+        B,
+        H,
+        PreflightDB,
+        Input<'a> = &'a mut StatelessClientEngine<B, H, PreflightDB>,
+    >;
+    type PostExecValidation: for<'a, 'b> PostExecutionValidationStrategy<
+        B,
+        H,
+        PreflightDB,
+        Input<'a> = <Self::TransactionExecution as TransactionExecutionStrategy<
             B,
             H,
             PreflightDB,
-        >>::Input,
+        >>::Output<'a>,
+        Output<'b> = BundleState,
     >;
-    type PostExecValidation: PostExecutionValidationStrategy<B, H, PreflightDB>;
 
     fn preflight_with_rpc(
         chain_spec: Arc<ChainSpec>,
@@ -103,11 +114,10 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader> {
         let execution_output = engine
             .execute_transactions::<<Self as PreflightClient<B, H>>::TransactionExecution>()?;
         info!("Post execution validation ...");
-        let state_changeset = engine
-            .post_execution_validation::<<Self as PreflightClient<B, H>>::PostExecValidation>(
-                execution_output,
-            )?
-            .into_plain_state(OriginalValuesKnown::Yes);
+        let bundle_state = StatelessClientEngine::<B, H, PreflightDB>::post_execution_validation::<
+            <Self as PreflightClient<B, H>>::PostExecValidation,
+        >(execution_output)?;
+        let state_changeset = bundle_state.into_plain_state(OriginalValuesKnown::Yes);
         info!("Provider-backed execution is Done!");
 
         // Rescue the dropped DB and apply the state changeset

@@ -27,21 +27,22 @@ use reth_revm::primitives::AccountInfo;
 use reth_revm::InMemoryDB;
 
 pub trait InitializationStrategy<Block, Header, Database> {
-    type Output;
-    fn initialize_database(
-        stateless_client_engine: &mut StatelessClientEngine<Block, Header, Database>,
-    ) -> anyhow::Result<Self::Output>;
+    type Input<'a>;
+    type Output<'b>;
+    fn initialize_database(input: Self::Input<'_>) -> anyhow::Result<Self::Output<'_>>;
 }
 
 pub struct InMemoryDbStrategy;
 
-impl<Block> InitializationStrategy<Block, Header, InMemoryDB> for InMemoryDbStrategy {
-    type Output = ();
+impl<Block> InitializationStrategy<Block, Header, InMemoryDB> for InMemoryDbStrategy
+where
+    Block: 'static,
+{
+    type Input<'a> = &'a mut StatelessClientEngine<Block, Header, InMemoryDB>;
+    type Output<'b> = ();
 
-    fn initialize_database(
-        stateless_client_engine: &mut StatelessClientEngine<Block, Header, InMemoryDB>,
-    ) -> anyhow::Result<Self::Output> {
-        // Unpack engine instance
+    fn initialize_database(input: Self::Input<'_>) -> anyhow::Result<Self::Output<'_>> {
+        // Unpack input
         let StatelessClientEngine {
             data:
                 StatelessClientData {
@@ -52,8 +53,9 @@ impl<Block> InitializationStrategy<Block, Header, InMemoryDB> for InMemoryDbStra
                     ancestor_headers,
                     ..
                 },
+            db,
             ..
-        } = stateless_client_engine;
+        } = input;
         // Verify starting state trie root
         if parent_header.state_root != parent_state_trie.hash() {
             bail!(
@@ -147,11 +149,12 @@ impl<Block> InitializationStrategy<Block, Header, InMemoryDB> for InMemoryDbStra
             prev = current;
         }
 
-        // Store database
-        let mut db = InMemoryDB::default();
-        db.accounts = accounts;
-        db.block_hashes = block_hashes;
-        stateless_client_engine.db = Some(db);
+        // Initialize database
+        db.replace(InMemoryDB {
+            accounts,
+            block_hashes,
+            ..Default::default()
+        });
         Ok(())
     }
 }

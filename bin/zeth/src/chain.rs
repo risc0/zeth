@@ -19,13 +19,13 @@ use zeth_core::stateless::data::StatelessClientData;
 use zeth_core::SERDE_BRIEF_CFG;
 
 #[derive(Debug, Default, Clone)]
-pub struct BuildResult {
+pub struct Witness {
     pub encoded_input: Vec<u8>,
     pub validated_tip: B256,
     pub validated_tail: B256,
 }
 
-impl From<StatelessClientData<Block, Header>> for BuildResult {
+impl From<StatelessClientData<Block, Header>> for Witness {
     fn from(value: StatelessClientData<Block, Header>) -> Self {
         let encoded_input =
             to_vec_with_config(&value, SERDE_BRIEF_CFG).expect("brief serialization failed");

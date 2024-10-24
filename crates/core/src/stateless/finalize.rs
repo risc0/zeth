@@ -26,39 +26,44 @@ use reth_revm::db::states::StateChangeset;
 use reth_revm::db::{BundleState, OriginalValuesKnown};
 
 pub trait FinalizationStrategy<Block, Header, Database> {
+    type Input<'a>;
     type Output;
 
-    fn finalize(
-        stateless_client_engine: &mut StatelessClientEngine<Block, Header, Database>,
-        state_delta: BundleState,
-    ) -> anyhow::Result<Self::Output>;
+    fn finalize(input: Self::Input<'_>) -> anyhow::Result<Self::Output>;
 }
 
 pub struct RethFinalizationStrategy;
+pub type EngineFinalizationStrategyInput<'a, B, H, D> = (
+    &'a mut StatelessClientEngine<B, H, D>,
+    BundleState,
+);
 
 impl<Database: reth_revm::Database> FinalizationStrategy<Block, Header, Database>
     for RethFinalizationStrategy
 where
+    Database: 'static,
     <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
 {
+    type Input<'a> = EngineFinalizationStrategyInput<'a, Block, Header, Database>;
     type Output = (B256, U256, U256);
 
-    fn finalize(
-        stateless_client_engine: &mut StatelessClientEngine<Block, Header, Database>,
-        state_delta: BundleState,
-    ) -> anyhow::Result<Self::Output> {
-        let StatelessClientEngine {
-            data:
-                StatelessClientData {
-                    block,
-                    parent_state_trie,
-                    parent_storage,
-                    parent_header,
-                    total_difficulty,
-                    ..
-                },
-            ..
-        } = stateless_client_engine;
+    fn finalize(input: Self::Input<'_>) -> anyhow::Result<Self::Output> {
+        // Unpack input
+        let (
+            StatelessClientEngine {
+                data:
+                    StatelessClientData {
+                        block,
+                        parent_state_trie,
+                        parent_storage,
+                        parent_header,
+                        total_difficulty,
+                        ..
+                    },
+                ..
+            },
+            state_delta,
+        ) = input;
         // Apply state updates
         let mut state_trie = take(parent_state_trie);
         assert_eq!(state_trie.hash(), parent_header.state_root);

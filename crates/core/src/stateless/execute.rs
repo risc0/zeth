@@ -23,10 +23,9 @@ use reth_evm_ethereum::EthEvmConfig;
 use reth_primitives::Block;
 
 pub trait TransactionExecutionStrategy<Block, Header, Database> {
-    type Output;
-    fn execute_transactions(
-        stateless_client_engine: &mut StatelessClientEngine<Block, Header, Database>,
-    ) -> anyhow::Result<Self::Output>;
+    type Input<'a>;
+    type Output<'b>;
+    fn execute_transactions(input: Self::Input<'_>) -> anyhow::Result<Self::Output<'_>>;
 }
 
 pub struct RethExecStrategy;
@@ -34,14 +33,14 @@ pub struct RethExecStrategy;
 impl<Database: reth_revm::Database> TransactionExecutionStrategy<Block, Header, Database>
     for RethExecStrategy
 where
+    Database: 'static,
     <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
 {
-    type Output = EthBatchExecutor<EthEvmConfig, Database>;
+    type Input<'a> = &'a mut StatelessClientEngine<Block, Header, Database>;
+    type Output<'b> = EthBatchExecutor<EthEvmConfig, Database>;
 
-    fn execute_transactions(
-        stateless_client_engine: &mut StatelessClientEngine<Block, Header, Database>,
-    ) -> anyhow::Result<Self::Output> {
-        // Unpack client instance
+    fn execute_transactions(input: Self::Input<'_>) -> anyhow::Result<Self::Output<'_>> {
+        // Unpack input
         let StatelessClientEngine {
             chain_spec,
             data:
@@ -52,10 +51,10 @@ where
                 },
             db,
             ..
-        } = stateless_client_engine;
-        let db = db.take().expect("Missing database.");
-        // Instantiate execution engine
-        let mut executor = EthExecutorProvider::ethereum(chain_spec.clone()).batch_executor(db);
+        } = input;
+        // Instantiate execution engine using database
+        let mut executor = EthExecutorProvider::ethereum(chain_spec.clone())
+            .batch_executor(db.take().expect("Missing database."));
         // Execute transactions
         // let block_with_senders = BlockWithSenders {
         //     block,

@@ -13,10 +13,11 @@
 // limitations under the License.
 
 use crate::keccak::keccak;
-use crate::stateless::client::StatelessClientEngine;
-use crate::stateless::data::StatelessClientData;
+use crate::mpt::MptNode;
+use crate::stateless::data::StorageEntry;
 use alloy_consensus::{Account, BlockHeader, Header};
-use alloy_primitives::{B256, U256};
+use alloy_primitives::map::HashMap;
+use alloy_primitives::{Address, B256, U256};
 use anyhow::{bail, Context};
 use core::fmt::Display;
 use core::mem::take;
@@ -33,8 +34,12 @@ pub trait FinalizationStrategy<Block, Header, Database> {
 }
 
 pub struct RethFinalizationStrategy;
-pub type EngineFinalizationStrategyInput<'a, B, H, D> = (
-    &'a mut StatelessClientEngine<B, H, D>,
+pub type MPTFinalizationInput<'a, B, H> = (
+    &'a mut B,
+    &'a mut MptNode,
+    &'a mut HashMap<Address, StorageEntry>,
+    &'a mut H,
+    &'a mut U256,
     BundleState,
 );
 
@@ -44,26 +49,12 @@ where
     Database: 'static,
     <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
 {
-    type Input<'a> = EngineFinalizationStrategyInput<'a, Block, Header, Database>;
+    type Input<'a> = MPTFinalizationInput<'a, Block, Header>;
     type Output = (B256, U256, U256);
 
-    fn finalize(input: Self::Input<'_>) -> anyhow::Result<Self::Output> {
-        // Unpack input
-        let (
-            StatelessClientEngine {
-                data:
-                    StatelessClientData {
-                        block,
-                        parent_state_trie,
-                        parent_storage,
-                        parent_header,
-                        total_difficulty,
-                        ..
-                    },
-                ..
-            },
-            state_delta,
-        ) = input;
+    fn finalize(
+        (block, parent_state_trie, parent_storage, parent_header, total_difficulty, state_delta): Self::Input<'_>,
+    ) -> anyhow::Result<Self::Output> {
         // Apply state updates
         let mut state_trie = take(parent_state_trie);
         assert_eq!(state_trie.hash(), parent_header.state_root);

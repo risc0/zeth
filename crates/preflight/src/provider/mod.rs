@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloy::primitives::map::HashMap;
 use alloy::primitives::{Address, Bytes, B256, U256};
 use alloy::rpc::types::{Block, EIP1186AccountProofResponse, Transaction, TransactionReceipt};
 use anyhow::anyhow;
-use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::BTreeSet;

@@ -12,15 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::stateless::client::StatelessClientEngine;
-use crate::stateless::data::StatelessClientData;
 use alloy_consensus::Header;
+use alloy_primitives::U256;
 use core::fmt::Display;
 use core::mem::take;
+use reth_chainspec::ChainSpec;
 use reth_evm::execute::{BatchExecutor, BlockExecutionInput, BlockExecutorProvider, ProviderError};
 use reth_evm_ethereum::execute::{EthBatchExecutor, EthExecutorProvider};
 use reth_evm_ethereum::EthEvmConfig;
 use reth_primitives::Block;
+use std::sync::Arc;
 
 pub trait TransactionExecutionStrategy<Block, Header, Database> {
     type Input<'a>;
@@ -29,6 +30,7 @@ pub trait TransactionExecutionStrategy<Block, Header, Database> {
 }
 
 pub struct RethExecStrategy;
+pub type DbExecutionInput<'a, B, D> = (Arc<ChainSpec>, &'a mut B, &'a mut U256, &'a mut Option<D>);
 
 impl<Database: reth_revm::Database> TransactionExecutionStrategy<Block, Header, Database>
     for RethExecStrategy
@@ -36,22 +38,12 @@ where
     Database: 'static,
     <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
 {
-    type Input<'a> = &'a mut StatelessClientEngine<Block, Header, Database>;
+    type Input<'a> = DbExecutionInput<'a, Block, Database>;
     type Output<'b> = EthBatchExecutor<EthEvmConfig, Database>;
 
-    fn execute_transactions(input: Self::Input<'_>) -> anyhow::Result<Self::Output<'_>> {
-        // Unpack input
-        let StatelessClientEngine {
-            chain_spec,
-            data:
-                StatelessClientData {
-                    block,
-                    total_difficulty,
-                    ..
-                },
-            db,
-            ..
-        } = input;
+    fn execute_transactions(
+        (chain_spec, block, total_difficulty, db): Self::Input<'_>,
+    ) -> anyhow::Result<Self::Output<'_>> {
         // Instantiate execution engine using database
         let mut executor = EthExecutorProvider::ethereum(chain_spec.clone())
             .batch_executor(db.take().expect("Missing database."));

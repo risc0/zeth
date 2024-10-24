@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::stateless::client::StatelessClientEngine;
-use crate::stateless::data::StatelessClientData;
 use alloy_consensus::Header;
-use alloy_primitives::Sealable;
+use alloy_primitives::{Sealable, U256};
 use core::mem::take;
+use reth_chainspec::ChainSpec;
 use reth_consensus::Consensus;
 use reth_ethereum_consensus::EthBeaconConsensus;
 use reth_primitives::{Block, SealedHeader};
+use std::sync::Arc;
 
 pub trait PreExecutionValidationStrategy<Block, Header, Database> {
     type Input<'a>;
@@ -28,27 +28,19 @@ pub trait PreExecutionValidationStrategy<Block, Header, Database> {
 }
 
 pub struct RethPreExecStrategy;
+pub type ConsensusPreExecValidationInput<'a, B, H> =
+    (Arc<ChainSpec>, &'a mut B, &'a mut H, &'a mut U256);
 
 impl<Database> PreExecutionValidationStrategy<Block, Header, Database> for RethPreExecStrategy
 where
     Database: 'static,
 {
-    type Input<'a> = &'a mut StatelessClientEngine<Block, Header, Database>;
+    type Input<'a> = ConsensusPreExecValidationInput<'a, Block, Header>;
     type Output<'b> = ();
 
-    fn pre_execution_validation(input: Self::Input<'_>) -> anyhow::Result<Self::Output<'_>> {
-        // Unpack input
-        let StatelessClientEngine {
-            chain_spec,
-            data:
-                StatelessClientData {
-                    block,
-                    parent_header,
-                    total_difficulty,
-                    ..
-                },
-            ..
-        } = input;
+    fn pre_execution_validation(
+        (chain_spec, block, parent_header, total_difficulty): Self::Input<'_>,
+    ) -> anyhow::Result<Self::Output<'_>> {
         // Instantiate consensus engine
         let consensus = EthBeaconConsensus::new(chain_spec.clone());
         // Validate total difficulty

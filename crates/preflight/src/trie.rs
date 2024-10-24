@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloy::primitives::map::HashMap;
 use alloy::primitives::{Address, B256, U256};
 use alloy::rpc::types::EIP1186AccountProofResponse;
 use anyhow::Context;
-use hashbrown::HashMap;
 use zeth_core::keccak::keccak;
 use zeth_core::mpt::{
     is_not_included, mpt_from_proof, parse_proof, resolve_nodes, shorten_node_path, MptNode,

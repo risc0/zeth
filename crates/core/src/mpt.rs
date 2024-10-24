@@ -23,10 +23,10 @@ use core::{
 };
 
 use alloy_primitives::bytes::Buf;
+use alloy_primitives::map::HashMap;
 use alloy_primitives::{b256, B256};
 use alloy_rlp::{Decodable, Encodable};
 use anyhow::{bail, Context};
-use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 

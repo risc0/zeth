@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use crate::keccak::keccak;
-use crate::stateless::client::StatelessClientEngine;
-use crate::stateless::data::StatelessClientData;
+use crate::mpt::MptNode;
+use crate::stateless::data::StorageEntry;
 use alloy_consensus::Account;
 use alloy_primitives::map::HashMap;
-use alloy_primitives::{Bytes, B256, U256};
+use alloy_primitives::{Address, Bytes, B256, U256};
 use anyhow::bail;
 use core::mem::take;
 use reth_primitives::revm_primitives::Bytecode;
@@ -33,29 +33,25 @@ pub trait InitializationStrategy<Block, Header, Database> {
 }
 
 pub struct InMemoryDbStrategy;
+pub type MPTInitializationInput<'a, H, D> = (
+    &'a mut MptNode,
+    &'a mut HashMap<Address, StorageEntry>,
+    &'a mut Vec<Bytes>,
+    &'a mut H,
+    &'a mut Vec<H>,
+    &'a mut Option<D>,
+);
 
 impl<Block> InitializationStrategy<Block, Header, InMemoryDB> for InMemoryDbStrategy
 where
     Block: 'static,
 {
-    type Input<'a> = &'a mut StatelessClientEngine<Block, Header, InMemoryDB>;
+    type Input<'a> = MPTInitializationInput<'a, Header, InMemoryDB>;
     type Output<'b> = ();
 
-    fn initialize_database(input: Self::Input<'_>) -> anyhow::Result<Self::Output<'_>> {
-        // Unpack input
-        let StatelessClientEngine {
-            data:
-                StatelessClientData {
-                    parent_state_trie,
-                    parent_storage,
-                    contracts,
-                    parent_header,
-                    ancestor_headers,
-                    ..
-                },
-            db,
-            ..
-        } = input;
+    fn initialize_database(
+        (parent_state_trie, parent_storage, contracts, parent_header, ancestor_headers, db): Self::Input<'_>,
+    ) -> anyhow::Result<Self::Output<'_>> {
         // Verify starting state trie root
         if parent_header.state_root != parent_state_trie.hash() {
             bail!(

@@ -13,22 +13,26 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use zeth_core::stateless::client::StatelessClientEngine;
 use zeth_core::stateless::data::StatelessClientData;
-use zeth_core::stateless::execute::{RethExecStrategy, TransactionExecutionStrategy};
+use zeth_core::stateless::execute::{
+    DbExecutionInput, RethExecStrategy, TransactionExecutionStrategy,
+};
 use zeth_core::stateless::post_exec::{PostExecutionValidationStrategy, RethPostExecStrategy};
-use zeth_core::stateless::pre_exec::{PreExecutionValidationStrategy, RethPreExecStrategy};
+use zeth_core::stateless::pre_exec::{
+    ConsensusPreExecValidationInput, PreExecutionValidationStrategy, RethPreExecStrategy,
+};
 
 pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader> {
     type PreExecValidation: for<'a> PreExecutionValidationStrategy<
         B,
         H,
         PreflightDB,
-        Input<'a> = &'a mut StatelessClientEngine<B, H, PreflightDB>,
+        Input<'a> = ConsensusPreExecValidationInput<'a, B, H>,
     >;
     type TransactionExecution: for<'a> TransactionExecutionStrategy<
         B,
         H,
         PreflightDB,
-        Input<'a> = &'a mut StatelessClientEngine<B, H, PreflightDB>,
+        Input<'a> = DbExecutionInput<'a, B, PreflightDB>,
     >;
     type PostExecValidation: for<'a, 'b> PostExecutionValidationStrategy<
         B,

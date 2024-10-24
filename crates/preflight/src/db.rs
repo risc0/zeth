@@ -14,9 +14,9 @@
 
 use crate::provider::db::ProviderDB;
 use crate::provider::{get_proofs, BlockQuery, UncleQuery};
+use alloy::primitives::map::HashMap;
 use alloy::primitives::{Address, B256, U256};
 use alloy::rpc::types::{EIP1186AccountProofResponse, Header};
-use hashbrown::HashMap;
 use reth_primitives::revm_primitives::{Account, AccountInfo, Bytecode};
 use reth_revm::db::states::StateChangeset;
 use reth_revm::db::CacheDB;

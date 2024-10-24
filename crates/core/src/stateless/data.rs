@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use crate::mpt::MptNode;
+use alloy_primitives::map::HashMap;
 use alloy_primitives::{Address, Bytes, U256};
-use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 
 /// Represents the state of an account's storage.

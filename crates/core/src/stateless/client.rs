@@ -13,11 +13,17 @@
 // limitations under the License.
 
 use crate::stateless::data::StatelessClientData;
-use crate::stateless::execute::{RethExecStrategy, TransactionExecutionStrategy};
-use crate::stateless::finalize::{EngineFinalizationStrategyInput, FinalizationStrategy, RethFinalizationStrategy};
-use crate::stateless::initialize::{InMemoryDbStrategy, InitializationStrategy};
+use crate::stateless::execute::{DbExecutionInput, RethExecStrategy, TransactionExecutionStrategy};
+use crate::stateless::finalize::{
+    FinalizationStrategy, MPTFinalizationInput, RethFinalizationStrategy,
+};
+use crate::stateless::initialize::{
+    InMemoryDbStrategy, InitializationStrategy, MPTInitializationInput,
+};
 use crate::stateless::post_exec::{PostExecutionValidationStrategy, RethPostExecStrategy};
-use crate::stateless::pre_exec::{PreExecutionValidationStrategy, RethPreExecStrategy};
+use crate::stateless::pre_exec::{
+    ConsensusPreExecValidationInput, PreExecutionValidationStrategy, RethPreExecStrategy,
+};
 use alloy_consensus::Header;
 use anyhow::Context;
 use reth_chainspec::ChainSpec;
@@ -52,29 +58,91 @@ impl<Block, Header, Database> StatelessClientEngine<Block, Header, Database> {
 
     /// Initializes the database from the input.
     pub fn initialize_database<
-        T: for<'a> InitializationStrategy<Block, Header, Database, Input<'a> = &'a mut Self>,
+        T: for<'a> InitializationStrategy<
+            Block,
+            Header,
+            Database,
+            Input<'a> = MPTInitializationInput<'a, Header, Database>,
+        >,
     >(
         &mut self,
     ) -> anyhow::Result<T::Output<'_>> {
-        T::initialize_database(self).context("StatelessClientEngine::initialize_database")
+        let StatelessClientEngine {
+            data:
+                StatelessClientData {
+                    parent_state_trie,
+                    parent_storage,
+                    contracts,
+                    parent_header,
+                    ancestor_headers,
+                    ..
+                },
+            db,
+            ..
+        } = self;
+        T::initialize_database((
+            parent_state_trie,
+            parent_storage,
+            contracts,
+            parent_header,
+            ancestor_headers,
+            db,
+        ))
+        .context("StatelessClientEngine::initialize_database")
     }
 
     /// Validates the header before execution.
     pub fn pre_execution_validation<
-        T: for<'a> PreExecutionValidationStrategy<Block, Header, Database, Input<'a> = &'a mut Self>,
+        T: for<'a> PreExecutionValidationStrategy<
+            Block,
+            Header,
+            Database,
+            Input<'a> = ConsensusPreExecValidationInput<'a, Block, Header>,
+        >,
     >(
         &mut self,
     ) -> anyhow::Result<T::Output<'_>> {
-        T::pre_execution_validation(self).context("StatelessClientEngine::pre_execution_validation")
+        // Unpack input
+        let StatelessClientEngine {
+            chain_spec,
+            data:
+                StatelessClientData {
+                    block,
+                    parent_header,
+                    total_difficulty,
+                    ..
+                },
+            ..
+        } = self;
+        T::pre_execution_validation((chain_spec.clone(), block, parent_header, total_difficulty))
+            .context("StatelessClientEngine::pre_execution_validation")
     }
 
     /// Executes transactions.
     pub fn execute_transactions<
-        T: for<'a> TransactionExecutionStrategy<Block, Header, Database, Input<'a> = &'a mut Self>,
+        T: for<'a> TransactionExecutionStrategy<
+            Block,
+            Header,
+            Database,
+            Input<'a> = DbExecutionInput<'a, Block, Database>,
+        >,
     >(
         &mut self,
     ) -> anyhow::Result<T::Output<'_>> {
-        T::execute_transactions(self).context("StatelessClientEngine::execute_transactions")
+        // Unpack input
+        let StatelessClientEngine {
+            chain_spec,
+            data:
+                StatelessClientData {
+                    block,
+                    total_difficulty,
+                    ..
+                },
+            db,
+            ..
+        } = self;
+        T::execute_transactions((chain_spec.clone(), block, total_difficulty, db))
+            .context("StatelessClientEngine::execute_transactions")
     }
 
     /// Validates the header after execution.
@@ -88,10 +156,39 @@ impl<Block, Header, Database> StatelessClientEngine<Block, Header, Database> {
     }
 
     /// Finalizes the state trie.
-    pub fn finalize<T: FinalizationStrategy<Block, Header, Database>>(
-        input: T::Input<'_>,
+    pub fn finalize<
+        T: for<'a> FinalizationStrategy<
+            Block,
+            Header,
+            Database,
+            Input<'a> = MPTFinalizationInput<'a, Block, Header>,
+        >,
+    >(
+        &mut self,
+        bundle_state: BundleState,
     ) -> anyhow::Result<T::Output> {
-        T::finalize(input).context("StatelessClientEngine::finalize")
+        // Unpack input
+        let StatelessClientEngine {
+            data:
+                StatelessClientData {
+                    block,
+                    parent_state_trie,
+                    parent_storage,
+                    parent_header,
+                    total_difficulty,
+                    ..
+                },
+            ..
+        } = self;
+        T::finalize((
+            block,
+            parent_state_trie,
+            parent_storage,
+            parent_header,
+            total_difficulty,
+            bundle_state,
+        ))
+        .context("StatelessClientEngine::finalize")
     }
 }
 
@@ -100,19 +197,19 @@ pub trait StatelessClient<Block: 'static, Header: 'static, Database: 'static> {
         Block,
         Header,
         Database,
-        Input<'a> = &'a mut StatelessClientEngine<Block, Header, Database>,
+        Input<'a> = MPTInitializationInput<'a, Header, Database>,
     >;
     type PreExecValidation: for<'a> PreExecutionValidationStrategy<
         Block,
         Header,
         Database,
-        Input<'a> = &'a mut StatelessClientEngine<Block, Header, Database>,
+        Input<'a> = ConsensusPreExecValidationInput<'a, Block, Header>,
     >;
     type TransactionExecution: for<'a> TransactionExecutionStrategy<
         Block,
         Header,
         Database,
-        Input<'a> = &'a mut StatelessClientEngine<Block, Header, Database>,
+        Input<'a> = DbExecutionInput<'a, Block, Database>,
     >;
     type PostExecValidation: for<'a, 'b> PostExecutionValidationStrategy<
         Block,
@@ -129,32 +226,26 @@ pub trait StatelessClient<Block: 'static, Header: 'static, Database: 'static> {
         Block,
         Header,
         Database,
-        Input<'a> = EngineFinalizationStrategyInput<'a, Block, Header, Database>
+        Input<'a> = MPTFinalizationInput<'a, Block, Header>,
     >;
 
-    // todo: when testing this function, implement tests at each fork that mess with the
-    // intermediate inputs/outputs to check whether all header fields (e.g. receipts/txn/state trie roots) are
-    // properly validated
     fn validate(
         chain_spec: Arc<ChainSpec>,
         data: StatelessClientData<Block, Header>,
-    ) -> anyhow::Result<
-        <Self::Finalization as FinalizationStrategy<Block, Header, Database>>::Output,
-    > {
+    ) -> anyhow::Result<<Self::Finalization as FinalizationStrategy<Block, Header, Database>>::Output>
+    {
         let mut engine =
             StatelessClientEngine::<Block, Header, Database>::new(chain_spec, data, None);
         engine.initialize_database::<Self::Initialization>()?;
         engine.pre_execution_validation::<Self::PreExecValidation>()?;
         let execution_output = engine.execute_transactions::<Self::TransactionExecution>()?;
 
-        let state_delta =
+        let bundle_state =
             StatelessClientEngine::<Block, Header, Database>::post_execution_validation::<
                 Self::PostExecValidation,
             >(execution_output)?;
 
-        StatelessClientEngine::<Block, Header, Database>::finalize::<Self::Finalization>(
-            (&mut engine, state_delta)
-        )
+        engine.finalize::<Self::Finalization>(bundle_state)
     }
 }
 

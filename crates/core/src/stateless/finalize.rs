@@ -15,7 +15,7 @@
 use crate::keccak::keccak;
 use crate::stateless::client::StatelessClientEngine;
 use crate::stateless::data::StatelessClientData;
-use alloy_consensus::{Account, Header};
+use alloy_consensus::{Account, BlockHeader, Header};
 use alloy_primitives::{B256, U256};
 use anyhow::{bail, Context};
 use core::fmt::Display;
@@ -41,7 +41,7 @@ impl<Database: reth_revm::Database> FinalizationStrategy<Block, Header, Database
 where
     <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
 {
-    type Output = (B256, U256);
+    type Output = (B256, U256, U256);
 
     fn finalize(
         stateless_client_engine: &mut StatelessClientEngine<Block, Header, Database>,
@@ -141,7 +141,8 @@ where
                 block.header.state_root,
             );
         }
-
-        Ok((block.hash_slow(), *total_difficulty))
+        // Add difficulty
+        let total_difficulty = *total_difficulty + block.header.difficulty();
+        Ok((block.hash_slow(), total_difficulty, U256::from(1)))
     }
 }

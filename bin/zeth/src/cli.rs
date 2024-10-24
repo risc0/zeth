@@ -129,7 +129,7 @@ pub struct BuildArgs {
 
     #[clap(short = 'n', long, require_equals = true, default_value_t = 1)]
     /// Number of blocks to derive (optimism-derived network only)
-    pub block_count: u32,
+    pub block_count: u64,
 }
 
 #[derive(clap::Args, Debug, Clone)]

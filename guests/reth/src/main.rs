@@ -35,13 +35,17 @@ pub extern "C" fn __ctzsi2(x: u32) -> usize {
 
 fn main() {
     // todo: load up revm with hashbrown feat
-    let stateless_client_block =
+    let stateless_client_data =
         serde_brief::from_reader_with_config(stdin(), SERDE_BRIEF_CFG).unwrap();
     env::log("Validating block");
-    let (block_hash, total_difficulty) =
-        RethStatelessClient::validate_block(MAINNET.clone(), stateless_client_block)
+    let (block_hash, total_difficulty, validation_depth) =
+        RethStatelessClient::validate(MAINNET.clone(), stateless_client_data)
             .expect("block validation failed");
 
-    let journal = [block_hash.0, total_difficulty.to_be_bytes::<32>()].concat();
+    let journal = [
+        block_hash.0,
+        total_difficulty.to_be_bytes::<32>(),
+        validation_depth.to_be_bytes::<32>(),
+    ].concat();
     env::commit_slice(&journal.as_slice())
 }

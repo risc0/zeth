@@ -110,7 +110,7 @@ pub trait StatelessClient<Block, Header, Database> {
     // todo: when testing this function, implement tests at each fork that mess with the
     // intermediate inputs/outputs to check whether all header fields (e.g. receipts/txn/state trie roots) are
     // properly validated
-    fn validate_block(
+    fn validate(
         chain_spec: Arc<ChainSpec>,
         data: StatelessClientData<Block, Header>,
     ) -> anyhow::Result<<Self::Finalization as FinalizationStrategy<Block, Header, Database>>::Output>

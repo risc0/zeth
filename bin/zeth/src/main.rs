@@ -40,11 +40,20 @@ async fn main() -> anyhow::Result<()> {
     if !cli.should_build() {
         let verify_args = cli.verify_args();
         let expected_journal = build_journal(&cli).await?;
-        info!(
-            "Verifying receipt file {} for block {}.",
-            verify_args.file.display(),
-            build_args.block_number
-        );
+        if build_args.block_count > 1 {
+            info!(
+                "Verifying receipt file {} for blocks {} - {}.",
+                verify_args.file.display(),
+                build_args.block_number,
+                build_args.block_number + build_args.block_count
+            );
+        } else {
+            info!(
+                "Verifying receipt file {} for block {}.",
+                verify_args.file.display(),
+                build_args.block_number
+            );
+        }
         let mut receipt_file = File::open(&verify_args.file).await?;
         let mut receipt_data = Vec::new();
         receipt_file.read_to_end(&mut receipt_data).await?;

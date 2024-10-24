@@ -14,6 +14,7 @@
 
 use crate::cli::Cli;
 use crate::result::BuildResult;
+use alloy::primitives::U256;
 use anyhow::Context;
 use log::{info, warn};
 use reth_chainspec::ChainSpec;
@@ -77,7 +78,7 @@ where
         let deserialized_preflight_data: StatelessClientData<B, H> =
             serde_brief::from_slice_with_config(&build_result.encoded_input, SERDE_BRIEF_CFG)
                 .context("brief deserialization failed")?;
-        <Self::StatelessClient>::validate_block(chain_spec.clone(), deserialized_preflight_data)
+        <Self::StatelessClient>::validate(chain_spec.clone(), deserialized_preflight_data)
             .expect("Block validation failed");
         info!("Memory run successful ...");
         Ok(build_result)
@@ -93,9 +94,6 @@ impl ZethClient<Block, Header, InMemoryDB> for RethZethClient {
 
 pub async fn build_journal(cli: &Cli) -> anyhow::Result<Vec<u8>> {
     let build_args = cli.build_args().clone();
-    if build_args.block_count > 1 {
-        warn!("Building multiple blocks is not supported. Only the first block will be built.");
-    }
 
     // Fetch all of the initial data
     let cache_path = build_args.cache.as_ref().map(|dir| {
@@ -110,12 +108,18 @@ pub async fn build_journal(cli: &Cli) -> anyhow::Result<Vec<u8>> {
     let provider = new_provider(cache_path, build_args.rpc_url)?;
 
     // Fetch the block
-    let block = provider.borrow_mut().get_full_block(&BlockQuery {
-        block_no: build_args.block_number,
+    let validation_tip_block = provider.borrow_mut().get_full_block(&BlockQuery {
+        block_no: build_args.block_number + build_args.block_count - 1,
     })?;
 
-    let total_difficulty = block.header.total_difficulty.unwrap() - block.header.difficulty;
-    let journal = [block.header.hash.0, total_difficulty.to_be_bytes::<32>()].concat();
+    let total_difficulty = validation_tip_block.header.total_difficulty.unwrap();
+    let validation_depth = U256::from(build_args.block_count);
+    let journal = [
+        validation_tip_block.header.hash.0,
+        total_difficulty.to_be_bytes::<32>(),
+        validation_depth.to_be_bytes::<32>(),
+    ]
+    .concat();
 
     Ok(journal)
 }

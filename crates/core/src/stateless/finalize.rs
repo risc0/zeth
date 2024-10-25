@@ -15,9 +15,9 @@
 use crate::keccak::keccak;
 use crate::mpt::MptNode;
 use crate::stateless::data::StorageEntry;
-use alloy_consensus::{Account, BlockHeader, Header};
+use alloy_consensus::{Account, Header};
 use alloy_primitives::map::HashMap;
-use alloy_primitives::{Address, B256, U256};
+use alloy_primitives::{Address, B256};
 use anyhow::{bail, Context};
 use core::fmt::Display;
 use core::mem::take;
@@ -39,7 +39,6 @@ pub type MPTFinalizationInput<'a, B, H> = (
     &'a mut MptNode,
     &'a mut HashMap<Address, StorageEntry>,
     &'a mut H,
-    &'a mut U256,
     BundleState,
 );
 
@@ -50,10 +49,10 @@ where
     <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
 {
     type Input<'a> = MPTFinalizationInput<'a, Block, Header>;
-    type Output = (B256, U256, U256);
+    type Output = B256;
 
     fn finalize(
-        (block, parent_state_trie, parent_storage, parent_header, total_difficulty, state_delta): Self::Input<'_>,
+        (block, parent_state_trie, parent_storage, parent_header, state_delta): Self::Input<'_>,
     ) -> anyhow::Result<Self::Output> {
         // Apply state updates
         let mut state_trie = take(parent_state_trie);
@@ -137,8 +136,6 @@ where
                 block.header.state_root,
             );
         }
-        // Add difficulty
-        let total_difficulty = *total_difficulty + block.header.difficulty();
-        Ok((block.hash_slow(), total_difficulty, U256::from(1)))
+        Ok(block.hash_slow())
     }
 }

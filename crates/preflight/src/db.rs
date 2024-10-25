@@ -25,9 +25,6 @@ use std::cell::RefCell;
 use std::ops::DerefMut;
 use std::sync::{Arc, Mutex};
 
-pub type PrePostDB = CacheDB<MutCacheDB<ProviderDB>>;
-pub type Rescue = Arc<Mutex<Option<PrePostDB>>>;
-
 #[derive(Clone)]
 pub struct MutCacheDB<T: DatabaseRef> {
     pub db: RefCell<CacheDB<T>>,
@@ -80,6 +77,10 @@ impl<T: DatabaseRef> DatabaseRef for MutCacheDB<T> {
         self.db.borrow_mut().block_hash(number)
     }
 }
+
+pub type PrePostDB = CacheDB<MutCacheDB<ProviderDB>>;
+
+pub type Rescue = Arc<Mutex<Option<PrePostDB>>>;
 
 pub struct PreflightDB {
     pub db: PrePostDB,

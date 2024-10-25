@@ -190,11 +190,10 @@ impl<Block, Header, Database, Driver: SCEDriver<Block, Header>>
             state_trie,
             storage_tries,
             parent_header,
-            total_difficulty,
             bundle_state,
         ))
         .context("StatelessClientEngine::finalize")?;
-        // Move to next block
+        // Prepare for next block
         *parent_header = Driver::block_to_header(blocks.pop().unwrap());
         *total_difficulty = Driver::accumulate_difficulty(*total_difficulty, &*parent_header);
 

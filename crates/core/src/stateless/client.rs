@@ -26,19 +26,22 @@ use crate::stateless::post_exec::{PostExecutionValidationStrategy, RethPostExecS
 use crate::stateless::pre_exec::{
     ConsensusPreExecValidationInput, PreExecutionValidationStrategy, RethPreExecStrategy,
 };
+use crate::SERDE_BRIEF_CFG;
 use alloy_consensus::Header;
 use reth_chainspec::ChainSpec;
 use reth_primitives::Block;
 use reth_revm::db::BundleState;
 use reth_revm::InMemoryDB;
+use serde::de::DeserializeOwned;
+use std::io::Read;
 use std::sync::{Arc, Mutex};
 
 pub type RescueDestination<D> = Arc<Mutex<Option<D>>>;
 
 pub trait StatelessClient<Block, Header, Database, Driver>
 where
-    Block: 'static,
-    Header: 'static,
+    Block: DeserializeOwned + 'static,
+    Header: DeserializeOwned + 'static,
     Database: 'static,
     Driver: SCEDriver<Block, Header> + 'static,
 {
@@ -78,23 +81,34 @@ where
         Input<'a> = MPTFinalizationInput<'a, Block, Header>,
     >;
 
+    fn deserialize_data<I: Read>(reader: I) -> anyhow::Result<StatelessClientData<Block, Header>> {
+        Ok(serde_brief::from_reader_with_config(
+            reader,
+            SERDE_BRIEF_CFG,
+        )?)
+    }
+
     fn validate(
         chain_spec: Arc<ChainSpec>,
         data: StatelessClientData<Block, Header>,
-    ) -> anyhow::Result<<Self::Finalization as FinalizationStrategy<Block, Header, Database>>::Output>
-    {
+    ) -> anyhow::Result<StatelessClientEngine<Block, Header, Database, Driver>> {
+        // Instantiate the engine and initialize the database
         let mut engine =
             StatelessClientEngine::<Block, Header, Database, Driver>::new(chain_spec, data, None);
         engine.initialize_database::<Self::Initialization>()?;
-        engine.pre_execution_validation::<Self::PreExecValidation>()?;
-        let execution_output = engine.execute_transactions::<Self::TransactionExecution>()?;
+        // Run the engine until all blocks are processed
+        while !engine.data.blocks.is_empty() {
+            engine.pre_execution_validation::<Self::PreExecValidation>()?;
+            let execution_output = engine.execute_transactions::<Self::TransactionExecution>()?;
 
-        let bundle_state =
-            StatelessClientEngine::<Block, Header, Database, Driver>::post_execution_validation::<
-                Self::PostExecValidation,
-            >(execution_output)?;
-
-        engine.finalize::<Self::Finalization>(bundle_state)
+            let bundle_state =
+                StatelessClientEngine::<Block, Header, Database, Driver>::post_execution_validation::<
+                    Self::PostExecValidation,
+                >(execution_output)?;
+            engine.finalize::<Self::Finalization>(bundle_state)?;
+        }
+        // Return the engine for inspection
+        Ok(engine)
     }
 }
 

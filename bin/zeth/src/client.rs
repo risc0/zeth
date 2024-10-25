@@ -14,7 +14,6 @@
 
 use crate::chain::Witness;
 use crate::cli::Cli;
-use alloy::primitives::U256;
 use anyhow::Context;
 use log::{info, warn};
 use reth_chainspec::ChainSpec;
@@ -116,11 +115,10 @@ pub async fn build_journal(cli: &Cli) -> anyhow::Result<Vec<u8>> {
     })?;
 
     let total_difficulty = validation_tip_block.header.total_difficulty.unwrap();
-    let validation_depth = U256::from(build_args.block_count);
     let journal = [
-        validation_tip_block.header.hash.0,
-        total_difficulty.to_be_bytes::<32>(),
-        validation_depth.to_be_bytes::<32>(),
+        validation_tip_block.header.hash.0.as_slice(),
+        total_difficulty.to_be_bytes::<32>().as_slice(),
+        build_args.block_count.to_be_bytes().as_slice(),
     ]
     .concat();
 

@@ -45,7 +45,7 @@ where
         let consensus = EthBeaconConsensus::new(chain_spec.clone());
         // Validate total difficulty
         consensus.validate_header_with_total_difficulty(&block.header, *total_difficulty)?;
-        // Validate header
+        // Validate header (todo: seal beforehand to save rehashing costs)
         let sealed_block = take(block).seal_slow();
         consensus.validate_header(&sealed_block.header)?;
         // Validate header w.r.t. parent

@@ -2070,7 +2070,6 @@ dependencies = [
  "lazy_static",
  "reth-chainspec",
  "risc0-zkvm",
- "serde-brief",
  "zeth-core",
 ]
 

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::db::MemoryDB;
 use crate::stateless::data::StatelessClientData;
 use crate::stateless::driver::{RethDriver, SCEDriver};
 use crate::stateless::engine::StatelessClientEngine;
@@ -20,7 +21,7 @@ use crate::stateless::finalize::{
     FinalizationStrategy, MPTFinalizationInput, RethFinalizationStrategy,
 };
 use crate::stateless::initialize::{
-    MemoryDbStrategy, InitializationStrategy, MPTInitializationInput,
+    InitializationStrategy, MPTInitializationInput, MemoryDbStrategy,
 };
 use crate::stateless::post_exec::{PostExecutionValidationStrategy, RethPostExecStrategy};
 use crate::stateless::pre_exec::{
@@ -34,7 +35,7 @@ use reth_revm::db::BundleState;
 use serde::de::DeserializeOwned;
 use std::io::Read;
 use std::sync::{Arc, Mutex};
-use crate::db::MemoryDB;
+use crate::rescue::{Recoverable, Wrapper};
 
 pub type RescueDestination<D> = Arc<Mutex<Option<D>>>;
 
@@ -42,14 +43,15 @@ pub trait StatelessClient<Block, Header, Database, Driver>
 where
     Block: DeserializeOwned + 'static,
     Header: DeserializeOwned + 'static,
-    Database: 'static,
+    Database: Recoverable + 'static,
     Driver: SCEDriver<Block, Header> + 'static,
 {
-    type Initialization: for<'a> InitializationStrategy<
+    type Initialization: for<'a, 'b> InitializationStrategy<
         Block,
         Header,
         Database,
-        Input<'a> = MPTInitializationInput<'a, Header, Database>,
+        Input<'a> = MPTInitializationInput<'a, Header>,
+        Output<'b> = Database,
     >;
     type PreExecValidation: for<'a> PreExecutionValidationStrategy<
         Block,
@@ -60,17 +62,17 @@ where
     type TransactionExecution: for<'a> TransactionExecutionStrategy<
         Block,
         Header,
-        Database,
-        Input<'a> = DbExecutionInput<'a, Block, Database>,
+        Wrapper<Database>,
+        Input<'a> = DbExecutionInput<'a, Block, Wrapper<Database>>,
     >;
     type PostExecValidation: for<'a, 'b> PostExecutionValidationStrategy<
         Block,
         Header,
-        Database,
+        Wrapper<Database>,
         Input<'a> = <Self::TransactionExecution as TransactionExecutionStrategy<
             Block,
             Header,
-            Database,
+            Wrapper<Database>,
         >>::Output<'a>,
         Output<'b> = BundleState,
     >;

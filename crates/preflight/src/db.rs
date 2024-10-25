@@ -23,9 +23,8 @@ use reth_revm::db::CacheDB;
 use reth_revm::{Database, DatabaseCommit, DatabaseRef};
 use std::cell::RefCell;
 use std::ops::DerefMut;
-use std::sync::{Arc, Mutex};
-
-
+use zeth_core::db::apply_changeset;
+use zeth_core::rescue::{Recoverable, Rescued};
 
 #[derive(Clone)]
 pub struct MutCacheDB<T: DatabaseRef> {
@@ -82,18 +81,21 @@ impl<T: DatabaseRef> DatabaseRef for MutCacheDB<T> {
 
 pub type PrePostDB = CacheDB<MutCacheDB<ProviderDB>>;
 
-pub type Rescue = Arc<Mutex<Option<PrePostDB>>>;
-
+#[derive(Clone)]
 pub struct PreflightDB {
-    pub db: PrePostDB,
-    pub rescue: Rescue,
+    pub inner: PrePostDB,
+}
+
+impl Recoverable for PreflightDB {
+    fn rescue(&mut self) -> Option<Self> {
+        Some(self.clone())
+    }
 }
 
 impl From<ProviderDB> for PreflightDB {
     fn from(value: ProviderDB) -> Self {
         Self {
-            db: CacheDB::new(MutCacheDB::new(CacheDB::new(value))),
-            rescue: Arc::new(Mutex::new(None)),
+            inner: CacheDB::new(MutCacheDB::new(CacheDB::new(value))),
         }
     }
 }
@@ -101,67 +103,33 @@ impl From<ProviderDB> for PreflightDB {
 impl From<PrePostDB> for PreflightDB {
     fn from(value: PrePostDB) -> Self {
         Self {
-            db: value,
-            rescue: Arc::new(Mutex::new(None)),
+            inner: value,
         }
     }
 }
 
-impl From<Rescue> for PreflightDB {
-    fn from(value: Rescue) -> Self {
+impl From<Rescued<PrePostDB>> for PreflightDB {
+    fn from(value: Rescued<PrePostDB>) -> Self {
         value.lock().unwrap().take().unwrap().into()
     }
 }
 
-impl Drop for PreflightDB {
-    fn drop(&mut self) {
-        // attempt to rescue DB
-        if let Ok(mut rescue_target) = self.rescue.lock() {
-            rescue_target.replace(self.db.clone());
-        }
-    }
-}
-
 impl PreflightDB {
-    pub fn get_rescue(&self) -> Rescue {
-        self.rescue.clone()
-    }
-
     pub fn save_provider(&mut self) -> anyhow::Result<()> {
-        self.db.db.db.borrow_mut().db.save_provider()
+        self.inner.db.db.borrow_mut().db.save_provider()
     }
 
     pub fn apply_changeset(&mut self, state_changeset: StateChangeset) -> anyhow::Result<()> {
-        let latest_db = &mut self.db;
-        // Update account storages
-        for storage in state_changeset.storage {
-            let db_account = latest_db.accounts.get_mut(&storage.address).unwrap();
-            if storage.wipe_storage {
-                db_account.storage.clear();
-            }
-            for (key, val) in storage.storage {
-                db_account.storage.insert(key, val);
-            }
-        }
-        // Update accounts in state trie
-        for (address, account_info) in state_changeset.accounts {
-            if account_info.is_none() {
-                latest_db.accounts.remove(&address);
-                continue;
-            }
-            let db_account = latest_db.accounts.get_mut(&address).unwrap();
-            db_account.info = account_info.unwrap();
-        }
-        Ok(())
+        apply_changeset(&mut self.inner, state_changeset)
     }
 
     pub fn get_initial_proofs(
         &mut self,
     ) -> anyhow::Result<HashMap<Address, EIP1186AccountProofResponse>> {
-        let initial_db = &self.db.db;
+        let initial_db = &self.inner.db;
         let storage_keys = enumerate_storage_keys(&initial_db.db.borrow());
 
-        let initial_db = self.db.db.db.borrow_mut();
+        let initial_db = self.inner.db.db.borrow_mut();
         let block_no = initial_db.db.block_no;
         let res = get_proofs(
             initial_db.db.provider.borrow_mut().deref_mut(),
@@ -175,10 +143,10 @@ impl PreflightDB {
         &mut self,
     ) -> anyhow::Result<HashMap<Address, EIP1186AccountProofResponse>> {
         // get initial keys
-        let initial_db = &self.db.db;
+        let initial_db = &self.inner.db;
         let mut initial_storage_keys = enumerate_storage_keys(&initial_db.db.borrow());
         // merge initial keys with latest db storage keys
-        for (address, mut indices) in enumerate_storage_keys(&self.db) {
+        for (address, mut indices) in enumerate_storage_keys(&self.inner) {
             match initial_storage_keys.get_mut(&address) {
                 Some(initial_indices) => initial_indices.append(&mut indices),
                 None => {
@@ -187,7 +155,7 @@ impl PreflightDB {
             }
         }
         // return proofs as of next block
-        let initial_db = self.db.db.db.borrow_mut();
+        let initial_db = self.inner.db.db.borrow_mut();
         let block_no = initial_db.db.block_no + 1;
         let res = get_proofs(
             initial_db.db.provider.borrow_mut().deref_mut(),
@@ -198,7 +166,7 @@ impl PreflightDB {
     }
 
     pub fn get_ancestor_headers(&mut self) -> anyhow::Result<Vec<Header>> {
-        let initial_db = &self.db.db.db.borrow_mut();
+        let initial_db = &self.inner.db.db.borrow_mut();
         let db_block_number = initial_db.db.block_no;
         let earliest_block = initial_db
             .block_hashes
@@ -221,7 +189,7 @@ impl PreflightDB {
     }
 
     pub fn get_uncles(&mut self, uncle_hashes: &Vec<B256>) -> anyhow::Result<Vec<Header>> {
-        let initial_db = self.db.db.db.borrow_mut();
+        let initial_db = self.inner.db.db.borrow_mut();
         let block_no = initial_db.db.block_no + 1;
         let mut provider = initial_db.db.provider.borrow_mut();
         let ommers = uncle_hashes
@@ -252,19 +220,19 @@ impl Database for PreflightDB {
     type Error = <PrePostDB as Database>::Error;
 
     fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
-        self.db.basic(address)
+        self.inner.basic(address)
     }
 
     fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error> {
-        self.db.code_by_hash(code_hash)
+        self.inner.code_by_hash(code_hash)
     }
 
     fn storage(&mut self, address: Address, index: U256) -> Result<U256, Self::Error> {
-        self.db.storage(address, index)
+        self.inner.storage(address, index)
     }
 
     fn block_hash(&mut self, number: u64) -> Result<B256, Self::Error> {
-        self.db.block_hash(number)
+        self.inner.block_hash(number)
     }
 }
 
@@ -272,24 +240,24 @@ impl DatabaseRef for PreflightDB {
     type Error = <PrePostDB as DatabaseRef>::Error;
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
-        self.db.basic_ref(address)
+        self.inner.basic_ref(address)
     }
 
     fn code_by_hash_ref(&self, code_hash: B256) -> Result<Bytecode, Self::Error> {
-        self.db.code_by_hash_ref(code_hash)
+        self.inner.code_by_hash_ref(code_hash)
     }
 
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, Self::Error> {
-        self.db.storage_ref(address, index)
+        self.inner.storage_ref(address, index)
     }
 
     fn block_hash_ref(&self, number: u64) -> Result<B256, Self::Error> {
-        self.db.block_hash_ref(number)
+        self.inner.block_hash_ref(number)
     }
 }
 
 impl DatabaseCommit for PreflightDB {
-    fn commit(&mut self, changes: alloy::primitives::map::HashMap<Address, Account>) {
-        self.db.commit(changes)
+    fn commit(&mut self, changes: HashMap<Address, Account>) {
+        self.inner.commit(changes)
     }
 }

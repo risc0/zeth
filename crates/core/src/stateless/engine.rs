@@ -23,17 +23,18 @@ use anyhow::Context;
 use reth_chainspec::ChainSpec;
 use reth_revm::db::BundleState;
 use std::sync::Arc;
+use crate::rescue::{Recoverable, Rescued, Wrapper};
 
 /// A generic builder for building a block.
-#[derive(Clone, Debug)]
-pub struct StatelessClientEngine<Block, Header, Database, Driver: SCEDriver<Block, Header>> {
+pub struct StatelessClientEngine<Block, Header, Database: Recoverable, Driver: SCEDriver<Block, Header>> {
     pub chain_spec: Arc<ChainSpec>,
     pub data: StatelessClientData<Block, Header>,
-    pub db: Option<Database>,
+    pub db: Option<Wrapper<Database>>,
+    pub db_rescued: Option<Rescued<Database>>,
     pub driver: Driver,
 }
 
-impl<Block, Header, Database, Driver: SCEDriver<Block, Header>>
+impl<Block, Header, Database: Recoverable, Driver: SCEDriver<Block, Header>>
     StatelessClientEngine<Block, Header, Database, Driver>
 {
     /// Creates a new stateless validator
@@ -42,25 +43,29 @@ impl<Block, Header, Database, Driver: SCEDriver<Block, Header>>
         data: StatelessClientData<Block, Header>,
         db: Option<Database>,
     ) -> Self {
+        let db = db.map(|db| Wrapper::from(db));
+        let db_rescued = db.as_ref().map(|db| db.rescued());
         Self {
             chain_spec,
             data,
             db,
+            db_rescued,
             driver: Driver::default(),
         }
     }
 
     /// Initializes the database from the input.
     pub fn initialize_database<
-        T: for<'a> InitializationStrategy<
+        T: for<'a, 'b> InitializationStrategy<
             Block,
             Header,
             Database,
-            Input<'a> = MPTInitializationInput<'a, Header, Database>,
+            Input<'a> = MPTInitializationInput<'a, Header>,
+            Output<'b> = Database,
         >,
     >(
         &mut self,
-    ) -> anyhow::Result<T::Output<'_>> {
+    ) -> anyhow::Result<Option<Database>> {
         let StatelessClientEngine {
             data:
                 StatelessClientData {
@@ -74,15 +79,19 @@ impl<Block, Header, Database, Driver: SCEDriver<Block, Header>>
             db,
             ..
         } = self;
-        T::initialize_database((
+        let new_db = Wrapper::from(T::initialize_database((
             state_trie,
             storage_tries,
             contracts,
             parent_header,
             ancestor_headers,
-            db,
         ))
-        .context("StatelessClientEngine::initialize_database")
+            .context("StatelessClientEngine::initialize_database")?);
+        self.db_rescued = Some(new_db.rescued());
+        Ok(db
+            .replace(new_db)
+            .map(|mut rescue_db| rescue_db.rescue())
+            .flatten())
     }
 
     /// Validates the header before execution.
@@ -122,8 +131,8 @@ impl<Block, Header, Database, Driver: SCEDriver<Block, Header>>
         T: for<'a> TransactionExecutionStrategy<
             Block,
             Header,
-            Database,
-            Input<'a> = DbExecutionInput<'a, Block, Database>,
+            Wrapper<Database>,
+            Input<'a> = DbExecutionInput<'a, Block, Wrapper<Database>>,
         >,
     >(
         &mut self,
@@ -151,12 +160,14 @@ impl<Block, Header, Database, Driver: SCEDriver<Block, Header>>
 
     /// Validates the header after execution.
     pub fn post_execution_validation<
-        T: PostExecutionValidationStrategy<Block, Header, Database>,
+        T: PostExecutionValidationStrategy<Block, Header, Wrapper<Database>>,
     >(
         input: T::Input<'_>,
     ) -> anyhow::Result<T::Output<'_>> {
-        T::post_execution_validation(input)
-            .context("StatelessClientEngine::post_execution_validation")
+        let output = T::post_execution_validation(input)
+            .context("StatelessClientEngine::post_execution_validation")?;
+
+        Ok(output)
     }
 
     /// Finalizes the state trie.

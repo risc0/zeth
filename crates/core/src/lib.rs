@@ -15,6 +15,7 @@
 pub mod db;
 pub mod keccak;
 pub mod mpt;
+pub mod rescue;
 pub mod stateless;
 
 pub const SERDE_BRIEF_CFG: serde_brief::Config = serde_brief::Config {

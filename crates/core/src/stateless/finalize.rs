@@ -17,7 +17,7 @@ use crate::mpt::MptNode;
 use crate::stateless::data::StorageEntry;
 use alloy_consensus::{Account, Header};
 use alloy_primitives::map::HashMap;
-use alloy_primitives::{Address, B256};
+use alloy_primitives::Address;
 use anyhow::{bail, Context};
 use core::fmt::Display;
 use core::mem::take;
@@ -49,7 +49,7 @@ where
     <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
 {
     type Input<'a> = MPTFinalizationInput<'a, Block, Header>;
-    type Output = B256;
+    type Output = ();
 
     fn finalize(
         (block, parent_state_trie, parent_storage, parent_header, state_delta): Self::Input<'_>,
@@ -136,6 +136,6 @@ where
                 block.header.state_root,
             );
         }
-        Ok(block.hash_slow())
+        Ok(())
     }
 }

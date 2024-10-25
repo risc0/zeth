@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::db::MemoryDB;
 use crate::keccak::keccak;
 use crate::mpt::MptNode;
 use crate::stateless::data::StorageEntry;
@@ -24,7 +25,6 @@ use reth_primitives::revm_primitives::Bytecode;
 use reth_primitives::{Header, KECCAK_EMPTY};
 use reth_revm::db::{AccountState, DbAccount};
 use reth_revm::primitives::AccountInfo;
-use crate::db::MemoryDB;
 
 pub trait InitializationStrategy<Block, Header, Database> {
     type Input<'a>;
@@ -33,24 +33,23 @@ pub trait InitializationStrategy<Block, Header, Database> {
 }
 
 pub struct MemoryDbStrategy;
-pub type MPTInitializationInput<'a, H, D> = (
+pub type MPTInitializationInput<'a, H> = (
     &'a mut MptNode,
     &'a mut HashMap<Address, StorageEntry>,
     &'a mut Vec<Bytes>,
     &'a mut H,
     &'a mut Vec<H>,
-    &'a mut Option<D>,
 );
 
 impl<Block> InitializationStrategy<Block, Header, MemoryDB> for MemoryDbStrategy
 where
     Block: 'static,
 {
-    type Input<'a> = MPTInitializationInput<'a, Header, MemoryDB>;
-    type Output<'b> = ();
+    type Input<'a> = MPTInitializationInput<'a, Header>;
+    type Output<'b> = MemoryDB;
 
     fn initialize_database(
-        (parent_state_trie, parent_storage, contracts, parent_header, ancestor_headers, db): Self::Input<'_>,
+        (parent_state_trie, parent_storage, contracts, parent_header, ancestor_headers): Self::Input<'_>,
     ) -> anyhow::Result<Self::Output<'_>> {
         // Verify starting state trie root
         if parent_header.state_root != parent_state_trie.hash() {
@@ -146,11 +145,10 @@ where
         }
 
         // Initialize database
-        db.replace(MemoryDB {
+        Ok(MemoryDB {
             accounts,
             block_hashes,
             ..Default::default()
-        });
-        Ok(())
+        })
     }
 }

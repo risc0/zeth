@@ -17,9 +17,9 @@ use alloy::primitives::map::HashMap;
 use alloy::primitives::{Address, B256, U256};
 use reth_revm::primitives::{Account, AccountInfo, Bytecode};
 use reth_revm::{Database, DatabaseCommit, DatabaseRef};
+use reth_storage_errors::db::DatabaseError;
 use std::cell::RefCell;
 use std::sync::Arc;
-use reth_storage_errors::db::DatabaseError;
 
 #[derive(Clone)]
 pub struct ProviderDB {

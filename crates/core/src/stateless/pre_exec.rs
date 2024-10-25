@@ -42,7 +42,7 @@ where
         (chain_spec, block, parent_header, total_difficulty): Self::Input<'_>,
     ) -> anyhow::Result<Self::Output<'_>> {
         // Instantiate consensus engine
-        let consensus = EthBeaconConsensus::new(chain_spec.clone());
+        let consensus = EthBeaconConsensus::new(chain_spec);
         // Validate total difficulty
         consensus.validate_header_with_total_difficulty(&block.header, *total_difficulty)?;
         // Validate header (todo: seal beforehand to save rehashing costs)

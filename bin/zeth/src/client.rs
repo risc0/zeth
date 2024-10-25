@@ -22,6 +22,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::sync::Arc;
 use zeth_core::db::MemoryDB;
+use zeth_core::rescue::Recoverable;
 use zeth_core::stateless::client::{RethStatelessClient, StatelessClient};
 use zeth_core::stateless::data::StatelessClientData;
 use zeth_core::stateless::driver::{RethDriver, SCEDriver};
@@ -36,7 +37,7 @@ pub trait ZethClient<B, H, D, R>
 where
     B: RPCDerivableBlock + Send + Serialize + DeserializeOwned + 'static,
     H: RPCDerivableHeader + Send + Serialize + DeserializeOwned + 'static,
-    D: 'static,
+    D: Recoverable + 'static,
     R: SCEDriver<B, H> + 'static,
     Witness: From<StatelessClientData<B, H>>,
 {

@@ -12,6 +12,7 @@ use reth_revm::db::{BundleState, OriginalValuesKnown};
 use std::iter::zip;
 use std::path::PathBuf;
 use std::sync::Arc;
+use zeth_core::rescue::Wrapper;
 use zeth_core::stateless::data::StatelessClientData;
 use zeth_core::stateless::driver::{RethDriver, SCEDriver};
 use zeth_core::stateless::engine::StatelessClientEngine;
@@ -33,17 +34,17 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
     type TransactionExecution: for<'a> TransactionExecutionStrategy<
         B,
         H,
-        PreflightDB,
-        Input<'a> = DbExecutionInput<'a, B, PreflightDB>,
+        Wrapper<PreflightDB>,
+        Input<'a> = DbExecutionInput<'a, B, Wrapper<PreflightDB>>,
     >;
     type PostExecValidation: for<'a, 'b> PostExecutionValidationStrategy<
         B,
         H,
-        PreflightDB,
+        Wrapper<PreflightDB>,
         Input<'a> = <Self::TransactionExecution as TransactionExecutionStrategy<
             B,
             H,
-            PreflightDB,
+            Wrapper<PreflightDB>,
         >>::Output<'a>,
         Output<'b> = BundleState,
     >;
@@ -103,7 +104,6 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
         mut preflight_db: PreflightDB,
         data: StatelessClientData<Block, Header>,
     ) -> anyhow::Result<StatelessClientData<B, H>> {
-        let preflight_db_rescue = preflight_db.get_rescue();
         info!("Grabbing uncles ...");
         let ommers: Vec<_> = data
             .blocks
@@ -133,7 +133,7 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
         info!("Provider-backed execution is Done!");
 
         // Rescue the dropped DB and apply the state changeset
-        let mut preflight_db = PreflightDB::from(preflight_db_rescue);
+        let mut preflight_db = engine.db.take().unwrap().unwrap();
         preflight_db.apply_changeset(state_changeset)?;
         // storage sanity check
         // {
@@ -174,7 +174,7 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
         // collect the code from each account
         info!("Collecting contracts ...");
         let mut contracts = HashSet::new();
-        let initial_db = &preflight_db.db.db.db.borrow();
+        let initial_db = &preflight_db.inner.db.db.borrow();
         for account in initial_db.accounts.values() {
             let code = account.info.code.clone().context("missing code")?;
             if !code.is_empty() {

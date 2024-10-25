@@ -138,6 +138,7 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
         // Rescue the dropped DB and apply the state changeset
         let mut preflight_db = engine.db.take().unwrap().unwrap();
         preflight_db.apply_changeset(state_changeset)?;
+
         // storage sanity check
         // {
         //     let init_db = preflight_db.db.db.db.borrow_mut();

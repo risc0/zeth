@@ -108,12 +108,17 @@ pub async fn build_journal(cli: &Cli) -> anyhow::Result<Vec<u8>> {
         )
     });
 
-    let provider = new_provider(cache_path, build_args.rpc_url)?;
-
     // Fetch the block
-    let validation_tip_block = provider.borrow_mut().get_full_block(&BlockQuery {
-        block_no: build_args.block_number + build_args.block_count - 1,
-    })?;
+    let validation_tip_block = tokio::task::spawn_blocking(move || {
+        let provider = new_provider(cache_path, build_args.rpc_url).unwrap();
+
+        let result = provider.borrow_mut().get_full_block(&BlockQuery {
+            block_no: build_args.block_number + build_args.block_count - 1,
+        });
+
+        result
+    })
+    .await??;
 
     let total_difficulty = validation_tip_block.header.total_difficulty.unwrap();
     let journal = [

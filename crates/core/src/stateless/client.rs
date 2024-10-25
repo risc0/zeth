@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use crate::db::MemoryDB;
+use crate::rescue::{Recoverable, Wrapper};
 use crate::stateless::data::StatelessClientData;
 use crate::stateless::driver::{RethDriver, SCEDriver};
 use crate::stateless::engine::StatelessClientEngine;
@@ -30,12 +31,13 @@ use crate::stateless::pre_exec::{
 use crate::SERDE_BRIEF_CFG;
 use alloy_consensus::Header;
 use reth_chainspec::ChainSpec;
+use reth_evm_ethereum::execute::EthBatchExecutor;
+use reth_evm_ethereum::EthEvmConfig;
 use reth_primitives::Block;
 use reth_revm::db::BundleState;
 use serde::de::DeserializeOwned;
 use std::io::Read;
 use std::sync::{Arc, Mutex};
-use crate::rescue::{Recoverable, Wrapper};
 
 pub type RescueDestination<D> = Arc<Mutex<Option<D>>>;
 
@@ -59,11 +61,12 @@ where
         Database,
         Input<'a> = ConsensusPreExecValidationInput<'a, Block, Header>,
     >;
-    type TransactionExecution: for<'a> TransactionExecutionStrategy<
+    type TransactionExecution: for<'a, 'b> TransactionExecutionStrategy<
         Block,
         Header,
         Wrapper<Database>,
         Input<'a> = DbExecutionInput<'a, Block, Wrapper<Database>>,
+        Output<'b> = EthBatchExecutor<EthEvmConfig, Wrapper<Database>>,
     >;
     type PostExecValidation: for<'a, 'b> PostExecutionValidationStrategy<
         Block,
@@ -102,11 +105,8 @@ where
         while !engine.data.blocks.is_empty() {
             engine.pre_execution_validation::<Self::PreExecValidation>()?;
             let execution_output = engine.execute_transactions::<Self::TransactionExecution>()?;
-
             let bundle_state =
-                StatelessClientEngine::<Block, Header, Database, Driver>::post_execution_validation::<
-                    Self::PostExecValidation,
-                >(execution_output)?;
+                engine.post_execution_validation::<Self::PostExecValidation>(execution_output)?;
             engine.finalize::<Self::Finalization>(bundle_state)?;
         }
         // Return the engine for inspection

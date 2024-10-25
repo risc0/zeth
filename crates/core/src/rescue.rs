@@ -62,7 +62,10 @@ impl<T: Recoverable> From<T> for Wrapper<T> {
 impl<T: Recoverable> From<Rescued<T>> for Wrapper<T> {
     fn from(rescue: Rescued<T>) -> Self {
         let value = rescue.lock().unwrap().take().unwrap();
-        Self { inner: value, rescue }
+        Self {
+            inner: value,
+            rescue,
+        }
     }
 }
 

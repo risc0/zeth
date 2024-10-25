@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use crate::rescue::{Recoverable, Wrapper};
-use alloy_primitives::{Address, B256, U256};
 use alloy_primitives::map::HashMap;
+use alloy_primitives::{Address, B256, U256};
 use reth_primitives::revm_primitives::{Account, AccountInfo, Bytecode};
 use reth_revm::db::states::StateChangeset;
 use reth_revm::db::CacheDB;

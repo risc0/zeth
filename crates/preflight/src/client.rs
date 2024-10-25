@@ -8,6 +8,8 @@ use anyhow::Context;
 use hashbrown::HashSet;
 use log::{debug, info};
 use reth_chainspec::ChainSpec;
+use reth_evm_ethereum::execute::EthBatchExecutor;
+use reth_evm_ethereum::EthEvmConfig;
 use reth_revm::db::{BundleState, OriginalValuesKnown};
 use std::iter::zip;
 use std::path::PathBuf;
@@ -31,11 +33,12 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
         PreflightDB,
         Input<'a> = ConsensusPreExecValidationInput<'a, B, H>,
     >;
-    type TransactionExecution: for<'a> TransactionExecutionStrategy<
+    type TransactionExecution: for<'a, 'b> TransactionExecutionStrategy<
         B,
         H,
         Wrapper<PreflightDB>,
         Input<'a> = DbExecutionInput<'a, B, Wrapper<PreflightDB>>,
+        Output<'b> = EthBatchExecutor<EthEvmConfig, Wrapper<PreflightDB>>,
     >;
     type PostExecValidation: for<'a, 'b> PostExecutionValidationStrategy<
         B,
@@ -125,10 +128,10 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
         let execution_output = engine
             .execute_transactions::<<Self as PreflightClient<B, H, R>>::TransactionExecution>()?;
         info!("Post execution validation ...");
-        let bundle_state =
-            StatelessClientEngine::<B, H, PreflightDB, R>::post_execution_validation::<
-                <Self as PreflightClient<B, H, R>>::PostExecValidation,
-            >(execution_output)?;
+        let bundle_state = engine
+            .post_execution_validation::<<Self as PreflightClient<B, H, R>>::PostExecValidation>(
+                execution_output,
+            )?;
         let state_changeset = bundle_state.into_plain_state(OriginalValuesKnown::Yes);
         info!("Provider-backed execution is Done!");
 

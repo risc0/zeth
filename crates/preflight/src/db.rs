@@ -102,9 +102,7 @@ impl From<ProviderDB> for PreflightDB {
 
 impl From<PrePostDB> for PreflightDB {
     fn from(value: PrePostDB) -> Self {
-        Self {
-            inner: value,
-        }
+        Self { inner: value }
     }
 }
 

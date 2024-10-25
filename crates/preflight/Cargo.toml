@@ -16,6 +16,7 @@ serde.workspace = true
 flate2.workspace = true
 
 reth-chainspec.workspace = true
+reth-evm-ethereum.workspace = true
 reth-revm.workspace = true
 reth-primitives.workspace = true
 reth-storage-errors.workspace = true

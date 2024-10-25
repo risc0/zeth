@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::rescue::{Recoverable, Rescued, Wrapper};
 use crate::stateless::data::StatelessClientData;
 use crate::stateless::driver::SCEDriver;
 use crate::stateless::execute::{DbExecutionInput, TransactionExecutionStrategy};
@@ -21,12 +22,18 @@ use crate::stateless::post_exec::PostExecutionValidationStrategy;
 use crate::stateless::pre_exec::{ConsensusPreExecValidationInput, PreExecutionValidationStrategy};
 use anyhow::Context;
 use reth_chainspec::ChainSpec;
+use reth_evm_ethereum::execute::EthBatchExecutor;
+use reth_evm_ethereum::EthEvmConfig;
 use reth_revm::db::BundleState;
 use std::sync::Arc;
-use crate::rescue::{Recoverable, Rescued, Wrapper};
 
 /// A generic builder for building a block.
-pub struct StatelessClientEngine<Block, Header, Database: Recoverable, Driver: SCEDriver<Block, Header>> {
+pub struct StatelessClientEngine<
+    Block,
+    Header,
+    Database: Recoverable,
+    Driver: SCEDriver<Block, Header>,
+> {
     pub chain_spec: Arc<ChainSpec>,
     pub data: StatelessClientData<Block, Header>,
     pub db: Option<Wrapper<Database>>,
@@ -79,14 +86,16 @@ impl<Block, Header, Database: Recoverable, Driver: SCEDriver<Block, Header>>
             db,
             ..
         } = self;
-        let new_db = Wrapper::from(T::initialize_database((
-            state_trie,
-            storage_tries,
-            contracts,
-            parent_header,
-            ancestor_headers,
-        ))
-            .context("StatelessClientEngine::initialize_database")?);
+        let new_db = Wrapper::from(
+            T::initialize_database((
+                state_trie,
+                storage_tries,
+                contracts,
+                parent_header,
+                ancestor_headers,
+            ))
+            .context("StatelessClientEngine::initialize_database")?,
+        );
         self.db_rescued = Some(new_db.rescued());
         Ok(db
             .replace(new_db)
@@ -128,11 +137,12 @@ impl<Block, Header, Database: Recoverable, Driver: SCEDriver<Block, Header>>
 
     /// Executes transactions.
     pub fn execute_transactions<
-        T: for<'a> TransactionExecutionStrategy<
+        T: for<'a, 'b> TransactionExecutionStrategy<
             Block,
             Header,
             Wrapper<Database>,
             Input<'a> = DbExecutionInput<'a, Block, Wrapper<Database>>,
+            Output<'b> = EthBatchExecutor<EthEvmConfig, Wrapper<Database>>,
         >,
     >(
         &mut self,
@@ -160,13 +170,22 @@ impl<Block, Header, Database: Recoverable, Driver: SCEDriver<Block, Header>>
 
     /// Validates the header after execution.
     pub fn post_execution_validation<
+        'a,
         T: PostExecutionValidationStrategy<Block, Header, Wrapper<Database>>,
     >(
-        input: T::Input<'_>,
-    ) -> anyhow::Result<T::Output<'_>> {
+        &mut self,
+        input: T::Input<'a>,
+    ) -> anyhow::Result<T::Output<'a>> {
+        // Perform validation
         let output = T::post_execution_validation(input)
             .context("StatelessClientEngine::post_execution_validation")?;
-
+        // Rescue database
+        if let Some(rescued) = self.db_rescued.take() {
+            let new_db = Wrapper::from(rescued);
+            self.db_rescued.replace(new_db.rescued());
+            self.db.replace(new_db);
+        }
+        // Return validation output
         Ok(output)
     }
 

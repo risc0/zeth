@@ -6165,6 +6165,7 @@ dependencies = [
  "hashbrown 0.15.0",
  "log",
  "reth-chainspec",
+ "reth-evm-ethereum",
  "reth-primitives",
  "reth-revm",
  "reth-storage-errors",

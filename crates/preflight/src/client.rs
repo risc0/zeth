@@ -11,8 +11,9 @@ use reth_chainspec::ChainSpec;
 use reth_revm::db::{BundleState, OriginalValuesKnown};
 use std::path::PathBuf;
 use std::sync::Arc;
-use zeth_core::stateless::client::StatelessClientEngine;
 use zeth_core::stateless::data::StatelessClientData;
+use zeth_core::stateless::driver::{RethDriver, SCEDriver};
+use zeth_core::stateless::engine::StatelessClientEngine;
 use zeth_core::stateless::execute::{
     DbExecutionInput, RethExecStrategy, TransactionExecutionStrategy,
 };
@@ -21,7 +22,7 @@ use zeth_core::stateless::pre_exec::{
     ConsensusPreExecValidationInput, PreExecutionValidationStrategy, RethPreExecStrategy,
 };
 
-pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader> {
+pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDriver<B, H>> {
     type PreExecValidation: for<'a> PreExecutionValidationStrategy<
         B,
         H,
@@ -106,41 +107,44 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader> {
         let ommers = preflight_db.get_uncles(&data.block.uncles)?;
         // Instantiate the engine with a rescue for the DB
         info!("Running block execution engine ...");
-        let mut engine = StatelessClientEngine::new(
+        let mut engine = StatelessClientEngine::<B, H, PreflightDB, R>::new(
             chain_spec,
             StatelessClientData::<B, H>::derive(data.clone(), ommers.clone()),
             Some(preflight_db),
         );
         // Run the engine
         info!("Pre execution validation ...");
-        engine.pre_execution_validation::<<Self as PreflightClient<B, H>>::PreExecValidation>()?;
+        engine
+            .pre_execution_validation::<<Self as PreflightClient<B, H, R>>::PreExecValidation>()?;
         info!("Executing transactions ...");
         let execution_output = engine
-            .execute_transactions::<<Self as PreflightClient<B, H>>::TransactionExecution>()?;
+            .execute_transactions::<<Self as PreflightClient<B, H, R>>::TransactionExecution>()?;
         info!("Post execution validation ...");
-        let bundle_state = StatelessClientEngine::<B, H, PreflightDB>::post_execution_validation::<
-            <Self as PreflightClient<B, H>>::PostExecValidation,
-        >(execution_output)?;
+        let bundle_state =
+            StatelessClientEngine::<B, H, PreflightDB, R>::post_execution_validation::<
+                <Self as PreflightClient<B, H, R>>::PostExecValidation,
+            >(execution_output)?;
         let state_changeset = bundle_state.into_plain_state(OriginalValuesKnown::Yes);
         info!("Provider-backed execution is Done!");
 
         // Rescue the dropped DB and apply the state changeset
         let mut preflight_db = PreflightDB::from(preflight_db_rescue);
         preflight_db.apply_changeset(state_changeset)?;
-        {
-            let init_db = preflight_db.db.db.db.borrow_mut();
-            let mut provider_db = init_db.db.clone();
-            provider_db.block_no += 1;
-            for (address, db_account) in &preflight_db.db.accounts {
-                use reth_revm::Database;
-                let provider_info = provider_db.basic(*address)?.unwrap();
-                if db_account.info != provider_info {
-                    dbg!(&address);
-                    dbg!(&db_account.info);
-                    dbg!(&provider_info);
-                }
-            }
-        }
+        // storage sanity check
+        // {
+        //     let init_db = preflight_db.db.db.db.borrow_mut();
+        //     let mut provider_db = init_db.db.clone();
+        //     provider_db.block_no += 1;
+        //     for (address, db_account) in &preflight_db.db.accounts {
+        //         use reth_revm::Database;
+        //         let provider_info = provider_db.basic(*address)?.unwrap();
+        //         if db_account.info != provider_info {
+        //             dbg!(&address);
+        //             dbg!(&db_account.info);
+        //             dbg!(&provider_info);
+        //         }
+        //     }
+        // }
 
         // Save the provider cache
         info!("Saving provider cache ...");
@@ -204,7 +208,9 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader> {
 
 pub struct RethPreflightClient;
 
-impl PreflightClient<reth_primitives::Block, reth_primitives::Header> for RethPreflightClient {
+impl PreflightClient<reth_primitives::Block, reth_primitives::Header, RethDriver>
+    for RethPreflightClient
+{
     type PreExecValidation = RethPreExecStrategy;
     type TransactionExecution = RethExecStrategy;
     type PostExecValidation = RethPostExecStrategy;

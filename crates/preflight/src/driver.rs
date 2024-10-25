@@ -12,9 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod client;
-pub mod db;
-pub mod derive;
-pub mod driver;
-pub mod provider;
-pub mod trie;
+use alloy::rpc::types::{Block, Header};
+use zeth_core::stateless::driver::SCEDriver;
+
+#[derive(Default, Copy, Clone, Debug)]
+pub struct AlloyDriver;
+
+impl SCEDriver<Block, Header> for AlloyDriver {
+    fn get_block_header(block: &Block) -> &Header {
+        &block.header
+    }
+}

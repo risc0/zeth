@@ -12,9 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod client;
-pub mod db;
-pub mod derive;
-pub mod driver;
-pub mod provider;
-pub mod trie;
+use alloy_consensus::Header;
+use reth_primitives::Block;
+
+pub trait SCEDriver<Block, Header>: Default {
+    fn get_block_header(block: &Block) -> &Header;
+}
+
+#[derive(Default, Copy, Clone, Debug)]
+pub struct RethDriver;
+
+impl SCEDriver<Block, Header> for RethDriver {
+    fn get_block_header(block: &Block) -> &Header {
+        &block.header
+    }
+}

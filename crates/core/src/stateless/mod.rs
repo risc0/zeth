@@ -14,6 +14,8 @@
 
 pub mod client;
 pub mod data;
+pub mod driver;
+pub mod engine;
 pub mod execute;
 pub mod finalize;
 pub mod initialize;

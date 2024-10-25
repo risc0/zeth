@@ -26,21 +26,23 @@ use std::sync::Arc;
 use zeth_core::stateless::client::{RethStatelessClient, StatelessClient};
 use zeth_core::stateless::data::StatelessClientData;
 use zeth_core::SERDE_BRIEF_CFG;
+use zeth_core::stateless::driver::{RethDriver, SCEDriver};
 use zeth_preflight::client::{PreflightClient, RethPreflightClient};
 use zeth_preflight::derive::{RPCDerivableBlock, RPCDerivableHeader};
 use zeth_preflight::provider::cache_provider::cache_file_path;
 use zeth_preflight::provider::{new_provider, BlockQuery};
 
 #[async_trait::async_trait]
-pub trait ZethClient<B, H, D>
+pub trait ZethClient<B, H, D, R>
 where
     B: RPCDerivableBlock + Send + Serialize + DeserializeOwned + 'static,
     H: RPCDerivableHeader + Send + Serialize + DeserializeOwned + 'static,
     D: 'static,
+    R: SCEDriver<B, H> + 'static,
     Witness: From<StatelessClientData<B, H>>,
 {
-    type PreflightClient: PreflightClient<B, H>;
-    type StatelessClient: StatelessClient<B, H, D>;
+    type PreflightClient: PreflightClient<B, H, R>;
+    type StatelessClient: StatelessClient<B, H, D, R>;
 
     async fn build_block(cli: &Cli, chain_spec: Arc<ChainSpec>) -> anyhow::Result<Witness> {
         let build_args = cli.build_args().clone();
@@ -88,7 +90,7 @@ where
 
 pub struct RethZethClient;
 
-impl ZethClient<Block, Header, InMemoryDB> for RethZethClient {
+impl ZethClient<Block, Header, InMemoryDB, RethDriver> for RethZethClient {
     type PreflightClient = RethPreflightClient;
     type StatelessClient = RethStatelessClient;
 }

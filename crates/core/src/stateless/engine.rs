@@ -64,8 +64,8 @@ impl<Block, Header, Database, Driver: SCEDriver<Block, Header>>
         let StatelessClientEngine {
             data:
                 StatelessClientData {
-                    parent_state_trie,
-                    parent_storage,
+                    state_trie,
+                    storage_tries,
                     contracts,
                     parent_header,
                     ancestor_headers,
@@ -75,8 +75,8 @@ impl<Block, Header, Database, Driver: SCEDriver<Block, Header>>
             ..
         } = self;
         T::initialize_database((
-            parent_state_trie,
-            parent_storage,
+            state_trie,
+            storage_tries,
             contracts,
             parent_header,
             ancestor_headers,
@@ -101,15 +101,20 @@ impl<Block, Header, Database, Driver: SCEDriver<Block, Header>>
             chain_spec,
             data:
                 StatelessClientData {
-                    block,
+                    blocks,
                     parent_header,
                     total_difficulty,
                     ..
                 },
             ..
         } = self;
-        T::pre_execution_validation((chain_spec.clone(), block, parent_header, total_difficulty))
-            .context("StatelessClientEngine::pre_execution_validation")
+        T::pre_execution_validation((
+            chain_spec.clone(),
+            blocks.last_mut().unwrap(),
+            parent_header,
+            total_difficulty,
+        ))
+        .context("StatelessClientEngine::pre_execution_validation")
     }
 
     /// Executes transactions.
@@ -128,15 +133,20 @@ impl<Block, Header, Database, Driver: SCEDriver<Block, Header>>
             chain_spec,
             data:
                 StatelessClientData {
-                    block,
+                    blocks,
                     total_difficulty,
                     ..
                 },
             db,
             ..
         } = self;
-        T::execute_transactions((chain_spec.clone(), block, total_difficulty, db))
-            .context("StatelessClientEngine::execute_transactions")
+        T::execute_transactions((
+            chain_spec.clone(),
+            blocks.last_mut().unwrap(),
+            total_difficulty,
+            db,
+        ))
+        .context("StatelessClientEngine::execute_transactions")
     }
 
     /// Validates the header after execution.
@@ -165,23 +175,29 @@ impl<Block, Header, Database, Driver: SCEDriver<Block, Header>>
         let StatelessClientEngine {
             data:
                 StatelessClientData {
-                    block,
-                    parent_state_trie,
-                    parent_storage,
+                    blocks,
+                    state_trie,
+                    storage_tries,
                     parent_header,
                     total_difficulty,
                     ..
                 },
             ..
         } = self;
-        T::finalize((
-            block,
-            parent_state_trie,
-            parent_storage,
+        // Follow finalization strategy
+        let result = T::finalize((
+            blocks.last_mut().unwrap(),
+            state_trie,
+            storage_tries,
             parent_header,
             total_difficulty,
             bundle_state,
         ))
-        .context("StatelessClientEngine::finalize")
+        .context("StatelessClientEngine::finalize")?;
+        // Move to next block
+        *parent_header = Driver::block_to_header(blocks.pop().unwrap());
+        *total_difficulty = Driver::accumulate_difficulty(*total_difficulty, &*parent_header);
+
+        Ok(result)
     }
 }

@@ -73,8 +73,8 @@ pub struct BlockQuery {
 
 #[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
 pub struct UncleQuery {
-    pub uncle_hash: B256,
-    pub index_number: u64,
+    pub block_no: u64,
+    pub uncle_index: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Deserialize, Serialize)]

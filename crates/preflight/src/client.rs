@@ -9,6 +9,7 @@ use hashbrown::HashSet;
 use log::{debug, info};
 use reth_chainspec::ChainSpec;
 use reth_revm::db::{BundleState, OriginalValuesKnown};
+use std::iter::zip;
 use std::path::PathBuf;
 use std::sync::Arc;
 use zeth_core::stateless::data::StatelessClientData;
@@ -84,9 +85,9 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
             .total_difficulty
             .expect("Missing total difficulty");
         let data = StatelessClientData {
-            block,
-            parent_state_trie: Default::default(),
-            parent_storage: Default::default(),
+            blocks: vec![block],
+            state_trie: Default::default(),
+            storage_tries: Default::default(),
             contracts: vec![],
             parent_header,
             ancestor_headers: vec![],
@@ -104,7 +105,11 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
     ) -> anyhow::Result<StatelessClientData<B, H>> {
         let preflight_db_rescue = preflight_db.get_rescue();
         info!("Grabbing uncles ...");
-        let ommers = preflight_db.get_uncles(&data.block.uncles)?;
+        let ommers: Vec<_> = data
+            .blocks
+            .iter()
+            .map(|block| preflight_db.get_uncles(&block.uncles).unwrap())
+            .collect();
         // Instantiate the engine with a rescue for the DB
         info!("Running block execution engine ...");
         let mut engine = StatelessClientEngine::<B, H, PreflightDB, R>::new(
@@ -195,9 +200,11 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
         );
 
         Ok(StatelessClientData::<B, H> {
-            block: B::derive(data.block, ommers),
-            parent_state_trie,
-            parent_storage,
+            blocks: zip(data.blocks.into_iter(), ommers.into_iter())
+                .map(|(block, ommers)| B::derive(block, ommers))
+                .collect(),
+            state_trie: parent_state_trie,
+            storage_tries: parent_storage,
             contracts: contracts.into_iter().map(|b| b.bytes()).collect(),
             parent_header: H::derive(data.parent_header),
             ancestor_headers: ancestor_headers.into_iter().map(|h| H::derive(h)).collect(),

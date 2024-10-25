@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloy::primitives::U256;
 use alloy::rpc::types::{Block, Header};
 use zeth_core::stateless::driver::SCEDriver;
 
@@ -19,7 +20,11 @@ use zeth_core::stateless::driver::SCEDriver;
 pub struct AlloyDriver;
 
 impl SCEDriver<Block, Header> for AlloyDriver {
-    fn get_block_header(block: &Block) -> &Header {
-        &block.header
+    fn block_to_header(block: Block) -> Header {
+        block.header
+    }
+
+    fn accumulate_difficulty(total_difficulty: U256, header: &Header) -> U256 {
+        total_difficulty + header.difficulty
     }
 }

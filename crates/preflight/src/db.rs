@@ -219,15 +219,16 @@ impl PreflightDB {
 
     pub fn get_uncles(&mut self, uncle_hashes: &Vec<B256>) -> anyhow::Result<Vec<Header>> {
         let initial_db = self.db.db.db.borrow_mut();
+        let block_no = initial_db.db.block_no + 1;
         let mut provider = initial_db.db.provider.borrow_mut();
         let ommers = uncle_hashes
             .into_iter()
             .enumerate()
-            .map(|(index, uncle_hash)| {
+            .map(|(index, _)| {
                 provider
                     .get_uncle_block(&UncleQuery {
-                        uncle_hash: *uncle_hash,
-                        index_number: index as u64,
+                        block_no,
+                        uncle_index: index as u64,
                     })
                     .expect("Failed to retrieve uncle block")
                     .header

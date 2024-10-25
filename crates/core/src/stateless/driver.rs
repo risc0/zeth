@@ -13,17 +13,23 @@
 // limitations under the License.
 
 use alloy_consensus::Header;
+use alloy_primitives::U256;
 use reth_primitives::Block;
 
 pub trait SCEDriver<Block, Header>: Default {
-    fn get_block_header(block: &Block) -> &Header;
+    fn block_to_header(block: Block) -> Header;
+    fn accumulate_difficulty(total_difficulty: U256, header: &Header) -> U256;
 }
 
 #[derive(Default, Copy, Clone, Debug)]
 pub struct RethDriver;
 
 impl SCEDriver<Block, Header> for RethDriver {
-    fn get_block_header(block: &Block) -> &Header {
-        &block.header
+    fn block_to_header(block: Block) -> Header {
+        block.header
+    }
+
+    fn accumulate_difficulty(total_difficulty: U256, header: &Header) -> U256 {
+        total_difficulty + header.difficulty
     }
 }

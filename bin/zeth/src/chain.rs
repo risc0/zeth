@@ -31,8 +31,8 @@ impl From<StatelessClientData<Block, Header>> for Witness {
             to_vec_with_config(&value, SERDE_BRIEF_CFG).expect("brief serialization failed");
         Self {
             encoded_input,
-            validated_tip: value.block.hash_slow(),
-            validated_tail: value.block.parent_hash,
+            validated_tip: value.blocks.last().unwrap().hash_slow(),
+            validated_tail: value.parent_header.hash_slow(),
         }
     }
 }

@@ -26,11 +26,11 @@ pub type StorageEntry = (MptNode, Vec<U256>);
 #[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize, Serialize)]
 pub struct StatelessClientData<Block, Header> {
     /// Block and transaction data to execute
-    pub block: Block,
+    pub blocks: Vec<Block>,
     /// State trie of the parent block.
-    pub parent_state_trie: MptNode,
+    pub state_trie: MptNode,
     /// Maps each address with its storage trie and the used storage slots.
-    pub parent_storage: HashMap<Address, StorageEntry>,
+    pub storage_tries: HashMap<Address, StorageEntry>,
     /// The code of all unique contracts.
     pub contracts: Vec<Bytes>,
     /// Immediate parent header

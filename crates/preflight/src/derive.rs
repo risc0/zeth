@@ -16,6 +16,7 @@ use alloy::consensus::{Block, BlockBody, Header, TxEip4844Variant, TxEnvelope, T
 use alloy::network::TransactionResponse;
 use alloy::rpc::types::{Block as RPCBlock, Header as RPCHeader, Transaction as RPCTransaction};
 use reth_primitives::Withdrawals;
+use std::iter::zip;
 use zeth_core::stateless::data::StatelessClientData;
 
 pub trait RPCDerivableTransaction {
@@ -105,15 +106,17 @@ impl RPCDerivableBlock for reth_primitives::Block {
 }
 
 pub trait RPCDerivableData {
-    fn derive(data: StatelessClientData<RPCBlock, RPCHeader>, ommers: Vec<RPCHeader>) -> Self;
+    fn derive(data: StatelessClientData<RPCBlock, RPCHeader>, ommers: Vec<Vec<RPCHeader>>) -> Self;
 }
 
 impl<B: RPCDerivableBlock, H: RPCDerivableHeader> RPCDerivableData for StatelessClientData<B, H> {
-    fn derive(data: StatelessClientData<RPCBlock, RPCHeader>, ommers: Vec<RPCHeader>) -> Self {
+    fn derive(data: StatelessClientData<RPCBlock, RPCHeader>, ommers: Vec<Vec<RPCHeader>>) -> Self {
         StatelessClientData {
-            block: B::derive(data.block, ommers),
-            parent_state_trie: data.parent_state_trie,
-            parent_storage: data.parent_storage,
+            blocks: zip(data.blocks.into_iter(), ommers.into_iter())
+                .map(|(block, ommers)| B::derive(block, ommers))
+                .collect(),
+            state_trie: data.state_trie,
+            storage_tries: data.storage_tries,
             contracts: data.contracts,
             parent_header: H::derive(data.parent_header),
             ancestor_headers: data

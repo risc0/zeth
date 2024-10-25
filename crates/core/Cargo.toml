@@ -18,6 +18,7 @@ reth-evm.workspace = true
 reth-evm-ethereum.workspace = true
 reth-primitives.workspace = true
 reth-revm.workspace = true
+reth-storage-errors.workspace = true
 
 serde.workspace = true
 serde-brief = { workspace = true, features = ["std"] }

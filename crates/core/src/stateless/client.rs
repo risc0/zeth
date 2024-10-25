@@ -20,7 +20,7 @@ use crate::stateless::finalize::{
     FinalizationStrategy, MPTFinalizationInput, RethFinalizationStrategy,
 };
 use crate::stateless::initialize::{
-    InMemoryDbStrategy, InitializationStrategy, MPTInitializationInput,
+    MemoryDbStrategy, InitializationStrategy, MPTInitializationInput,
 };
 use crate::stateless::post_exec::{PostExecutionValidationStrategy, RethPostExecStrategy};
 use crate::stateless::pre_exec::{
@@ -31,10 +31,10 @@ use alloy_consensus::Header;
 use reth_chainspec::ChainSpec;
 use reth_primitives::Block;
 use reth_revm::db::BundleState;
-use reth_revm::InMemoryDB;
 use serde::de::DeserializeOwned;
 use std::io::Read;
 use std::sync::{Arc, Mutex};
+use crate::db::MemoryDB;
 
 pub type RescueDestination<D> = Arc<Mutex<Option<D>>>;
 
@@ -114,8 +114,8 @@ where
 
 pub struct RethStatelessClient;
 
-impl StatelessClient<Block, Header, InMemoryDB, RethDriver> for RethStatelessClient {
-    type Initialization = InMemoryDbStrategy;
+impl StatelessClient<Block, Header, MemoryDB, RethDriver> for RethStatelessClient {
+    type Initialization = MemoryDbStrategy;
     type PreExecValidation = RethPreExecStrategy;
     type TransactionExecution = RethExecStrategy;
     type PostExecValidation = RethPostExecStrategy;

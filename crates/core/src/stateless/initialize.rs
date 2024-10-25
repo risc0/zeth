@@ -24,7 +24,7 @@ use reth_primitives::revm_primitives::Bytecode;
 use reth_primitives::{Header, KECCAK_EMPTY};
 use reth_revm::db::{AccountState, DbAccount};
 use reth_revm::primitives::AccountInfo;
-use reth_revm::InMemoryDB;
+use crate::db::MemoryDB;
 
 pub trait InitializationStrategy<Block, Header, Database> {
     type Input<'a>;
@@ -32,7 +32,7 @@ pub trait InitializationStrategy<Block, Header, Database> {
     fn initialize_database(input: Self::Input<'_>) -> anyhow::Result<Self::Output<'_>>;
 }
 
-pub struct InMemoryDbStrategy;
+pub struct MemoryDbStrategy;
 pub type MPTInitializationInput<'a, H, D> = (
     &'a mut MptNode,
     &'a mut HashMap<Address, StorageEntry>,
@@ -42,11 +42,11 @@ pub type MPTInitializationInput<'a, H, D> = (
     &'a mut Option<D>,
 );
 
-impl<Block> InitializationStrategy<Block, Header, InMemoryDB> for InMemoryDbStrategy
+impl<Block> InitializationStrategy<Block, Header, MemoryDB> for MemoryDbStrategy
 where
     Block: 'static,
 {
-    type Input<'a> = MPTInitializationInput<'a, Header, InMemoryDB>;
+    type Input<'a> = MPTInitializationInput<'a, Header, MemoryDB>;
     type Output<'b> = ();
 
     fn initialize_database(
@@ -146,7 +146,7 @@ where
         }
 
         // Initialize database
-        db.replace(InMemoryDB {
+        db.replace(MemoryDB {
             accounts,
             block_hashes,
             ..Default::default()

@@ -3656,6 +3656,7 @@ dependencies = [
  "reth-evm-ethereum",
  "reth-primitives",
  "reth-revm",
+ "reth-storage-errors",
  "serde",
  "serde-brief",
  "thiserror",

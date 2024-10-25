@@ -18,10 +18,10 @@ use anyhow::Context;
 use log::{info, warn};
 use reth_chainspec::ChainSpec;
 use reth_primitives::{Block, Header};
-use reth_revm::InMemoryDB;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::sync::Arc;
+use zeth_core::db::MemoryDB;
 use zeth_core::stateless::client::{RethStatelessClient, StatelessClient};
 use zeth_core::stateless::data::StatelessClientData;
 use zeth_core::stateless::driver::{RethDriver, SCEDriver};
@@ -89,7 +89,7 @@ where
 
 pub struct RethZethClient;
 
-impl ZethClient<Block, Header, InMemoryDB, RethDriver> for RethZethClient {
+impl ZethClient<Block, Header, MemoryDB, RethDriver> for RethZethClient {
     type PreflightClient = RethPreflightClient;
     type StatelessClient = RethStatelessClient;
 }

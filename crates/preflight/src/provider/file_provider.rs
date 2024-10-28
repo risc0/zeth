@@ -98,6 +98,7 @@ impl FileProvider {
                     }
                     Ok(FileProvider {
                         dir_path,
+                        block_no,
                         ..Default::default()
                     })
                 }
@@ -140,11 +141,10 @@ impl Provider for FileProvider {
     }
 
     fn advance(&mut self) -> anyhow::Result<()> {
-        drop(replace(
+        Ok(drop(replace(
             self,
             FileProvider::new(self.dir_path.clone(), self.block_no + 1)?,
-        ));
-        Ok(())
+        )))
     }
 
     fn get_full_block(&mut self, query: &BlockQuery) -> anyhow::Result<Block<Transaction>> {

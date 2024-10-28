@@ -117,7 +117,6 @@ where
         Ok(engine)
     }
 }
-
 pub struct RethStatelessClient;
 
 impl StatelessClient<Block, Header, MemoryDB, RethDriver> for RethStatelessClient {

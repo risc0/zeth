@@ -38,7 +38,7 @@ fn main() {
         .expect("Failed to load client data from stdin");
     let validation_depth = stateless_client_data.blocks.len() as u64;
     // Build the block
-    env::log("Validating block");
+    env::log("Validating blocks");
     let engine = RethStatelessClient::validate(MAINNET.clone(), stateless_client_data)
         .expect("block validation failed");
     // Build the journal (todo: make this a strategy)

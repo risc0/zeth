@@ -83,7 +83,7 @@ where
         Block,
         Header,
         Database,
-        Input<'a> = MPTFinalizationInput<'a, Block, Header>,
+        Input<'a> = MPTFinalizationInput<'a, Block, Header, Database>,
     >;
 
     fn deserialize_data<I: Read>(reader: I) -> anyhow::Result<StatelessClientData<Block, Header>> {
@@ -107,6 +107,10 @@ where
             let execution_output = engine.execute_transactions::<Self::TransactionExecution>()?;
             let bundle_state =
                 engine.post_execution_validation::<Self::PostExecValidation>(execution_output)?;
+            // Skip the database update if we're finalizing the last block
+            if engine.data.blocks.len() == 1 {
+                engine.db.take();
+            }
             engine.finalize::<Self::Finalization>(bundle_state)?;
         }
         // Return the engine for inspection

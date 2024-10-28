@@ -15,7 +15,7 @@
 use crate::chain::Witness;
 use crate::cli::Cli;
 use anyhow::Context;
-use log::{info, warn};
+use log::info;
 use reth_chainspec::ChainSpec;
 use reth_primitives::{Block, Header};
 use serde::de::DeserializeOwned;
@@ -46,9 +46,6 @@ where
 
     async fn build_block(cli: &Cli, chain_spec: Arc<ChainSpec>) -> anyhow::Result<Witness> {
         let build_args = cli.build_args().clone();
-        if build_args.block_count > 1 {
-            warn!("Building multiple blocks is not supported. Only the first block will be built.");
-        }
 
         // Fetch all of the initial data
         let cache_dir = build_args

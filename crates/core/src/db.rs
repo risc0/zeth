@@ -29,20 +29,20 @@ pub struct UnreachableDB;
 impl DatabaseRef for UnreachableDB {
     type Error = DatabaseError;
 
-    fn basic_ref(&self, _: Address) -> Result<Option<AccountInfo>, Self::Error> {
-        unreachable!()
+    fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
+        unreachable!("basic_ref {address}")
     }
 
-    fn code_by_hash_ref(&self, _: B256) -> Result<Bytecode, Self::Error> {
-        unreachable!()
+    fn code_by_hash_ref(&self, code_hash: B256) -> Result<Bytecode, Self::Error> {
+        unreachable!("code_by_hash_ref {code_hash:?}")
     }
 
-    fn storage_ref(&self, _: Address, _: U256) -> Result<U256, Self::Error> {
-        unreachable!()
+    fn storage_ref(&self, address: Address, index: U256) -> Result<U256, Self::Error> {
+        unreachable!("storage_ref {address}-{index}")
     }
 
-    fn block_hash_ref(&self, _: u64) -> Result<B256, Self::Error> {
-        unreachable!()
+    fn block_hash_ref(&self, number: u64) -> Result<B256, Self::Error> {
+        unreachable!("block_hash_ref {number}")
     }
 }
 

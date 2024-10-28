@@ -49,14 +49,14 @@ where
     type Output<'b> = MemoryDB;
 
     fn initialize_database(
-        (parent_state_trie, parent_storage, contracts, parent_header, ancestor_headers): Self::Input<'_>,
+        (state_trie, storage_tries, contracts, parent_header, ancestor_headers): Self::Input<'_>,
     ) -> anyhow::Result<Self::Output<'_>> {
         // Verify starting state trie root
-        if parent_header.state_root != parent_state_trie.hash() {
+        if parent_header.state_root != state_trie.hash() {
             bail!(
                 "Invalid initial state trie: expected {}, got {}",
                 parent_header.state_root,
-                parent_state_trie.hash()
+                state_trie.hash()
             );
         }
 
@@ -67,13 +67,13 @@ where
             .collect();
 
         // Load account data into db
-        let mut accounts = HashMap::with_capacity(parent_storage.len());
-        for (address, (storage_trie, slots)) in parent_storage {
+        let mut accounts = HashMap::with_capacity(storage_tries.len());
+        for (address, (storage_trie, slots)) in storage_tries {
             // consume the slots, as they are no longer needed afterward
             let slots = take(slots);
 
             // load the account from the state trie or empty if it does not exist
-            let state_account = parent_state_trie
+            let state_account = state_trie
                 .get_rlp::<Account>(&keccak(address))?
                 .unwrap_or_default();
             // Verify storage trie root

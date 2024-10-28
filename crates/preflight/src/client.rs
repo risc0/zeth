@@ -98,7 +98,7 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
             .total_difficulty
             .expect("Missing total difficulty");
         let data = StatelessClientData {
-            blocks,
+            blocks: blocks.into_iter().rev().collect(),
             state_trie: Default::default(),
             storage_tries: Default::default(),
             contracts: vec![],
@@ -229,8 +229,26 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
 
             // Increment block number counter
             preflight_db.advance_provider_block()?;
-        }
 
+            // Give db back to engine
+            engine.replace_db(Wrapper::from(preflight_db))?;
+
+            // Advance engine manually
+            engine.data.parent_header = R::block_to_header(engine.data.blocks.pop().unwrap());
+            engine.data.total_difficulty =
+                R::accumulate_difficulty(engine.data.total_difficulty, &engine.data.parent_header);
+
+            // Report stats
+            info!("State trie: {} nodes", state_trie.size());
+            let storage_nodes: u64 = storage_tries
+                .iter()
+                .map(|(_, (n, _))| n.size() as u64)
+                .sum();
+            info!(
+                "Storage tries: {storage_nodes} total nodes over {} accounts",
+                storage_tries.len()
+            );
+        }
         info!("Blocks: {}", data.blocks.len());
         let transactions: u64 = data
             .blocks
@@ -238,15 +256,6 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
             .map(|b| b.transactions.len() as u64)
             .sum();
         info!("Transactions: {transactions} total transactions");
-        info!("State trie: {} nodes", state_trie.size());
-        let storage_nodes: u64 = storage_tries
-            .iter()
-            .map(|(_, (n, _))| n.size() as u64)
-            .sum();
-        info!(
-            "Storage tries: {storage_nodes} total nodes over {} accounts",
-            storage_tries.len()
-        );
 
         Ok(StatelessClientData::<B, H> {
             blocks: zip(data.blocks.into_iter(), ommers.into_iter())

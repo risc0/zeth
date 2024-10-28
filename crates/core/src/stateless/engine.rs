@@ -181,12 +181,18 @@ impl<Block, Header, Database: Recoverable, Driver: SCEDriver<Block, Header>>
             .context("StatelessClientEngine::post_execution_validation")?;
         // Rescue database
         if let Some(rescued) = self.db_rescued.take() {
-            let new_db = Wrapper::from(rescued);
-            self.db_rescued.replace(new_db.rescued());
-            self.db.replace(new_db);
+            self.replace_db(Wrapper::from(rescued))?;
         }
         // Return validation output
         Ok(output)
+    }
+
+    pub fn replace_db(
+        &mut self,
+        new_db: Wrapper<Database>,
+    ) -> anyhow::Result<Option<Wrapper<Database>>> {
+        self.db_rescued.replace(new_db.rescued());
+        Ok(self.db.replace(new_db))
     }
 
     /// Finalizes the state trie.
@@ -195,7 +201,7 @@ impl<Block, Header, Database: Recoverable, Driver: SCEDriver<Block, Header>>
             Block,
             Header,
             Database,
-            Input<'a> = MPTFinalizationInput<'a, Block, Header>,
+            Input<'a> = MPTFinalizationInput<'a, Block, Header, Database>,
         >,
     >(
         &mut self,
@@ -212,14 +218,17 @@ impl<Block, Header, Database: Recoverable, Driver: SCEDriver<Block, Header>>
                     total_difficulty,
                     ..
                 },
+            db,
             ..
         } = self;
+        let db = db.as_mut();
         // Follow finalization strategy
         let result = T::finalize((
             blocks.last_mut().unwrap(),
             state_trie,
             storage_tries,
             parent_header,
+            db.map(|db| &mut db.inner),
             bundle_state,
         ))
         .context("StatelessClientEngine::finalize")?;

@@ -12,16 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::db::{apply_changeset, MemoryDB};
 use crate::keccak::keccak;
 use crate::mpt::MptNode;
 use crate::stateless::data::StorageEntry;
 use alloy_consensus::{Account, Header};
 use alloy_primitives::map::HashMap;
 use alloy_primitives::Address;
-use anyhow::{bail, Context};
-use core::fmt::Display;
-use core::mem::take;
-use reth_evm::execute::ProviderError;
+use anyhow::Context;
 use reth_primitives::Block;
 use reth_revm::db::states::StateChangeset;
 use reth_revm::db::{BundleState, OriginalValuesKnown};
@@ -34,38 +32,36 @@ pub trait FinalizationStrategy<Block, Header, Database> {
 }
 
 pub struct RethFinalizationStrategy;
-pub type MPTFinalizationInput<'a, B, H> = (
+pub type MPTFinalizationInput<'a, B, H, D> = (
     &'a mut B,
     &'a mut MptNode,
     &'a mut HashMap<Address, StorageEntry>,
     &'a mut H,
+    Option<&'a mut D>,
     BundleState,
 );
 
-impl<Database: reth_revm::Database> FinalizationStrategy<Block, Header, Database>
-    for RethFinalizationStrategy
-where
-    Database: 'static,
-    <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
-{
-    type Input<'a> = MPTFinalizationInput<'a, Block, Header>;
+impl FinalizationStrategy<Block, Header, MemoryDB> for RethFinalizationStrategy {
+    type Input<'a> = MPTFinalizationInput<'a, Block, Header, MemoryDB>;
     type Output = ();
 
     fn finalize(
-        (block, parent_state_trie, parent_storage, parent_header, state_delta): Self::Input<'_>,
+        (block, state_trie, storage_tries, parent_header, db, bundle_state): Self::Input<'_>,
     ) -> anyhow::Result<Self::Output> {
         // Apply state updates
-        let mut state_trie = take(parent_state_trie);
         assert_eq!(state_trie.hash(), parent_header.state_root);
 
+        let state_changeset = bundle_state.into_plain_state(OriginalValuesKnown::Yes);
+
+        // Update the trie data
         let StateChangeset {
             accounts, storage, ..
-        } = state_delta.into_plain_state(OriginalValuesKnown::Yes);
+        } = &state_changeset;
         // Apply storage trie changes
-        for storage_change in storage.into_iter() {
+        for storage_change in storage {
             // getting a mutable reference is more efficient than calling remove
             // every account must have an entry, even newly created accounts
-            let (storage_trie, _) = parent_storage.get_mut(&storage_change.address).unwrap();
+            let (storage_trie, _) = storage_tries.get_mut(&storage_change.address).unwrap();
             // for cleared accounts always start from the empty trie
             if storage_change.wipe_storage {
                 storage_trie.clear();
@@ -84,8 +80,8 @@ where
                 }
             }
         }
-        // Apply account info changes
-        for (address, account_info) in accounts.into_iter() {
+        // Apply account info + storage changes
+        for (address, account_info) in accounts {
             let state_trie_index = keccak(address);
             if account_info.is_none() {
                 state_trie
@@ -94,11 +90,11 @@ where
                 continue;
             }
             let storage_root = {
-                let (storage_trie, _) = parent_storage.remove(&address).unwrap();
+                let (storage_trie, _) = storage_tries.get(address).unwrap();
                 storage_trie.hash()
             };
 
-            let info = account_info.unwrap();
+            let info = account_info.as_ref().unwrap();
             let state_account = Account {
                 nonce: info.nonce,
                 balance: info.balance,
@@ -109,8 +105,8 @@ where
                 .insert_rlp(&state_trie_index, state_account)
                 .context("state_trie.insert_rlp")?;
         }
-        // Apply storage root updates
-        for (address, (storage_trie, _)) in parent_storage {
+        // Apply account storage only changes
+        for (address, (storage_trie, _)) in storage_tries {
             if storage_trie.is_reference_cached() {
                 continue;
             }
@@ -128,14 +124,14 @@ where
             }
         }
 
-        // Validate final state trie
-        if block.header.state_root != state_trie.hash() {
-            bail!(
-                "Unexpected final state root! Found {} but expected {}",
-                state_trie.hash(),
-                block.header.state_root,
-            );
+        // Update the database
+        if let Some(db) = db {
+            apply_changeset(db, state_changeset)?;
         }
+
+        // Validate final state trie
+        assert_eq!(block.header.state_root, state_trie.hash());
+
         Ok(())
     }
 }

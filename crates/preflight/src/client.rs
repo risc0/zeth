@@ -113,15 +113,18 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
 
     fn preflight_with_db(
         chain_spec: Arc<ChainSpec>,
-        mut preflight_db: PreflightDB,
+        preflight_db: PreflightDB,
         data: StatelessClientData<Block, Header>,
     ) -> anyhow::Result<StatelessClientData<B, H>> {
         info!("Grabbing uncles ...");
-        let ommers: Vec<_> = data
-            .blocks
-            .iter()
-            .map(|block| preflight_db.get_uncles(&block.uncles).unwrap())
-            .collect();
+        let mut ommers: Vec<Vec<Header>> = Vec::new();
+        let mut preflight_db_clone = preflight_db.clone();
+        for block in data.blocks.iter().rev() {
+            ommers.push(preflight_db_clone.get_uncles(&block.uncles)?);
+            preflight_db_clone.save_provider()?;
+            preflight_db_clone.advance_provider_block()?;
+        }
+        ommers.reverse();
         // Instantiate the engine with a rescue for the DB
         info!("Running block execution engine ...");
         let mut engine = StatelessClientEngine::<B, H, PreflightDB, R>::new(

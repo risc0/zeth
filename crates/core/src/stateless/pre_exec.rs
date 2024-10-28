@@ -14,6 +14,7 @@
 
 use alloy_consensus::Header;
 use alloy_primitives::{Sealable, U256};
+use anyhow::Context;
 use core::mem::take;
 use reth_chainspec::ChainSpec;
 use reth_consensus::Consensus;
@@ -44,18 +45,26 @@ where
         // Instantiate consensus engine
         let consensus = EthBeaconConsensus::new(chain_spec);
         // Validate total difficulty
-        consensus.validate_header_with_total_difficulty(&block.header, *total_difficulty)?;
+        consensus
+            .validate_header_with_total_difficulty(&block.header, *total_difficulty)
+            .context("validate_header_with_total_difficulty")?;
         // Validate header (todo: seal beforehand to save rehashing costs)
         let sealed_block = take(block).seal_slow();
-        consensus.validate_header(&sealed_block.header)?;
+        consensus
+            .validate_header(&sealed_block.header)
+            .context("validate_header")?;
         // Validate header w.r.t. parent
         let sealed_parent_header = {
             let (parent_header, parent_header_seal) = take(parent_header).seal_slow().into_parts();
             SealedHeader::new(parent_header, parent_header_seal)
         };
-        consensus.validate_header_against_parent(&sealed_block.header, &sealed_parent_header)?;
+        consensus
+            .validate_header_against_parent(&sealed_block.header, &sealed_parent_header)
+            .context("validate_header_against_parent")?;
         // Check pre-execution block conditions
-        consensus.validate_block_pre_execution(&sealed_block)?;
+        consensus
+            .validate_block_pre_execution(&sealed_block)
+            .context("validate_block_pre_execution")?;
         // Return values
         *block = sealed_block.unseal();
         *parent_header = sealed_parent_header.unseal();

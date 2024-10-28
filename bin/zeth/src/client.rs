@@ -29,7 +29,7 @@ use zeth_core::stateless::driver::{RethDriver, SCEDriver};
 use zeth_core::SERDE_BRIEF_CFG;
 use zeth_preflight::client::{PreflightClient, RethPreflightClient};
 use zeth_preflight::derive::{RPCDerivableBlock, RPCDerivableHeader};
-use zeth_preflight::provider::cache_provider::cache_file_path;
+use zeth_preflight::provider::cache_provider::cache_dir_path;
 use zeth_preflight::provider::{new_provider, BlockQuery};
 
 #[async_trait::async_trait]
@@ -51,26 +51,22 @@ where
         }
 
         // Fetch all of the initial data
-        let rpc_cache = build_args.cache.as_ref().map(|dir| {
-            cache_file_path(
-                dir,
-                &build_args.network.to_string(),
-                build_args.block_number,
-                "json.gz",
-            )
-        });
+        let cache_dir = build_args
+            .cache
+            .as_ref()
+            .map(|dir| cache_dir_path(dir, &build_args.network.to_string()));
 
         let preflight_chain_spec = chain_spec.clone();
-        let preflight_result = tokio::task::spawn_blocking(move || {
+        let preflight_data: StatelessClientData<B, H> = tokio::task::spawn_blocking(move || {
             <Self::PreflightClient>::preflight_with_rpc(
                 preflight_chain_spec,
-                rpc_cache,
+                cache_dir,
                 build_args.rpc_url,
                 build_args.block_number,
+                build_args.block_count,
             )
         })
-        .await?;
-        let preflight_data = preflight_result.context("preflight failed")?;
+        .await??;
         let build_result = Witness::from(preflight_data);
 
         // Verify that the transactions run correctly
@@ -99,18 +95,15 @@ pub async fn build_journal(cli: &Cli) -> anyhow::Result<Vec<u8>> {
     let build_args = cli.build_args().clone();
 
     // Fetch all of the initial data
-    let cache_path = build_args.cache.as_ref().map(|dir| {
-        cache_file_path(
-            dir,
-            &build_args.network.to_string(),
-            build_args.block_number,
-            "json.gz",
-        )
-    });
+    let cache_dir = build_args
+        .cache
+        .as_ref()
+        .map(|dir| cache_dir_path(dir, &build_args.network.to_string()));
 
     // Fetch the block
     let validation_tip_block = tokio::task::spawn_blocking(move || {
-        let provider = new_provider(cache_path, build_args.rpc_url).unwrap();
+        let provider =
+            new_provider(cache_dir, build_args.block_number, build_args.rpc_url).unwrap();
 
         let result = provider.borrow_mut().get_full_block(&BlockQuery {
             block_no: build_args.block_number + build_args.block_count - 1,

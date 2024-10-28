@@ -32,6 +32,11 @@ impl ProviderDB {
         ProviderDB { provider, block_no }
     }
 
+    pub fn advance_provider_block(&mut self) -> anyhow::Result<()> {
+        self.block_no += 1;
+        self.provider.borrow_mut().advance()
+    }
+
     pub fn save_provider(&self) -> anyhow::Result<()> {
         self.provider.borrow().save()
     }

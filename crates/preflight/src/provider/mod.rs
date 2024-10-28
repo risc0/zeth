@@ -27,9 +27,12 @@ pub mod db;
 pub mod file_provider;
 pub mod rpc_provider;
 
-pub fn new_file_provider(file_path: PathBuf) -> anyhow::Result<Arc<RefCell<dyn Provider>>> {
+pub fn new_file_provider(
+    dir_path: PathBuf,
+    block_no: u64,
+) -> anyhow::Result<Arc<RefCell<dyn Provider>>> {
     Ok(Arc::new(RefCell::new(file_provider::FileProvider::new(
-        file_path,
+        dir_path, block_no,
     )?)))
 }
 
@@ -40,21 +43,23 @@ pub fn new_rpc_provider(rpc_url: String) -> anyhow::Result<Arc<RefCell<dyn Provi
 }
 
 pub fn new_cached_rpc_provider(
-    cache_path: PathBuf,
+    dir_path: PathBuf,
+    block_no: u64,
     rpc_url: String,
 ) -> anyhow::Result<Arc<RefCell<dyn Provider>>> {
     Ok(Arc::new(RefCell::new(
-        cache_provider::CachedRpcProvider::new(cache_path, rpc_url)?,
+        cache_provider::CachedRpcProvider::new(dir_path, block_no, rpc_url)?,
     )))
 }
 
 pub fn new_provider(
-    cache_path: Option<PathBuf>,
+    cache_dir: Option<PathBuf>,
+    block_no: u64,
     rpc_url: Option<String>,
 ) -> anyhow::Result<Arc<RefCell<dyn Provider>>> {
-    match (cache_path, rpc_url) {
-        (Some(cache_path), Some(rpc_url)) => new_cached_rpc_provider(cache_path, rpc_url),
-        (Some(cache_path), None) => new_file_provider(cache_path),
+    match (cache_dir, rpc_url) {
+        (Some(cache_path), Some(rpc_url)) => new_cached_rpc_provider(cache_path, block_no, rpc_url),
+        (Some(cache_path), None) => new_file_provider(cache_path, block_no),
         (None, Some(rpc_url)) => new_rpc_provider(rpc_url),
         (None, None) => Err(anyhow!("No cache_path or rpc_url given")),
     }
@@ -93,6 +98,7 @@ pub struct StorageQuery {
 
 pub trait Provider: Send {
     fn save(&self) -> anyhow::Result<()>;
+    fn advance(&mut self) -> anyhow::Result<()>;
 
     fn get_full_block(&mut self, query: &BlockQuery) -> anyhow::Result<Block<Transaction>>;
     fn get_uncle_block(&mut self, query: &UncleQuery) -> anyhow::Result<Block<Transaction>>;

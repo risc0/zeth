@@ -299,6 +299,15 @@ impl MptNode {
         &self.data
     }
 
+    /// Retrieves the underlying data of the node.
+    ///
+    /// This method provides a reference to the node's data, allowing for inspection and
+    /// manipulation.
+    #[inline]
+    pub fn as_data_mut(&mut self) -> &mut MptNodeData {
+        &mut self.data
+    }
+
     #[inline]
     pub fn is_reference_cached(&self) -> bool {
         self.cached_reference.borrow().is_some()
@@ -948,6 +957,37 @@ pub fn resolve_nodes(root: &MptNode, node_store: &HashMap<MptNodeReference, MptN
     debug_assert_eq!(root.hash(), trie.hash());
 
     trie
+}
+
+/// Creates a new MPT trie where all the digests contained in `node_store` are resolved.
+pub fn resolve_nodes_in_place(
+    root: &mut MptNode,
+    node_store: &HashMap<MptNodeReference, MptNode>,
+) -> () {
+    let starting_hash = root.hash();
+    let replacement = match root.as_data_mut() {
+        MptNodeData::Null | MptNodeData::Leaf(_, _) => None,
+        MptNodeData::Branch(children) => {
+            for child in children {
+                if let Some(child) = child {
+                    resolve_nodes_in_place(child, node_store);
+                }
+            }
+            None
+        }
+        MptNodeData::Extension(_, target) => {
+            resolve_nodes_in_place(target, node_store);
+            None
+        }
+        MptNodeData::Digest(digest) => node_store.get(&MptNodeReference::Digest(*digest)),
+    };
+    if let Some(data) = replacement {
+        root.data = data.data.clone();
+        root.invalidate_ref_cache();
+        resolve_nodes_in_place(root, node_store);
+    }
+    // the root hash must not change
+    debug_assert_eq!(root.hash(), starting_hash);
 }
 
 /// Returns a list of all possible nodes that can be created by shortening the path of the

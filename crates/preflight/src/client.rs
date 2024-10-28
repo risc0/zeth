@@ -2,7 +2,7 @@ use crate::db::PreflightDB;
 use crate::derive::{RPCDerivableBlock, RPCDerivableData, RPCDerivableHeader};
 use crate::provider::db::ProviderDB;
 use crate::provider::{new_provider, BlockQuery};
-use crate::trie::proofs_to_tries;
+use crate::trie::extend_proof_tries;
 use alloy::rpc::types::{Block, Header};
 use anyhow::Context;
 use hashbrown::HashSet;
@@ -11,9 +11,12 @@ use reth_chainspec::ChainSpec;
 use reth_evm_ethereum::execute::EthBatchExecutor;
 use reth_evm_ethereum::EthEvmConfig;
 use reth_revm::db::{BundleState, OriginalValuesKnown};
+use reth_revm::primitives::Bytecode;
 use std::iter::zip;
+use std::mem::replace;
 use std::path::PathBuf;
 use std::sync::Arc;
+use zeth_core::mpt::MptNode;
 use zeth_core::rescue::Wrapper;
 use zeth_core::stateless::data::StatelessClientData;
 use zeth_core::stateless::driver::{RethDriver, SCEDriver};
@@ -54,11 +57,12 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
 
     fn preflight_with_rpc(
         chain_spec: Arc<ChainSpec>,
-        cache_path: Option<PathBuf>,
+        cache_dir: Option<PathBuf>,
         rpc_url: Option<String>,
         block_no: u64,
+        block_count: u64,
     ) -> anyhow::Result<StatelessClientData<B, H>> {
-        let provider = new_provider(cache_path, rpc_url)?;
+        let provider = new_provider(cache_dir, block_no, rpc_url)?;
         // Fetch the parent block
         let parent_block = provider.borrow_mut().get_full_block(&BlockQuery {
             block_no: block_no - 1,
@@ -69,16 +73,21 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
         );
         let parent_header = parent_block.header;
 
-        // Fetch the target block
-        let block = provider
-            .borrow_mut()
-            .get_full_block(&BlockQuery { block_no })?;
+        // Fetch the blocks
+        let mut blocks = Vec::new();
+        for block_no in block_no..block_no + block_count {
+            let block = provider
+                .borrow_mut()
+                .get_full_block(&BlockQuery { block_no })?;
 
-        debug!(
-            "Final block number: {:?} ({:?})",
-            block.header.number, block.header.hash,
-        );
-        debug!("Transaction count: {:?}", block.transactions.len());
+            debug!(
+                "Block number: {:?} ({:?})",
+                block.header.number, block.header.hash,
+            );
+            debug!("Transaction count: {:?}", block.transactions.len());
+
+            blocks.push(block);
+        }
 
         // Create the provider DB
         let provider_db = ProviderDB::new(provider, parent_header.number);
@@ -89,7 +98,7 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
             .total_difficulty
             .expect("Missing total difficulty");
         let data = StatelessClientData {
-            blocks: vec![block],
+            blocks,
             state_trie: Default::default(),
             storage_tries: Default::default(),
             contracts: vec![],
@@ -120,95 +129,131 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
             StatelessClientData::<B, H>::derive(data.clone(), ommers.clone()),
             Some(preflight_db),
         );
-        // Run the engine
-        info!("Pre execution validation ...");
-        engine
-            .pre_execution_validation::<<Self as PreflightClient<B, H, R>>::PreExecValidation>()?;
-        info!("Executing transactions ...");
-        let execution_output = engine
-            .execute_transactions::<<Self as PreflightClient<B, H, R>>::TransactionExecution>()?;
-        info!("Post execution validation ...");
-        let bundle_state = engine
-            .post_execution_validation::<<Self as PreflightClient<B, H, R>>::PostExecValidation>(
-                execution_output,
+
+        let block_count = data.blocks.len();
+
+        let mut state_trie = MptNode::from(data.parent_header.state_root);
+        let mut storage_tries = Default::default();
+        let mut contracts: HashSet<Bytecode> = Default::default();
+        let mut ancestor_headers: Vec<Header> = Default::default();
+
+        for _ in 0..block_count {
+            // Run the engine
+            info!("Pre execution validation ...");
+            engine
+                .pre_execution_validation::<<Self as PreflightClient<B, H, R>>::PreExecValidation>(
+                )?;
+            info!("Executing transactions ...");
+            let execution_output = engine
+                .execute_transactions::<<Self as PreflightClient<B, H, R>>::TransactionExecution>(
             )?;
-        let state_changeset = bundle_state.into_plain_state(OriginalValuesKnown::Yes);
-        info!("Provider-backed execution is Done!");
+            info!("Post execution validation ...");
+            let bundle_state = engine
+                .post_execution_validation::<<Self as PreflightClient<B, H, R>>::PostExecValidation>(
+                    execution_output,
+                )?;
+            let state_changeset = bundle_state.into_plain_state(OriginalValuesKnown::Yes);
+            info!("Provider-backed execution is Done!");
 
-        // Rescue the dropped DB and apply the state changeset
-        let mut preflight_db = engine.db.take().unwrap().unwrap();
-        preflight_db.apply_changeset(state_changeset)?;
+            // Rescue the dropped DB and apply the state changeset
+            let mut preflight_db = engine.db.take().unwrap().unwrap();
+            preflight_db.apply_changeset(state_changeset)?;
 
-        // storage sanity check
-        // {
-        //     let init_db = preflight_db.db.db.db.borrow_mut();
-        //     let mut provider_db = init_db.db.clone();
-        //     provider_db.block_no += 1;
-        //     for (address, db_account) in &preflight_db.db.accounts {
-        //         use reth_revm::Database;
-        //         let provider_info = provider_db.basic(*address)?.unwrap();
-        //         if db_account.info != provider_info {
-        //             dbg!(&address);
-        //             dbg!(&db_account.info);
-        //             dbg!(&provider_info);
-        //         }
-        //     }
-        // }
+            // storage sanity check
+            // {
+            //     let init_db = preflight_db.db.db.db.borrow_mut();
+            //     let mut provider_db = init_db.db.clone();
+            //     provider_db.block_no += 1;
+            //     for (address, db_account) in &preflight_db.db.accounts {
+            //         use reth_revm::Database;
+            //         let provider_info = provider_db.basic(*address)?.unwrap();
+            //         if db_account.info != provider_info {
+            //             dbg!(&address);
+            //             dbg!(&db_account.info);
+            //             dbg!(&provider_info);
+            //         }
+            //     }
+            // }
 
-        // Save the provider cache
-        info!("Saving provider cache ...");
-        preflight_db.save_provider()?;
+            // Save the provider cache
+            info!("Saving provider cache ...");
+            preflight_db.save_provider()?;
 
-        // Gather inclusion proofs for the initial and final state
-        info!("Gathering initial proofs ...");
-        let initial_proofs = preflight_db.get_initial_proofs()?;
-        info!("Saving provider cache ...");
-        preflight_db.save_provider()?;
-        info!("Gathering final proofs ...");
-        let latest_proofs = preflight_db.get_latest_proofs()?;
-        info!("Saving provider cache ...");
-        preflight_db.save_provider()?;
+            // Gather inclusion proofs for the initial and final state
+            info!("Gathering initial proofs ...");
+            let initial_proofs = preflight_db.get_initial_proofs()?;
+            info!("Saving provider cache ...");
+            preflight_db.save_provider()?;
+            info!("Gathering final proofs ...");
+            let latest_proofs = preflight_db.get_latest_proofs()?;
+            info!("Saving provider cache ...");
+            preflight_db.save_provider()?;
 
-        // Gather proofs for block history
-        info!("Gathering ancestor headers ...");
-        let ancestor_headers = preflight_db.get_ancestor_headers()?;
-        info!("Saving provider cache ...");
-        preflight_db.save_provider()?;
-
-        // collect the code from each account
-        info!("Collecting contracts ...");
-        let mut contracts = HashSet::new();
-        let initial_db = &preflight_db.inner.db.db.borrow();
-        for account in initial_db.accounts.values() {
-            let code = account.info.code.clone().context("missing code")?;
-            if !code.is_empty() {
-                contracts.insert(code);
+            // Gather proofs for block history
+            info!("Gathering ancestor headers ...");
+            let new_ancestor_headers = preflight_db.get_ancestor_headers()?;
+            if ancestor_headers.is_empty()
+                || (!new_ancestor_headers.is_empty()
+                    && new_ancestor_headers.last().unwrap().number
+                        < ancestor_headers.last().unwrap().number)
+            {
+                let _ = replace(&mut ancestor_headers, new_ancestor_headers);
             }
+
+            info!("Saving provider cache ...");
+            preflight_db.save_provider()?;
+
+            // collect the code from each account
+            info!("Collecting contracts ...");
+            let initial_db = preflight_db.inner.db.db.borrow();
+            for account in initial_db.accounts.values() {
+                let code = account.info.code.clone().context("missing code")?;
+                if !code.is_empty() {
+                    contracts.insert(code);
+                }
+            }
+            drop(initial_db);
+
+            // construct the sparse MPTs from the inclusion proofs
+            info!(
+                "Extending tries from {} initialization and {} finalization proofs ...",
+                initial_proofs.len(),
+                latest_proofs.len()
+            );
+            extend_proof_tries(
+                &mut state_trie,
+                &mut storage_tries,
+                initial_proofs,
+                latest_proofs,
+            )?;
+
+            // Increment block number counter
+            preflight_db.advance_provider_block()?;
         }
 
-        // construct the sparse MPTs from the inclusion proofs
-        info!("Deriving tries from proofs ...");
-        let (parent_state_trie, parent_storage) =
-            proofs_to_tries(data.parent_header.state_root, initial_proofs, latest_proofs)?;
-
+        info!("Blocks: {}", data.blocks.len());
+        let transactions: u64 = data
+            .blocks
+            .iter()
+            .map(|b| b.transactions.len() as u64)
+            .sum();
+        info!("Transactions: {transactions} total transactions");
+        info!("State trie: {} nodes", state_trie.size());
+        let storage_nodes: u64 = storage_tries
+            .iter()
+            .map(|(_, (n, _))| n.size() as u64)
+            .sum();
         info!(
-            "The partial state trie consists of {} nodes",
-            parent_state_trie.size()
-        );
-        info!(
-            "The partial storage tries consist of {} nodes",
-            parent_storage
-                .values()
-                .map(|(n, _)| n.size())
-                .sum::<usize>()
+            "Storage tries: {storage_nodes} total nodes over {} accounts",
+            storage_tries.len()
         );
 
         Ok(StatelessClientData::<B, H> {
             blocks: zip(data.blocks.into_iter(), ommers.into_iter())
                 .map(|(block, ommers)| B::derive(block, ommers))
                 .collect(),
-            state_trie: parent_state_trie,
-            storage_tries: parent_storage,
+            state_trie,
+            storage_tries,
             contracts: contracts.into_iter().map(|b| b.bytes()).collect(),
             parent_header: H::derive(data.parent_header),
             ancestor_headers: ancestor_headers.into_iter().map(|h| H::derive(h)).collect(),

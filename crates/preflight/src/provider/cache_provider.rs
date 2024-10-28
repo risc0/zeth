@@ -25,8 +25,8 @@ pub struct CachedRpcProvider {
 }
 
 impl CachedRpcProvider {
-    pub fn new(cache_path: PathBuf, rpc_url: String) -> anyhow::Result<Self> {
-        let cache = FileProvider::new(cache_path).context("failed to init cache")?;
+    pub fn new(cache_dir: PathBuf, block_no: u64, rpc_url: String) -> anyhow::Result<Self> {
+        let cache = FileProvider::new(cache_dir, block_no).context("failed to init cache")?;
         let rpc = RpcProvider::new(rpc_url).context("failed to init RPC")?;
 
         Ok(CachedRpcProvider { cache, rpc })
@@ -36,6 +36,10 @@ impl CachedRpcProvider {
 impl Provider for CachedRpcProvider {
     fn save(&self) -> anyhow::Result<()> {
         self.cache.save()
+    }
+
+    fn advance(&mut self) -> anyhow::Result<()> {
+        self.cache.advance()
     }
 
     fn get_full_block(&mut self, query: &BlockQuery) -> anyhow::Result<Block<Transaction>> {
@@ -136,6 +140,12 @@ impl Provider for CachedRpcProvider {
 
         Ok(out)
     }
+}
+
+pub fn cache_dir_path(cache_path: &Path, network: &str) -> PathBuf {
+    let dir = cache_path.join(network);
+    std::fs::create_dir_all(&dir).expect("Could not create directory");
+    dir
 }
 
 pub fn cache_file_path(cache_path: &Path, network: &str, block_no: u64, ext: &str) -> PathBuf {

@@ -18,10 +18,76 @@ use alloy::rpc::types::EIP1186AccountProofResponse;
 use anyhow::Context;
 use zeth_core::keccak::keccak;
 use zeth_core::mpt::{
-    is_not_included, mpt_from_proof, parse_proof, resolve_nodes, shorten_node_path, MptNode,
-    MptNodeReference,
+    is_not_included, mpt_from_proof, parse_proof, resolve_nodes, resolve_nodes_in_place,
+    shorten_node_path, MptNode, MptNodeReference,
 };
 use zeth_core::stateless::data::StorageEntry;
+
+pub fn extend_proof_tries(
+    state_trie: &mut MptNode,
+    storage_tries: &mut HashMap<Address, StorageEntry>,
+    initialization_proofs: HashMap<Address, EIP1186AccountProofResponse>,
+    finalization_proofs: HashMap<Address, EIP1186AccountProofResponse>,
+) -> anyhow::Result<()> {
+    // storage for encountered trie data
+    let mut state_nodes = HashMap::new();
+    for (address, initialization_proof) in initialization_proofs {
+        // Create individual nodes from proof
+        let proof_nodes = parse_proof(&initialization_proof.account_proof)
+            .context("invalid account_proof encoding")?;
+        // Ensure the trie is consistent
+        mpt_from_proof(&proof_nodes).context("invalid account_proof")?;
+        // Insert each node into the trie data store
+        proof_nodes.into_iter().for_each(|node| {
+            assert_eq!(node.size(), 1);
+            state_nodes.insert(node.reference(), node);
+        });
+        // assure that addresses can be deleted from the state trie
+        let finalization_proof = finalization_proofs
+            .get(&address)
+            .with_context(|| format!("missing finalization proof for address {:#}", &address))?;
+        add_orphaned_leafs(address, &finalization_proof.account_proof, &mut state_nodes)?;
+        // insert inaccessible storage trie
+        if !storage_tries.contains_key(&address) {
+            storage_tries.insert(address, (initialization_proof.storage_hash.into(), vec![]));
+        }
+        // storage for encountered storage trie data
+        let mut storage_nodes = HashMap::new();
+        for storage_proof in &initialization_proof.storage_proof {
+            let proof_nodes =
+                parse_proof(&storage_proof.proof).context("invalid storage_proof encoding")?;
+            mpt_from_proof(&proof_nodes).context("invalid storage_proof")?;
+            // Load storage entry
+            let storage_entry = storage_tries.get_mut(&address).unwrap();
+            let storage_key = U256::from_be_bytes(storage_proof.key.0 .0);
+            // Push the storage key if new
+            if !storage_entry.1.contains(&storage_key) {
+                storage_entry.1.push(storage_key);
+            }
+            // Load storage trie nodes into store
+            proof_nodes.into_iter().for_each(|node| {
+                storage_nodes.insert(node.reference(), node);
+            });
+        }
+
+        // assure that slots can be deleted from the storage trie
+        for storage_proof in &finalization_proof.storage_proof {
+            add_orphaned_leafs(
+                storage_proof.key.0,
+                &storage_proof.proof,
+                &mut storage_nodes,
+            )?;
+        }
+
+        let storage_entry = storage_tries.get_mut(&address).unwrap();
+        // Load up newly found storage nodes
+        resolve_nodes_in_place(&mut storage_entry.0, &storage_nodes);
+    }
+    // Load up newly found state nodes
+    resolve_nodes_in_place(state_trie, &state_nodes);
+
+    Ok(())
+}
 
 pub fn proofs_to_tries(
     state_root: B256,

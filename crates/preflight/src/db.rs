@@ -117,6 +117,10 @@ impl PreflightDB {
         self.inner.db.db.borrow_mut().db.save_provider()
     }
 
+    pub fn advance_provider_block(&mut self) -> anyhow::Result<()> {
+        self.inner.db.db.borrow_mut().db.advance_provider_block()
+    }
+
     pub fn apply_changeset(&mut self, state_changeset: StateChangeset) -> anyhow::Result<()> {
         apply_changeset(&mut self.inner, state_changeset)
     }

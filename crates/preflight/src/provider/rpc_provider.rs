@@ -41,6 +41,10 @@ impl Provider for RpcProvider {
         Ok(())
     }
 
+    fn advance(&mut self) -> anyhow::Result<()> {
+        Ok(())
+    }
+
     fn get_full_block(&mut self, query: &BlockQuery) -> anyhow::Result<Block<Transaction>> {
         debug!("Querying RPC for full block: {:?}", query);
 

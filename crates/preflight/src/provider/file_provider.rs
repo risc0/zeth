@@ -12,27 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::{
+    AccountQuery, BlockQuery, MutProvider, ProofQuery, Provider, StorageQuery, UncleQuery,
+};
 use alloy::primitives::{Bytes, U256};
 use alloy::rpc::types::{Block, EIP1186AccountProofResponse, Transaction, TransactionReceipt};
 use anyhow::{anyhow, Context};
 use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 use serde::{Deserialize, Serialize};
+use std::mem::replace;
 use std::{
     collections::HashMap,
     fs::{self, File},
     io,
-    io::Write,
-    path::{Path, PathBuf},
-};
-
-use super::{
-    AccountQuery, BlockQuery, MutProvider, ProofQuery, Provider, StorageQuery, UncleQuery,
+    path::PathBuf,
 };
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct FileProvider {
     #[serde(skip)]
-    file_path: PathBuf,
+    block_no: u64,
+    #[serde(skip)]
+    dir_path: PathBuf,
     #[serde(skip)]
     dirty: bool,
     #[serde(with = "ordered_map")]
@@ -85,8 +86,9 @@ mod ordered_map {
 impl FileProvider {
     /// Creates a new [FileProvider]. If the file exists, it will be read and
     /// deserialized. Otherwise, a new file will be created when saved.
-    pub fn new(file_path: PathBuf) -> anyhow::Result<Self> {
-        match FileProvider::read(file_path.clone()) {
+    pub fn new(dir_path: PathBuf, block_no: u64) -> anyhow::Result<Self> {
+        let file_path = Self::derive_file_path(&dir_path, block_no);
+        let provider = match FileProvider::read(dir_path.clone(), block_no) {
             Ok(provider) => Ok(provider),
             Err(err) => match err.downcast_ref::<io::Error>() {
                 Some(io_err) if io_err.kind() == io::ErrorKind::NotFound => {
@@ -95,49 +97,53 @@ impl FileProvider {
                         fs::create_dir_all(parent)?;
                     }
                     Ok(FileProvider {
-                        file_path,
+                        dir_path,
                         ..Default::default()
                     })
                 }
                 _ => Err(err),
             },
-        }
+        }?;
+        Ok(provider)
     }
 
-    fn read(file_path: PathBuf) -> anyhow::Result<Self> {
+    fn derive_file_path(dir_path: &PathBuf, block_no: u64) -> PathBuf {
+        dir_path
+            .join(block_no.to_string())
+            .with_extension("json.gz")
+    }
+
+    fn read(dir_path: PathBuf, block_no: u64) -> anyhow::Result<Self> {
+        let file_path = Self::derive_file_path(&dir_path, block_no);
         let f = File::open(&file_path)?;
         let mut out: Self = serde_json::from_reader(GzDecoder::new(f))?;
-        out.file_path = file_path;
+        out.dir_path = dir_path;
         out.dirty = false;
+        out.block_no = block_no;
 
         Ok(out)
-    }
-
-    pub fn save_to_file(&self, file_path: &Path) -> anyhow::Result<()> {
-        if self.dirty {
-            let mut encoder = flate2::write::GzEncoder::new(
-                File::create(file_path)
-                    .with_context(|| format!("Failed to create '{}'", file_path.display()))?,
-                flate2::Compression::best(),
-            );
-            encoder.write_all(&serde_json::to_vec(self)?)?;
-            encoder.finish()?;
-        }
-
-        Ok(())
     }
 }
 
 impl Provider for FileProvider {
     fn save(&self) -> anyhow::Result<()> {
         if self.dirty {
-            let f = File::create(&self.file_path)
-                .with_context(|| format!("Failed to create '{}'", self.file_path.display()))?;
+            let file_path = Self::derive_file_path(&self.dir_path, self.block_no);
+            let f = File::create(&file_path)
+                .with_context(|| format!("Failed to create '{}'", self.dir_path.display()))?;
             let mut encoder = GzEncoder::new(f, Compression::best());
             serde_json::to_writer(&mut encoder, &self)?;
             encoder.finish()?;
         }
 
+        Ok(())
+    }
+
+    fn advance(&mut self) -> anyhow::Result<()> {
+        drop(replace(
+            self,
+            FileProvider::new(self.dir_path.clone(), self.block_no + 1)?,
+        ));
         Ok(())
     }
 

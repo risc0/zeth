@@ -128,9 +128,3 @@ pub fn apply_changeset<DB>(
     }
     Ok(())
 }
-// --block-number=19426587 --block-count=2
-// 2_073_397_735
-// --block-number=19426587 --block-count=1
-//
-// --block-number=19426588 --block-count=1
-//

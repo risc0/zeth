@@ -114,12 +114,23 @@ pub fn apply_changeset<DB>(
     }
     // Update accounts in state trie
     for (address, account_info) in state_changeset.accounts {
-        if account_info.is_none() {
+        let Some(info) = account_info else {
             db.accounts.remove(&address);
             continue;
-        }
+        };
         let db_account = db.accounts.get_mut(&address).unwrap();
-        db_account.info = account_info.unwrap();
+        if info.code_hash != db_account.info.code_hash {
+            db_account.info = info;
+        } else {
+            db_account.info.balance = info.balance;
+            db_account.info.nonce = info.nonce;
+        }
     }
     Ok(())
 }
+// --block-number=19426587 --block-count=2
+// 2_073_397_735
+// --block-number=19426587 --block-count=1
+//
+// --block-number=19426588 --block-count=1
+//

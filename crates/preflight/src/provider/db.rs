@@ -114,7 +114,7 @@ impl DatabaseRef for ProviderDB {
 
     fn code_by_hash_ref(&self, _: B256) -> Result<Bytecode, Self::Error> {
         // not needed because we already load code with basic info
-        unreachable!()
+        unreachable!("code_by_hash_ref")
     }
 
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, Self::Error> {

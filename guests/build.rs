@@ -16,7 +16,7 @@
 fn main() {
     let cwd = std::env::current_dir().unwrap();
     let root_dir = cwd.parent().map(|d| d.to_path_buf());
-    let build_opts = std::collections::HashMap::from_iter(["reth"].into_iter().map(|guest_pkg| {
+    let build_opts = std::collections::HashMap::from_iter(["zeth-guests-reth"].into_iter().map(|guest_pkg| {
         (
             guest_pkg,
             risc0_build::GuestOptions {

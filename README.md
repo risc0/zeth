@@ -48,6 +48,13 @@ Follow the installation steps for the RISC Zero zkVM:
 
 https://dev.risczero.com/api/zkvm/install
 
+**Note: v1.81 of the toolchain is required:**
+
+```shell
+cargo risczero build-toolchain --version r0.1.81.0-rc.4
+```
+
+
 #### zeth
 
 Clone the repository and build with `cargo` using one of the following commands:

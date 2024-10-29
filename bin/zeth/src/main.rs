@@ -23,7 +23,7 @@ use zeth::cli::{Cli, Network};
 use zeth::client::{build_journal, RethZethClient, ZethClient};
 use zeth::executor::build_executor_env;
 use zeth::proof_file_name;
-use zeth_guests::{RETH_ELF, RETH_ID};
+use zeth_guests::{ZETH_GUESTS_RETH_ELF, ZETH_GUESTS_RETH_ID};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -33,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
 
     // select a guest program
     let (image_id, elf) = match build_args.network {
-        Network::Ethereum => (RETH_ID, RETH_ELF),
+        Network::Ethereum => (ZETH_GUESTS_RETH_ID, ZETH_GUESTS_RETH_ELF),
         Network::Optimism => todo!(),
     };
 

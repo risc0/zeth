@@ -2062,18 +2062,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
 
 [[package]]
-name = "reth"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "c-kzg",
- "lazy_static",
- "reth-chainspec",
- "risc0-zkvm",
- "zeth-core",
-]
-
-[[package]]
 name = "reth-chainspec"
 version = "1.1.0"
 source = "git+https://github.com/risc0/reth?branch=p1.1.0_zstd#918bf7a9aece7e20cb936c63ba5918da09b9ae9d"
@@ -3661,6 +3649,18 @@ dependencies = [
  "serde-brief",
  "thiserror",
  "tiny-keccak",
+]
+
+[[package]]
+name = "zeth-guests-reth"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "c-kzg",
+ "lazy_static",
+ "reth-chainspec",
+ "risc0-zkvm",
+ "zeth-core",
 ]
 
 [[package]]

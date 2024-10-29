@@ -14,9 +14,7 @@
 
 use alloy::primitives::B256;
 use reth_primitives::{Block, Header};
-use serde_brief::to_vec_with_config;
 use zeth_core::stateless::data::StatelessClientData;
-use zeth_core::SERDE_BRIEF_CFG;
 
 #[derive(Debug, Default, Clone)]
 pub struct Witness {
@@ -27,8 +25,7 @@ pub struct Witness {
 
 impl From<StatelessClientData<Block, Header>> for Witness {
     fn from(value: StatelessClientData<Block, Header>) -> Self {
-        let encoded_input =
-            to_vec_with_config(&value, SERDE_BRIEF_CFG).expect("brief serialization failed");
+        let encoded_input = pot::to_vec(&value).expect("serialization failed");
         Self {
             encoded_input,
             validated_tip: value.blocks.last().unwrap().hash_slow(),

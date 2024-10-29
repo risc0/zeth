@@ -28,7 +28,6 @@ use crate::stateless::post_exec::{PostExecutionValidationStrategy, RethPostExecS
 use crate::stateless::pre_exec::{
     ConsensusPreExecValidationInput, PreExecutionValidationStrategy, RethPreExecStrategy,
 };
-use crate::SERDE_BRIEF_CFG;
 use alloy_consensus::Header;
 use reth_chainspec::ChainSpec;
 use reth_evm_ethereum::execute::EthBatchExecutor;
@@ -87,10 +86,7 @@ where
     >;
 
     fn deserialize_data<I: Read>(reader: I) -> anyhow::Result<StatelessClientData<Block, Header>> {
-        Ok(serde_brief::from_reader_with_config(
-            reader,
-            SERDE_BRIEF_CFG,
-        )?)
+        Ok(pot::from_reader(reader)?)
     }
 
     fn validate(

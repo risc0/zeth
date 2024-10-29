@@ -20,7 +20,7 @@ reth-primitives.workspace = true
 reth-revm.workspace = true
 reth-storage-errors.workspace = true
 
+pot.workspace = true
 serde.workspace = true
-serde-brief = { workspace = true, features = ["std"] }
 thiserror.workspace = true
 tiny-keccak.workspace = true

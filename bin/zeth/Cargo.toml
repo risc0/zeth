@@ -25,13 +25,13 @@ bytemuck.workspace = true
 clap.workspace = true
 env_logger.workspace = true
 log.workspace = true
+pot.workspace = true
 
 reth-chainspec.workspace = true
 reth-primitives.workspace = true
 reth-revm.workspace = true
 
 serde.workspace = true
-serde-brief = { workspace = true, features = ["std"] }
 tokio.workspace = true
 tracing.workspace = true
 

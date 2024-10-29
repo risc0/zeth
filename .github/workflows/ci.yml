@@ -36,7 +36,6 @@ jobs:
         crate: cargo-binstall
     - run: cargo binstall -y --force cargo-risczero@$RISC0_VERSION
     - run: cargo risczero install --version $RISC0_TOOLCHAIN_VERSION
-    - run: cargo risczero build-toolchain --version erik/risc0-1.81.0
     - run: cargo test --workspace --all-targets -F debug-guest-build
 
   clippy:
@@ -61,9 +60,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - if: matrix.feature == 'cuda'
-        uses: risc0/risc0/.github/actions/cuda@v1.0.5
-      - uses: risc0/risc0/.github/actions/rustup@v1.0.5
-      - uses: risc0/risc0/.github/actions/sccache@v1.0.5
+        uses: risc0/risc0/.github/actions/cuda@v1.1.2
+      - uses: risc0/risc0/.github/actions/rustup@v1.1.2
+      - uses: risc0/risc0/.github/actions/sccache@v1.1.2
       - uses: risc0/clippy-action@main
         with:
           reporter: 'github-pr-check'
@@ -76,5 +75,5 @@ jobs:
     timeout-minutes: 10
     steps:
     - uses: actions/checkout@v4
-    - uses: risc0/risc0/.github/actions/rustup@v1.0.5
+    - uses: risc0/risc0/.github/actions/rustup@v1.1.2
     - run: cargo fmt --all --check

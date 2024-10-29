@@ -21,7 +21,7 @@ reth-revm.workspace = true
 reth-primitives.workspace = true
 reth-storage-errors.workspace = true
 
+pot.workspace = true
 serde_json.workspace = true
-serde-brief.workspace = true
 tokio.workspace = true
 tracing.workspace = true

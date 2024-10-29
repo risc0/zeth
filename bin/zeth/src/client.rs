@@ -26,7 +26,6 @@ use zeth_core::rescue::Recoverable;
 use zeth_core::stateless::client::{RethStatelessClient, StatelessClient};
 use zeth_core::stateless::data::StatelessClientData;
 use zeth_core::stateless::driver::{RethDriver, SCEDriver};
-use zeth_core::SERDE_BRIEF_CFG;
 use zeth_preflight::client::{PreflightClient, RethPreflightClient};
 use zeth_preflight::derive::{RPCDerivableBlock, RPCDerivableHeader};
 use zeth_preflight::provider::cache_provider::cache_dir_path;
@@ -72,8 +71,8 @@ where
             build_result.encoded_input.len()
         );
         let deserialized_preflight_data: StatelessClientData<B, H> =
-            serde_brief::from_slice_with_config(&build_result.encoded_input, SERDE_BRIEF_CFG)
-                .context("brief deserialization failed")?;
+            Self::StatelessClient::deserialize_data(build_result.encoded_input.as_slice())
+                .context("input deserialization failed")?;
         <Self::StatelessClient>::validate(chain_spec.clone(), deserialized_preflight_data)
             .expect("Block validation failed");
         info!("Memory run successful ...");

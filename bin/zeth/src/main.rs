@@ -117,7 +117,7 @@ async fn main() -> anyhow::Result<()> {
                 "Proof of {} total cycles ({} user cycles) computed.",
                 prove_info.stats.total_cycles, prove_info.stats.user_cycles
             );
-            let mut output_file = File::create(file_name).await?;
+            let mut output_file = File::create(&file_name).await?;
             // Write receipt data to file
             let receipt_bytes =
                 bincode::serialize(&prove_info.receipt).expect("Could not serialize receipt.");
@@ -129,6 +129,7 @@ async fn main() -> anyhow::Result<()> {
                 .flush()
                 .await
                 .expect("Failed to flush receipt output file data.");
+            info!("Receipt file {file_name} written.");
             prove_info.receipt
         };
 

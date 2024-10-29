@@ -1,6 +1,10 @@
 # zeth
 
-Zeth is an open-source ZK block prover for Ethereum and Optimism built on the RISC Zero zkVM.
+NOTICE: Zeth has recently been revised to utilize [reth](https://github.com/paradigmxyz/reth) instead of just [revm](https://github.com/bluealloy/revm). Some features that may be mentioned in the rest of the readme, are still being re-added:
+* Support for Optimism blocks.
+* Release builds
+
+Zeth is an open-source ZK execution-layer block prover for Ethereum and Optimism built on the RISC Zero zkVM.
 
 Zeth makes it possible to *prove* that a given block is valid
 (i.e., is the result of applying the given list of transactions to the parent block)
@@ -16,12 +20,10 @@ This is because Zeth does *all* the work needed to construct a new block *from w
 
 After constructing the new block, Zeth calculates and outputs the block hash.
 By running this process within the zkVM, we obtain a ZK proof that the new block is valid.
-For Optimism, our validity proof ensures that the block is correctly derived from the
-available data posted to Ethereum.
 
 ## Status
 
-Zeth is experimental and may still contain bugs.
+Zeth's block building logic uses reth 1.1.0, but its other components are not audited for use in production.
 
 ## Usage
 
@@ -31,11 +33,10 @@ Zeth primarily requires the availability of Ethereum/Optimism RPC provider(s) da
 Two complementary types of providers are supported:
 
 * RPC provider.
-  This fetches data from a Web2 RPC provider, such as [Alchemy](https://www.alchemy.com/).
-  Specified using the `--eth-rpc-url=<RPC_URL>` and `--op-rpc-url=<RPC_URL>` parameters.
+  This fetches data from a Web2 RPC provider, such as [Alchemy](https://www.alchemy.com/), whose URL is specified using the `--rpc-url=<RPC_URL>` parameter.
 * Cached RPC provider.
-  This fetches RPC data from a local file when possible, and falls back to a Web2 RPC provider when necessary.
-  It amends the local file with results from the Web2 provider so that subsequent runs don't require additional Web2 RPC calls.
+  This fetches RPC data from a local file when possible, and falls back to an RPC provider when necessary.
+  It amends the local file with results from the RPC provider so that subsequent runs don't require additional RPC calls.
   Specified using the `--cache[=<CACHE>]` parameter.
 
 ### Installation
@@ -43,11 +44,13 @@ Two complementary types of providers are supported:
 
 #### RISC Zero zkVM
 
-Install the `cargo risczero` tool and the `risc0` toolchain:
+Follow the installation steps for the RISC Zero zkVM:
 
-```console
-cargo install cargo-risczero
-cargo risczero install
+https://dev.risczero.com/api/zkvm/install
+
+Additionally, install the toolchain for v1.81 of rust as follows:
+```shell
+cargo risczero build-toolchain --version erik/risc0-1.81.0
 ```
 
 #### zeth
@@ -55,51 +58,45 @@ cargo risczero install
 Clone the repository and build with `cargo` using one of the following commands:
 
 * CPU Proving (slow):
-```console
-cargo build --release
+```shell
+cargo build
 ```
 
 - GPU Proving (apple/metal)
-```console
-cargo build -F metal --release
+```shell
+cargo build -F metal
 ```
 
 - GPU Proving (nvidia/cuda)
-```console
-cargo build -F cuda --release
+```shell
+cargo build -F cuda
 ```
-
-#### docker (recommended)
-
-If you wish to use the `--release` profile when building Zeth,
-check out https://docs.docker.com/engine/install/ for a guide on how to install docker, which is required for reproducible builds of the zkVM binaries in Zeth.
 
 
 #### Execution:
 
 Run the built binary (instead of using `cargo run`) using:
 
-```console
-RUST_LOG=info ./target/release/zeth
+```shell
+RUST_LOG=info ./target/debug/zeth
 ```
 
 ### CLI
 
 Zeth currently has four main modes of execution:
 
-```console
-RUST_LOG=info ./target/release/zeth help
+```shell
+RUST_LOG=info ./target/debug/zeth help
 ```
 ```console
 Usage: zeth <COMMAND>
 
 Commands:
-  build    Build blocks natively outside the zkVM
-  run      Run the block creation process inside the executor
-  prove    Provably create blocks inside the zkVM
-  verify   Verify a block creation receipt
-  op-info  Output debug information about an optimism block
-  help     Print this message or the help of the given subcommand(s)
+  build   Build blocks only on the host
+  run     Run the block building inside the executor
+  prove   Provably build blocks inside the zkVM
+  verify  Verify a block building receipt
+  help    Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help     Print help
@@ -108,93 +105,72 @@ Options:
 
 For every command, the `--network` parameter can be set to either `ethereum` or `optimism` for provable construction
 of single blocks from either chain on its own.
-To provably derive Optimism blocks using the data posted on the Ethereum chain, use `--network=optimism-derived`,
-but `optimism-derived` is not supported by the `run` and `op-info` commands.
 
 #### build
 *This command only natively builds blocks and does not generate any proofs.*
-```console
-RUST_LOG=info ./target/release/zeth build --help
+```shell
+RUST_LOG=info ./target/debug/zeth build --help
 ```
 
 ```console
-Build blocks natively outside the zkVM
+Build blocks natively outside the RISC Zero zkVM
 
 Usage: zeth build [OPTIONS] --block-number=<BLOCK_NUMBER>
 
 Options:
-  -w, --network=<NETWORK>            Network name (ethereum/optimism/optimism-derived) [default: ethereum]
-  -e, --eth-rpc-url=<ETH_RPC_URL>    URL of the Ethereum RPC node
-  -o, --op-rpc-url=<OP_RPC_URL>      URL of the Optimism RPC node
-  -c, --cache[=<CACHE>]              Use a local directory as a cache for RPC calls. Accepts a custom directory. [default: cache_rpc]
-  -b, --block-number=<BLOCK_NUMBER>  Block number to begin from
-  -n, --block-count=<BLOCK_COUNT>    Number of blocks to provably derive [default: 1]
-  -m, --composition[=<COMPOSITION>]  Compose separate block derivation proofs together. Accepts a custom number of blocks to process per derivation call. (optimism-derived network only) [default: 1]
-  -h, --help                         Print help
+  -w, --network=<NETWORK>           Network name (ethereum/optimism) [default: ethereum]
+  -r, --rpc-url=<RPC_URL>           URL of the execution-layer RPC node
+  -c, --cache[=<CACHE>]             Cache RPC calls locally; the value specifies the cache directory [default when the flag is present: cache_rpc]
+  -b, --block-number=<BLOCK_NUMBER> Starting block number
+  -n, --block-count=<BLOCK_COUNT>   Number of blocks to build in a single proof [default: 1]
 ```
 
 When run in this mode, Zeth does all the work needed to construct an Ethereum block and verifies the correctness
 of the result using the RPC provider.
 No proofs are generated.
 
-With `--network=optimism-derived`, the derivation proof creation is done without proof composition by default,
-requiring the derivation to be carried out inside a single zkVM execution.
-
-**Examples**
-The `host/testdata` and `host/testdata/derivation` directories come preloaded with a few cache files that you can use
+**Example**
+The `bin/zeth/data` directory comes preloaded with a few cache files that you can use
 out of the box without the need to explicitly specify an RPC URL:
-```console
-RUST_LOG=info ./target/release/zeth build \
+```shell
+RUST_LOG=info ./target/debug/zeth build \
   --network=ethereum \
-  --cache=host/testdata \
-  --block-number=16424130
+  --cache=bin/zeth/data \
+  --block-number=1
 ```
-```console
-RUST_LOG=info ./target/release/zeth build \
-  --network=optimism \
-  --cache=host/testdata \
-  --block-number=107728767
+Preloaded cache data is provided under `bin/zeth/data` for all major Ethereum fork blocks:
 ```
-```console
-RUST_LOG=info ./target/release/zeth build \
-  --network=optimism-derived \
-  --cache=host/testdata/derivation \
-  --block-number=109279674 \
-  --block-count=4
-```
-**Composition** The optimism derivation proof (`--network=optimism-derived`) can alternatively be created using proof composition by
-setting the `--composition` parameter to the number of op blocks per rolled up proof.
-In the following example, 2 derivation proofs of 2 sequential blocks each are composed to obtain the final derivation
-proof for the 4 sequential blocks:
-```console
-RUST_LOG=info ./target/release/zeth build \
-  --network=optimism-derived \
-  --cache=host/testdata/derivation \
-  --block-number=109279674 \
-  --block-count=4 \
-  --composition=2
+Block     Fork
+1         Frontier
+1150000   Homestead
+1920000   Dao
+2463000   Tangerine
+2675000   Spurious Dragon
+4370000   Byzantium
+7280000   Constantinople / Petersburg
+9069000   Istanbul
+9200000   Muir Glacier
+12244000  Berlin
+12965000  London
+13773000  Arrow Glacier
+15050000  Gray Glacier
+15537394  Paris / Merge
+17034870  Shanghai
+19426587  Dencun
 ```
 
 #### run
-*This command only invokes the RISC-V emulator and does not generate any proofs.*
-```console
-RUST_LOG=info ./target/release/zeth run --help  
+*This command only invokes the RISC Zero executor and does not generate any proofs.*
+```shell
+RUST_LOG=info ./target/debug/zeth run --help  
 ```
 ```console
-Run the block creation process inside the executor
+Build blocks inside the RISC Zero zkVM executor
 
 Usage: zeth run [OPTIONS] --block-number=<BLOCK_NUMBER>
 
 Options:
-  -w, --network=<NETWORK>            Network name (ethereum/optimism/optimism-derived) [default: ethereum]
-  -e, --eth-rpc-url=<ETH_RPC_URL>    URL of the Ethereum RPC node
-  -o, --op-rpc-url=<OP_RPC_URL>      URL of the Optimism RPC node
-  -c, --cache[=<CACHE>]              Use a local directory as a cache for RPC calls. Accepts a custom directory. [default: cache_rpc]
-  -b, --block-number=<BLOCK_NUMBER>  Block number to begin from
-  -n, --block-count=<BLOCK_COUNT>    Number of blocks to provably derive [default: 1]
-  -x, --execution-po2=<LOCAL_EXEC>      The maximum segment cycle count as a power of 2 [default: 20]
-  -p, --profile                      Whether to profile the zkVM execution
-  -h, --help                         Print help
+  -x, --execution-po2=<EXECUTION_PO2> The maximum cycle count of a segment as a power of 2 [default: 20]
 ```
 
 **Local executor mode**.
@@ -203,151 +179,83 @@ Correctness of the result is checked using the RPC provider.
 This is useful for measuring the size of the computation (number of execution segments and cycles).
 No proofs are generated.
 
-**Examples**
-The below examples will invoke the executor, which will take a bit more time, and output the number of cycles required
+**Example**
+The below example will invoke the executor, which will take a bit more time, and output the number of cycles required
 for execution/proving inside the zkVM:
-```console
-RUST_LOG=info ./target/release/zeth run \
-  --cache=host/testdata \
+```shell
+RUST_LOG=info ./target/debug/zeth run \
+  --cache=bin/zeth/data \
   --network=ethereum \
-  --block-number=16424130
+  --block-number=1
 ```
-```console
-RUST_LOG=info ./target/release/zeth run \
-  --cache=host/testdata \
-  --network=optimism \
-  --block-number=107728767
-```
-
-The `run` command does not support proof composition (required by `--network=optimism-derived`) because receipts are required for this process inside the
-executor.
-Alternatively, one can call the `prove` command in dev mode (`RISC0_DEV_MODE=true`) for the same functionality, as
-demonstrated in the next section.
 
 #### prove
-*This command generates a ZK proof, unless dev mode is enabled through the environment variable `RISC0_DEV_MODE=true`.*
-```console
-RUST_LOG=info ./target/release/zeth prove --help
+*This command generates a real ZK proof, unless dev mode is enabled through the environment variable `RISC0_DEV_MODE=1`.*
+
+Generated proofs are saved locally as `.zkp` files (or `.fake` under dev mode).
+```shell
+RUST_LOG=info ./target/debug/zeth prove --help
 ```
 ```console
-Provably create blocks inside the zkVM
+Provably build blocks inside the RISC Zero zkVM
 
 Usage: zeth prove [OPTIONS] --block-number=<BLOCK_NUMBER>
 
 Options:
-  -w, --network=<NETWORK>            Network name (ethereum/optimism/optimism-derived) [default: ethereum]
-  -e, --eth-rpc-url=<ETH_RPC_URL>    URL of the Ethereum RPC node
-  -o, --op-rpc-url=<OP_RPC_URL>      URL of the Optimism RPC node
-  -c, --cache[=<CACHE>]              Use a local directory as a cache for RPC calls. Accepts a custom directory. [default: cache_rpc]
-  -b, --block-number=<BLOCK_NUMBER>  Block number to begin from
-  -n, --block-count=<BLOCK_COUNT>    Number of blocks to provably derive [default: 1]
-  -x, --execution-po2=<LOCAL_EXEC>      The maximum segment cycle count as a power of 2 [default: 20]
-  -p, --profile                      Whether to profile the zkVM execution
-  -m, --composition[=<COMPOSITION>]  Compose separate block derivation proofs together. Accepts a custom number of blocks to process per derivation call. (optimism-derived network only) [default: 1]
-  -s, --submit-to-bonsai             Prove remotely using Bonsai
-  -h, --help                         Print help
+  -s, --snark Convert the resulting STARK receipt into a Groth-16 SNARK
 ```
 
-**Proving on Bonsai**.
-To run in this mode, add the parameter `--submit-to-bonsai`.
-When run in this mode, Zeth submits a proving task to the [Bonsai proving service](https://www.bonsai.xyz/),
-which then constructs the blocks entirely from within the zkVM.
-This mode checks the correctness of the result on your machine using the RPC provider(s).
-It also outputs the Bonsai session UUID, and polls Bonsai until the proof is complete.
 
+**Proving on Bonsai**.
 To use this feature, first set the `BONSAI_API_URL` and `BONSAI_API_KEY` environment variables before executing zeth
 to submit jobs to Bonsai.
+With said environment variables set, Zeth submits a proving task to the [Bonsai proving service](https://www.bonsai.xyz/),
+which then constructs the blocks entirely from within the zkVM.
+This mode checks the correctness of the result on your machine using the RPC provider(s).
+It waits for Bonsai until the proof is complete, and saves the receipt locally on your machine.
 
 Need a Bonsai API key? [Sign up today](https://bonsai.xyz/apply).
 
-**Examples**
-The below examples will invoke the prover, which will take a potentially significant time to generate a ZK proof
-locally:
-```console
-RUST_LOG=info ./target/release/zeth prove \
-  --cache=host/testdata \
+**Example**
+The below example will invoke the prover under dev mode, which will execute quickly and generate a fake receipt locally:
+```shell
+RUST_LOG=info RISC0_DEV_MODE=1 ./target/debug/zeth prove \
+  --cache=bin/zeth/data \
   --network=ethereum \
-  --block-number=16424130
+  --block-number=1
 ```
-```console
-RUST_LOG=info ./target/release/zeth prove \
-  --cache=host/testdata \
-  --network=optimism \
-  --block-number=107728767
-```
-```console
-RUST_LOG=info ./target/release/zeth prove \
-  --network=optimism-derived \
-  --cache=host/testdata/derivation \
-  --block-number=109279674 \
-  --block-count=4
-```
-**Composition** Alternatively, we can run composition in dev mode, which should only as much time as required by the
-executor, using the following command:
-```console
-RISC0_DEV_MODE=true RUST_LOG=info ./target/release/zeth prove \
-  --network=optimism-derived \
-  --cache=host/testdata/derivation \
-  --block-number=109279674 \
-  --block-count=4 \
-  --composition=2
-```
+
 ***NOTE*** Proving in dev mode only generates dummy receipts that do not attest to the validity of the computation and
-are not verifiable outside of dev mode!
+are not verifiable outside of dev mode! To generate a real cryptographic proof, do not set the `RISC0_DEV_MODE` environment variable.
 
 #### verify
-*This command verifies a ZK proof generated on Bonsai.*
+*This command verifies a ZK proof.*
+```shell
+RUST_LOG=info ./target/debug/zeth verify --help
 ```
-RUST_LOG=info ./target/release/zeth verify --help  
-```
-```
-Verify a block creation receipt
+```console
+Verify a block building proof
 
-Usage: zeth verify [OPTIONS] --block-number=<BLOCK_NUMBER> --bonsai-receipt-uuid=<BONSAI_RECEIPT_UUID>
-
-Options:
-  -w, --network=<NETWORK>
-          Network name (ethereum/optimism/optimism-derived) [default: ethereum]
-  -e, --eth-rpc-url=<ETH_RPC_URL>
-          URL of the Ethereum RPC node
-  -o, --op-rpc-url=<OP_RPC_URL>
-          URL of the Optimism RPC node
-  -c, --cache[=<CACHE>]
-          Use a local directory as a cache for RPC calls. Accepts a custom directory. [default: cache_rpc]
-  -b, --block-number=<BLOCK_NUMBER>
-          Block number to begin from
-  -n, --block-count=<BLOCK_COUNT>
-          Number of blocks to provably derive [default: 1]
-  -b, --bonsai-receipt-uuid=<BONSAI_RECEIPT_UUID>
-          Verify the receipt from the provided Bonsai Session UUID
-  -h, --help
-          Print help
-```
-
-This command first natively builds the specified block(s), and then validates the correctness of the receipt generated
-on Bonsai specified by the `--bonsai-receipt-uuid=BONSAI_SESSION_UUID` parameter, where `BONSAI_SESSION_UUID` is the
-session UUID returned when proving using `--submit-to-bonsai`.
-
-#### op-info
-```
-RUST_LOG=info ./target/release/zeth op-info --help  
-```
-```
-Output debug information about an optimism block
-
-Usage: zeth op-info [OPTIONS] --block-number=<BLOCK_NUMBER>
+Usage: zeth verify [OPTIONS] --block-number=<BLOCK_NUMBER> --file=<FILE>
 
 Options:
-  -w, --network=<NETWORK>            Network name (ethereum/optimism/optimism-derived) [default: ethereum]
-  -e, --eth-rpc-url=<ETH_RPC_URL>    URL of the Ethereum RPC node
-  -o, --op-rpc-url=<OP_RPC_URL>      URL of the Optimism RPC node
-  -c, --cache[=<CACHE>]              Use a local directory as a cache for RPC calls. Accepts a custom directory. [default: cache_rpc]
-  -b, --block-number=<BLOCK_NUMBER>  Block number to begin from
-  -n, --block-count=<BLOCK_COUNT>    Number of blocks to provably derive [default: 1]
-  -h, --help                         Print help
+  -f, --file=<FILE> Receipt file path
 ```
-This command only outputs debug information for development use.
 
+This command first locally fetches some metadata about the specified block(s) to build the expected receipt journal,
+and then validates the correctness of the specified receipt file.
+
+**Example**
+The below example will verify a fake receipt, where such verification can only pass under dev mode:
+```shell
+RUST_LOG=info RISC0_DEV_MODE=1 ./target/debug/zeth verify \
+  --cache=bin/zeth/data \
+  --network=ethereum \
+  --block-number=1 \
+  --file=risc0-1.1.2-0x0c5dda870412334fe6011ed1bfdc2b7f7a68b794b4fedc360c1c6db160096036.fake
+```
+
+***NOTE*** The aforementioned receipt will very likely have a different name on your machine.
 
 ## Additional resources
 

@@ -22,13 +22,13 @@ use clap::ValueEnum;
 #[command(bin_name = "zeth")]
 #[command(author, version, about, long_about = None)]
 pub enum Cli {
-    /// Build blocks only on the host
+    /// Build blocks natively outside the RISC Zero zkVM
     Build(BuildArgs),
-    /// Run the block building inside the executor
+    /// Build blocks inside the RISC Zero zkVM executor
     Run(RunArgs),
-    /// Provably build blocks inside the zkVM
+    /// Provably build blocks inside the RISC Zero zkVM
     Prove(ProveArgs),
-    /// Verify a block building receipt
+    /// Verify a block building proof
     Verify(VerifyArgs),
 }
 
@@ -124,11 +124,11 @@ pub struct BuildArgs {
     pub cache: Option<PathBuf>,
 
     #[clap(short, long, require_equals = true)]
-    /// Start block number
+    /// Starting block number
     pub block_number: u64,
 
     #[clap(short = 'n', long, require_equals = true, default_value_t = 1)]
-    /// Number of blocks to derive (optimism-derived network only)
+    /// Number of blocks to build in a single proof
     pub block_count: u64,
 }
 
@@ -140,12 +140,6 @@ pub struct RunArgs {
     #[clap(short = 'x', long, require_equals = true, default_value_t = 20)]
     /// The maximum cycle count of a segment as a power of 2
     pub execution_po2: u32,
-
-    #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "profiles")]
-    /// Profile zkVM executions; the value specifies the output directory
-    ///
-    /// [default when the flag is present: profiles]
-    pub profile: Option<PathBuf>,
 }
 
 #[derive(clap::Args, Debug, Clone)]

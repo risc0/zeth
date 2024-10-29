@@ -55,7 +55,7 @@ where
 
         let preflight_chain_spec = chain_spec.clone();
         let preflight_data: StatelessClientData<B, H> = tokio::task::spawn_blocking(move || {
-            <Self::PreflightClient>::preflight_with_rpc(
+            <Self::PreflightClient>::preflight(
                 preflight_chain_spec,
                 cache_dir,
                 build_args.rpc_url,

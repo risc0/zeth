@@ -23,15 +23,5 @@ pub fn build_executor_env<'a, 'b>(
     let mut builder = ExecutorEnv::builder();
     builder.write_slice(input);
     builder.segment_limit_po2(run_args.execution_po2);
-    if let Some(profile_path) = run_args.profile.as_ref() {
-        let build_args = cli.build_args();
-        let path = profile_path
-            .join(build_args.network.to_string())
-            .join(format!(
-                "{}_{}.pb",
-                build_args.block_number, build_args.block_count
-            ));
-        builder.enable_profiler(path);
-    }
     builder.build()
 }

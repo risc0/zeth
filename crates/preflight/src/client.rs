@@ -1,7 +1,7 @@
 use crate::db::PreflightDB;
 use crate::derive::{RPCDerivableBlock, RPCDerivableData, RPCDerivableHeader};
 use crate::provider::db::ProviderDB;
-use crate::provider::{new_provider, BlockQuery};
+use crate::provider::{new_provider, BlockQuery, UncleQuery};
 use crate::trie::extend_proof_tries;
 use alloy::rpc::types::{Block, Header};
 use anyhow::Context;
@@ -55,16 +55,17 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
         Output<'b> = BundleState,
     >;
 
-    fn preflight_with_rpc(
+    fn preflight(
         chain_spec: Arc<ChainSpec>,
         cache_dir: Option<PathBuf>,
         rpc_url: Option<String>,
         block_no: u64,
         block_count: u64,
     ) -> anyhow::Result<StatelessClientData<B, H>> {
-        let provider = new_provider(cache_dir, block_no, rpc_url)?;
+        let provider = new_provider(cache_dir.clone(), block_no, rpc_url.clone())?;
+        let mut provider_mut = provider.borrow_mut();
         // Fetch the parent block
-        let parent_block = provider.borrow_mut().get_full_block(&BlockQuery {
+        let parent_block = provider_mut.get_full_block(&BlockQuery {
             block_no: block_no - 1,
         })?;
         debug!(
@@ -73,24 +74,47 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
         );
         let parent_header = parent_block.header;
 
-        // Fetch the blocks
+        // Fetch the blocks and their uncles
+        info!("Grabbing blocks and their uncles ...");
         let mut blocks = Vec::new();
+        let mut ommers = Vec::new();
         for block_no in block_no..block_no + block_count {
-            let block = provider
-                .borrow_mut()
-                .get_full_block(&BlockQuery { block_no })?;
-
+            let block = provider_mut.get_full_block(&BlockQuery { block_no })?;
+            let uncle_headers: Vec<_> = block
+                .uncles
+                .iter()
+                .enumerate()
+                .map(|(idx, _)| {
+                    provider_mut
+                        .get_uncle_block(&UncleQuery {
+                            block_no,
+                            uncle_index: idx as u64,
+                        })
+                        .expect("Failed to retrieve uncle block")
+                        .header
+                })
+                .collect();
+            // Print Debug info
             debug!(
                 "Block number: {:?} ({:?})",
                 block.header.number, block.header.hash,
             );
             debug!("Transaction count: {:?}", block.transactions.len());
-
+            debug!("Uncle count: {:?}", block.uncles.len());
+            // Collect data
             blocks.push(block);
+            ommers.push(uncle_headers);
+            // Prepare for next iteration
+            provider_mut.save()?;
+            provider_mut.advance()?;
         }
+        ommers.reverse();
 
-        // Create the provider DB
-        let provider_db = ProviderDB::new(provider, parent_header.number);
+        // Create the provider DB with a fresh provider to reset block_no
+        let provider_db = ProviderDB::new(
+            new_provider(cache_dir, block_no, rpc_url)?,
+            parent_header.number,
+        );
         let preflight_db = PreflightDB::from(provider_db);
 
         // Create the input data
@@ -108,23 +132,15 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
         };
 
         // Create the block builder, run the transactions and extract the DB
-        Self::preflight_with_db(chain_spec, preflight_db, data)
+        Self::preflight_with_db(chain_spec, preflight_db, data, ommers)
     }
 
     fn preflight_with_db(
         chain_spec: Arc<ChainSpec>,
         preflight_db: PreflightDB,
         data: StatelessClientData<Block, Header>,
+        ommers: Vec<Vec<Header>>,
     ) -> anyhow::Result<StatelessClientData<B, H>> {
-        info!("Grabbing uncles ...");
-        let mut ommers: Vec<Vec<Header>> = Vec::new();
-        let mut preflight_db_clone = preflight_db.clone();
-        for block in data.blocks.iter().rev() {
-            ommers.push(preflight_db_clone.get_uncles(&block.uncles)?);
-            preflight_db_clone.save_provider()?;
-            preflight_db_clone.advance_provider_block()?;
-        }
-        ommers.reverse();
         // Instantiate the engine with a rescue for the DB
         info!("Running block execution engine ...");
         let mut engine = StatelessClientEngine::<B, H, PreflightDB, R>::new(

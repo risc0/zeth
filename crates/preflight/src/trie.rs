@@ -48,8 +48,8 @@ pub fn extend_proof_tries(
             .with_context(|| format!("missing finalization proof for address {:#}", &address))?;
         add_orphaned_leafs(address, &finalization_proof.account_proof, &mut state_nodes)?;
         // insert inaccessible storage trie
-        if !storage_tries.contains_key(&address) {
-            storage_tries.insert(address, (initialization_proof.storage_hash.into(), vec![]));
+        if let std::collections::hash_map::Entry::Vacant(e) = storage_tries.entry(address) {
+            e.insert((initialization_proof.storage_hash.into(), vec![]));
         }
         // storage for encountered storage trie data
         let mut storage_nodes = HashMap::new();

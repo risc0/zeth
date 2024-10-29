@@ -99,8 +99,7 @@ impl<Block, Header, Database: Recoverable, Driver: SCEDriver<Block, Header>>
         self.db_rescued = Some(new_db.rescued());
         Ok(db
             .replace(new_db)
-            .map(|mut rescue_db| rescue_db.rescue())
-            .flatten())
+            .and_then(|mut rescue_db| rescue_db.rescue()))
     }
 
     /// Validates the header before execution.

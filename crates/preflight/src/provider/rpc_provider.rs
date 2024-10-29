@@ -64,11 +64,11 @@ impl Provider for RpcProvider {
 
         let response = self.tokio_handle.block_on(
             self.http_client
-                .get_uncle(query.block_no.into(), query.uncle_index.into()),
+                .get_uncle(query.block_no.into(), query.uncle_index),
         )?;
 
         match response {
-            Some(out) => Ok(out.into()),
+            Some(out) => Ok(out),
             None => Err(anyhow!("No data for {:?}", query)),
         }
     }

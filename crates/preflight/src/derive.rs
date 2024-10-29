@@ -98,7 +98,7 @@ impl RPCDerivableBlock for reth_primitives::Block {
                     .map(reth_primitives::TransactionSigned::derive)
                     .collect(),
                 ommers: ommers.into_iter().map(Header::derive).collect(),
-                withdrawals: block.withdrawals.map(|w| Withdrawals::new(w)),
+                withdrawals: block.withdrawals.map(Withdrawals::new),
                 requests: None,
             },
         }
@@ -112,7 +112,7 @@ pub trait RPCDerivableData {
 impl<B: RPCDerivableBlock, H: RPCDerivableHeader> RPCDerivableData for StatelessClientData<B, H> {
     fn derive(data: StatelessClientData<RPCBlock, RPCHeader>, ommers: Vec<Vec<RPCHeader>>) -> Self {
         StatelessClientData {
-            blocks: zip(data.blocks.into_iter(), ommers.into_iter())
+            blocks: zip(data.blocks, ommers)
                 .map(|(block, ommers)| B::derive(block, ommers))
                 .collect(),
             state_trie: data.state_trie,

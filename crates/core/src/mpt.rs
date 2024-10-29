@@ -960,18 +960,13 @@ pub fn resolve_nodes(root: &MptNode, node_store: &HashMap<MptNodeReference, MptN
 }
 
 /// Creates a new MPT trie where all the digests contained in `node_store` are resolved.
-pub fn resolve_nodes_in_place(
-    root: &mut MptNode,
-    node_store: &HashMap<MptNodeReference, MptNode>,
-) -> () {
+pub fn resolve_nodes_in_place(root: &mut MptNode, node_store: &HashMap<MptNodeReference, MptNode>) {
     let starting_hash = root.hash();
     let replacement = match root.as_data_mut() {
         MptNodeData::Null | MptNodeData::Leaf(_, _) => None,
         MptNodeData::Branch(children) => {
-            for child in children {
-                if let Some(child) = child {
-                    resolve_nodes_in_place(child, node_store);
-                }
+            for child in children.iter_mut().flatten() {
+                resolve_nodes_in_place(child, node_store);
             }
             None
         }

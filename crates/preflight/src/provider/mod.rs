@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::rc::Rc;
 
 pub mod cache_provider;
 pub mod db;
@@ -30,14 +30,14 @@ pub mod rpc_provider;
 pub fn new_file_provider(
     dir_path: PathBuf,
     block_no: u64,
-) -> anyhow::Result<Arc<RefCell<dyn Provider>>> {
-    Ok(Arc::new(RefCell::new(file_provider::FileProvider::new(
+) -> anyhow::Result<Rc<RefCell<dyn Provider>>> {
+    Ok(Rc::new(RefCell::new(file_provider::FileProvider::new(
         dir_path, block_no,
     )?)))
 }
 
-pub fn new_rpc_provider(rpc_url: String) -> anyhow::Result<Arc<RefCell<dyn Provider>>> {
-    Ok(Arc::new(RefCell::new(rpc_provider::RpcProvider::new(
+pub fn new_rpc_provider(rpc_url: String) -> anyhow::Result<Rc<RefCell<dyn Provider>>> {
+    Ok(Rc::new(RefCell::new(rpc_provider::RpcProvider::new(
         rpc_url,
     )?)))
 }
@@ -46,8 +46,8 @@ pub fn new_cached_rpc_provider(
     dir_path: PathBuf,
     block_no: u64,
     rpc_url: String,
-) -> anyhow::Result<Arc<RefCell<dyn Provider>>> {
-    Ok(Arc::new(RefCell::new(
+) -> anyhow::Result<Rc<RefCell<dyn Provider>>> {
+    Ok(Rc::new(RefCell::new(
         cache_provider::CachedRpcProvider::new(dir_path, block_no, rpc_url)?,
     )))
 }
@@ -56,7 +56,7 @@ pub fn new_provider(
     cache_dir: Option<PathBuf>,
     block_no: u64,
     rpc_url: Option<String>,
-) -> anyhow::Result<Arc<RefCell<dyn Provider>>> {
+) -> anyhow::Result<Rc<RefCell<dyn Provider>>> {
     match (cache_dir, rpc_url) {
         (Some(cache_path), Some(rpc_url)) => new_cached_rpc_provider(cache_path, block_no, rpc_url),
         (Some(cache_path), None) => new_file_provider(cache_path, block_no),

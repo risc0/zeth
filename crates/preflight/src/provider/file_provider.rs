@@ -21,6 +21,7 @@ use anyhow::{anyhow, Context};
 use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 use serde::{Deserialize, Serialize};
 use std::mem::replace;
+use std::path::Path;
 use std::{
     collections::HashMap,
     fs::{self, File},
@@ -108,7 +109,7 @@ impl FileProvider {
         Ok(provider)
     }
 
-    fn derive_file_path(dir_path: &PathBuf, block_no: u64) -> PathBuf {
+    fn derive_file_path(dir_path: &Path, block_no: u64) -> PathBuf {
         dir_path
             .join(block_no.to_string())
             .with_extension("json.gz")
@@ -141,10 +142,11 @@ impl Provider for FileProvider {
     }
 
     fn advance(&mut self) -> anyhow::Result<()> {
-        Ok(drop(replace(
+        drop(replace(
             self,
             FileProvider::new(self.dir_path.clone(), self.block_no + 1)?,
-        )))
+        ));
+        Ok(())
     }
 
     fn get_full_block(&mut self, query: &BlockQuery) -> anyhow::Result<Block<Transaction>> {

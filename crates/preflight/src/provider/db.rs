@@ -19,16 +19,16 @@ use reth_revm::primitives::{Account, AccountInfo, Bytecode};
 use reth_revm::{Database, DatabaseCommit, DatabaseRef};
 use reth_storage_errors::db::DatabaseError;
 use std::cell::RefCell;
-use std::sync::Arc;
+use std::rc::Rc;
 
 #[derive(Clone)]
 pub struct ProviderDB {
-    pub provider: Arc<RefCell<dyn Provider>>,
+    pub provider: Rc<RefCell<dyn Provider>>,
     pub block_no: u64,
 }
 
 impl ProviderDB {
-    pub fn new(provider: Arc<RefCell<dyn Provider>>, block_no: u64) -> Self {
+    pub fn new(provider: Rc<RefCell<dyn Provider>>, block_no: u64) -> Self {
         ProviderDB { provider, block_no }
     }
 

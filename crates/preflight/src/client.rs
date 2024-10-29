@@ -277,7 +277,7 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
         info!("Transactions: {transactions} total transactions");
 
         Ok(StatelessClientData::<B, H> {
-            blocks: zip(data.blocks.into_iter(), ommers.into_iter())
+            blocks: zip(data.blocks, ommers)
                 .map(|(block, ommers)| B::derive(block, ommers))
                 .collect(),
             state_trie,

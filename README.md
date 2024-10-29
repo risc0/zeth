@@ -48,11 +48,6 @@ Follow the installation steps for the RISC Zero zkVM:
 
 https://dev.risczero.com/api/zkvm/install
 
-Additionally, install the toolchain for v1.81 of rust as follows:
-```shell
-cargo risczero build-toolchain --version erik/risc0-1.81.0
-```
-
 #### zeth
 
 Clone the repository and build with `cargo` using one of the following commands:

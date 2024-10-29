@@ -38,5 +38,5 @@ pub fn proof_file_name(
     ]
     .concat();
     let file_name = B256::from(keccak(data));
-    format!("risc0-{}-{file_name}.{suffix}", version.to_string())
+    format!("risc0-{version}-{file_name}.{suffix}")
 }

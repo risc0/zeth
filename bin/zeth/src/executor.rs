@@ -15,10 +15,7 @@
 use crate::cli::Cli;
 use risc0_zkvm::ExecutorEnv;
 
-pub fn build_executor_env<'a, 'b>(
-    cli: &'a Cli,
-    input: &'b [u8],
-) -> anyhow::Result<ExecutorEnv<'b>> {
+pub fn build_executor_env<'b>(cli: &Cli, input: &'b [u8]) -> anyhow::Result<ExecutorEnv<'b>> {
     let run_args = cli.run_args();
     let mut builder = ExecutorEnv::builder();
     builder.write_slice(input);

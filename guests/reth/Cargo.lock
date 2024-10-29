@@ -734,7 +734,7 @@ dependencies = [
 [[package]]
 name = "c-kzg"
 version = "1.0.3"
-source = "git+https://github.com/risc0/c-kzg-4844.git?branch=p1.0.3#b4fa332be479d2b51fc516b08cea5ab952a550ea"
+source = "git+https://github.com/risc0/c-kzg-4844.git?branch=p1.0.3#795934e2e8768d0a4dcb79e280e58fd73d6c9e17"
 dependencies = [
  "blst",
  "cc",
@@ -2908,16 +2908,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde-brief"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d3ebe2a279beb0833037245a36adbbf71239fdaefc0f670122aff9922bcaf0b"
-dependencies = [
- "serde",
- "tracing",
-]
-
-[[package]]
 name = "serde_derive"
 version = "1.0.210"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3668,7 +3658,6 @@ dependencies = [
  "reth-revm",
  "reth-storage-errors",
  "serde",
- "serde-brief",
  "thiserror",
  "tiny-keccak",
 ]

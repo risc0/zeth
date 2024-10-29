@@ -60,13 +60,13 @@ async fn main() -> anyhow::Result<()> {
         let receipt = bincode::deserialize::<Receipt>(&receipt_data)?;
         // Fail if the receipt is unverifiable or has a wrong journal
         let mut err = false;
-        if &receipt.journal.bytes != &expected_journal {
+        if receipt.journal.bytes != expected_journal {
             error!("Invalid journal.");
             dbg!(&receipt.journal.bytes);
             dbg!(&expected_journal);
             err = true;
         }
-        if let Err(_) = receipt.verify(image_id) {
+        if receipt.verify(image_id).is_err() {
             error!("Invalid proof.");
             err = true;
         };

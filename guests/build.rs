@@ -16,17 +16,18 @@
 fn main() {
     let cwd = std::env::current_dir().unwrap();
     let root_dir = cwd.parent().map(|d| d.to_path_buf());
-    let build_opts = std::collections::HashMap::from_iter(["zeth-guests-reth"].into_iter().map(|guest_pkg| {
-        (
-            guest_pkg,
-            risc0_build::GuestOptions {
-                features: vec![],
-                use_docker: Some(risc0_build::DockerOptions {
-                    root_dir: root_dir.clone(),
-                }),
-            },
-        )
-    }));
+    let build_opts =
+        std::collections::HashMap::from_iter(["zeth-guests-reth"].into_iter().map(|guest_pkg| {
+            (
+                guest_pkg,
+                risc0_build::GuestOptions {
+                    features: vec![],
+                    use_docker: Some(risc0_build::DockerOptions {
+                        root_dir: root_dir.clone(),
+                    }),
+                },
+            )
+        }));
     risc0_build::embed_methods_with_options(build_opts);
 }
 

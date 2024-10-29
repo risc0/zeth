@@ -35,7 +35,8 @@ jobs:
       with:
         crate: cargo-binstall
     - run: cargo binstall -y --force cargo-risczero@$RISC0_VERSION
-    - run: cargo risczero install --version $RISC0_TOOLCHAIN_VERSION
+    - run: cargo risczero build-toolchain --version $RISC0_TOOLCHAIN_VERSION
+#    - run: cargo risczero install --version $RISC0_TOOLCHAIN_VERSION
     - run: cargo test --workspace --all-targets -F debug-guest-build
 
   clippy:

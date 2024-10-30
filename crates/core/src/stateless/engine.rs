@@ -178,7 +178,7 @@ impl<ChainSpec, Block, Header, Database: Recoverable, Driver: SCEDriver<Block, H
         } = self;
         let db = db.as_mut();
         // Follow finalization strategy
-        let result = T::finalize_state(
+        T::finalize_state(
             blocks.last_mut().unwrap(),
             state_trie,
             storage_tries,
@@ -191,6 +191,6 @@ impl<ChainSpec, Block, Header, Database: Recoverable, Driver: SCEDriver<Block, H
         *parent_header = Driver::block_to_header(blocks.pop().unwrap());
         *total_difficulty = Driver::accumulate_difficulty(*total_difficulty, &*parent_header);
 
-        Ok(result)
+        Ok(())
     }
 }

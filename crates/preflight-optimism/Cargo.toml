@@ -1,5 +1,5 @@
 [package]
-name = "zeth-core-optimism"
+name = "zeth-preflight-optimism"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,10 +9,17 @@ workspace = true
 [dependencies.zeth-core-ethereum]
 workspace = true
 
+[dependencies.zeth-core-optimism]
+workspace = true
+
+[dependencies.zeth-preflight]
+workspace = true
+
+[dependencies.zeth-preflight-ethereum]
+workspace = true
 
 [dependencies]
-anyhow.workspace = true
-
+reth-chainspec = { workspace = true, features = ["optimism"] }
 reth-consensus.workspace = true
 reth-evm.workspace = true
 reth-optimism-chainspec.workspace = true

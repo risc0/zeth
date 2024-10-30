@@ -36,6 +36,15 @@ use zeth_core::stateless::finalize::RethFinalizationStrategy;
 use zeth_core::stateless::initialize::MemoryDbStrategy;
 use zeth_core::stateless::validate::ValidationStrategy;
 
+pub struct OpRethStatelessClient;
+
+impl StatelessClient<OpChainSpec, Block, Header, MemoryDB, RethDriver> for OpRethStatelessClient {
+    type Initialization = MemoryDbStrategy;
+    type Validation = OpRethValidationStrategy;
+    type Execution = OpRethExecutionStrategy;
+    type Finalization = RethFinalizationStrategy;
+}
+
 pub struct OpRethValidationStrategy;
 
 impl<Database: 'static> ValidationStrategy<OpChainSpec, Block, Header, Database>
@@ -77,10 +86,10 @@ impl<Database: 'static> ValidationStrategy<OpChainSpec, Block, Header, Database>
     }
 }
 
-pub struct OpRethExecStrategy;
+pub struct OpRethExecutionStrategy;
 
 impl<Database: reth_revm::Database> ExecutionStrategy<OpChainSpec, Block, Header, Database>
-    for OpRethExecStrategy
+    for OpRethExecutionStrategy
 where
     Database: 'static,
     <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
@@ -114,13 +123,4 @@ where
         let ExecutionOutcome { bundle, .. } = executor.finalize();
         Ok(bundle)
     }
-}
-
-pub struct OpRethStatelessClient;
-
-impl StatelessClient<OpChainSpec, Block, Header, MemoryDB, RethDriver> for OpRethStatelessClient {
-    type Initialization = MemoryDbStrategy;
-    type Validation = OpRethValidationStrategy;
-    type Execution = OpRethExecStrategy;
-    type Finalization = RethFinalizationStrategy;
 }

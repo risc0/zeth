@@ -7,7 +7,7 @@ edition = "2021"
 risc0-build = { workspace = true }
 
 [package.metadata.risc0]
-methods = ["reth"]
+methods = ["reth", "reth-optimism"]
 
 [features]
 debug-guest-build = []

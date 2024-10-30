@@ -88,9 +88,7 @@ pub trait PreflightClient<C, B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCE
         let preflight_db = PreflightDB::from(provider_db);
 
         // Create the input data
-        let total_difficulty = parent_header
-            .total_difficulty
-            .expect("Missing total difficulty");
+        let total_difficulty = parent_header.total_difficulty.unwrap_or_default();
         let data = StatelessClientData {
             blocks: blocks.into_iter().rev().collect(),
             state_trie: Default::default(),

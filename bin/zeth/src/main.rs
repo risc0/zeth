@@ -21,9 +21,13 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use zeth::cli::{Cli, Network};
 use zeth::executor::build_executor_env;
 use zeth::{cache_dir_path, proof_file_name};
-use zeth_guests::{ZETH_GUESTS_RETH_ELF, ZETH_GUESTS_RETH_ID};
+use zeth_guests::{
+    ZETH_GUESTS_RETH_ELF, ZETH_GUESTS_RETH_ID, ZETH_GUESTS_RETH_OPTIMISM_ELF,
+    ZETH_GUESTS_RETH_OPTIMISM_ID,
+};
 use zeth_preflight::BlockBuilder;
 use zeth_preflight_ethereum::RethBlockBuilder;
+use zeth_preflight_optimism::OpRethBlockBuilder;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -49,7 +53,17 @@ async fn main() -> anyhow::Result<()> {
             )
             .await?,
         ),
-        Network::Optimism => todo!(),
+        Network::Optimism => (
+            ZETH_GUESTS_RETH_OPTIMISM_ID,
+            ZETH_GUESTS_RETH_OPTIMISM_ELF,
+            OpRethBlockBuilder::build_journal(
+                cache_dir.clone(),
+                build_args.rpc_url.clone(),
+                build_args.block_number,
+                build_args.block_count,
+            )
+            .await?,
+        ),
     };
 
     if !cli.should_build() {
@@ -102,7 +116,15 @@ async fn main() -> anyhow::Result<()> {
             )
             .await?
         }
-        Network::Optimism => todo!(),
+        Network::Optimism => {
+            OpRethBlockBuilder::build_block(
+                cache_dir.clone(),
+                build_args.rpc_url.clone(),
+                build_args.block_number,
+                build_args.block_count,
+            )
+            .await?
+        }
     };
 
     if !cli.should_execute() {

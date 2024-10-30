@@ -6286,6 +6286,7 @@ dependencies = [
  "zeth-guests",
  "zeth-preflight",
  "zeth-preflight-ethereum",
+ "zeth-preflight-optimism",
 ]
 
 [[package]]

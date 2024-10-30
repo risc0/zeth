@@ -13,6 +13,9 @@ workspace = true
 [dependencies.zeth-preflight-ethereum]
 workspace = true
 
+[dependencies.zeth-preflight-optimism]
+workspace = true
+
 [dependencies.zeth-guests]
 workspace = true
 

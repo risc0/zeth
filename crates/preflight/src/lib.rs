@@ -118,7 +118,10 @@ where
         })
         .await??;
 
-        let total_difficulty = validation_tip_block.header.total_difficulty.unwrap();
+        let total_difficulty = validation_tip_block
+            .header
+            .total_difficulty
+            .unwrap_or_default();
         let journal = [
             validation_tip_block.header.hash.0.as_slice(),
             total_difficulty.to_be_bytes::<32>().as_slice(),

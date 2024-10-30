@@ -19,7 +19,7 @@ use reth_evm::execute::{
 };
 use reth_optimism_chainspec::OpChainSpec;
 use reth_optimism_consensus::OptimismBeaconConsensus;
-use reth_optimism_evm::{OpBatchExecutor, OpExecutorProvider, OptimismEvmConfig};
+use reth_optimism_evm::OpExecutorProvider;
 use reth_primitives::revm_primitives::alloy_primitives::Sealable;
 use reth_primitives::{Block, Header, SealedHeader};
 use reth_revm::db::BundleState;
@@ -27,7 +27,6 @@ use reth_storage_errors::provider::ProviderError;
 use std::fmt::Display;
 use std::mem::take;
 use zeth_core::stateless::execute::{DbExecutionInput, TransactionExecutionStrategy};
-use zeth_core::stateless::post_exec::PostExecutionValidationStrategy;
 use zeth_core::stateless::pre_exec::{
     ConsensusPreExecValidationInput, PreExecutionValidationStrategy,
 };
@@ -82,11 +81,10 @@ where
     <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
 {
     type Input<'a> = DbExecutionInput<'a, OpChainSpec, Block, Database>;
-    type Output<'b> = OpBatchExecutor<OptimismEvmConfig, Database>;
 
     fn execute_transactions(
         (chain_spec, block, total_difficulty, db): Self::Input<'_>,
-    ) -> anyhow::Result<Self::Output<'_>> {
+    ) -> anyhow::Result<BundleState> {
         // Instantiate execution engine using database
         let mut executor = OpExecutorProvider::optimism(chain_spec.clone())
             .batch_executor(db.take().expect("Missing database"));
@@ -104,24 +102,9 @@ where
                 total_difficulty: *total_difficulty,
             })
             .expect("Execution failed");
-
+        // Return block
         *block = block_with_senders.block;
-        Ok(executor)
-    }
-}
-
-pub struct OpRethPostExecStrategy;
-
-impl<Database: reth_revm::Database> PostExecutionValidationStrategy<Block, Header, Database>
-    for OpRethPostExecStrategy
-where
-    Database: 'static,
-    <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
-{
-    type Input<'a> = OpBatchExecutor<OptimismEvmConfig, Database>;
-    type Output<'b> = BundleState;
-
-    fn post_execution_validation(executor: Self::Input<'_>) -> anyhow::Result<Self::Output<'_>> {
+        // Return bundle state
         let ExecutionOutcome { bundle, .. } = executor.finalize();
         Ok(bundle)
     }
@@ -133,6 +116,5 @@ pub struct OpRethStatelessClient;
 //     type Initialization = MemoryDbStrategy;
 //     type PreExecValidation = OpRethPreExecStrategy;
 //     type TransactionExecution = OpRethExecStrategy;
-//     type PostExecValidation = OpRethPostExecStrategy;
 //     type Finalization = RethFinalizationStrategy;
 // }

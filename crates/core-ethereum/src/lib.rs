@@ -19,8 +19,7 @@ use reth_ethereum_consensus::EthBeaconConsensus;
 use reth_evm::execute::{
     BatchExecutor, BlockExecutionInput, BlockExecutorProvider, ExecutionOutcome,
 };
-use reth_evm_ethereum::execute::{EthBatchExecutor, EthExecutorProvider};
-use reth_evm_ethereum::EthEvmConfig;
+use reth_evm_ethereum::execute::EthExecutorProvider;
 use reth_primitives::revm_primitives::alloy_primitives::Sealable;
 use reth_primitives::{Block, Header, SealedHeader};
 use reth_revm::db::BundleState;
@@ -33,7 +32,6 @@ use zeth_core::stateless::driver::RethDriver;
 use zeth_core::stateless::execute::{DbExecutionInput, TransactionExecutionStrategy};
 use zeth_core::stateless::finalize::RethFinalizationStrategy;
 use zeth_core::stateless::initialize::MemoryDbStrategy;
-use zeth_core::stateless::post_exec::PostExecutionValidationStrategy;
 use zeth_core::stateless::pre_exec::{
     ConsensusPreExecValidationInput, PreExecutionValidationStrategy,
 };
@@ -44,7 +42,6 @@ impl StatelessClient<ChainSpec, Block, Header, MemoryDB, RethDriver> for RethSta
     type Initialization = MemoryDbStrategy;
     type PreExecValidation = RethPreExecStrategy;
     type TransactionExecution = RethExecStrategy;
-    type PostExecValidation = RethPostExecStrategy;
     type Finalization = RethFinalizationStrategy;
 }
 
@@ -99,11 +96,10 @@ where
     <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
 {
     type Input<'a> = DbExecutionInput<'a, ChainSpec, Block, Database>;
-    type Output<'b> = EthBatchExecutor<EthEvmConfig, Database>;
 
     fn execute_transactions(
         (chain_spec, block, total_difficulty, db): Self::Input<'_>,
-    ) -> anyhow::Result<Self::Output<'_>> {
+    ) -> anyhow::Result<BundleState> {
         // Instantiate execution engine using database
         let mut executor = EthExecutorProvider::ethereum(chain_spec.clone())
             .batch_executor(db.take().expect("Missing database."));
@@ -121,24 +117,9 @@ where
                 total_difficulty: *total_difficulty,
             })
             .expect("Execution failed");
-
+        // Return block
         *block = block_with_senders.block;
-        Ok(executor)
-    }
-}
-
-pub struct RethPostExecStrategy;
-
-impl<Database: reth_revm::Database> PostExecutionValidationStrategy<Block, Header, Database>
-    for RethPostExecStrategy
-where
-    Database: 'static,
-    <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
-{
-    type Input<'a> = EthBatchExecutor<EthEvmConfig, Database>;
-    type Output<'b> = BundleState;
-
-    fn post_execution_validation(executor: Self::Input<'_>) -> anyhow::Result<Self::Output<'_>> {
+        // Return bundle state
         let ExecutionOutcome { bundle, .. } = executor.finalize();
         Ok(bundle)
     }

@@ -19,11 +19,7 @@ use crate::stateless::engine::StatelessClientEngine;
 use crate::stateless::execute::{DbExecutionInput, TransactionExecutionStrategy};
 use crate::stateless::finalize::{FinalizationStrategy, MPTFinalizationInput};
 use crate::stateless::initialize::{InitializationStrategy, MPTInitializationInput};
-use crate::stateless::post_exec::PostExecutionValidationStrategy;
 use crate::stateless::pre_exec::{ConsensusPreExecValidationInput, PreExecutionValidationStrategy};
-use reth_evm_ethereum::execute::EthBatchExecutor;
-use reth_evm_ethereum::EthEvmConfig;
-use reth_revm::db::BundleState;
 use serde::de::DeserializeOwned;
 use std::io::Read;
 use std::sync::{Arc, Mutex};
@@ -55,18 +51,6 @@ where
         Header,
         Wrapper<Database>,
         Input<'a> = DbExecutionInput<'a, ChainSpec, Block, Wrapper<Database>>,
-        Output<'b> = EthBatchExecutor<EthEvmConfig, Wrapper<Database>>,
-    >;
-    type PostExecValidation: for<'a, 'b> PostExecutionValidationStrategy<
-        Block,
-        Header,
-        Wrapper<Database>,
-        Input<'a> = <Self::TransactionExecution as TransactionExecutionStrategy<
-            Block,
-            Header,
-            Wrapper<Database>,
-        >>::Output<'a>,
-        Output<'b> = BundleState,
     >;
     type Finalization: for<'a> FinalizationStrategy<
         Block,
@@ -91,9 +75,7 @@ where
         // Run the engine until all blocks are processed
         while !engine.data.blocks.is_empty() {
             engine.pre_execution_validation::<Self::PreExecValidation>()?;
-            let execution_output = engine.execute_transactions::<Self::TransactionExecution>()?;
-            let bundle_state =
-                engine.post_execution_validation::<Self::PostExecValidation>(execution_output)?;
+            let bundle_state = engine.execute_transactions::<Self::TransactionExecution>()?;
             // Skip the database update if we're finalizing the last block
             if engine.data.blocks.len() == 1 {
                 engine.db.take();

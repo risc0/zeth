@@ -7,9 +7,7 @@ use alloy::rpc::types::{Block, Header};
 use anyhow::Context;
 use hashbrown::HashSet;
 use log::{debug, info};
-use reth_evm_ethereum::execute::EthBatchExecutor;
-use reth_evm_ethereum::EthEvmConfig;
-use reth_revm::db::{BundleState, OriginalValuesKnown};
+use reth_revm::db::OriginalValuesKnown;
 use reth_revm::primitives::Bytecode;
 use std::iter::zip;
 use std::mem::replace;
@@ -21,7 +19,6 @@ use zeth_core::stateless::data::StatelessClientData;
 use zeth_core::stateless::driver::SCEDriver;
 use zeth_core::stateless::engine::StatelessClientEngine;
 use zeth_core::stateless::execute::{DbExecutionInput, TransactionExecutionStrategy};
-use zeth_core::stateless::post_exec::PostExecutionValidationStrategy;
 use zeth_core::stateless::pre_exec::{
     ConsensusPreExecValidationInput, PreExecutionValidationStrategy,
 };
@@ -38,18 +35,6 @@ pub trait PreflightClient<C, B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCE
         H,
         Wrapper<PreflightDB>,
         Input<'a> = DbExecutionInput<'a, C, B, Wrapper<PreflightDB>>,
-        Output<'b> = EthBatchExecutor<EthEvmConfig, Wrapper<PreflightDB>>,
-    >;
-    type PostExecValidation: for<'a, 'b> PostExecutionValidationStrategy<
-        B,
-        H,
-        Wrapper<PreflightDB>,
-        Input<'a> = <Self::TransactionExecution as TransactionExecutionStrategy<
-            B,
-            H,
-            Wrapper<PreflightDB>,
-        >>::Output<'a>,
-        Output<'b> = BundleState,
     >;
 
     fn preflight(
@@ -160,14 +145,9 @@ pub trait PreflightClient<C, B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCE
                 .pre_execution_validation::<<Self as PreflightClient<C, B, H, R>>::PreExecValidation>(
                 )?;
             info!("Executing transactions ...");
-            let execution_output = engine
+            let bundle_state = engine
                 .execute_transactions::<<Self as PreflightClient<C, B, H, R>>::TransactionExecution>(
             )?;
-            info!("Post execution validation ...");
-            let bundle_state = engine
-                .post_execution_validation::<<Self as PreflightClient<C, B, H, R>>::PostExecValidation>(
-                    execution_output,
-                )?;
             let state_changeset = bundle_state.into_plain_state(OriginalValuesKnown::Yes);
             info!("Provider-backed execution is Done!");
 

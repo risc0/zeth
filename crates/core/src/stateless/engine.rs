@@ -18,11 +18,8 @@ use crate::stateless::driver::SCEDriver;
 use crate::stateless::execute::{DbExecutionInput, TransactionExecutionStrategy};
 use crate::stateless::finalize::{FinalizationStrategy, MPTFinalizationInput};
 use crate::stateless::initialize::{InitializationStrategy, MPTInitializationInput};
-use crate::stateless::post_exec::PostExecutionValidationStrategy;
 use crate::stateless::pre_exec::{ConsensusPreExecValidationInput, PreExecutionValidationStrategy};
 use anyhow::Context;
-use reth_evm_ethereum::execute::EthBatchExecutor;
-use reth_evm_ethereum::EthEvmConfig;
 use reth_revm::db::BundleState;
 use std::sync::Arc;
 
@@ -141,11 +138,10 @@ impl<ChainSpec, Block, Header, Database: Recoverable, Driver: SCEDriver<Block, H
             Header,
             Wrapper<Database>,
             Input<'a> = DbExecutionInput<'a, ChainSpec, Block, Wrapper<Database>>,
-            Output<'b> = EthBatchExecutor<EthEvmConfig, Wrapper<Database>>,
         >,
     >(
         &mut self,
-    ) -> anyhow::Result<T::Output<'_>> {
+    ) -> anyhow::Result<BundleState> {
         // Unpack input
         let StatelessClientEngine {
             chain_spec,
@@ -158,32 +154,19 @@ impl<ChainSpec, Block, Header, Database: Recoverable, Driver: SCEDriver<Block, H
             db,
             ..
         } = self;
-        T::execute_transactions((
+        // Execute transactions
+        let bundle_state = T::execute_transactions((
             chain_spec.clone(),
             blocks.last_mut().unwrap(),
             total_difficulty,
             db,
         ))
-        .context("StatelessClientEngine::execute_transactions")
-    }
-
-    /// Validates the header after execution.
-    pub fn post_execution_validation<
-        'a,
-        T: PostExecutionValidationStrategy<Block, Header, Wrapper<Database>>,
-    >(
-        &mut self,
-        input: T::Input<'a>,
-    ) -> anyhow::Result<T::Output<'a>> {
-        // Perform validation
-        let output = T::post_execution_validation(input)
-            .context("StatelessClientEngine::post_execution_validation")?;
+        .context("StatelessClientEngine::execute_transactions")?;
         // Rescue database
         if let Some(rescued) = self.db_rescued.take() {
             self.replace_db(Wrapper::from(rescued))?;
         }
-        // Return validation output
-        Ok(output)
+        Ok(bundle_state)
     }
 
     pub fn replace_db(

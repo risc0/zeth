@@ -18,7 +18,6 @@ use std::sync::Arc;
 use zeth_core::db::MemoryDB;
 use zeth_core::stateless::driver::RethDriver;
 use zeth_core_ethereum::RethExecStrategy;
-use zeth_core_ethereum::RethPostExecStrategy;
 use zeth_core_ethereum::RethPreExecStrategy;
 use zeth_core_ethereum::RethStatelessClient;
 use zeth_preflight::client::PreflightClient;
@@ -40,5 +39,4 @@ pub struct RethPreflightClient;
 impl PreflightClient<ChainSpec, Block, Header, RethDriver> for RethPreflightClient {
     type PreExecValidation = RethPreExecStrategy;
     type TransactionExecution = RethExecStrategy;
-    type PostExecValidation = RethPostExecStrategy;
 }

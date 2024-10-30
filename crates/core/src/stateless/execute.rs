@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use alloy_primitives::U256;
+use reth_revm::db::BundleState;
 use std::sync::Arc;
 
 pub trait TransactionExecutionStrategy<Block, Header, Database> {
     type Input<'a>;
-    type Output<'b>;
-    fn execute_transactions(input: Self::Input<'_>) -> anyhow::Result<Self::Output<'_>>;
+    fn execute_transactions(input: Self::Input<'_>) -> anyhow::Result<BundleState>;
 }
 
 pub type DbExecutionInput<'a, C, B, D> = (Arc<C>, &'a mut B, &'a mut U256, &'a mut Option<D>);

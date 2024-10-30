@@ -7,7 +7,6 @@ use alloy::rpc::types::{Block, Header};
 use anyhow::Context;
 use hashbrown::HashSet;
 use log::{debug, info};
-use reth_chainspec::ChainSpec;
 use reth_evm_ethereum::execute::EthBatchExecutor;
 use reth_evm_ethereum::EthEvmConfig;
 use reth_revm::db::{BundleState, OriginalValuesKnown};
@@ -27,18 +26,18 @@ use zeth_core::stateless::pre_exec::{
     ConsensusPreExecValidationInput, PreExecutionValidationStrategy,
 };
 
-pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDriver<B, H>> {
+pub trait PreflightClient<C, B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDriver<B, H>> {
     type PreExecValidation: for<'a> PreExecutionValidationStrategy<
         B,
         H,
         PreflightDB,
-        Input<'a> = ConsensusPreExecValidationInput<'a, B, H>,
+        Input<'a> = ConsensusPreExecValidationInput<'a, C, B, H>,
     >;
     type TransactionExecution: for<'a, 'b> TransactionExecutionStrategy<
         B,
         H,
         Wrapper<PreflightDB>,
-        Input<'a> = DbExecutionInput<'a, B, Wrapper<PreflightDB>>,
+        Input<'a> = DbExecutionInput<'a, C, B, Wrapper<PreflightDB>>,
         Output<'b> = EthBatchExecutor<EthEvmConfig, Wrapper<PreflightDB>>,
     >;
     type PostExecValidation: for<'a, 'b> PostExecutionValidationStrategy<
@@ -54,7 +53,7 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
     >;
 
     fn preflight(
-        chain_spec: Arc<ChainSpec>,
+        chain_spec: Arc<C>,
         cache_dir: Option<PathBuf>,
         rpc_url: Option<String>,
         block_no: u64,
@@ -134,14 +133,14 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
     }
 
     fn preflight_with_db(
-        chain_spec: Arc<ChainSpec>,
+        chain_spec: Arc<C>,
         preflight_db: PreflightDB,
         data: StatelessClientData<Block, Header>,
         ommers: Vec<Vec<Header>>,
     ) -> anyhow::Result<StatelessClientData<B, H>> {
         // Instantiate the engine with a rescue for the DB
         info!("Running block execution engine ...");
-        let mut engine = StatelessClientEngine::<B, H, PreflightDB, R>::new(
+        let mut engine = StatelessClientEngine::<C, B, H, PreflightDB, R>::new(
             chain_spec,
             StatelessClientData::<B, H>::derive(data.clone(), ommers.clone()),
             Some(preflight_db),
@@ -158,15 +157,15 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
             // Run the engine
             info!("Pre execution validation ...");
             engine
-                .pre_execution_validation::<<Self as PreflightClient<B, H, R>>::PreExecValidation>(
+                .pre_execution_validation::<<Self as PreflightClient<C, B, H, R>>::PreExecValidation>(
                 )?;
             info!("Executing transactions ...");
             let execution_output = engine
-                .execute_transactions::<<Self as PreflightClient<B, H, R>>::TransactionExecution>(
+                .execute_transactions::<<Self as PreflightClient<C, B, H, R>>::TransactionExecution>(
             )?;
             info!("Post execution validation ...");
             let bundle_state = engine
-                .post_execution_validation::<<Self as PreflightClient<B, H, R>>::PostExecValidation>(
+                .post_execution_validation::<<Self as PreflightClient<C, B, H, R>>::PostExecValidation>(
                     execution_output,
                 )?;
             let state_changeset = bundle_state.into_plain_state(OriginalValuesKnown::Yes);

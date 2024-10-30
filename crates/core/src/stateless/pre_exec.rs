@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use alloy_primitives::U256;
-use reth_chainspec::ChainSpec;
 use std::sync::Arc;
 
 pub trait PreExecutionValidationStrategy<Block, Header, Database> {
@@ -22,5 +21,5 @@ pub trait PreExecutionValidationStrategy<Block, Header, Database> {
     fn pre_execution_validation(input: Self::Input<'_>) -> anyhow::Result<Self::Output<'_>>;
 }
 
-pub type ConsensusPreExecValidationInput<'a, B, H> =
-    (Arc<ChainSpec>, &'a mut B, &'a mut H, &'a mut U256);
+pub type ConsensusPreExecValidationInput<'a, C, B, H> =
+    (Arc<C>, &'a mut B, &'a mut H, &'a mut U256);

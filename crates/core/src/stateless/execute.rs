@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use alloy_primitives::U256;
-use reth_chainspec::ChainSpec;
 use std::sync::Arc;
 
 pub trait TransactionExecutionStrategy<Block, Header, Database> {
@@ -22,4 +21,4 @@ pub trait TransactionExecutionStrategy<Block, Header, Database> {
     fn execute_transactions(input: Self::Input<'_>) -> anyhow::Result<Self::Output<'_>>;
 }
 
-pub type DbExecutionInput<'a, B, D> = (Arc<ChainSpec>, &'a mut B, &'a mut U256, &'a mut Option<D>);
+pub type DbExecutionInput<'a, C, B, D> = (Arc<C>, &'a mut B, &'a mut U256, &'a mut Option<D>);

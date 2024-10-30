@@ -18,7 +18,6 @@ use crate::provider::{new_provider, BlockQuery};
 use alloy::primitives::B256;
 use anyhow::Context;
 use log::info;
-use reth_chainspec::ChainSpec;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::path::PathBuf;
@@ -56,17 +55,17 @@ impl Witness {
 }
 
 #[async_trait::async_trait]
-pub trait BlockBuilder<B, H, D, R>
+pub trait BlockBuilder<C, B, H, D, R>
 where
     B: RPCDerivableBlock + Send + Serialize + DeserializeOwned + 'static,
     H: RPCDerivableHeader + Send + Serialize + DeserializeOwned + 'static,
     D: Recoverable + 'static,
     R: SCEDriver<B, H> + 'static,
 {
-    type PreflightClient: PreflightClient<B, H, R>;
-    type StatelessClient: StatelessClient<B, H, D, R>;
+    type PreflightClient: PreflightClient<C, B, H, R>;
+    type StatelessClient: StatelessClient<C, B, H, D, R>;
 
-    fn chain_spec() -> Arc<ChainSpec>;
+    fn chain_spec() -> Arc<C>;
 
     async fn build_block(
         cache_dir: Option<PathBuf>,

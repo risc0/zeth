@@ -26,7 +26,7 @@ use zeth_preflight::BlockBuilder;
 
 pub struct RethBlockBuilder;
 
-impl BlockBuilder<Block, Header, MemoryDB, RethDriver> for RethBlockBuilder {
+impl BlockBuilder<ChainSpec, Block, Header, MemoryDB, RethDriver> for RethBlockBuilder {
     type PreflightClient = RethPreflightClient;
     type StatelessClient = RethStatelessClient;
 
@@ -37,7 +37,7 @@ impl BlockBuilder<Block, Header, MemoryDB, RethDriver> for RethBlockBuilder {
 
 pub struct RethPreflightClient;
 
-impl PreflightClient<Block, Header, RethDriver> for RethPreflightClient {
+impl PreflightClient<ChainSpec, Block, Header, RethDriver> for RethPreflightClient {
     type PreExecValidation = RethPreExecStrategy;
     type TransactionExecution = RethExecStrategy;
     type PostExecValidation = RethPostExecStrategy;

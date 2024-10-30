@@ -21,7 +21,6 @@ use crate::stateless::initialize::{InitializationStrategy, MPTInitializationInpu
 use crate::stateless::post_exec::PostExecutionValidationStrategy;
 use crate::stateless::pre_exec::{ConsensusPreExecValidationInput, PreExecutionValidationStrategy};
 use anyhow::Context;
-use reth_chainspec::ChainSpec;
 use reth_evm_ethereum::execute::EthBatchExecutor;
 use reth_evm_ethereum::EthEvmConfig;
 use reth_revm::db::BundleState;
@@ -29,6 +28,7 @@ use std::sync::Arc;
 
 /// A generic builder for building a block.
 pub struct StatelessClientEngine<
+    ChainSpec,
     Block,
     Header,
     Database: Recoverable,
@@ -41,8 +41,8 @@ pub struct StatelessClientEngine<
     pub driver: Driver,
 }
 
-impl<Block, Header, Database: Recoverable, Driver: SCEDriver<Block, Header>>
-    StatelessClientEngine<Block, Header, Database, Driver>
+impl<ChainSpec, Block, Header, Database: Recoverable, Driver: SCEDriver<Block, Header>>
+    StatelessClientEngine<ChainSpec, Block, Header, Database, Driver>
 {
     /// Creates a new stateless validator
     pub fn new(
@@ -108,7 +108,7 @@ impl<Block, Header, Database: Recoverable, Driver: SCEDriver<Block, Header>>
             Block,
             Header,
             Database,
-            Input<'a> = ConsensusPreExecValidationInput<'a, Block, Header>,
+            Input<'a> = ConsensusPreExecValidationInput<'a, ChainSpec, Block, Header>,
         >,
     >(
         &mut self,
@@ -140,7 +140,7 @@ impl<Block, Header, Database: Recoverable, Driver: SCEDriver<Block, Header>>
             Block,
             Header,
             Wrapper<Database>,
-            Input<'a> = DbExecutionInput<'a, Block, Wrapper<Database>>,
+            Input<'a> = DbExecutionInput<'a, ChainSpec, Block, Wrapper<Database>>,
             Output<'b> = EthBatchExecutor<EthEvmConfig, Wrapper<Database>>,
         >,
     >(

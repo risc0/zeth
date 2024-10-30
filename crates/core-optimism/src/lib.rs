@@ -23,24 +23,21 @@ use reth_optimism_evm::{OpBatchExecutor, OpExecutorProvider, OptimismEvmConfig};
 use reth_primitives::revm_primitives::alloy_primitives::Sealable;
 use reth_primitives::{Block, Header, SealedHeader};
 use reth_revm::db::BundleState;
-use reth_revm::primitives::U256;
 use reth_storage_errors::provider::ProviderError;
 use std::fmt::Display;
 use std::mem::take;
-use std::sync::Arc;
-use zeth_core::stateless::execute::TransactionExecutionStrategy;
+use zeth_core::stateless::execute::{DbExecutionInput, TransactionExecutionStrategy};
 use zeth_core::stateless::post_exec::PostExecutionValidationStrategy;
-use zeth_core::stateless::pre_exec::PreExecutionValidationStrategy;
+use zeth_core::stateless::pre_exec::{
+    ConsensusPreExecValidationInput, PreExecutionValidationStrategy,
+};
 
 pub struct OpRethPreExecStrategy;
-
-pub type OpRethPreExecValidationInput<'a, B, H> =
-    (Arc<OpChainSpec>, &'a mut B, &'a mut H, &'a mut U256);
 
 impl<Database: 'static> PreExecutionValidationStrategy<Block, Header, Database>
     for OpRethPreExecStrategy
 {
-    type Input<'a> = OpRethPreExecValidationInput<'a, Block, Header>;
+    type Input<'a> = ConsensusPreExecValidationInput<'a, OpChainSpec, Block, Header>;
     type Output<'b> = ();
 
     fn pre_execution_validation(
@@ -78,16 +75,13 @@ impl<Database: 'static> PreExecutionValidationStrategy<Block, Header, Database>
 
 pub struct OpRethExecStrategy;
 
-pub type OpDbExecutionInput<'a, B, D> =
-    (Arc<OpChainSpec>, &'a mut B, &'a mut U256, &'a mut Option<D>);
-
 impl<Database: reth_revm::Database> TransactionExecutionStrategy<Block, Header, Database>
     for OpRethExecStrategy
 where
     Database: 'static,
     <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
 {
-    type Input<'a> = OpDbExecutionInput<'a, Block, Database>;
+    type Input<'a> = DbExecutionInput<'a, OpChainSpec, Block, Database>;
     type Output<'b> = OpBatchExecutor<OptimismEvmConfig, Database>;
 
     fn execute_transactions(
@@ -132,3 +126,13 @@ where
         Ok(bundle)
     }
 }
+
+pub struct OpRethStatelessClient;
+
+// impl StatelessClient<OpChainSpec, Block, Header, MemoryDB, RethDriver> for OpRethStatelessClient {
+//     type Initialization = MemoryDbStrategy;
+//     type PreExecValidation = OpRethPreExecStrategy;
+//     type TransactionExecution = OpRethExecStrategy;
+//     type PostExecValidation = OpRethPostExecStrategy;
+//     type Finalization = RethFinalizationStrategy;
+// }

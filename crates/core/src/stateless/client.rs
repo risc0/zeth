@@ -21,7 +21,6 @@ use crate::stateless::finalize::{FinalizationStrategy, MPTFinalizationInput};
 use crate::stateless::initialize::{InitializationStrategy, MPTInitializationInput};
 use crate::stateless::post_exec::PostExecutionValidationStrategy;
 use crate::stateless::pre_exec::{ConsensusPreExecValidationInput, PreExecutionValidationStrategy};
-use reth_chainspec::ChainSpec;
 use reth_evm_ethereum::execute::EthBatchExecutor;
 use reth_evm_ethereum::EthEvmConfig;
 use reth_revm::db::BundleState;
@@ -31,7 +30,7 @@ use std::sync::{Arc, Mutex};
 
 pub type RescueDestination<D> = Arc<Mutex<Option<D>>>;
 
-pub trait StatelessClient<Block, Header, Database, Driver>
+pub trait StatelessClient<ChainSpec, Block, Header, Database, Driver>
 where
     Block: DeserializeOwned + 'static,
     Header: DeserializeOwned + 'static,
@@ -49,13 +48,13 @@ where
         Block,
         Header,
         Database,
-        Input<'a> = ConsensusPreExecValidationInput<'a, Block, Header>,
+        Input<'a> = ConsensusPreExecValidationInput<'a, ChainSpec, Block, Header>,
     >;
     type TransactionExecution: for<'a, 'b> TransactionExecutionStrategy<
         Block,
         Header,
         Wrapper<Database>,
-        Input<'a> = DbExecutionInput<'a, Block, Wrapper<Database>>,
+        Input<'a> = DbExecutionInput<'a, ChainSpec, Block, Wrapper<Database>>,
         Output<'b> = EthBatchExecutor<EthEvmConfig, Wrapper<Database>>,
     >;
     type PostExecValidation: for<'a, 'b> PostExecutionValidationStrategy<
@@ -83,10 +82,11 @@ where
     fn validate(
         chain_spec: Arc<ChainSpec>,
         data: StatelessClientData<Block, Header>,
-    ) -> anyhow::Result<StatelessClientEngine<Block, Header, Database, Driver>> {
+    ) -> anyhow::Result<StatelessClientEngine<ChainSpec, Block, Header, Database, Driver>> {
         // Instantiate the engine and initialize the database
-        let mut engine =
-            StatelessClientEngine::<Block, Header, Database, Driver>::new(chain_spec, data, None);
+        let mut engine = StatelessClientEngine::<ChainSpec, Block, Header, Database, Driver>::new(
+            chain_spec, data, None,
+        );
         engine.initialize_database::<Self::Initialization>()?;
         // Run the engine until all blocks are processed
         while !engine.data.blocks.is_empty() {

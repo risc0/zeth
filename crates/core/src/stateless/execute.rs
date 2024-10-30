@@ -16,9 +16,11 @@ use alloy_primitives::U256;
 use reth_revm::db::BundleState;
 use std::sync::Arc;
 
-pub trait ExecutionStrategy<Block, Header, Database> {
-    type Input<'a>;
-    fn execute_transactions(input: Self::Input<'_>) -> anyhow::Result<BundleState>;
+pub trait ExecutionStrategy<ChainSpec, Block, Header, Database> {
+    fn execute_transactions(
+        chain_spec: Arc<ChainSpec>,
+        block: &mut Block,
+        total_difficulty: &mut U256,
+        db: &mut Option<Database>,
+    ) -> anyhow::Result<BundleState>;
 }
-
-pub type DbExecutionInput<'a, C, B, D> = (Arc<C>, &'a mut B, &'a mut U256, &'a mut Option<D>);

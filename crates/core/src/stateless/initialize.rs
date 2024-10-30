@@ -27,30 +27,28 @@ use reth_revm::db::{AccountState, DbAccount};
 use reth_revm::primitives::AccountInfo;
 
 pub trait InitializationStrategy<Block, Header, Database> {
-    type Input<'a>;
-    type Output<'b>;
-    fn initialize_database(input: Self::Input<'_>) -> anyhow::Result<Self::Output<'_>>;
+    fn initialize_database(
+        state_trie: &mut MptNode,
+        storage_tries: &mut HashMap<Address, StorageEntry>,
+        contracts: &mut Vec<Bytes>,
+        parent_header: &mut Header,
+        ancestor_headers: &mut Vec<Header>,
+    ) -> anyhow::Result<Database>;
 }
 
 pub struct MemoryDbStrategy;
-pub type MPTInitializationInput<'a, H> = (
-    &'a mut MptNode,
-    &'a mut HashMap<Address, StorageEntry>,
-    &'a mut Vec<Bytes>,
-    &'a mut H,
-    &'a mut Vec<H>,
-);
 
 impl<Block> InitializationStrategy<Block, Header, MemoryDB> for MemoryDbStrategy
 where
     Block: 'static,
 {
-    type Input<'a> = MPTInitializationInput<'a, Header>;
-    type Output<'b> = MemoryDB;
-
     fn initialize_database(
-        (state_trie, storage_tries, contracts, parent_header, ancestor_headers): Self::Input<'_>,
-    ) -> anyhow::Result<Self::Output<'_>> {
+        state_trie: &mut MptNode,
+        storage_tries: &mut HashMap<Address, StorageEntry>,
+        contracts: &mut Vec<Bytes>,
+        parent_header: &mut Header,
+        ancestor_headers: &mut Vec<Header>,
+    ) -> anyhow::Result<MemoryDB> {
         // Verify starting state trie root
         if parent_header.state_root != state_trie.hash() {
             bail!(

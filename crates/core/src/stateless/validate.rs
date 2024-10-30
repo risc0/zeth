@@ -15,10 +15,11 @@
 use alloy_primitives::U256;
 use std::sync::Arc;
 
-pub trait ValidationStrategy<Block, Header, Database> {
-    type Input<'a>;
-    type Output<'b>;
-    fn validate_header(input: Self::Input<'_>) -> anyhow::Result<Self::Output<'_>>;
+pub trait ValidationStrategy<ChainSpec, Block, Header, Database> {
+    fn validate_header(
+        chain_spec: Arc<ChainSpec>,
+        block: &mut Block,
+        parent_header: &mut Header,
+        total_difficulty: &mut U256,
+    ) -> anyhow::Result<()>;
 }
-
-pub type HeaderValidationInput<'a, C, B, H> = (Arc<C>, &'a mut B, &'a mut H, &'a mut U256);

@@ -15,10 +15,10 @@
 use crate::rescue::{Recoverable, Rescued, Wrapper};
 use crate::stateless::data::StatelessClientData;
 use crate::stateless::driver::SCEDriver;
-use crate::stateless::execute::{DbExecutionInput, ExecutionStrategy};
-use crate::stateless::finalize::{FinalizationStrategy, MPTFinalizationInput};
-use crate::stateless::initialize::{InitializationStrategy, MPTInitializationInput};
-use crate::stateless::validate::{HeaderValidationInput, ValidationStrategy};
+use crate::stateless::execute::ExecutionStrategy;
+use crate::stateless::finalize::FinalizationStrategy;
+use crate::stateless::initialize::InitializationStrategy;
+use crate::stateless::validate::ValidationStrategy;
 use anyhow::Context;
 use reth_revm::db::BundleState;
 use std::sync::Arc;
@@ -59,15 +59,7 @@ impl<ChainSpec, Block, Header, Database: Recoverable, Driver: SCEDriver<Block, H
     }
 
     /// Initializes the database from the input.
-    pub fn initialize_database<
-        T: for<'a, 'b> InitializationStrategy<
-            Block,
-            Header,
-            Database,
-            Input<'a> = MPTInitializationInput<'a, Header>,
-            Output<'b> = Database,
-        >,
-    >(
+    pub fn initialize_database<T: for<'a, 'b> InitializationStrategy<Block, Header, Database>>(
         &mut self,
     ) -> anyhow::Result<Option<Database>> {
         let StatelessClientEngine {
@@ -84,13 +76,13 @@ impl<ChainSpec, Block, Header, Database: Recoverable, Driver: SCEDriver<Block, H
             ..
         } = self;
         let new_db = Wrapper::from(
-            T::initialize_database((
+            T::initialize_database(
                 state_trie,
                 storage_tries,
                 contracts,
                 parent_header,
                 ancestor_headers,
-            ))
+            )
             .context("StatelessClientEngine::initialize_database")?,
         );
         self.db_rescued = Some(new_db.rescued());
@@ -100,16 +92,9 @@ impl<ChainSpec, Block, Header, Database: Recoverable, Driver: SCEDriver<Block, H
     }
 
     /// Validates the header before execution.
-    pub fn validate_header<
-        T: for<'a> ValidationStrategy<
-            Block,
-            Header,
-            Database,
-            Input<'a> = HeaderValidationInput<'a, ChainSpec, Block, Header>,
-        >,
-    >(
+    pub fn validate_header<T: for<'a> ValidationStrategy<ChainSpec, Block, Header, Database>>(
         &mut self,
-    ) -> anyhow::Result<T::Output<'_>> {
+    ) -> anyhow::Result<()> {
         // Unpack input
         let StatelessClientEngine {
             chain_spec,
@@ -122,23 +107,18 @@ impl<ChainSpec, Block, Header, Database: Recoverable, Driver: SCEDriver<Block, H
                 },
             ..
         } = self;
-        T::validate_header((
+        T::validate_header(
             chain_spec.clone(),
             blocks.last_mut().unwrap(),
             parent_header,
             total_difficulty,
-        ))
+        )
         .context("StatelessClientEngine::validate_header")
     }
 
     /// Executes transactions.
     pub fn execute_transactions<
-        T: for<'a, 'b> ExecutionStrategy<
-            Block,
-            Header,
-            Wrapper<Database>,
-            Input<'a> = DbExecutionInput<'a, ChainSpec, Block, Wrapper<Database>>,
-        >,
+        T: for<'a, 'b> ExecutionStrategy<ChainSpec, Block, Header, Wrapper<Database>>,
     >(
         &mut self,
     ) -> anyhow::Result<BundleState> {
@@ -155,12 +135,12 @@ impl<ChainSpec, Block, Header, Database: Recoverable, Driver: SCEDriver<Block, H
             ..
         } = self;
         // Execute transactions
-        let bundle_state = T::execute_transactions((
+        let bundle_state = T::execute_transactions(
             chain_spec.clone(),
             blocks.last_mut().unwrap(),
             total_difficulty,
             db,
-        ))
+        )
         .context("StatelessClientEngine::execute_transactions")?;
         // Rescue database
         if let Some(rescued) = self.db_rescued.take() {
@@ -178,17 +158,10 @@ impl<ChainSpec, Block, Header, Database: Recoverable, Driver: SCEDriver<Block, H
     }
 
     /// Finalizes the state trie.
-    pub fn finalize_state<
-        T: for<'a> FinalizationStrategy<
-            Block,
-            Header,
-            Database,
-            Input<'a> = MPTFinalizationInput<'a, Block, Header, Database>,
-        >,
-    >(
+    pub fn finalize_state<T: for<'a> FinalizationStrategy<Block, Header, Database>>(
         &mut self,
         bundle_state: BundleState,
-    ) -> anyhow::Result<T::Output> {
+    ) -> anyhow::Result<()> {
         // Unpack input
         let StatelessClientEngine {
             data:
@@ -205,14 +178,14 @@ impl<ChainSpec, Block, Header, Database: Recoverable, Driver: SCEDriver<Block, H
         } = self;
         let db = db.as_mut();
         // Follow finalization strategy
-        let result = T::finalize_state((
+        let result = T::finalize_state(
             blocks.last_mut().unwrap(),
             state_trie,
             storage_tries,
             parent_header,
             db.map(|db| &mut db.inner),
             bundle_state,
-        ))
+        )
         .context("StatelessClientEngine::finalize")?;
         // Prepare for next block
         *parent_header = Driver::block_to_header(blocks.pop().unwrap());

@@ -18,22 +18,12 @@ use zeth_core::rescue::Wrapper;
 use zeth_core::stateless::data::StatelessClientData;
 use zeth_core::stateless::driver::SCEDriver;
 use zeth_core::stateless::engine::StatelessClientEngine;
-use zeth_core::stateless::execute::{DbExecutionInput, ExecutionStrategy};
-use zeth_core::stateless::validate::{HeaderValidationInput, ValidationStrategy};
+use zeth_core::stateless::execute::ExecutionStrategy;
+use zeth_core::stateless::validate::ValidationStrategy;
 
 pub trait PreflightClient<C, B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDriver<B, H>> {
-    type Validation: for<'a> ValidationStrategy<
-        B,
-        H,
-        PreflightDB,
-        Input<'a> = HeaderValidationInput<'a, C, B, H>,
-    >;
-    type Execution: for<'a, 'b> ExecutionStrategy<
-        B,
-        H,
-        Wrapper<PreflightDB>,
-        Input<'a> = DbExecutionInput<'a, C, B, Wrapper<PreflightDB>>,
-    >;
+    type Validation: for<'a> ValidationStrategy<C, B, H, PreflightDB>;
+    type Execution: for<'a, 'b> ExecutionStrategy<C, B, H, Wrapper<PreflightDB>>;
 
     fn preflight(
         chain_spec: Arc<C>,

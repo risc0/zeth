@@ -16,10 +16,10 @@ use crate::rescue::{Recoverable, Wrapper};
 use crate::stateless::data::StatelessClientData;
 use crate::stateless::driver::SCEDriver;
 use crate::stateless::engine::StatelessClientEngine;
-use crate::stateless::execute::{DbExecutionInput, ExecutionStrategy};
-use crate::stateless::finalize::{FinalizationStrategy, MPTFinalizationInput};
-use crate::stateless::initialize::{InitializationStrategy, MPTInitializationInput};
-use crate::stateless::validate::{HeaderValidationInput, ValidationStrategy};
+use crate::stateless::execute::ExecutionStrategy;
+use crate::stateless::finalize::FinalizationStrategy;
+use crate::stateless::initialize::InitializationStrategy;
+use crate::stateless::validate::ValidationStrategy;
 use serde::de::DeserializeOwned;
 use std::io::Read;
 use std::sync::{Arc, Mutex};
@@ -33,31 +33,10 @@ where
     Database: Recoverable + 'static,
     Driver: SCEDriver<Block, Header> + 'static,
 {
-    type Initialization: for<'a, 'b> InitializationStrategy<
-        Block,
-        Header,
-        Database,
-        Input<'a> = MPTInitializationInput<'a, Header>,
-        Output<'b> = Database,
-    >;
-    type Validation: for<'a> ValidationStrategy<
-        Block,
-        Header,
-        Database,
-        Input<'a> = HeaderValidationInput<'a, ChainSpec, Block, Header>,
-    >;
-    type Execution: for<'a, 'b> ExecutionStrategy<
-        Block,
-        Header,
-        Wrapper<Database>,
-        Input<'a> = DbExecutionInput<'a, ChainSpec, Block, Wrapper<Database>>,
-    >;
-    type Finalization: for<'a> FinalizationStrategy<
-        Block,
-        Header,
-        Database,
-        Input<'a> = MPTFinalizationInput<'a, Block, Header, Database>,
-    >;
+    type Initialization: for<'a, 'b> InitializationStrategy<Block, Header, Database>;
+    type Validation: for<'a> ValidationStrategy<ChainSpec, Block, Header, Database>;
+    type Execution: for<'a, 'b> ExecutionStrategy<ChainSpec, Block, Header, Wrapper<Database>>;
+    type Finalization: for<'a> FinalizationStrategy<Block, Header, Database>;
 
     fn deserialize_data<I: Read>(reader: I) -> anyhow::Result<StatelessClientData<Block, Header>> {
         Ok(pot::from_reader(reader)?)

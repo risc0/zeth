@@ -25,30 +25,27 @@ use reth_revm::db::states::StateChangeset;
 use reth_revm::db::{BundleState, OriginalValuesKnown};
 
 pub trait FinalizationStrategy<Block, Header, Database> {
-    type Input<'a>;
-    type Output;
-
-    fn finalize_state(input: Self::Input<'_>) -> anyhow::Result<Self::Output>;
+    fn finalize_state(
+        block: &mut Block,
+        state_trie: &mut MptNode,
+        storage_tries: &mut HashMap<Address, StorageEntry>,
+        parent_header: &mut Header,
+        db: Option<&mut Database>,
+        bundle_state: BundleState,
+    ) -> anyhow::Result<()>;
 }
-
-pub type MPTFinalizationInput<'a, B, H, D> = (
-    &'a mut B,
-    &'a mut MptNode,
-    &'a mut HashMap<Address, StorageEntry>,
-    &'a mut H,
-    Option<&'a mut D>,
-    BundleState,
-);
 
 pub struct RethFinalizationStrategy;
 
 impl FinalizationStrategy<Block, Header, MemoryDB> for RethFinalizationStrategy {
-    type Input<'a> = MPTFinalizationInput<'a, Block, Header, MemoryDB>;
-    type Output = ();
-
     fn finalize_state(
-        (block, state_trie, storage_tries, parent_header, db, bundle_state): Self::Input<'_>,
-    ) -> anyhow::Result<Self::Output> {
+        block: &mut Block,
+        state_trie: &mut MptNode,
+        storage_tries: &mut HashMap<Address, StorageEntry>,
+        parent_header: &mut Header,
+        db: Option<&mut MemoryDB>,
+        bundle_state: BundleState,
+    ) -> anyhow::Result<()> {
         // Apply state updates
         assert_eq!(state_trie.hash(), parent_header.state_root);
 

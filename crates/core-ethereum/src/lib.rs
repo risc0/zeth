@@ -21,18 +21,20 @@ use reth_evm::execute::{
 };
 use reth_evm_ethereum::execute::EthExecutorProvider;
 use reth_primitives::revm_primitives::alloy_primitives::Sealable;
+use reth_primitives::revm_primitives::U256;
 use reth_primitives::{Block, Header, SealedHeader};
 use reth_revm::db::BundleState;
 use reth_storage_errors::provider::ProviderError;
 use std::fmt::Display;
 use std::mem::take;
+use std::sync::Arc;
 use zeth_core::db::MemoryDB;
 use zeth_core::stateless::client::StatelessClient;
 use zeth_core::stateless::driver::RethDriver;
-use zeth_core::stateless::execute::{DbExecutionInput, ExecutionStrategy};
+use zeth_core::stateless::execute::ExecutionStrategy;
 use zeth_core::stateless::finalize::RethFinalizationStrategy;
 use zeth_core::stateless::initialize::MemoryDbStrategy;
-use zeth_core::stateless::validate::{HeaderValidationInput, ValidationStrategy};
+use zeth_core::stateless::validate::ValidationStrategy;
 
 pub struct RethStatelessClient;
 
@@ -45,16 +47,16 @@ impl StatelessClient<ChainSpec, Block, Header, MemoryDB, RethDriver> for RethSta
 
 pub struct RethValidationStrategy;
 
-impl<Database> ValidationStrategy<Block, Header, Database> for RethValidationStrategy
+impl<Database> ValidationStrategy<ChainSpec, Block, Header, Database> for RethValidationStrategy
 where
     Database: 'static,
 {
-    type Input<'a> = HeaderValidationInput<'a, ChainSpec, Block, Header>;
-    type Output<'b> = ();
-
     fn validate_header(
-        (chain_spec, block, parent_header, total_difficulty): Self::Input<'_>,
-    ) -> anyhow::Result<Self::Output<'_>> {
+        chain_spec: Arc<ChainSpec>,
+        block: &mut Block,
+        parent_header: &mut Header,
+        total_difficulty: &mut U256,
+    ) -> anyhow::Result<()> {
         // Instantiate consensus engine
         let consensus = EthBeaconConsensus::new(chain_spec);
         // Validate total difficulty
@@ -87,16 +89,17 @@ where
 
 pub struct RethExecutionStrategy;
 
-impl<Database: reth_revm::Database> ExecutionStrategy<Block, Header, Database>
+impl<Database: reth_revm::Database> ExecutionStrategy<ChainSpec, Block, Header, Database>
     for RethExecutionStrategy
 where
     Database: 'static,
     <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
 {
-    type Input<'a> = DbExecutionInput<'a, ChainSpec, Block, Database>;
-
     fn execute_transactions(
-        (chain_spec, block, total_difficulty, db): Self::Input<'_>,
+        chain_spec: Arc<ChainSpec>,
+        block: &mut Block,
+        total_difficulty: &mut U256,
+        db: &mut Option<Database>,
     ) -> anyhow::Result<BundleState> {
         // Instantiate execution engine using database
         let mut executor = EthExecutorProvider::ethereum(chain_spec.clone())

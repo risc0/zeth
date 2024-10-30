@@ -21,23 +21,32 @@ use reth_optimism_chainspec::OpChainSpec;
 use reth_optimism_consensus::OptimismBeaconConsensus;
 use reth_optimism_evm::OpExecutorProvider;
 use reth_primitives::revm_primitives::alloy_primitives::Sealable;
+use reth_primitives::revm_primitives::U256;
 use reth_primitives::{Block, Header, SealedHeader};
 use reth_revm::db::BundleState;
 use reth_storage_errors::provider::ProviderError;
 use std::fmt::Display;
 use std::mem::take;
-use zeth_core::stateless::execute::{DbExecutionInput, ExecutionStrategy};
-use zeth_core::stateless::validate::{HeaderValidationInput, ValidationStrategy};
+use std::sync::Arc;
+use zeth_core::db::MemoryDB;
+use zeth_core::stateless::client::StatelessClient;
+use zeth_core::stateless::driver::RethDriver;
+use zeth_core::stateless::execute::ExecutionStrategy;
+use zeth_core::stateless::finalize::RethFinalizationStrategy;
+use zeth_core::stateless::initialize::MemoryDbStrategy;
+use zeth_core::stateless::validate::ValidationStrategy;
 
 pub struct OpRethValidationStrategy;
 
-impl<Database: 'static> ValidationStrategy<Block, Header, Database> for OpRethValidationStrategy {
-    type Input<'a> = HeaderValidationInput<'a, OpChainSpec, Block, Header>;
-    type Output<'b> = ();
-
+impl<Database: 'static> ValidationStrategy<OpChainSpec, Block, Header, Database>
+    for OpRethValidationStrategy
+{
     fn validate_header(
-        (chain_spec, block, parent_header, total_difficulty): Self::Input<'_>,
-    ) -> anyhow::Result<Self::Output<'_>> {
+        chain_spec: Arc<OpChainSpec>,
+        block: &mut Block,
+        parent_header: &mut Header,
+        total_difficulty: &mut U256,
+    ) -> anyhow::Result<()> {
         // Instantiate consensus engine
         let consensus = OptimismBeaconConsensus::new(chain_spec);
         // Validate total difficulty
@@ -70,16 +79,17 @@ impl<Database: 'static> ValidationStrategy<Block, Header, Database> for OpRethVa
 
 pub struct OpRethExecStrategy;
 
-impl<Database: reth_revm::Database> ExecutionStrategy<Block, Header, Database>
+impl<Database: reth_revm::Database> ExecutionStrategy<OpChainSpec, Block, Header, Database>
     for OpRethExecStrategy
 where
     Database: 'static,
     <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
 {
-    type Input<'a> = DbExecutionInput<'a, OpChainSpec, Block, Database>;
-
     fn execute_transactions(
-        (chain_spec, block, total_difficulty, db): Self::Input<'_>,
+        chain_spec: Arc<OpChainSpec>,
+        block: &mut Block,
+        total_difficulty: &mut U256,
+        db: &mut Option<Database>,
     ) -> anyhow::Result<BundleState> {
         // Instantiate execution engine using database
         let mut executor = OpExecutorProvider::optimism(chain_spec.clone())
@@ -108,9 +118,9 @@ where
 
 pub struct OpRethStatelessClient;
 
-// impl StatelessClient<OpChainSpec, Block, Header, MemoryDB, RethDriver> for OpRethStatelessClient {
-//     type Initialization = MemoryDbStrategy;
-//     type Validation = OpRethValidationStrategy;
-//     type Execution = OpRethExecStrategy;
-//     type Finalization = RethFinalizationStrategy;
-// }
+impl StatelessClient<OpChainSpec, Block, Header, MemoryDB, RethDriver> for OpRethStatelessClient {
+    type Initialization = MemoryDbStrategy;
+    type Validation = OpRethValidationStrategy;
+    type Execution = OpRethExecStrategy;
+    type Finalization = RethFinalizationStrategy;
+}

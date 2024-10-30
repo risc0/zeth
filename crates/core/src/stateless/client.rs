@@ -16,10 +16,10 @@ use crate::rescue::{Recoverable, Wrapper};
 use crate::stateless::data::StatelessClientData;
 use crate::stateless::driver::SCEDriver;
 use crate::stateless::engine::StatelessClientEngine;
-use crate::stateless::execute::{DbExecutionInput, TransactionExecutionStrategy};
+use crate::stateless::execute::{DbExecutionInput, ExecutionStrategy};
 use crate::stateless::finalize::{FinalizationStrategy, MPTFinalizationInput};
 use crate::stateless::initialize::{InitializationStrategy, MPTInitializationInput};
-use crate::stateless::pre_exec::{ConsensusPreExecValidationInput, PreExecutionValidationStrategy};
+use crate::stateless::validate::{HeaderValidationInput, ValidationStrategy};
 use serde::de::DeserializeOwned;
 use std::io::Read;
 use std::sync::{Arc, Mutex};
@@ -40,13 +40,13 @@ where
         Input<'a> = MPTInitializationInput<'a, Header>,
         Output<'b> = Database,
     >;
-    type PreExecValidation: for<'a> PreExecutionValidationStrategy<
+    type Validation: for<'a> ValidationStrategy<
         Block,
         Header,
         Database,
-        Input<'a> = ConsensusPreExecValidationInput<'a, ChainSpec, Block, Header>,
+        Input<'a> = HeaderValidationInput<'a, ChainSpec, Block, Header>,
     >;
-    type TransactionExecution: for<'a, 'b> TransactionExecutionStrategy<
+    type Execution: for<'a, 'b> ExecutionStrategy<
         Block,
         Header,
         Wrapper<Database>,
@@ -74,13 +74,13 @@ where
         engine.initialize_database::<Self::Initialization>()?;
         // Run the engine until all blocks are processed
         while !engine.data.blocks.is_empty() {
-            engine.pre_execution_validation::<Self::PreExecValidation>()?;
-            let bundle_state = engine.execute_transactions::<Self::TransactionExecution>()?;
+            engine.validate_header::<Self::Validation>()?;
+            let bundle_state = engine.execute_transactions::<Self::Execution>()?;
             // Skip the database update if we're finalizing the last block
             if engine.data.blocks.len() == 1 {
                 engine.db.take();
             }
-            engine.finalize::<Self::Finalization>(bundle_state)?;
+            engine.finalize_state::<Self::Finalization>(bundle_state)?;
         }
         // Return the engine for inspection
         Ok(engine)

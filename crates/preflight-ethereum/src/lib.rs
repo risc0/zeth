@@ -17,9 +17,9 @@ use reth_primitives::{Block, Header};
 use std::sync::Arc;
 use zeth_core::db::MemoryDB;
 use zeth_core::stateless::driver::RethDriver;
-use zeth_core_ethereum::RethExecStrategy;
-use zeth_core_ethereum::RethPreExecStrategy;
+use zeth_core_ethereum::RethExecutionStrategy;
 use zeth_core_ethereum::RethStatelessClient;
+use zeth_core_ethereum::RethValidationStrategy;
 use zeth_preflight::client::PreflightClient;
 use zeth_preflight::BlockBuilder;
 
@@ -37,6 +37,6 @@ impl BlockBuilder<ChainSpec, Block, Header, MemoryDB, RethDriver> for RethBlockB
 pub struct RethPreflightClient;
 
 impl PreflightClient<ChainSpec, Block, Header, RethDriver> for RethPreflightClient {
-    type PreExecValidation = RethPreExecStrategy;
-    type TransactionExecution = RethExecStrategy;
+    type Validation = RethValidationStrategy;
+    type Execution = RethExecutionStrategy;
 }

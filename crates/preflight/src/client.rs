@@ -18,19 +18,17 @@ use zeth_core::rescue::Wrapper;
 use zeth_core::stateless::data::StatelessClientData;
 use zeth_core::stateless::driver::SCEDriver;
 use zeth_core::stateless::engine::StatelessClientEngine;
-use zeth_core::stateless::execute::{DbExecutionInput, TransactionExecutionStrategy};
-use zeth_core::stateless::pre_exec::{
-    ConsensusPreExecValidationInput, PreExecutionValidationStrategy,
-};
+use zeth_core::stateless::execute::{DbExecutionInput, ExecutionStrategy};
+use zeth_core::stateless::validate::{HeaderValidationInput, ValidationStrategy};
 
 pub trait PreflightClient<C, B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDriver<B, H>> {
-    type PreExecValidation: for<'a> PreExecutionValidationStrategy<
+    type Validation: for<'a> ValidationStrategy<
         B,
         H,
         PreflightDB,
-        Input<'a> = ConsensusPreExecValidationInput<'a, C, B, H>,
+        Input<'a> = HeaderValidationInput<'a, C, B, H>,
     >;
-    type TransactionExecution: for<'a, 'b> TransactionExecutionStrategy<
+    type Execution: for<'a, 'b> ExecutionStrategy<
         B,
         H,
         Wrapper<PreflightDB>,
@@ -141,13 +139,10 @@ pub trait PreflightClient<C, B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCE
         for _ in 0..block_count {
             // Run the engine
             info!("Pre execution validation ...");
-            engine
-                .pre_execution_validation::<<Self as PreflightClient<C, B, H, R>>::PreExecValidation>(
-                )?;
+            engine.validate_header::<<Self as PreflightClient<C, B, H, R>>::Validation>()?;
             info!("Executing transactions ...");
             let bundle_state = engine
-                .execute_transactions::<<Self as PreflightClient<C, B, H, R>>::TransactionExecution>(
-            )?;
+                .execute_transactions::<<Self as PreflightClient<C, B, H, R>>::Execution>()?;
             let state_changeset = bundle_state.into_plain_state(OriginalValuesKnown::Yes);
             info!("Provider-backed execution is Done!");
 

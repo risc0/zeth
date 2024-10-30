@@ -15,11 +15,10 @@
 use alloy_primitives::U256;
 use std::sync::Arc;
 
-pub trait PreExecutionValidationStrategy<Block, Header, Database> {
+pub trait ValidationStrategy<Block, Header, Database> {
     type Input<'a>;
     type Output<'b>;
-    fn pre_execution_validation(input: Self::Input<'_>) -> anyhow::Result<Self::Output<'_>>;
+    fn validate_header(input: Self::Input<'_>) -> anyhow::Result<Self::Output<'_>>;
 }
 
-pub type ConsensusPreExecValidationInput<'a, C, B, H> =
-    (Arc<C>, &'a mut B, &'a mut H, &'a mut U256);
+pub type HeaderValidationInput<'a, C, B, H> = (Arc<C>, &'a mut B, &'a mut H, &'a mut U256);

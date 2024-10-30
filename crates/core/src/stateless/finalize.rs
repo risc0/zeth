@@ -28,7 +28,7 @@ pub trait FinalizationStrategy<Block, Header, Database> {
     type Input<'a>;
     type Output;
 
-    fn finalize(input: Self::Input<'_>) -> anyhow::Result<Self::Output>;
+    fn finalize_state(input: Self::Input<'_>) -> anyhow::Result<Self::Output>;
 }
 
 pub type MPTFinalizationInput<'a, B, H, D> = (
@@ -46,7 +46,7 @@ impl FinalizationStrategy<Block, Header, MemoryDB> for RethFinalizationStrategy 
     type Input<'a> = MPTFinalizationInput<'a, Block, Header, MemoryDB>;
     type Output = ();
 
-    fn finalize(
+    fn finalize_state(
         (block, state_trie, storage_tries, parent_header, db, bundle_state): Self::Input<'_>,
     ) -> anyhow::Result<Self::Output> {
         // Apply state updates

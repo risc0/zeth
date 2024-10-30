@@ -16,7 +16,7 @@ use alloy_primitives::U256;
 use reth_revm::db::BundleState;
 use std::sync::Arc;
 
-pub trait TransactionExecutionStrategy<Block, Header, Database> {
+pub trait ExecutionStrategy<Block, Header, Database> {
     type Input<'a>;
     fn execute_transactions(input: Self::Input<'_>) -> anyhow::Result<BundleState>;
 }

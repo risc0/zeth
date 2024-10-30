@@ -15,10 +15,10 @@
 use crate::rescue::{Recoverable, Rescued, Wrapper};
 use crate::stateless::data::StatelessClientData;
 use crate::stateless::driver::SCEDriver;
-use crate::stateless::execute::{DbExecutionInput, TransactionExecutionStrategy};
+use crate::stateless::execute::{DbExecutionInput, ExecutionStrategy};
 use crate::stateless::finalize::{FinalizationStrategy, MPTFinalizationInput};
 use crate::stateless::initialize::{InitializationStrategy, MPTInitializationInput};
-use crate::stateless::pre_exec::{ConsensusPreExecValidationInput, PreExecutionValidationStrategy};
+use crate::stateless::validate::{HeaderValidationInput, ValidationStrategy};
 use anyhow::Context;
 use reth_revm::db::BundleState;
 use std::sync::Arc;
@@ -100,12 +100,12 @@ impl<ChainSpec, Block, Header, Database: Recoverable, Driver: SCEDriver<Block, H
     }
 
     /// Validates the header before execution.
-    pub fn pre_execution_validation<
-        T: for<'a> PreExecutionValidationStrategy<
+    pub fn validate_header<
+        T: for<'a> ValidationStrategy<
             Block,
             Header,
             Database,
-            Input<'a> = ConsensusPreExecValidationInput<'a, ChainSpec, Block, Header>,
+            Input<'a> = HeaderValidationInput<'a, ChainSpec, Block, Header>,
         >,
     >(
         &mut self,
@@ -122,18 +122,18 @@ impl<ChainSpec, Block, Header, Database: Recoverable, Driver: SCEDriver<Block, H
                 },
             ..
         } = self;
-        T::pre_execution_validation((
+        T::validate_header((
             chain_spec.clone(),
             blocks.last_mut().unwrap(),
             parent_header,
             total_difficulty,
         ))
-        .context("StatelessClientEngine::pre_execution_validation")
+        .context("StatelessClientEngine::validate_header")
     }
 
     /// Executes transactions.
     pub fn execute_transactions<
-        T: for<'a, 'b> TransactionExecutionStrategy<
+        T: for<'a, 'b> ExecutionStrategy<
             Block,
             Header,
             Wrapper<Database>,
@@ -178,7 +178,7 @@ impl<ChainSpec, Block, Header, Database: Recoverable, Driver: SCEDriver<Block, H
     }
 
     /// Finalizes the state trie.
-    pub fn finalize<
+    pub fn finalize_state<
         T: for<'a> FinalizationStrategy<
             Block,
             Header,
@@ -205,7 +205,7 @@ impl<ChainSpec, Block, Header, Database: Recoverable, Driver: SCEDriver<Block, H
         } = self;
         let db = db.as_mut();
         // Follow finalization strategy
-        let result = T::finalize((
+        let result = T::finalize_state((
             blocks.last_mut().unwrap(),
             state_trie,
             storage_tries,

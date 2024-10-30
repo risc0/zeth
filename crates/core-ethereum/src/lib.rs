@@ -29,32 +29,30 @@ use std::mem::take;
 use zeth_core::db::MemoryDB;
 use zeth_core::stateless::client::StatelessClient;
 use zeth_core::stateless::driver::RethDriver;
-use zeth_core::stateless::execute::{DbExecutionInput, TransactionExecutionStrategy};
+use zeth_core::stateless::execute::{DbExecutionInput, ExecutionStrategy};
 use zeth_core::stateless::finalize::RethFinalizationStrategy;
 use zeth_core::stateless::initialize::MemoryDbStrategy;
-use zeth_core::stateless::pre_exec::{
-    ConsensusPreExecValidationInput, PreExecutionValidationStrategy,
-};
+use zeth_core::stateless::validate::{HeaderValidationInput, ValidationStrategy};
 
 pub struct RethStatelessClient;
 
 impl StatelessClient<ChainSpec, Block, Header, MemoryDB, RethDriver> for RethStatelessClient {
     type Initialization = MemoryDbStrategy;
-    type PreExecValidation = RethPreExecStrategy;
-    type TransactionExecution = RethExecStrategy;
+    type Validation = RethValidationStrategy;
+    type Execution = RethExecutionStrategy;
     type Finalization = RethFinalizationStrategy;
 }
 
-pub struct RethPreExecStrategy;
+pub struct RethValidationStrategy;
 
-impl<Database> PreExecutionValidationStrategy<Block, Header, Database> for RethPreExecStrategy
+impl<Database> ValidationStrategy<Block, Header, Database> for RethValidationStrategy
 where
     Database: 'static,
 {
-    type Input<'a> = ConsensusPreExecValidationInput<'a, ChainSpec, Block, Header>;
+    type Input<'a> = HeaderValidationInput<'a, ChainSpec, Block, Header>;
     type Output<'b> = ();
 
-    fn pre_execution_validation(
+    fn validate_header(
         (chain_spec, block, parent_header, total_difficulty): Self::Input<'_>,
     ) -> anyhow::Result<Self::Output<'_>> {
         // Instantiate consensus engine
@@ -87,10 +85,10 @@ where
     }
 }
 
-pub struct RethExecStrategy;
+pub struct RethExecutionStrategy;
 
-impl<Database: reth_revm::Database> TransactionExecutionStrategy<Block, Header, Database>
-    for RethExecStrategy
+impl<Database: reth_revm::Database> ExecutionStrategy<Block, Header, Database>
+    for RethExecutionStrategy
 where
     Database: 'static,
     <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,

@@ -26,20 +26,16 @@ use reth_revm::db::BundleState;
 use reth_storage_errors::provider::ProviderError;
 use std::fmt::Display;
 use std::mem::take;
-use zeth_core::stateless::execute::{DbExecutionInput, TransactionExecutionStrategy};
-use zeth_core::stateless::pre_exec::{
-    ConsensusPreExecValidationInput, PreExecutionValidationStrategy,
-};
+use zeth_core::stateless::execute::{DbExecutionInput, ExecutionStrategy};
+use zeth_core::stateless::validate::{HeaderValidationInput, ValidationStrategy};
 
-pub struct OpRethPreExecStrategy;
+pub struct OpRethValidationStrategy;
 
-impl<Database: 'static> PreExecutionValidationStrategy<Block, Header, Database>
-    for OpRethPreExecStrategy
-{
-    type Input<'a> = ConsensusPreExecValidationInput<'a, OpChainSpec, Block, Header>;
+impl<Database: 'static> ValidationStrategy<Block, Header, Database> for OpRethValidationStrategy {
+    type Input<'a> = HeaderValidationInput<'a, OpChainSpec, Block, Header>;
     type Output<'b> = ();
 
-    fn pre_execution_validation(
+    fn validate_header(
         (chain_spec, block, parent_header, total_difficulty): Self::Input<'_>,
     ) -> anyhow::Result<Self::Output<'_>> {
         // Instantiate consensus engine
@@ -74,7 +70,7 @@ impl<Database: 'static> PreExecutionValidationStrategy<Block, Header, Database>
 
 pub struct OpRethExecStrategy;
 
-impl<Database: reth_revm::Database> TransactionExecutionStrategy<Block, Header, Database>
+impl<Database: reth_revm::Database> ExecutionStrategy<Block, Header, Database>
     for OpRethExecStrategy
 where
     Database: 'static,
@@ -114,7 +110,7 @@ pub struct OpRethStatelessClient;
 
 // impl StatelessClient<OpChainSpec, Block, Header, MemoryDB, RethDriver> for OpRethStatelessClient {
 //     type Initialization = MemoryDbStrategy;
-//     type PreExecValidation = OpRethPreExecStrategy;
-//     type TransactionExecution = OpRethExecStrategy;
+//     type Validation = OpRethValidationStrategy;
+//     type Execution = OpRethExecStrategy;
 //     type Finalization = RethFinalizationStrategy;
 // }

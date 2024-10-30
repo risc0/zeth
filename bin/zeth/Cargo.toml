@@ -26,8 +26,6 @@ env_logger.workspace = true
 log.workspace = true
 pot.workspace = true
 
-reth-chainspec.workspace = true
-
 serde.workspace = true
 tokio.workspace = true
 tracing.workspace = true

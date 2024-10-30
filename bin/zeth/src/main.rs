@@ -14,7 +14,6 @@
 
 use clap::Parser;
 use log::{error, info};
-use reth_chainspec::MAINNET;
 use risc0_zkvm::{default_executor, default_prover, ProverOpts, Receipt};
 use std::path::Path;
 use tokio::fs::File;
@@ -96,7 +95,6 @@ async fn main() -> anyhow::Result<()> {
                 build_args.rpc_url.clone(),
                 build_args.block_number,
                 build_args.block_count,
-                MAINNET.clone(),
             )
             .await?
         }

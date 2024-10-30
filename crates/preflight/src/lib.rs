@@ -19,7 +19,7 @@ use alloy::consensus::Header;
 use alloy::primitives::B256;
 use anyhow::Context;
 use log::info;
-use reth_chainspec::ChainSpec;
+use reth_chainspec::{ChainSpec, MAINNET};
 use reth_primitives::Block;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -69,18 +69,18 @@ where
     type PreflightClient: PreflightClient<B, H, R>;
     type StatelessClient: StatelessClient<B, H, D, R>;
 
+    fn chain_spec() -> Arc<ChainSpec>;
+
     async fn build_block(
         cache_dir: Option<PathBuf>,
         rpc_url: Option<String>,
         block_number: u64,
         block_count: u64,
-        chain_spec: Arc<ChainSpec>,
     ) -> anyhow::Result<Witness> {
         // Fetch all of the initial data
-        let preflight_chain_spec = chain_spec.clone();
         let preflight_data: StatelessClientData<B, H> = tokio::task::spawn_blocking(move || {
             <Self::PreflightClient>::preflight(
-                preflight_chain_spec,
+                Self::chain_spec(),
                 cache_dir,
                 rpc_url,
                 block_number,
@@ -98,7 +98,7 @@ where
         let deserialized_preflight_data: StatelessClientData<B, H> =
             Self::StatelessClient::deserialize_data(build_result.encoded_input.as_slice())
                 .context("input deserialization failed")?;
-        <Self::StatelessClient>::validate(chain_spec.clone(), deserialized_preflight_data)
+        <Self::StatelessClient>::validate(Self::chain_spec(), deserialized_preflight_data)
             .expect("Block validation failed");
         info!("Memory run successful ...");
         Ok(build_result)
@@ -139,4 +139,8 @@ pub struct RethBlockBuilder;
 impl BlockBuilder<Block, Header, MemoryDB, RethDriver> for RethBlockBuilder {
     type PreflightClient = RethPreflightClient;
     type StatelessClient = RethStatelessClient;
+
+    fn chain_spec() -> Arc<ChainSpec> {
+        MAINNET.clone()
+    }
 }

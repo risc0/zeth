@@ -140,8 +140,8 @@ where
     type Input<'a> = EthBatchExecutor<EthEvmConfig, Database>;
     type Output<'b> = BundleState;
 
-    fn post_execution_validation(input: Self::Input<'_>) -> anyhow::Result<Self::Output<'_>> {
-        let ExecutionOutcome { bundle, .. } = input.finalize();
+    fn post_execution_validation(executor: Self::Input<'_>) -> anyhow::Result<Self::Output<'_>> {
+        let ExecutionOutcome { bundle, .. } = executor.finalize();
         Ok(bundle)
     }
 }

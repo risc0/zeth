@@ -4101,6 +4101,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "reth-optimism-consensus"
+version = "1.1.0"
+source = "git+https://github.com/risc0/reth?branch=p1.1.0_zstd#918bf7a9aece7e20cb936c63ba5918da09b9ae9d"
+dependencies = [
+ "alloy-primitives",
+ "reth-chainspec",
+ "reth-consensus",
+ "reth-consensus-common",
+ "reth-optimism-chainspec",
+ "reth-optimism-forks",
+ "reth-primitives",
+ "reth-trie-common",
+ "tracing",
+]
+
+[[package]]
+name = "reth-optimism-evm"
+version = "1.1.0"
+source = "git+https://github.com/risc0/reth?branch=p1.1.0_zstd#918bf7a9aece7e20cb936c63ba5918da09b9ae9d"
+dependencies = [
+ "alloy-primitives",
+ "op-alloy-consensus",
+ "reth-chainspec",
+ "reth-ethereum-forks",
+ "reth-evm",
+ "reth-execution-errors",
+ "reth-execution-types",
+ "reth-optimism-chainspec",
+ "reth-optimism-consensus",
+ "reth-optimism-forks",
+ "reth-primitives",
+ "reth-prune-types",
+ "reth-revm",
+ "revm",
+ "revm-primitives",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
 name = "reth-optimism-forks"
 version = "1.1.0"
 source = "git+https://github.com/risc0/reth?branch=p1.1.0_zstd#918bf7a9aece7e20cb936c63ba5918da09b9ae9d"
@@ -6289,23 +6329,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeth-core-optimism"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "reth-chainspec",
+ "reth-consensus",
+ "reth-evm",
+ "reth-optimism-chainspec",
+ "reth-optimism-consensus",
+ "reth-optimism-evm",
+ "reth-primitives",
+ "reth-revm",
+ "reth-storage-errors",
+ "zeth-core",
+ "zeth-core-ethereum",
+]
+
+[[package]]
 name = "zeth-guests"
 version = "0.1.0"
 dependencies = [
  "risc0-build",
-]
-
-[[package]]
-name = "zeth-optimism"
-version = "0.1.0"
-dependencies = [
- "reth-chainspec",
- "reth-optimism-chainspec",
- "reth-primitives",
- "reth-revm",
- "zeth-core",
- "zeth-preflight",
- "zeth-preflight-ethereum",
 ]
 
 [[package]]

@@ -1,0 +1,24 @@
+[package]
+name = "zeth-core-optimism"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies.zeth-core]
+workspace = true
+
+[dependencies.zeth-core-ethereum]
+workspace = true
+
+
+[dependencies]
+anyhow.workspace = true
+
+reth-chainspec = { workspace = true, features = ["optimism"] }
+reth-consensus.workspace = true
+reth-evm.workspace = true
+reth-optimism-chainspec.workspace = true
+reth-optimism-evm = { workspace = true, features = ["optimism"] }
+reth-optimism-consensus = { workspace = true, features = ["optimism"] }
+reth-primitives = { workspace = true, features = ["optimism"] }
+reth-revm = { workspace = true, features = ["optimism"] }
+reth-storage-errors.workspace = true

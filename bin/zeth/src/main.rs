@@ -21,9 +21,9 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use zeth::cli::{Cli, Network};
 use zeth::executor::build_executor_env;
 use zeth::{cache_dir_path, proof_file_name};
-use zeth_preflight_ethereum::RethBlockBuilder;
 use zeth_guests::{ZETH_GUESTS_RETH_ELF, ZETH_GUESTS_RETH_ID};
 use zeth_preflight::BlockBuilder;
+use zeth_preflight_ethereum::RethBlockBuilder;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

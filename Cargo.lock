@@ -6116,7 +6116,6 @@ version = "0.1.0"
 dependencies = [
  "alloy",
  "anyhow",
- "async-trait",
  "bincode",
  "bytemuck",
  "clap",
@@ -6124,8 +6123,6 @@ dependencies = [
  "log",
  "pot",
  "reth-chainspec",
- "reth-primitives",
- "reth-revm",
  "risc0-zkvm",
  "serde",
  "tokio",
@@ -6171,6 +6168,7 @@ version = "0.1.0"
 dependencies = [
  "alloy",
  "anyhow",
+ "async-trait",
  "env_logger",
  "flate2",
  "hashbrown 0.15.0",

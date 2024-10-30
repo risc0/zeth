@@ -16,7 +16,7 @@ use crate::provider::file_provider::FileProvider;
 use crate::provider::rpc_provider::RpcProvider;
 use crate::provider::*;
 use anyhow::Context;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Clone, Debug)]
 pub struct CachedRpcProvider {
@@ -140,10 +140,4 @@ impl Provider for CachedRpcProvider {
 
         Ok(out)
     }
-}
-
-pub fn cache_dir_path(cache_path: &Path, network: &str) -> PathBuf {
-    let dir = cache_path.join(network);
-    std::fs::create_dir_all(&dir).expect("Could not create directory");
-    dir
 }

@@ -14,11 +14,10 @@
 
 use alloy::primitives::B256;
 use risc0_zkvm::{is_dev_mode, ProverOpts};
+use std::path::{Path, PathBuf};
 use zeth_core::keccak::keccak;
 
-pub mod chain;
 pub mod cli;
-pub mod client;
 pub mod executor;
 
 pub fn proof_file_name(
@@ -39,4 +38,10 @@ pub fn proof_file_name(
     .concat();
     let file_name = B256::from(keccak(data));
     format!("risc0-{version}-{file_name}.{suffix}")
+}
+
+pub fn cache_dir_path(cache_path: &Path, network: &str) -> PathBuf {
+    let dir = cache_path.join(network);
+    std::fs::create_dir_all(&dir).expect("Could not create directory");
+    dir
 }

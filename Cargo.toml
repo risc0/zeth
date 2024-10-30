@@ -47,14 +47,17 @@ reth-consensus = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd"
 reth-ethereum-consensus = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd" }
 reth-evm = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false, features = ["std"] }
 reth-evm-ethereum = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false, features = ["std"] }
+reth-optimism-chainspec = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false, features = ["std"] }
 reth-primitives = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false, features = ["std"] }
 reth-revm = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false, features = ["std"] }
 reth-storage-errors = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false, features = ["std"] }
 
 # Zeth
 zeth-core = { path = "crates/core" }
-zeth-guests = { path = "guests"}
+zeth-core-ethereum = { path = "crates/core-ethereum" }
+zeth-guests = { path = "guests" }
 zeth-preflight = { path = "crates/preflight" }
+zeth-preflight-ethereum = { path = "crates/preflight-ethereum" }
 
 # Others
 anyhow = "1.0.89"

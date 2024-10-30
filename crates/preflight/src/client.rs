@@ -19,14 +19,12 @@ use std::sync::Arc;
 use zeth_core::mpt::MptNode;
 use zeth_core::rescue::Wrapper;
 use zeth_core::stateless::data::StatelessClientData;
-use zeth_core::stateless::driver::{RethDriver, SCEDriver};
+use zeth_core::stateless::driver::SCEDriver;
 use zeth_core::stateless::engine::StatelessClientEngine;
-use zeth_core::stateless::execute::{
-    DbExecutionInput, RethExecStrategy, TransactionExecutionStrategy,
-};
-use zeth_core::stateless::post_exec::{PostExecutionValidationStrategy, RethPostExecStrategy};
+use zeth_core::stateless::execute::{DbExecutionInput, TransactionExecutionStrategy};
+use zeth_core::stateless::post_exec::PostExecutionValidationStrategy;
 use zeth_core::stateless::pre_exec::{
-    ConsensusPreExecValidationInput, PreExecutionValidationStrategy, RethPreExecStrategy,
+    ConsensusPreExecValidationInput, PreExecutionValidationStrategy,
 };
 
 pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDriver<B, H>> {
@@ -288,14 +286,4 @@ pub trait PreflightClient<B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDri
             total_difficulty: data.total_difficulty,
         })
     }
-}
-
-pub struct RethPreflightClient;
-
-impl PreflightClient<reth_primitives::Block, reth_primitives::Header, RethDriver>
-    for RethPreflightClient
-{
-    type PreExecValidation = RethPreExecStrategy;
-    type TransactionExecution = RethExecStrategy;
-    type PostExecValidation = RethPostExecStrategy;
 }

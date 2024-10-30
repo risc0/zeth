@@ -14,6 +14,10 @@ features = ["std"]
 path = "../../crates/core"
 default-features = false
 
+[dependencies.zeth-core-ethereum]
+path = "../../crates/core-ethereum"
+default-features = false
+
 [dependencies]
 anyhow = { version = "1.0.86", default-features = false }
 c-kzg = { version = "=1.0.3", features = ["risc0-ffi"] }

@@ -12,24 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::client::{PreflightClient, RethPreflightClient};
+use crate::client::PreflightClient;
 use crate::derive::{RPCDerivableBlock, RPCDerivableHeader};
 use crate::provider::{new_provider, BlockQuery};
-use alloy::consensus::Header;
 use alloy::primitives::B256;
 use anyhow::Context;
 use log::info;
-use reth_chainspec::{ChainSpec, MAINNET};
-use reth_primitives::Block;
+use reth_chainspec::ChainSpec;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::Arc;
-use zeth_core::db::MemoryDB;
 use zeth_core::rescue::Recoverable;
-use zeth_core::stateless::client::{RethStatelessClient, StatelessClient};
+use zeth_core::stateless::client::StatelessClient;
 use zeth_core::stateless::data::StatelessClientData;
-use zeth_core::stateless::driver::{RethDriver, SCEDriver};
+use zeth_core::stateless::driver::SCEDriver;
 
 pub mod client;
 pub mod db;
@@ -131,16 +128,5 @@ where
         .concat();
 
         Ok(journal)
-    }
-}
-
-pub struct RethBlockBuilder;
-
-impl BlockBuilder<Block, Header, MemoryDB, RethDriver> for RethBlockBuilder {
-    type PreflightClient = RethPreflightClient;
-    type StatelessClient = RethStatelessClient;
-
-    fn chain_spec() -> Arc<ChainSpec> {
-        MAINNET.clone()
     }
 }

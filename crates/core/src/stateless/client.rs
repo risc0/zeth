@@ -12,27 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::db::MemoryDB;
 use crate::rescue::{Recoverable, Wrapper};
 use crate::stateless::data::StatelessClientData;
-use crate::stateless::driver::{RethDriver, SCEDriver};
+use crate::stateless::driver::SCEDriver;
 use crate::stateless::engine::StatelessClientEngine;
-use crate::stateless::execute::{DbExecutionInput, RethExecStrategy, TransactionExecutionStrategy};
-use crate::stateless::finalize::{
-    FinalizationStrategy, MPTFinalizationInput, RethFinalizationStrategy,
-};
-use crate::stateless::initialize::{
-    InitializationStrategy, MPTInitializationInput, MemoryDbStrategy,
-};
-use crate::stateless::post_exec::{PostExecutionValidationStrategy, RethPostExecStrategy};
-use crate::stateless::pre_exec::{
-    ConsensusPreExecValidationInput, PreExecutionValidationStrategy, RethPreExecStrategy,
-};
-use alloy_consensus::Header;
+use crate::stateless::execute::{DbExecutionInput, TransactionExecutionStrategy};
+use crate::stateless::finalize::{FinalizationStrategy, MPTFinalizationInput};
+use crate::stateless::initialize::{InitializationStrategy, MPTInitializationInput};
+use crate::stateless::post_exec::PostExecutionValidationStrategy;
+use crate::stateless::pre_exec::{ConsensusPreExecValidationInput, PreExecutionValidationStrategy};
 use reth_chainspec::ChainSpec;
 use reth_evm_ethereum::execute::EthBatchExecutor;
 use reth_evm_ethereum::EthEvmConfig;
-use reth_primitives::Block;
 use reth_revm::db::BundleState;
 use serde::de::DeserializeOwned;
 use std::io::Read;
@@ -112,13 +103,4 @@ where
         // Return the engine for inspection
         Ok(engine)
     }
-}
-pub struct RethStatelessClient;
-
-impl StatelessClient<Block, Header, MemoryDB, RethDriver> for RethStatelessClient {
-    type Initialization = MemoryDbStrategy;
-    type PreExecValidation = RethPreExecStrategy;
-    type TransactionExecution = RethExecStrategy;
-    type PostExecValidation = RethPostExecStrategy;
-    type Finalization = RethFinalizationStrategy;
 }

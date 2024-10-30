@@ -21,8 +21,9 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use zeth::cli::{Cli, Network};
 use zeth::executor::build_executor_env;
 use zeth::{cache_dir_path, proof_file_name};
+use zeth_preflight_ethereum::RethBlockBuilder;
 use zeth_guests::{ZETH_GUESTS_RETH_ELF, ZETH_GUESTS_RETH_ID};
-use zeth_preflight::{BlockBuilder, RethBlockBuilder};
+use zeth_preflight::BlockBuilder;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -30,26 +31,29 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let build_args = cli.build_args();
 
-    // select a guest program
-    let (image_id, elf) = match build_args.network {
-        Network::Ethereum => (ZETH_GUESTS_RETH_ID, ZETH_GUESTS_RETH_ELF),
-        Network::Optimism => todo!(),
-    };
     // Prepare the cache directory
     let cache_dir = build_args
         .cache
         .as_ref()
         .map(|dir| cache_dir_path(dir, &build_args.network.to_string()));
+    // select a guest program
+    let (image_id, elf, expected_journal) = match build_args.network {
+        Network::Ethereum => (
+            ZETH_GUESTS_RETH_ID,
+            ZETH_GUESTS_RETH_ELF,
+            RethBlockBuilder::build_journal(
+                cache_dir.clone(),
+                build_args.rpc_url.clone(),
+                build_args.block_number,
+                build_args.block_count,
+            )
+            .await?,
+        ),
+        Network::Optimism => todo!(),
+    };
 
     if !cli.should_build() {
         let verify_args = cli.verify_args();
-        let expected_journal = RethBlockBuilder::build_journal(
-            cache_dir.clone(),
-            build_args.rpc_url.clone(),
-            build_args.block_number,
-            build_args.block_count,
-        )
-        .await?;
         if build_args.block_count > 1 {
             info!(
                 "Verifying receipt file {} for blocks {} - {}.",
@@ -163,13 +167,6 @@ async fn main() -> anyhow::Result<()> {
         session_info.journal.bytes
     };
     // sanity check
-    let expected_journal = RethBlockBuilder::build_journal(
-        cache_dir.clone(),
-        build_args.rpc_url.clone(),
-        build_args.block_number,
-        build_args.block_count,
-    )
-    .await?;
     assert_eq!(expected_journal, computed_journal);
 
     Ok(())

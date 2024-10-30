@@ -10,6 +10,9 @@ features = ["std", "client"]
 [dependencies.zeth-core]
 workspace = true
 
+[dependencies.zeth-preflight-ethereum]
+workspace = true
+
 [dependencies.zeth-guests]
 workspace = true
 

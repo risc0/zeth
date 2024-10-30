@@ -12,34 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloy_consensus::Header;
-use reth_evm::execute::{BatchExecutor, ExecutionOutcome, ProviderError};
-use reth_evm_ethereum::execute::EthBatchExecutor;
-use reth_evm_ethereum::EthEvmConfig;
-use reth_primitives::Block;
-use reth_revm::db::BundleState;
-use std::fmt::Display;
-
 pub trait PostExecutionValidationStrategy<Block, Header, Database> {
     type Input<'a>;
     type Output<'b>;
 
     fn post_execution_validation(input: Self::Input<'_>) -> anyhow::Result<Self::Output<'_>>;
-}
-
-pub struct RethPostExecStrategy;
-
-impl<Database: reth_revm::Database> PostExecutionValidationStrategy<Block, Header, Database>
-    for RethPostExecStrategy
-where
-    Database: 'static,
-    <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
-{
-    type Input<'a> = EthBatchExecutor<EthEvmConfig, Database>;
-    type Output<'b> = BundleState;
-
-    fn post_execution_validation(input: Self::Input<'_>) -> anyhow::Result<Self::Output<'_>> {
-        let ExecutionOutcome { bundle, .. } = input.finalize();
-        Ok(bundle)
-    }
 }

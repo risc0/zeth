@@ -1,0 +1,18 @@
+[package]
+name = "zeth-preflight-ethereum"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies.zeth-core]
+workspace = true
+
+[dependencies.zeth-core-ethereum]
+workspace = true
+
+[dependencies.zeth-preflight]
+workspace = true
+
+[dependencies]
+reth-chainspec.workspace = true
+reth-primitives.workspace = true
+reth-revm.workspace = true

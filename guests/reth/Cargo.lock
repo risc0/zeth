@@ -3662,6 +3662,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeth-core-ethereum"
+version = "0.1.0"
+dependencies = [
+ "alloy-consensus",
+ "anyhow",
+ "reth-chainspec",
+ "reth-consensus",
+ "reth-ethereum-consensus",
+ "reth-evm",
+ "reth-evm-ethereum",
+ "reth-primitives",
+ "reth-revm",
+ "reth-storage-errors",
+ "zeth-core",
+]
+
+[[package]]
 name = "zeth-guests-reth"
 version = "0.1.0"
 dependencies = [
@@ -3671,6 +3688,7 @@ dependencies = [
  "reth-chainspec",
  "risc0-zkvm",
  "zeth-core",
+ "zeth-core-ethereum",
 ]
 
 [[package]]

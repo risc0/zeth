@@ -17,7 +17,7 @@ fn main() {
     let cwd = std::env::current_dir().unwrap();
     let root_dir = cwd.parent().map(|d| d.to_path_buf());
     let build_opts = std::collections::HashMap::from_iter(
-        ["zeth-guests-reth", "zeth-guests-reth-optimism"]
+        ["zeth-guests-reth-ethereum", "zeth-guests-reth-optimism"]
             .into_iter()
             .map(|guest_pkg| {
                 (

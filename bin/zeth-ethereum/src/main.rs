@@ -13,15 +13,15 @@
 // limitations under the License.
 
 use tokio::task::spawn_blocking;
-use zeth_guests::{ZETH_GUESTS_RETH_ELF, ZETH_GUESTS_RETH_ID};
+use zeth_guests::{ZETH_GUESTS_RETH_ETHEREUM_ELF, ZETH_GUESTS_RETH_ETHEREUM_ID};
 use zeth_preflight_ethereum::RethBlockBuilder;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     spawn_blocking(move || {
         zeth::run::<RethBlockBuilder, _, _, _, _, _>(
-            ZETH_GUESTS_RETH_ELF,
-            ZETH_GUESTS_RETH_ID,
+            ZETH_GUESTS_RETH_ETHEREUM_ELF,
+            ZETH_GUESTS_RETH_ETHEREUM_ID,
             "ethereum",
         )
     })

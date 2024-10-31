@@ -13,23 +13,23 @@
 // limitations under the License.
 
 use crate::db::{apply_changeset, MemoryDB};
+use crate::driver::CoreDriver;
 use crate::keccak::keccak;
 use crate::mpt::MptNode;
 use crate::stateless::data::StorageEntry;
-use alloy_consensus::{Account, Header};
+use alloy_consensus::Account;
 use alloy_primitives::map::HashMap;
 use alloy_primitives::Address;
 use anyhow::Context;
-use reth_primitives::Block;
 use reth_revm::db::states::StateChangeset;
 use reth_revm::db::{BundleState, OriginalValuesKnown};
 
-pub trait FinalizationStrategy<Block, Header, Database> {
+pub trait FinalizationStrategy<Driver: CoreDriver, Database> {
     fn finalize_state(
-        block: &mut Block,
+        block: &mut Driver::Block,
         state_trie: &mut MptNode,
         storage_tries: &mut HashMap<Address, StorageEntry>,
-        parent_header: &mut Header,
+        parent_header: &mut Driver::Header,
         db: Option<&mut Database>,
         bundle_state: BundleState,
     ) -> anyhow::Result<()>;
@@ -37,17 +37,17 @@ pub trait FinalizationStrategy<Block, Header, Database> {
 
 pub struct RethFinalizationStrategy;
 
-impl FinalizationStrategy<Block, Header, MemoryDB> for RethFinalizationStrategy {
+impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for RethFinalizationStrategy {
     fn finalize_state(
-        block: &mut Block,
+        block: &mut Driver::Block,
         state_trie: &mut MptNode,
         storage_tries: &mut HashMap<Address, StorageEntry>,
-        parent_header: &mut Header,
+        parent_header: &mut Driver::Header,
         db: Option<&mut MemoryDB>,
         bundle_state: BundleState,
     ) -> anyhow::Result<()> {
         // Apply state updates
-        assert_eq!(state_trie.hash(), parent_header.state_root);
+        assert_eq!(state_trie.hash(), Driver::state_root(parent_header));
 
         let state_changeset = bundle_state.into_plain_state(OriginalValuesKnown::Yes);
 
@@ -128,7 +128,8 @@ impl FinalizationStrategy<Block, Header, MemoryDB> for RethFinalizationStrategy 
         }
 
         // Validate final state trie
-        assert_eq!(block.header.state_root, state_trie.hash());
+        let header = Driver::block_header(block);
+        assert_eq!(Driver::state_root(header), state_trie.hash());
 
         Ok(())
     }

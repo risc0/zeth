@@ -12,27 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloy::network::Network;
 use alloy::primitives::{B256, U256};
-use alloy::rpc::types::{Block, Header};
-use zeth_core::stateless::driver::SCEDriver;
+use zeth_core::driver::CoreDriver;
+use zeth_core::stateless::data::StatelessClientData;
 
-#[derive(Default, Copy, Clone, Debug)]
-pub struct AlloyDriver;
-
-impl SCEDriver<Block, Header> for AlloyDriver {
-    fn header_hash(header: &Header) -> B256 {
-        header.hash
-    }
-
-    fn block_header(block: &Block) -> &Header {
-        &block.header
-    }
-
-    fn block_to_header(block: Block) -> Header {
-        block.header
-    }
-
-    fn accumulate_difficulty(total_difficulty: U256, header: &Header) -> U256 {
-        total_difficulty + header.difficulty
-    }
+pub trait PreflightDriver<Core: CoreDriver, N: Network> {
+    fn total_difficulty(header: &N::HeaderResponse) -> Option<U256>;
+    fn count_transactions(block: &N::BlockResponse) -> usize;
+    fn derive_transaction(transaction: N::TransactionResponse) -> Core::Transaction;
+    fn derive_header(header: N::HeaderResponse) -> Core::Header;
+    fn derive_block(block: N::BlockResponse, ommers: Vec<N::HeaderResponse>) -> Core::Block;
+    fn derive_header_response(block: N::BlockResponse) -> N::HeaderResponse;
+    fn header_response(block: &N::BlockResponse) -> &N::HeaderResponse;
+    fn uncles(block: &N::BlockResponse) -> &Vec<B256>;
+    fn derive_receipt(receipt: N::ReceiptResponse) -> Core::Receipt;
+    fn derive_data(
+        data: StatelessClientData<N::BlockResponse, N::HeaderResponse>,
+        ommers: Vec<Vec<N::HeaderResponse>>,
+    ) -> StatelessClientData<Core::Block, Core::Header>;
 }

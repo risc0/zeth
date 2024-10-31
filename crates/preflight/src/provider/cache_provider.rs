@@ -19,12 +19,12 @@ use anyhow::Context;
 use std::path::PathBuf;
 
 #[derive(Clone, Debug)]
-pub struct CachedRpcProvider {
-    cache: FileProvider,
-    rpc: RpcProvider,
+pub struct CachedRpcProvider<N: Network> {
+    cache: FileProvider<N>,
+    rpc: RpcProvider<N>,
 }
 
-impl CachedRpcProvider {
+impl<N: Network> CachedRpcProvider<N> {
     pub fn new(cache_dir: PathBuf, block_no: u64, rpc_url: String) -> anyhow::Result<Self> {
         let cache = FileProvider::new(cache_dir, block_no).context("failed to init cache")?;
         let rpc = RpcProvider::new(rpc_url).context("failed to init RPC")?;
@@ -33,7 +33,7 @@ impl CachedRpcProvider {
     }
 }
 
-impl Provider for CachedRpcProvider {
+impl<N: Network> Provider<N> for CachedRpcProvider<N> {
     fn save(&self) -> anyhow::Result<()> {
         self.cache.save()
     }
@@ -42,7 +42,7 @@ impl Provider for CachedRpcProvider {
         self.cache.advance()
     }
 
-    fn get_full_block(&mut self, query: &BlockQuery) -> anyhow::Result<Block<Transaction>> {
+    fn get_full_block(&mut self, query: &BlockQuery) -> anyhow::Result<N::BlockResponse> {
         let cache_out = self.cache.get_full_block(query);
         if cache_out.is_ok() {
             return cache_out;
@@ -54,7 +54,7 @@ impl Provider for CachedRpcProvider {
         Ok(out)
     }
 
-    fn get_uncle_block(&mut self, query: &UncleQuery) -> anyhow::Result<Block<Transaction>> {
+    fn get_uncle_block(&mut self, query: &UncleQuery) -> anyhow::Result<N::BlockResponse> {
         let cache_out = self.cache.get_uncle_block(query);
         if cache_out.is_ok() {
             return cache_out;
@@ -69,7 +69,7 @@ impl Provider for CachedRpcProvider {
     fn get_block_receipts(
         &mut self,
         query: &BlockQuery,
-    ) -> anyhow::Result<Vec<TransactionReceipt>> {
+    ) -> anyhow::Result<Vec<N::ReceiptResponse>> {
         let cache_out = self.cache.get_block_receipts(query);
         if cache_out.is_ok() {
             return cache_out;

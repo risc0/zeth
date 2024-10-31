@@ -12,14 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::driver::CoreDriver;
 use alloy_primitives::U256;
 use std::sync::Arc;
 
-pub trait ValidationStrategy<ChainSpec, Block, Header, Database> {
+pub trait ValidationStrategy<ChainSpec, Driver: CoreDriver, Database> {
     fn validate_header(
         chain_spec: Arc<ChainSpec>,
-        block: &mut Block,
-        parent_header: &mut Header,
+        block: &mut Driver::Block,
+        parent_header: &mut Driver::Header,
         total_difficulty: &mut U256,
     ) -> anyhow::Result<()>;
 }

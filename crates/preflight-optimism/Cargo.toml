@@ -6,19 +6,19 @@ edition = "2021"
 [dependencies.zeth-core]
 workspace = true
 
-[dependencies.zeth-core-ethereum]
-workspace = true
-
 [dependencies.zeth-core-optimism]
 workspace = true
 
 [dependencies.zeth-preflight]
 workspace = true
 
-[dependencies.zeth-preflight-ethereum]
-workspace = true
-
 [dependencies]
+alloy.workspace = true
+op-alloy-consensus.workspace = true
+op-alloy-network.workspace = true
+op-alloy-rpc-types.workspace = true
+
+
 reth-chainspec = { workspace = true, features = ["optimism"] }
 reth-consensus.workspace = true
 reth-evm.workspace = true

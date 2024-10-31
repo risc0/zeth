@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub mod db;
+pub mod driver;
 pub mod keccak;
 pub mod mpt;
 pub mod rescue;

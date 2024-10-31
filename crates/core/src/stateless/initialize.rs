@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use crate::db::MemoryDB;
+use crate::driver::CoreDriver;
 use crate::keccak::keccak;
 use crate::mpt::MptNode;
 use crate::stateless::data::StorageEntry;
@@ -22,38 +23,35 @@ use alloy_primitives::{Address, Bytes, B256, U256};
 use anyhow::bail;
 use core::mem::take;
 use reth_primitives::revm_primitives::Bytecode;
-use reth_primitives::{Header, KECCAK_EMPTY};
+use reth_primitives::KECCAK_EMPTY;
 use reth_revm::db::{AccountState, DbAccount};
 use reth_revm::primitives::AccountInfo;
 
-pub trait InitializationStrategy<Block, Header, Database> {
+pub trait InitializationStrategy<Driver: CoreDriver, Database> {
     fn initialize_database(
         state_trie: &mut MptNode,
         storage_tries: &mut HashMap<Address, StorageEntry>,
         contracts: &mut Vec<Bytes>,
-        parent_header: &mut Header,
-        ancestor_headers: &mut Vec<Header>,
+        parent_header: &mut Driver::Header,
+        ancestor_headers: &mut Vec<Driver::Header>,
     ) -> anyhow::Result<Database>;
 }
 
 pub struct MemoryDbStrategy;
 
-impl<Block> InitializationStrategy<Block, Header, MemoryDB> for MemoryDbStrategy
-where
-    Block: 'static,
-{
+impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB> for MemoryDbStrategy {
     fn initialize_database(
         state_trie: &mut MptNode,
         storage_tries: &mut HashMap<Address, StorageEntry>,
         contracts: &mut Vec<Bytes>,
-        parent_header: &mut Header,
-        ancestor_headers: &mut Vec<Header>,
+        parent_header: &mut Driver::Header,
+        ancestor_headers: &mut Vec<Driver::Header>,
     ) -> anyhow::Result<MemoryDB> {
         // Verify starting state trie root
-        if parent_header.state_root != state_trie.hash() {
+        if Driver::state_root(&parent_header) != state_trie.hash() {
             bail!(
                 "Invalid initial state trie: expected {}, got {}",
-                parent_header.state_root,
+                Driver::state_root(&parent_header),
                 state_trie.hash()
             );
         }
@@ -119,26 +117,30 @@ where
         // prepare block hash history
         let mut block_hashes: HashMap<U256, B256> =
             HashMap::with_capacity(ancestor_headers.len() + 1);
-        block_hashes.insert(U256::from(parent_header.number), parent_header.hash_slow());
+        block_hashes.insert(
+            U256::from(Driver::block_number(&parent_header)),
+            Driver::header_hash(parent_header),
+        );
         let mut prev = &*parent_header;
         for current in ancestor_headers.iter() {
-            let current_hash = current.hash_slow();
-            if prev.parent_hash != current_hash {
+            let current_hash = Driver::header_hash(current);
+            if Driver::parent_hash(&prev) != current_hash {
                 bail!(
                     "Invalid chain: {} is not the parent of {}",
-                    current.number,
-                    prev.number
+                    Driver::block_number(current),
+                    Driver::block_number(prev)
                 );
             }
-            if parent_header.number < current.number || parent_header.number - current.number >= 256
+            if Driver::block_number(parent_header) < Driver::block_number(current)
+                || Driver::block_number(parent_header) - Driver::block_number(current) >= 256
             {
                 bail!(
                     "Invalid chain: {} is not one of the {} most recent blocks",
-                    current.number,
+                    Driver::block_number(current),
                     256,
                 );
             }
-            block_hashes.insert(U256::from(current.number), current_hash);
+            block_hashes.insert(U256::from(Driver::block_number(current)), current_hash);
             prev = current;
         }
 

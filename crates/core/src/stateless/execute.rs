@@ -12,14 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::driver::CoreDriver;
 use alloy_primitives::U256;
 use reth_revm::db::BundleState;
 use std::sync::Arc;
 
-pub trait ExecutionStrategy<ChainSpec, Block, Header, Database> {
+pub trait ExecutionStrategy<ChainSpec, Driver: CoreDriver, Database> {
     fn execute_transactions(
         chain_spec: Arc<ChainSpec>,
-        block: &mut Block,
+        block: &mut Driver::Block,
         total_difficulty: &mut U256,
         db: &mut Option<Database>,
     ) -> anyhow::Result<BundleState>;

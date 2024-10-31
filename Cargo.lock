@@ -3196,6 +3196,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "op-alloy-network"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d113b325527ba7da271a8793f1c14bdf7f035ce9e0611e668c36fc6812568c7f"
+dependencies = [
+ "alloy-consensus",
+ "alloy-network",
+ "alloy-primitives",
+ "alloy-rpc-types-eth",
+ "op-alloy-consensus",
+ "op-alloy-rpc-types",
+]
+
+[[package]]
 name = "op-alloy-rpc-types"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4160,12 +4174,15 @@ dependencies = [
  "alloy-eips",
  "alloy-primitives",
  "alloy-rlp",
+ "alloy-rpc-types",
+ "alloy-serde",
  "bytes",
  "derive_more 1.0.0",
  "k256",
  "modular-bitfield",
  "once_cell",
  "op-alloy-consensus",
+ "op-alloy-rpc-types",
  "rayon",
  "reth-codecs",
  "reth-ethereum-forks",
@@ -6381,6 +6398,7 @@ dependencies = [
 name = "zeth-preflight-ethereum"
 version = "0.1.0"
 dependencies = [
+ "alloy",
  "reth-chainspec",
  "reth-primitives",
  "reth-revm",
@@ -6393,6 +6411,10 @@ dependencies = [
 name = "zeth-preflight-optimism"
 version = "0.1.0"
 dependencies = [
+ "alloy",
+ "op-alloy-consensus",
+ "op-alloy-network",
+ "op-alloy-rpc-types",
  "reth-chainspec",
  "reth-consensus",
  "reth-evm",
@@ -6403,10 +6425,8 @@ dependencies = [
  "reth-revm",
  "reth-storage-errors",
  "zeth-core",
- "zeth-core-ethereum",
  "zeth-core-optimism",
  "zeth-preflight",
- "zeth-preflight-ethereum",
 ]
 
 [[package]]

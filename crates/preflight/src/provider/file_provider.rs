@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{
-    AccountQuery, BlockQuery, MutProvider, ProofQuery, Provider, StorageQuery, UncleQuery,
-};
+use super::{ordered_map, MutProvider, Provider};
+use crate::provider::query::{AccountQuery, BlockQuery, ProofQuery, StorageQuery, UncleQuery};
+use alloy::network::Network;
 use alloy::primitives::{Bytes, U256};
-use alloy::rpc::types::{Block, EIP1186AccountProofResponse, Transaction, TransactionReceipt};
+use alloy::rpc::types::EIP1186AccountProofResponse;
 use anyhow::{anyhow, Context};
 use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 use serde::{Deserialize, Serialize};
@@ -29,8 +29,8 @@ use std::{
     path::PathBuf,
 };
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct FileProvider {
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct FileProvider<N: Network> {
     #[serde(skip)]
     block_no: u64,
     #[serde(skip)]
@@ -38,12 +38,12 @@ pub struct FileProvider {
     #[serde(skip)]
     dirty: bool,
     #[serde(with = "ordered_map")]
-    full_blocks: HashMap<BlockQuery, Block<Transaction>>,
+    full_blocks: HashMap<BlockQuery, N::BlockResponse>,
     #[serde(with = "ordered_map")]
-    uncle_blocks: HashMap<UncleQuery, Block<Transaction>>,
+    uncle_blocks: HashMap<UncleQuery, N::BlockResponse>,
     #[serde(default)]
     #[serde(with = "ordered_map")]
-    receipts: HashMap<BlockQuery, Vec<TransactionReceipt>>,
+    receipts: HashMap<BlockQuery, Vec<N::ReceiptResponse>>,
     #[serde(with = "ordered_map")]
     proofs: HashMap<ProofQuery, EIP1186AccountProofResponse>,
     #[serde(with = "ordered_map")]
@@ -56,35 +56,7 @@ pub struct FileProvider {
     storage: HashMap<StorageQuery, U256>,
 }
 
-/// A serde helper to serialize a HashMap into a vector sorted by key
-mod ordered_map {
-    use std::{collections::HashMap, hash::Hash};
-
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-    pub fn serialize<S, K, V>(map: &HashMap<K, V>, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-        K: Ord + Serialize,
-        V: Serialize,
-    {
-        let mut vec: Vec<(_, _)> = map.iter().collect();
-        vec.sort_unstable_by_key(|&(k, _)| k);
-        vec.serialize(serializer)
-    }
-
-    pub fn deserialize<'de, D, K, V>(deserializer: D) -> Result<HashMap<K, V>, D::Error>
-    where
-        D: Deserializer<'de>,
-        K: Eq + Hash + Deserialize<'de>,
-        V: Deserialize<'de>,
-    {
-        let vec = Vec::<(_, _)>::deserialize(deserializer)?;
-        Ok(vec.into_iter().collect())
-    }
-}
-
-impl FileProvider {
+impl<N: Network> FileProvider<N> {
     /// Creates a new [FileProvider]. If the file exists, it will be read and
     /// deserialized. Otherwise, a new file will be created when saved.
     pub fn new(dir_path: PathBuf, block_no: u64) -> anyhow::Result<Self> {
@@ -99,8 +71,16 @@ impl FileProvider {
                     }
                     Ok(FileProvider {
                         dir_path,
+                        dirty: false,
+                        full_blocks: Default::default(),
+                        uncle_blocks: Default::default(),
+                        receipts: Default::default(),
+                        proofs: Default::default(),
+                        transaction_count: Default::default(),
+                        balance: Default::default(),
+                        code: Default::default(),
                         block_no,
-                        ..Default::default()
+                        storage: Default::default(),
                     })
                 }
                 _ => Err(err),
@@ -127,7 +107,7 @@ impl FileProvider {
     }
 }
 
-impl Provider for FileProvider {
+impl<N: Network> Provider<N> for FileProvider<N> {
     fn save(&self) -> anyhow::Result<()> {
         if self.dirty {
             let file_path = Self::derive_file_path(&self.dir_path, self.block_no);
@@ -149,14 +129,14 @@ impl Provider for FileProvider {
         Ok(())
     }
 
-    fn get_full_block(&mut self, query: &BlockQuery) -> anyhow::Result<Block<Transaction>> {
+    fn get_full_block(&mut self, query: &BlockQuery) -> anyhow::Result<N::BlockResponse> {
         match self.full_blocks.get(query) {
             Some(val) => Ok(val.clone()),
             None => Err(anyhow!("No data for {:?}", query)),
         }
     }
 
-    fn get_uncle_block(&mut self, query: &UncleQuery) -> anyhow::Result<Block<Transaction>> {
+    fn get_uncle_block(&mut self, query: &UncleQuery) -> anyhow::Result<N::BlockResponse> {
         match self.uncle_blocks.get(query) {
             Some(val) => Ok(val.clone()),
             None => Err(anyhow!("No data for {:?}", query)),
@@ -166,7 +146,7 @@ impl Provider for FileProvider {
     fn get_block_receipts(
         &mut self,
         query: &BlockQuery,
-    ) -> anyhow::Result<Vec<TransactionReceipt>> {
+    ) -> anyhow::Result<Vec<N::ReceiptResponse>> {
         match self.receipts.get(query) {
             Some(val) => Ok(val.clone()),
             None => Err(anyhow!("No data for {:?}", query)),
@@ -209,18 +189,18 @@ impl Provider for FileProvider {
     }
 }
 
-impl MutProvider for FileProvider {
-    fn insert_full_block(&mut self, query: BlockQuery, val: Block<Transaction>) {
+impl<N: Network> MutProvider<N> for FileProvider<N> {
+    fn insert_full_block(&mut self, query: BlockQuery, val: N::BlockResponse) {
         self.full_blocks.insert(query, val);
         self.dirty = true;
     }
 
-    fn insert_uncle_block(&mut self, query: UncleQuery, val: Block<Transaction>) {
+    fn insert_uncle_block(&mut self, query: UncleQuery, val: N::BlockResponse) {
         self.uncle_blocks.insert(query, val);
         self.dirty = true;
     }
 
-    fn insert_block_receipts(&mut self, query: BlockQuery, val: Vec<TransactionReceipt>) {
+    fn insert_block_receipts(&mut self, query: BlockQuery, val: Vec<N::ReceiptResponse>) {
         self.receipts.insert(query, val);
         self.dirty = true;
     }

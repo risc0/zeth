@@ -12,24 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::provider::{AccountQuery, BlockQuery, Provider, StorageQuery};
+use crate::driver::PreflightDriver;
+use crate::provider::query::{AccountQuery, BlockQuery, StorageQuery};
+use crate::provider::Provider;
+use alloy::network::Network;
 use alloy::primitives::map::HashMap;
 use alloy::primitives::{Address, B256, U256};
 use reth_revm::primitives::{Account, AccountInfo, Bytecode};
 use reth_revm::{Database, DatabaseCommit, DatabaseRef};
 use reth_storage_errors::db::DatabaseError;
 use std::cell::RefCell;
+use std::marker::PhantomData;
 use std::rc::Rc;
+use zeth_core::driver::CoreDriver;
 
 #[derive(Clone)]
-pub struct ProviderDB {
-    pub provider: Rc<RefCell<dyn Provider>>,
+pub struct ProviderDB<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> {
+    pub provider: Rc<RefCell<dyn Provider<N>>>,
     pub block_no: u64,
+    pub driver: PhantomData<(R, P)>,
 }
 
-impl ProviderDB {
-    pub fn new(provider: Rc<RefCell<dyn Provider>>, block_no: u64) -> Self {
-        ProviderDB { provider, block_no }
+impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> ProviderDB<N, R, P> {
+    pub fn new(provider: Rc<RefCell<dyn Provider<N>>>, block_no: u64) -> Self {
+        ProviderDB {
+            provider,
+            block_no,
+            driver: PhantomData,
+        }
     }
 
     pub fn advance_provider_block(&mut self) -> anyhow::Result<()> {
@@ -42,7 +52,7 @@ impl ProviderDB {
     }
 }
 
-impl Database for ProviderDB {
+impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> Database for ProviderDB<N, R, P> {
     type Error = anyhow::Error;
 
     fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
@@ -79,16 +89,16 @@ impl Database for ProviderDB {
     }
 
     fn block_hash(&mut self, block_no: u64) -> Result<B256, Self::Error> {
-        Ok(self
-            .provider
-            .borrow_mut()
-            .get_full_block(&BlockQuery { block_no })?
-            .header
-            .hash)
+        let header = P::derive_header(P::derive_header_response(
+            self.provider
+                .borrow_mut()
+                .get_full_block(&BlockQuery { block_no })?,
+        ));
+        Ok(R::header_hash(&header))
     }
 }
 
-impl DatabaseRef for ProviderDB {
+impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> DatabaseRef for ProviderDB<N, R, P> {
     type Error = DatabaseError;
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
@@ -133,16 +143,16 @@ impl DatabaseRef for ProviderDB {
     }
 
     fn block_hash_ref(&self, block_no: u64) -> Result<B256, Self::Error> {
-        Ok(self
-            .provider
-            .borrow_mut()
-            .get_full_block(&BlockQuery { block_no })
-            .unwrap()
-            .header
-            .hash)
+        let header = P::derive_header(P::derive_header_response(
+            self.provider
+                .borrow_mut()
+                .get_full_block(&BlockQuery { block_no })
+                .unwrap(),
+        ));
+        Ok(R::header_hash(&header))
     }
 }
 
-impl DatabaseCommit for ProviderDB {
+impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> DatabaseCommit for ProviderDB<N, R, P> {
     fn commit(&mut self, _changes: HashMap<Address, Account>) {}
 }

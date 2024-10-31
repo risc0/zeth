@@ -20,17 +20,17 @@ use reth_evm::execute::{
 use reth_optimism_chainspec::OpChainSpec;
 use reth_optimism_consensus::OptimismBeaconConsensus;
 use reth_optimism_evm::OpExecutorProvider;
-use reth_primitives::revm_primitives::alloy_primitives::Sealable;
-use reth_primitives::revm_primitives::U256;
-use reth_primitives::{Block, Header, SealedHeader};
+use reth_primitives::revm_primitives::alloy_primitives::{BlockNumber, Sealable};
+use reth_primitives::revm_primitives::{B256, U256};
+use reth_primitives::{Block, Header, Receipt, SealedHeader, TransactionSigned};
 use reth_revm::db::BundleState;
 use reth_storage_errors::provider::ProviderError;
 use std::fmt::Display;
 use std::mem::take;
 use std::sync::Arc;
 use zeth_core::db::MemoryDB;
+use zeth_core::driver::CoreDriver;
 use zeth_core::stateless::client::StatelessClient;
-use zeth_core::stateless::driver::RethDriver;
 use zeth_core::stateless::execute::ExecutionStrategy;
 use zeth_core::stateless::finalize::RethFinalizationStrategy;
 use zeth_core::stateless::initialize::MemoryDbStrategy;
@@ -38,7 +38,7 @@ use zeth_core::stateless::validate::ValidationStrategy;
 
 pub struct OpRethStatelessClient;
 
-impl StatelessClient<OpChainSpec, Block, Header, MemoryDB, RethDriver> for OpRethStatelessClient {
+impl StatelessClient<OpChainSpec, OpRethCoreDriver, MemoryDB> for OpRethStatelessClient {
     type Initialization = MemoryDbStrategy;
     type Validation = OpRethValidationStrategy;
     type Execution = OpRethExecutionStrategy;
@@ -47,7 +47,7 @@ impl StatelessClient<OpChainSpec, Block, Header, MemoryDB, RethDriver> for OpRet
 
 pub struct OpRethValidationStrategy;
 
-impl<Database: 'static> ValidationStrategy<OpChainSpec, Block, Header, Database>
+impl<Database: 'static> ValidationStrategy<OpChainSpec, OpRethCoreDriver, Database>
     for OpRethValidationStrategy
 {
     fn validate_header(
@@ -88,7 +88,7 @@ impl<Database: 'static> ValidationStrategy<OpChainSpec, Block, Header, Database>
 
 pub struct OpRethExecutionStrategy;
 
-impl<Database: reth_revm::Database> ExecutionStrategy<OpChainSpec, Block, Header, Database>
+impl<Database: reth_revm::Database> ExecutionStrategy<OpChainSpec, OpRethCoreDriver, Database>
     for OpRethExecutionStrategy
 where
     Database: 'static,
@@ -122,5 +122,43 @@ where
         // Return bundle state
         let ExecutionOutcome { bundle, .. } = executor.finalize();
         Ok(bundle)
+    }
+}
+
+#[derive(Default, Copy, Clone, Debug)]
+pub struct OpRethCoreDriver;
+
+impl CoreDriver for OpRethCoreDriver {
+    type Block = Block;
+    type Header = Header;
+    type Receipt = Receipt;
+    type Transaction = TransactionSigned;
+
+    fn parent_hash(header: &Self::Header) -> B256 {
+        header.parent_hash
+    }
+
+    fn header_hash(header: &Self::Header) -> B256 {
+        header.hash_slow()
+    }
+
+    fn state_root(header: &Self::Header) -> B256 {
+        header.state_root
+    }
+
+    fn block_number(header: &Self::Header) -> BlockNumber {
+        header.number
+    }
+
+    fn block_header(block: &Self::Block) -> &Self::Header {
+        &block.header
+    }
+
+    fn block_to_header(block: Self::Block) -> Self::Header {
+        block.header
+    }
+
+    fn accumulate_difficulty(total_difficulty: U256, header: &Self::Header) -> U256 {
+        total_difficulty + header.difficulty
     }
 }

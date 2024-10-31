@@ -13,6 +13,7 @@ workspace = true
 workspace = true
 
 [dependencies]
+alloy.workspace = true
 reth-chainspec.workspace = true
 reth-primitives.workspace = true
 reth-revm.workspace = true

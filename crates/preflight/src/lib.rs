@@ -13,23 +13,22 @@
 // limitations under the License.
 
 use crate::client::PreflightClient;
-use crate::derive::{RPCDerivableBlock, RPCDerivableHeader};
-use crate::provider::{new_provider, BlockQuery};
+use crate::driver::PreflightDriver;
+use crate::provider::new_provider;
+use alloy::network::Network;
 use alloy::primitives::B256;
 use anyhow::Context;
 use log::info;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
+use provider::query::BlockQuery;
 use std::path::PathBuf;
 use std::sync::Arc;
+use zeth_core::driver::CoreDriver;
 use zeth_core::rescue::Recoverable;
 use zeth_core::stateless::client::StatelessClient;
 use zeth_core::stateless::data::StatelessClientData;
-use zeth_core::stateless::driver::SCEDriver;
 
 pub mod client;
 pub mod db;
-pub mod derive;
 pub mod driver;
 pub mod provider;
 pub mod trie;
@@ -42,9 +41,7 @@ pub struct Witness {
 }
 
 impl Witness {
-    pub fn driver_from<B: Serialize, H: Serialize, R: SCEDriver<B, H>>(
-        data: &StatelessClientData<B, H>,
-    ) -> Self {
+    pub fn driver_from<R: CoreDriver>(data: &StatelessClientData<R::Block, R::Header>) -> Self {
         let encoded_input = pot::to_vec(&data).expect("serialization failed");
         Self {
             encoded_input,
@@ -55,15 +52,15 @@ impl Witness {
 }
 
 #[async_trait::async_trait]
-pub trait BlockBuilder<C, B, H, D, R>
+pub trait BlockBuilder<C, N, D, R, P>
 where
-    B: RPCDerivableBlock + Send + Serialize + DeserializeOwned + 'static,
-    H: RPCDerivableHeader + Send + Serialize + DeserializeOwned + 'static,
+    N: Network,
     D: Recoverable + 'static,
-    R: SCEDriver<B, H> + 'static,
+    R: CoreDriver + Clone + 'static,
+    P: PreflightDriver<R, N> + Clone + 'static,
 {
-    type PreflightClient: PreflightClient<C, B, H, R>;
-    type StatelessClient: StatelessClient<C, B, H, D, R>;
+    type PreflightClient: PreflightClient<C, N, R, P>;
+    type StatelessClient: StatelessClient<C, R, D>;
 
     fn chain_spec() -> Arc<C>;
 
@@ -74,24 +71,22 @@ where
         block_count: u64,
     ) -> anyhow::Result<Witness> {
         // Fetch all of the initial data
-        let preflight_data: StatelessClientData<B, H> = tokio::task::spawn_blocking(move || {
+        let preflight_data: StatelessClientData<R::Block, R::Header> =
             <Self::PreflightClient>::preflight(
                 Self::chain_spec(),
                 cache_dir,
                 rpc_url,
                 block_number,
                 block_count,
-            )
-        })
-        .await??;
-        let build_result = Witness::driver_from::<B, H, R>(&preflight_data);
+            )?;
+        let build_result = Witness::driver_from::<R>(&preflight_data);
 
         // Verify that the transactions run correctly
         info!(
             "Running from memory (Input size: {} bytes) ...",
             build_result.encoded_input.len()
         );
-        let deserialized_preflight_data: StatelessClientData<B, H> =
+        let deserialized_preflight_data: StatelessClientData<R::Block, R::Header> =
             Self::StatelessClient::deserialize_data(build_result.encoded_input.as_slice())
                 .context("input deserialization failed")?;
         <Self::StatelessClient>::validate(Self::chain_spec(), deserialized_preflight_data)
@@ -107,23 +102,17 @@ where
         block_count: u64,
     ) -> anyhow::Result<Vec<u8>> {
         // Fetch the block
-        let validation_tip_block = tokio::task::spawn_blocking(move || {
-            let provider = new_provider(cache_dir, block_number, rpc_url).unwrap();
+        let provider = new_provider::<N>(cache_dir, block_number, rpc_url).unwrap();
 
-            let result = provider.borrow_mut().get_full_block(&BlockQuery {
-                block_no: block_number + block_count - 1,
-            });
+        let validation_tip_block = provider.borrow_mut().get_full_block(&BlockQuery {
+            block_no: block_number + block_count - 1,
+        })?;
 
-            result
-        })
-        .await??;
+        let header = P::derive_header_response(validation_tip_block);
 
-        let total_difficulty = validation_tip_block
-            .header
-            .total_difficulty
-            .unwrap_or_default();
+        let total_difficulty = P::total_difficulty(&header).unwrap_or_default();
         let journal = [
-            validation_tip_block.header.hash.0.as_slice(),
+            R::header_hash(&P::derive_header(header)).0.as_slice(),
             total_difficulty.to_be_bytes::<32>().as_slice(),
             block_count.to_be_bytes().as_slice(),
         ]

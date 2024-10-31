@@ -13,18 +13,19 @@
 // limitations under the License.
 
 use crate::provider::*;
+use alloy::network::Network;
 use alloy::providers::{Provider as AlloyProvider, ReqwestProvider};
 use anyhow::anyhow;
 use log::debug;
 use std::future::IntoFuture;
 
 #[derive(Clone, Debug)]
-pub struct RpcProvider {
-    http_client: ReqwestProvider,
+pub struct RpcProvider<N: Network> {
+    http_client: ReqwestProvider<N>,
     tokio_handle: tokio::runtime::Handle,
 }
 
-impl RpcProvider {
+impl<N: Network> RpcProvider<N> {
     pub fn new(rpc_url: String) -> anyhow::Result<Self> {
         let http_client = ReqwestProvider::new_http(rpc_url.parse()?);
         let tokio_handle = tokio::runtime::Handle::current();
@@ -36,7 +37,7 @@ impl RpcProvider {
     }
 }
 
-impl Provider for RpcProvider {
+impl<N: Network> Provider<N> for RpcProvider<N> {
     fn save(&self) -> anyhow::Result<()> {
         Ok(())
     }
@@ -45,7 +46,7 @@ impl Provider for RpcProvider {
         Ok(())
     }
 
-    fn get_full_block(&mut self, query: &BlockQuery) -> anyhow::Result<Block<Transaction>> {
+    fn get_full_block(&mut self, query: &BlockQuery) -> anyhow::Result<N::BlockResponse> {
         debug!("Querying RPC for full block: {:?}", query);
 
         let response = self.tokio_handle.block_on(
@@ -59,7 +60,7 @@ impl Provider for RpcProvider {
         }
     }
 
-    fn get_uncle_block(&mut self, query: &UncleQuery) -> anyhow::Result<Block<Transaction>> {
+    fn get_uncle_block(&mut self, query: &UncleQuery) -> anyhow::Result<N::BlockResponse> {
         debug!("Querying RPC for uncle block: {:?}", query);
 
         let response = self.tokio_handle.block_on(
@@ -76,7 +77,7 @@ impl Provider for RpcProvider {
     fn get_block_receipts(
         &mut self,
         query: &BlockQuery,
-    ) -> anyhow::Result<Vec<TransactionReceipt>> {
+    ) -> anyhow::Result<Vec<N::ReceiptResponse>> {
         debug!("Querying RPC for block receipts: {:?}", query);
 
         let response = self

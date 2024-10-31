@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::driver::CoreDriver;
 use crate::rescue::{Recoverable, Rescued, Wrapper};
 use crate::stateless::data::StatelessClientData;
-use crate::stateless::driver::SCEDriver;
 use crate::stateless::execute::ExecutionStrategy;
 use crate::stateless::finalize::FinalizationStrategy;
 use crate::stateless::initialize::InitializationStrategy;
@@ -24,27 +24,20 @@ use reth_revm::db::BundleState;
 use std::sync::Arc;
 
 /// A generic builder for building a block.
-pub struct StatelessClientEngine<
-    ChainSpec,
-    Block,
-    Header,
-    Database: Recoverable,
-    Driver: SCEDriver<Block, Header>,
-> {
+pub struct StatelessClientEngine<ChainSpec, Driver: CoreDriver, Database: Recoverable> {
     pub chain_spec: Arc<ChainSpec>,
-    pub data: StatelessClientData<Block, Header>,
+    pub data: StatelessClientData<Driver::Block, Driver::Header>,
     pub db: Option<Wrapper<Database>>,
     pub db_rescued: Option<Rescued<Database>>,
-    pub driver: Driver,
 }
 
-impl<ChainSpec, Block, Header, Database: Recoverable, Driver: SCEDriver<Block, Header>>
-    StatelessClientEngine<ChainSpec, Block, Header, Database, Driver>
+impl<ChainSpec, Driver: CoreDriver, Database: Recoverable>
+    StatelessClientEngine<ChainSpec, Driver, Database>
 {
     /// Creates a new stateless validator
     pub fn new(
         chain_spec: Arc<ChainSpec>,
-        data: StatelessClientData<Block, Header>,
+        data: StatelessClientData<Driver::Block, Driver::Header>,
         db: Option<Database>,
     ) -> Self {
         let db = db.map(|db| Wrapper::from(db));
@@ -54,12 +47,11 @@ impl<ChainSpec, Block, Header, Database: Recoverable, Driver: SCEDriver<Block, H
             data,
             db,
             db_rescued,
-            driver: Driver::default(),
         }
     }
 
     /// Initializes the database from the input.
-    pub fn initialize_database<T: for<'a, 'b> InitializationStrategy<Block, Header, Database>>(
+    pub fn initialize_database<T: for<'a, 'b> InitializationStrategy<Driver, Database>>(
         &mut self,
     ) -> anyhow::Result<Option<Database>> {
         let StatelessClientEngine {
@@ -92,7 +84,7 @@ impl<ChainSpec, Block, Header, Database: Recoverable, Driver: SCEDriver<Block, H
     }
 
     /// Validates the header before execution.
-    pub fn validate_header<T: for<'a> ValidationStrategy<ChainSpec, Block, Header, Database>>(
+    pub fn validate_header<T: for<'a> ValidationStrategy<ChainSpec, Driver, Database>>(
         &mut self,
     ) -> anyhow::Result<()> {
         // Unpack input
@@ -118,7 +110,7 @@ impl<ChainSpec, Block, Header, Database: Recoverable, Driver: SCEDriver<Block, H
 
     /// Executes transactions.
     pub fn execute_transactions<
-        T: for<'a, 'b> ExecutionStrategy<ChainSpec, Block, Header, Wrapper<Database>>,
+        T: for<'a, 'b> ExecutionStrategy<ChainSpec, Driver, Wrapper<Database>>,
     >(
         &mut self,
     ) -> anyhow::Result<BundleState> {
@@ -158,7 +150,7 @@ impl<ChainSpec, Block, Header, Database: Recoverable, Driver: SCEDriver<Block, H
     }
 
     /// Finalizes the state trie.
-    pub fn finalize_state<T: for<'a> FinalizationStrategy<Block, Header, Database>>(
+    pub fn finalize_state<T: for<'a> FinalizationStrategy<Driver, Database>>(
         &mut self,
         bundle_state: BundleState,
     ) -> anyhow::Result<()> {

@@ -20,17 +20,17 @@ use reth_evm::execute::{
     BatchExecutor, BlockExecutionInput, BlockExecutorProvider, ExecutionOutcome,
 };
 use reth_evm_ethereum::execute::EthExecutorProvider;
-use reth_primitives::revm_primitives::alloy_primitives::Sealable;
-use reth_primitives::revm_primitives::U256;
-use reth_primitives::{Block, Header, SealedHeader};
+use reth_primitives::revm_primitives::alloy_primitives::{BlockNumber, Sealable};
+use reth_primitives::revm_primitives::{B256, U256};
+use reth_primitives::{Block, Header, Receipt, SealedHeader, TransactionSigned};
 use reth_revm::db::BundleState;
 use reth_storage_errors::provider::ProviderError;
 use std::fmt::Display;
 use std::mem::take;
 use std::sync::Arc;
 use zeth_core::db::MemoryDB;
+use zeth_core::driver::CoreDriver;
 use zeth_core::stateless::client::StatelessClient;
-use zeth_core::stateless::driver::RethDriver;
 use zeth_core::stateless::execute::ExecutionStrategy;
 use zeth_core::stateless::finalize::RethFinalizationStrategy;
 use zeth_core::stateless::initialize::MemoryDbStrategy;
@@ -38,7 +38,7 @@ use zeth_core::stateless::validate::ValidationStrategy;
 
 pub struct RethStatelessClient;
 
-impl StatelessClient<ChainSpec, Block, Header, MemoryDB, RethDriver> for RethStatelessClient {
+impl StatelessClient<ChainSpec, RethCoreDriver, MemoryDB> for RethStatelessClient {
     type Initialization = MemoryDbStrategy;
     type Validation = RethValidationStrategy;
     type Execution = RethExecutionStrategy;
@@ -47,7 +47,7 @@ impl StatelessClient<ChainSpec, Block, Header, MemoryDB, RethDriver> for RethSta
 
 pub struct RethValidationStrategy;
 
-impl<Database> ValidationStrategy<ChainSpec, Block, Header, Database> for RethValidationStrategy
+impl<Database> ValidationStrategy<ChainSpec, RethCoreDriver, Database> for RethValidationStrategy
 where
     Database: 'static,
 {
@@ -89,7 +89,7 @@ where
 
 pub struct RethExecutionStrategy;
 
-impl<Database: reth_revm::Database> ExecutionStrategy<ChainSpec, Block, Header, Database>
+impl<Database: reth_revm::Database> ExecutionStrategy<ChainSpec, RethCoreDriver, Database>
     for RethExecutionStrategy
 where
     Database: 'static,
@@ -123,5 +123,43 @@ where
         // Return bundle state
         let ExecutionOutcome { bundle, .. } = executor.finalize();
         Ok(bundle)
+    }
+}
+
+#[derive(Default, Copy, Clone, Debug)]
+pub struct RethCoreDriver;
+
+impl CoreDriver for RethCoreDriver {
+    type Block = Block;
+    type Header = Header;
+    type Receipt = Receipt;
+    type Transaction = TransactionSigned;
+
+    fn parent_hash(header: &Self::Header) -> B256 {
+        header.parent_hash
+    }
+
+    fn header_hash(header: &Self::Header) -> B256 {
+        header.hash_slow()
+    }
+
+    fn state_root(header: &Self::Header) -> B256 {
+        header.state_root
+    }
+
+    fn block_number(header: &Self::Header) -> BlockNumber {
+        header.number
+    }
+
+    fn block_header(block: &Self::Block) -> &Self::Header {
+        &block.header
+    }
+
+    fn block_to_header(block: Self::Block) -> Self::Header {
+        block.header
+    }
+
+    fn accumulate_difficulty(total_difficulty: U256, header: &Self::Header) -> U256 {
+        total_difficulty + header.difficulty
     }
 }

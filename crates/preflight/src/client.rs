@@ -1,9 +1,10 @@
 use crate::db::PreflightDB;
-use crate::derive::{RPCDerivableBlock, RPCDerivableData, RPCDerivableHeader};
+use crate::driver::PreflightDriver;
 use crate::provider::db::ProviderDB;
-use crate::provider::{new_provider, BlockQuery, UncleQuery};
+use crate::provider::new_provider;
+use crate::provider::query::{BlockQuery, UncleQuery};
 use crate::trie::extend_proof_tries;
-use alloy::rpc::types::{Block, Header};
+use alloy::network::Network;
 use anyhow::Context;
 use hashbrown::HashSet;
 use log::{debug, info};
@@ -13,17 +14,21 @@ use std::iter::zip;
 use std::mem::replace;
 use std::path::PathBuf;
 use std::sync::Arc;
+use zeth_core::driver::CoreDriver;
 use zeth_core::mpt::MptNode;
 use zeth_core::rescue::Wrapper;
 use zeth_core::stateless::data::StatelessClientData;
-use zeth_core::stateless::driver::SCEDriver;
 use zeth_core::stateless::engine::StatelessClientEngine;
 use zeth_core::stateless::execute::ExecutionStrategy;
 use zeth_core::stateless::validate::ValidationStrategy;
 
-pub trait PreflightClient<C, B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCEDriver<B, H>> {
-    type Validation: for<'a> ValidationStrategy<C, B, H, PreflightDB>;
-    type Execution: for<'a, 'b> ExecutionStrategy<C, B, H, Wrapper<PreflightDB>>;
+pub trait PreflightClient<C, N: Network, R: CoreDriver, P: PreflightDriver<R, N>>
+where
+    R: Clone,
+    P: Clone,
+{
+    type Validation: for<'a> ValidationStrategy<C, R, PreflightDB<N, R, P>>;
+    type Execution: for<'a, 'b> ExecutionStrategy<C, R, Wrapper<PreflightDB<N, R, P>>>;
 
     fn preflight(
         chain_spec: Arc<C>,
@@ -31,18 +36,20 @@ pub trait PreflightClient<C, B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCE
         rpc_url: Option<String>,
         block_no: u64,
         block_count: u64,
-    ) -> anyhow::Result<StatelessClientData<B, H>> {
-        let provider = new_provider(cache_dir.clone(), block_no, rpc_url.clone())?;
+    ) -> anyhow::Result<StatelessClientData<R::Block, R::Header>> {
+        let provider = new_provider::<N>(cache_dir.clone(), block_no, rpc_url.clone())?;
         let mut provider_mut = provider.borrow_mut();
         // Fetch the parent block
         let parent_block = provider_mut.get_full_block(&BlockQuery {
             block_no: block_no - 1,
         })?;
+        let parent_header = P::derive_header_response(parent_block);
+        let core_parent_header = P::derive_header(parent_header.clone());
         debug!(
             "Initial block: {:?} ({:?})",
-            parent_block.header.number, parent_block.header.hash
+            R::block_number(&core_parent_header),
+            R::header_hash(&core_parent_header)
         );
-        let parent_header = parent_block.header;
 
         // Fetch the blocks and their uncles
         info!("Grabbing blocks and their uncles ...");
@@ -50,27 +57,29 @@ pub trait PreflightClient<C, B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCE
         let mut ommers = Vec::new();
         for block_no in block_no..block_no + block_count {
             let block = provider_mut.get_full_block(&BlockQuery { block_no })?;
-            let uncle_headers: Vec<_> = block
-                .uncles
+            let uncle_headers: Vec<_> = P::uncles(&block)
                 .iter()
                 .enumerate()
                 .map(|(idx, _)| {
-                    provider_mut
-                        .get_uncle_block(&UncleQuery {
-                            block_no,
-                            uncle_index: idx as u64,
-                        })
-                        .expect("Failed to retrieve uncle block")
-                        .header
+                    P::derive_header_response(
+                        provider_mut
+                            .get_uncle_block(&UncleQuery {
+                                block_no,
+                                uncle_index: idx as u64,
+                            })
+                            .expect("Failed to retrieve uncle block"),
+                    )
                 })
                 .collect();
             // Print Debug info
+            let core_block_header = P::derive_header(P::header_response(&block).clone());
             debug!(
                 "Block number: {:?} ({:?})",
-                block.header.number, block.header.hash,
+                R::block_number(&core_block_header),
+                R::header_hash(&core_block_header),
             );
-            debug!("Transaction count: {:?}", block.transactions.len());
-            debug!("Uncle count: {:?}", block.uncles.len());
+            debug!("Transaction count: {:?}", P::count_transactions(&block));
+            debug!("Uncle count: {:?}", P::uncles(&block).len());
             // Collect data
             blocks.push(block);
             ommers.push(uncle_headers);
@@ -81,14 +90,14 @@ pub trait PreflightClient<C, B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCE
         ommers.reverse();
 
         // Create the provider DB with a fresh provider to reset block_no
-        let provider_db = ProviderDB::new(
-            new_provider(cache_dir, block_no, rpc_url)?,
-            parent_header.number,
+        let provider_db = ProviderDB::<N, R, P>::new(
+            new_provider::<N>(cache_dir, block_no, rpc_url)?,
+            R::block_number(&core_parent_header),
         );
         let preflight_db = PreflightDB::from(provider_db);
 
         // Create the input data
-        let total_difficulty = parent_header.total_difficulty.unwrap_or_default();
+        let total_difficulty = P::total_difficulty(&parent_header).unwrap_or_default();
         let data = StatelessClientData {
             blocks: blocks.into_iter().rev().collect(),
             state_trie: Default::default(),
@@ -105,32 +114,34 @@ pub trait PreflightClient<C, B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCE
 
     fn preflight_with_db(
         chain_spec: Arc<C>,
-        preflight_db: PreflightDB,
-        data: StatelessClientData<Block, Header>,
-        ommers: Vec<Vec<Header>>,
-    ) -> anyhow::Result<StatelessClientData<B, H>> {
+        preflight_db: PreflightDB<N, R, P>,
+        data: StatelessClientData<N::BlockResponse, N::HeaderResponse>,
+        ommers: Vec<Vec<N::HeaderResponse>>,
+    ) -> anyhow::Result<StatelessClientData<R::Block, R::Header>> {
         // Instantiate the engine with a rescue for the DB
         info!("Running block execution engine ...");
-        let mut engine = StatelessClientEngine::<C, B, H, PreflightDB, R>::new(
+        let mut engine = StatelessClientEngine::<C, R, PreflightDB<N, R, P>>::new(
             chain_spec,
-            StatelessClientData::<B, H>::derive(data.clone(), ommers.clone()),
+            P::derive_data(data.clone(), ommers.clone()),
+            // StatelessClientData::<B, H>::derive(data.clone(), ommers.clone()),
             Some(preflight_db),
         );
 
         let block_count = data.blocks.len();
 
-        let mut state_trie = MptNode::from(data.parent_header.state_root);
+        let core_parent_header = P::derive_header(data.parent_header.clone());
+        let mut state_trie = MptNode::from(R::state_root(&core_parent_header));
         let mut storage_tries = Default::default();
         let mut contracts: HashSet<Bytecode> = Default::default();
-        let mut ancestor_headers: Vec<Header> = Default::default();
+        let mut ancestor_headers: Vec<R::Header> = Default::default();
 
         for _ in 0..block_count {
             // Run the engine
             info!("Pre execution validation ...");
-            engine.validate_header::<<Self as PreflightClient<C, B, H, R>>::Validation>()?;
+            engine.validate_header::<<Self as PreflightClient<C, N, R, P>>::Validation>()?;
             info!("Executing transactions ...");
             let bundle_state = engine
-                .execute_transactions::<<Self as PreflightClient<C, B, H, R>>::Execution>()?;
+                .execute_transactions::<<Self as PreflightClient<C, N, R, P>>::Execution>()?;
             let state_changeset = bundle_state.into_plain_state(OriginalValuesKnown::Yes);
             info!("Provider-backed execution is Done!");
 
@@ -170,11 +181,15 @@ pub trait PreflightClient<C, B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCE
 
             // Gather proofs for block history
             info!("Gathering ancestor headers ...");
-            let new_ancestor_headers = preflight_db.get_ancestor_headers()?;
+            let new_ancestor_headers: Vec<_> = preflight_db
+                .get_ancestor_headers()?
+                .into_iter()
+                .map(|h| P::derive_header(h))
+                .collect();
             if ancestor_headers.is_empty()
                 || (!new_ancestor_headers.is_empty()
-                    && new_ancestor_headers.last().unwrap().number
-                        < ancestor_headers.last().unwrap().number)
+                    && R::block_number(new_ancestor_headers.last().unwrap())
+                        < R::block_number(ancestor_headers.last().unwrap()))
             {
                 let _ = replace(&mut ancestor_headers, new_ancestor_headers);
             }
@@ -232,19 +247,19 @@ pub trait PreflightClient<C, B: RPCDerivableBlock, H: RPCDerivableHeader, R: SCE
         let transactions: u64 = data
             .blocks
             .iter()
-            .map(|b| b.transactions.len() as u64)
+            .map(|b| P::count_transactions(b) as u64)
             .sum();
         info!("Transactions: {transactions} total transactions");
 
-        Ok(StatelessClientData::<B, H> {
+        Ok(StatelessClientData::<R::Block, R::Header> {
             blocks: zip(data.blocks, ommers)
-                .map(|(block, ommers)| B::derive(block, ommers))
+                .map(|(block, ommers)| P::derive_block(block, ommers))
                 .collect(),
             state_trie,
             storage_tries,
             contracts: contracts.into_iter().map(|b| b.bytes()).collect(),
-            parent_header: H::derive(data.parent_header),
-            ancestor_headers: ancestor_headers.into_iter().map(|h| H::derive(h)).collect(),
+            parent_header: P::derive_header(data.parent_header),
+            ancestor_headers,
             total_difficulty: data.total_difficulty,
         })
     }

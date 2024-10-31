@@ -22,7 +22,7 @@ async fn main() -> anyhow::Result<()> {
         zeth::run::<OpRethBlockBuilder, _, _, _, _, _>(
             ZETH_GUESTS_RETH_OPTIMISM_ELF,
             ZETH_GUESTS_RETH_OPTIMISM_ID,
-            "ethereum",
+            "optimism",
         )
     })
     .await?

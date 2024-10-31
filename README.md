@@ -1,7 +1,6 @@
 # zeth
 
 NOTICE: Zeth has recently been revised to utilize [reth](https://github.com/paradigmxyz/reth) instead of just [revm](https://github.com/bluealloy/revm). Some features that may be mentioned in the rest of the readme, are still being re-added:
-* Support for Optimism blocks.
 * Release builds
 
 Zeth is an open-source ZK execution-layer block prover for Ethereum and Optimism built on the RISC Zero zkVM.
@@ -29,7 +28,7 @@ Zeth's block building logic uses reth 1.1.0, but its other components are not au
 
 ### Prerequisites
 
-Zeth primarily requires the availability of Ethereum/Optimism RPC provider(s) data.
+Zeth primarily requires the availability of archival Ethereum/Optimism RPC provider(s) data.
 Two complementary types of providers are supported:
 
 * RPC provider.
@@ -40,7 +39,6 @@ Two complementary types of providers are supported:
   Specified using the `--cache[=<CACHE>]` parameter.
 
 ### Installation
-
 
 #### RISC Zero zkVM
 
@@ -54,24 +52,32 @@ https://dev.risczero.com/api/zkvm/install
 cargo risczero build-toolchain --version r0.1.81.0-rc.4
 ```
 
-
 #### zeth
 
 Clone the repository and build with `cargo` using one of the following commands:
 
 * CPU Proving (slow):
 ```shell
-cargo build
+cargo build -p zeth-ethereum --bin zeth-ethereum
+```
+```shell
+cargo build -p zeth-optimism --bin zeth-optimism
 ```
 
 - GPU Proving (apple/metal)
 ```shell
-cargo build -F metal
+cargo build -p zeth-ethereum --bin zeth-ethereum -F metal
+```
+```shell
+cargo build -p zeth-optimism --bin zeth-optimism -F metal
 ```
 
 - GPU Proving (nvidia/cuda)
 ```shell
-cargo build -F cuda
+cargo build -p zeth-ethereum --bin zeth-ethereum -F cuda
+```
+```shell
+cargo build -p zeth-optimism --bin zeth-optimism -F cuda
 ```
 
 
@@ -80,15 +86,23 @@ cargo build -F cuda
 Run the built binary (instead of using `cargo run`) using:
 
 ```shell
-RUST_LOG=info ./target/debug/zeth
+RUST_LOG=info ./target/debug/zeth-ethereum
+```
+or for Optimism
+```shell
+RUST_LOG=info ./target/debug/zeth-optimism
 ```
 
+Note that Optimism support is only available for post-Bedrock blocks.
+
 ### CLI
+
+> Note: Usage for `zeth-optimism` is the same as that for `zeth-ethereum` as shown below. 
 
 Zeth currently has four main modes of execution:
 
 ```shell
-RUST_LOG=info ./target/debug/zeth help
+RUST_LOG=info ./target/debug/zeth-ethereum help
 ```
 ```console
 Usage: zeth <COMMAND>
@@ -105,13 +119,10 @@ Options:
   -V, --version  Print version
 ```
 
-For every command, the `--network` parameter can be set to either `ethereum` or `optimism` for provable construction
-of single blocks from either chain on its own.
-
 #### build
 *This command only natively builds blocks and does not generate any proofs.*
 ```shell
-RUST_LOG=info ./target/debug/zeth build --help
+RUST_LOG=info ./target/debug/zeth-ethereum build --help
 ```
 
 ```console
@@ -120,7 +131,6 @@ Build blocks natively outside the RISC Zero zkVM
 Usage: zeth build [OPTIONS] --block-number=<BLOCK_NUMBER>
 
 Options:
-  -w, --network=<NETWORK>           Network name (ethereum/optimism) [default: ethereum]
   -r, --rpc-url=<RPC_URL>           URL of the execution-layer RPC node
   -c, --cache[=<CACHE>]             Cache RPC calls locally; the value specifies the cache directory [default when the flag is present: cache_rpc]
   -b, --block-number=<BLOCK_NUMBER> Starting block number
@@ -132,15 +142,14 @@ of the result using the RPC provider.
 No proofs are generated.
 
 **Example**
-The `bin/zeth/data` directory comes preloaded with a few cache files that you can use
+The `bin/zeth-ethereum/data` directory comes preloaded with a few cache files that you can use
 out of the box without the need to explicitly specify an RPC URL:
 ```shell
-RUST_LOG=info ./target/debug/zeth build \
-  --network=ethereum \
-  --cache=bin/zeth/data \
+RUST_LOG=info ./target/debug/zeth-ethereum build \
+  --cache=bin/zeth-ethereum/data \
   --block-number=1
 ```
-Preloaded cache data is provided under `bin/zeth/data` for all major Ethereum fork blocks:
+Preloaded cache data is provided under `bin/zeth-ethereum/data` for all major Ethereum fork blocks:
 ```
 Block     Fork
 1         Frontier
@@ -164,7 +173,7 @@ Block     Fork
 #### run
 *This command only invokes the RISC Zero executor and does not generate any proofs.*
 ```shell
-RUST_LOG=info ./target/debug/zeth run --help  
+RUST_LOG=info ./target/debug/zeth-ethereum run --help  
 ```
 ```console
 Build blocks inside the RISC Zero zkVM executor
@@ -185,9 +194,8 @@ No proofs are generated.
 The below example will invoke the executor, which will take a bit more time, and output the number of cycles required
 for execution/proving inside the zkVM:
 ```shell
-RUST_LOG=info ./target/debug/zeth run \
-  --cache=bin/zeth/data \
-  --network=ethereum \
+RUST_LOG=info ./target/debug/zeth-ethereum run \
+  --cache=bin/zeth-ethereum/data \
   --block-number=1
 ```
 
@@ -196,7 +204,7 @@ RUST_LOG=info ./target/debug/zeth run \
 
 Generated proofs are saved locally as `.zkp` files (or `.fake` under dev mode).
 ```shell
-RUST_LOG=info ./target/debug/zeth prove --help
+RUST_LOG=info ./target/debug/zeth-ethereum prove --help
 ```
 ```console
 Provably build blocks inside the RISC Zero zkVM
@@ -221,9 +229,8 @@ Need a Bonsai API key? [Sign up today](https://bonsai.xyz/apply).
 **Example**
 The below example will invoke the prover under dev mode, which will execute quickly and generate a fake receipt locally:
 ```shell
-RUST_LOG=info RISC0_DEV_MODE=1 ./target/debug/zeth prove \
-  --cache=bin/zeth/data \
-  --network=ethereum \
+RUST_LOG=info RISC0_DEV_MODE=1 ./target/debug/zeth-ethereum prove \
+  --cache=bin/zeth-ethereum/data \
   --block-number=1
 ```
 
@@ -233,7 +240,7 @@ are not verifiable outside of dev mode! To generate a real cryptographic proof, 
 #### verify
 *This command verifies a ZK proof.*
 ```shell
-RUST_LOG=info ./target/debug/zeth verify --help
+RUST_LOG=info ./target/debug/zeth-ethereum verify --help
 ```
 ```console
 Verify a block building proof
@@ -250,9 +257,8 @@ and then validates the correctness of the specified receipt file.
 **Example**
 The below example will verify a fake receipt, where such verification can only pass under dev mode:
 ```shell
-RUST_LOG=info RISC0_DEV_MODE=1 ./target/debug/zeth verify \
-  --cache=bin/zeth/data \
-  --network=ethereum \
+RUST_LOG=info RISC0_DEV_MODE=1 ./target/debug/zeth-ethereum verify \
+  --cache=bin/zeth-ethereum/data \
   --block-number=1 \
   --file=risc0-1.1.2-0x0c5dda870412334fe6011ed1bfdc2b7f7a68b794b4fedc360c1c6db160096036.fake
 ```

@@ -6302,8 +6302,6 @@ dependencies = [
  "zeth-core",
  "zeth-guests",
  "zeth-preflight",
- "zeth-preflight-ethereum",
- "zeth-preflight-optimism",
 ]
 
 [[package]]
@@ -6364,10 +6362,50 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeth-ethereum"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "anyhow",
+ "bincode",
+ "bytemuck",
+ "clap",
+ "env_logger",
+ "log",
+ "pot",
+ "serde",
+ "tokio",
+ "tracing",
+ "zeth",
+ "zeth-guests",
+ "zeth-preflight-ethereum",
+]
+
+[[package]]
 name = "zeth-guests"
 version = "0.1.0"
 dependencies = [
  "risc0-build",
+]
+
+[[package]]
+name = "zeth-optimism"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "anyhow",
+ "bincode",
+ "bytemuck",
+ "clap",
+ "env_logger",
+ "log",
+ "pot",
+ "serde",
+ "tokio",
+ "tracing",
+ "zeth",
+ "zeth-guests",
+ "zeth-preflight-optimism",
 ]
 
 [[package]]
@@ -6424,6 +6462,7 @@ dependencies = [
  "reth-primitives",
  "reth-revm",
  "reth-storage-errors",
+ "serde_json",
  "zeth-core",
  "zeth-core-optimism",
  "zeth-preflight",

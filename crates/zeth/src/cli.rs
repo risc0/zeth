@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::fmt;
 use std::path::PathBuf;
-
-use clap::ValueEnum;
 
 #[derive(clap::Parser, Debug, Clone)]
 #[command(name = "zeth")]
@@ -85,34 +82,8 @@ impl Cli {
     }
 }
 
-#[derive(Debug, Clone, clap::ValueEnum)]
-pub enum Network {
-    /// Ethereum Mainnet
-    Ethereum,
-    /// Optimism Mainnet
-    Optimism,
-}
-
-impl fmt::Display for Network {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // use the name of the clap::ValueEnum
-        let val = self.to_possible_value().unwrap();
-        write!(f, "{}", val.get_name())
-    }
-}
-
 #[derive(clap::Args, Debug, Clone)]
 pub struct BuildArgs {
-    #[clap(
-        short = 'w',
-        long,
-        require_equals = true,
-        value_enum,
-        default_value_t = Network::Ethereum
-    )]
-    /// Network name
-    pub network: Network,
-
     #[clap(short, long, require_equals = true)]
     /// URL of the execution-layer RPC node
     pub rpc_url: Option<String>,

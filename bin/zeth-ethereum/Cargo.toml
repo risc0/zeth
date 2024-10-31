@@ -1,0 +1,33 @@
+[package]
+name = "zeth-ethereum"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies.zeth]
+workspace = true
+
+[dependencies.zeth-preflight-ethereum]
+workspace = true
+
+[dependencies.zeth-guests]
+workspace = true
+
+
+[dependencies]
+alloy.workspace = true
+anyhow.workspace = true
+bincode.workspace = true
+bytemuck.workspace = true
+clap.workspace = true
+env_logger.workspace = true
+log.workspace = true
+pot.workspace = true
+
+serde.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[features]
+metal = ["zeth/metal"]
+cuda = ["zeth/cuda"]
+disable-dev-mode = ["zeth/disable-dev-mode"]

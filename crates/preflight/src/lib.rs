@@ -22,6 +22,7 @@ use log::info;
 use provider::query::BlockQuery;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tokio::task::spawn_blocking;
 use zeth_core::driver::CoreDriver;
 use zeth_core::rescue::Recoverable;
 use zeth_core::stateless::client::StatelessClient;
@@ -57,6 +58,8 @@ where
     N: Network,
     D: Recoverable + 'static,
     R: CoreDriver + Clone + 'static,
+    <R as CoreDriver>::Block: Send + 'static,
+    <R as CoreDriver>::Header: Send + 'static,
     P: PreflightDriver<R, N> + Clone + 'static,
 {
     type PreflightClient: PreflightClient<C, N, R, P>;
@@ -71,14 +74,16 @@ where
         block_count: u64,
     ) -> anyhow::Result<Witness> {
         // Fetch all of the initial data
-        let preflight_data: StatelessClientData<R::Block, R::Header> =
+        let preflight_data: StatelessClientData<R::Block, R::Header> = spawn_blocking(move || {
             <Self::PreflightClient>::preflight(
                 Self::chain_spec(),
                 cache_dir,
                 rpc_url,
                 block_number,
                 block_count,
-            )?;
+            )
+        })
+        .await??;
         let build_result = Witness::driver_from::<R>(&preflight_data);
 
         // Verify that the transactions run correctly
@@ -102,11 +107,16 @@ where
         block_count: u64,
     ) -> anyhow::Result<Vec<u8>> {
         // Fetch the block
-        let provider = new_provider::<N>(cache_dir, block_number, rpc_url).unwrap();
+        let validation_tip_block = spawn_blocking(move || {
+            let provider = new_provider::<N>(cache_dir, block_number, rpc_url).unwrap();
 
-        let validation_tip_block = provider.borrow_mut().get_full_block(&BlockQuery {
-            block_no: block_number + block_count - 1,
-        })?;
+            let result = provider.borrow_mut().get_full_block(&BlockQuery {
+                block_no: block_number + block_count - 1,
+            });
+
+            result
+        })
+        .await??;
 
         let header = P::derive_header_response(validation_tip_block);
 

@@ -28,3 +28,5 @@ reth-optimism-consensus = { workspace = true, features = ["optimism"] }
 reth-primitives = { workspace = true, features = ["optimism"] }
 reth-revm = { workspace = true, features = ["optimism"] }
 reth-storage-errors.workspace = true
+
+serde_json.workspace = true

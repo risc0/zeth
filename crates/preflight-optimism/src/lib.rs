@@ -70,7 +70,9 @@ impl PreflightDriver<OpRethCoreDriver, Optimism> for OpRethPreflightDriver {
     fn derive_transaction(
         transaction: <Optimism as Network>::TransactionResponse,
     ) -> <OpRethCoreDriver as CoreDriver>::Transaction {
-        TransactionSigned::try_from(WithOtherFields::new(transaction.inner)).unwrap()
+        let encoded = serde_json::to_vec(&transaction).unwrap();
+        let decoded: WithOtherFields<_> = serde_json::from_slice(&encoded).unwrap();
+        TransactionSigned::try_from(decoded).unwrap()
     }
 
     fn derive_header(

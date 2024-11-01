@@ -6,9 +6,7 @@ use crate::provider::query::{BlockQuery, UncleQuery};
 use crate::trie::extend_proof_tries;
 use alloy::network::Network;
 use anyhow::Context;
-use hashbrown::HashSet;
 use log::{debug, info};
-use reth_revm::primitives::Bytecode;
 use std::iter::zip;
 use std::mem::replace;
 use std::path::PathBuf;
@@ -103,7 +101,7 @@ where
             blocks: blocks.into_iter().rev().collect(),
             state_trie: Default::default(),
             storage_tries: Default::default(),
-            contracts: vec![],
+            contracts: Default::default(),
             parent_header,
             ancestor_headers: vec![],
             total_difficulty,
@@ -130,7 +128,7 @@ where
         let core_parent_header = P::derive_header(data.parent_header.clone());
         let mut state_trie = MptNode::from(R::state_root(&core_parent_header));
         let mut storage_tries = Default::default();
-        let mut contracts: HashSet<Bytecode> = Default::default();
+        let mut contracts = data.contracts.clone();
         let mut ancestor_headers: Vec<R::Header> = Default::default();
 
         for num_blocks in 0..block_count {
@@ -198,10 +196,10 @@ where
             // collect the code from each account
             info!("Collecting contracts ...");
             let initial_db = preflight_db.inner.db.db.borrow();
-            for account in initial_db.accounts.values() {
+            for (address, account) in initial_db.accounts.iter() {
                 let code = account.info.code.clone().context("missing code")?;
-                if !code.is_empty() {
-                    contracts.insert(code);
+                if !code.is_empty() && !contracts.contains_key(address) {
+                    contracts.insert(*address, code.bytes());
                 }
             }
             drop(initial_db);
@@ -257,7 +255,7 @@ where
                 .collect(),
             state_trie,
             storage_tries,
-            contracts: contracts.into_iter().map(|b| b.bytes()).collect(),
+            contracts,
             parent_header: P::derive_header(data.parent_header),
             ancestor_headers,
             total_difficulty: data.total_difficulty,

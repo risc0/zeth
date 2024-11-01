@@ -31,7 +31,7 @@ pub trait InitializationStrategy<Driver: CoreDriver, Database> {
     fn initialize_database(
         state_trie: &mut MptNode,
         storage_tries: &mut HashMap<Address, StorageEntry>,
-        contracts: &mut Vec<Bytes>,
+        contracts: &mut HashMap<Address, Bytes>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
     ) -> anyhow::Result<Database>;
@@ -43,7 +43,7 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB> for MemoryDbSt
     fn initialize_database(
         state_trie: &mut MptNode,
         storage_tries: &mut HashMap<Address, StorageEntry>,
-        contracts: &mut Vec<Bytes>,
+        contracts: &mut HashMap<Address, Bytes>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
     ) -> anyhow::Result<MemoryDB> {
@@ -57,9 +57,9 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB> for MemoryDbSt
         }
 
         // hash all the contract code
-        let contracts: HashMap<B256, Bytes> = take(contracts)
+        let mut contracts: HashMap<Address, (B256, Bytes)> = take(contracts)
             .into_iter()
-            .map(|bytes| (keccak(&bytes).into(), bytes))
+            .map(|(address, bytes)| (address, (keccak(&bytes).into(), bytes)))
             .collect();
 
         // Load account data into db
@@ -87,7 +87,8 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB> for MemoryDbSt
             let bytecode = if code_hash.0 == KECCAK_EMPTY.0 {
                 Bytecode::new()
             } else {
-                let bytes = contracts.get(&code_hash).unwrap().clone();
+                let (bytecode_hash, bytes) = contracts.remove(address).unwrap();
+                assert_eq!(bytecode_hash, code_hash);
                 Bytecode::new_raw(bytes)
             };
 

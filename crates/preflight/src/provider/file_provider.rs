@@ -165,7 +165,24 @@ impl<N: Network> Provider<N> for FileProvider<N> {
     fn get_proof(&mut self, query: &ProofQuery) -> anyhow::Result<EIP1186AccountProofResponse> {
         match self.proofs.get(query) {
             Some(val) => Ok(val.clone()),
-            None => Err(anyhow!("No data for {:?}", query)),
+            None => {
+                // return result if a query that targets a superset of keys is found
+                for (stored_query, proof) in self.proofs.iter() {
+                    if query.block_no != stored_query.block_no
+                        || query.address != stored_query.address
+                    {
+                        continue;
+                    }
+                    if query
+                        .indices
+                        .iter()
+                        .all(|idx| stored_query.indices.contains(idx))
+                    {
+                        return Ok(proof.clone());
+                    }
+                }
+                Err(anyhow!("No data for {:?}", query))
+            }
         }
     }
 

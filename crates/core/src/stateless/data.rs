@@ -34,8 +34,8 @@ pub struct StatelessClientData<Block, Header> {
     pub state_trie: MptNode,
     /// Maps each address with its storage trie and the used storage slots.
     pub storage_tries: HashMap<Address, StorageEntry>,
-    /// The code of all unique contracts.
-    pub contracts: Vec<Bytes>,
+    /// The code for each account
+    pub contracts: HashMap<Address, Bytes>,
     /// Immediate parent header
     pub parent_header: Header,
     /// List of at most 256 previous block headers

@@ -113,7 +113,7 @@ where
     }
 
     // preflight the block building process
-    let build_result = Handle::current().block_on(B::build_block(
+    let build_result = Handle::current().block_on(B::build_blocks(
         chain_id,
         cache_dir.clone(),
         build_args.rpc_url.clone(),

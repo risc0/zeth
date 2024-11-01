@@ -26,11 +26,20 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 use zeth_core::driver::CoreDriver;
 
-#[derive(Clone)]
 pub struct ProviderDB<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> {
     pub provider: Rc<RefCell<dyn Provider<N>>>,
     pub block_no: u64,
     pub driver: PhantomData<(R, P)>,
+}
+
+impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> Clone for ProviderDB<N, R, P> {
+    fn clone(&self) -> Self {
+        Self {
+            provider: self.provider.clone(),
+            block_no: self.block_no,
+            driver: self.driver,
+        }
+    }
 }
 
 impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> ProviderDB<N, R, P> {

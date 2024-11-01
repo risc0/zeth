@@ -64,7 +64,7 @@ where
     type PreflightClient: PreflightClient<N, R, P>;
     type StatelessClient: StatelessClient<R, D>;
 
-    async fn build_block(
+    async fn build_blocks(
         chain_id: Option<u64>,
         cache_dir: Option<PathBuf>,
         rpc_url: Option<String>,
@@ -117,6 +117,7 @@ where
                 .unwrap();
 
             let chain = provider_mut.get_chain().unwrap() as u64;
+            provider_mut.save().unwrap();
 
             (validation_tip, chain)
         })

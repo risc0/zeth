@@ -133,7 +133,7 @@ where
         let mut contracts: HashSet<Bytecode> = Default::default();
         let mut ancestor_headers: Vec<R::Header> = Default::default();
 
-        for _ in 0..block_count {
+        for num_blocks in 0..block_count {
             // Run the engine
             info!("Pre execution validation ...");
             engine.validate_header::<<Self as PreflightClient<N, R, P>>::Validation>()?;
@@ -221,6 +221,7 @@ where
 
             // Increment block number counter
             preflight_db.advance_provider_block()?;
+            preflight_db.clear()?;
 
             // Give db back to engine
             engine.replace_db(Wrapper::from(preflight_db))?;
@@ -240,14 +241,14 @@ where
                 "Storage tries: {storage_nodes} total nodes over {} accounts",
                 storage_tries.len()
             );
+            info!("Witness now covers {num_blocks} blocks.");
         }
-        info!("Blocks: {}", data.blocks.len());
         let transactions: u64 = data
             .blocks
             .iter()
             .map(|b| P::count_transactions(b) as u64)
             .sum();
-        info!("Transactions: {transactions} total transactions");
+        info!("{transactions} total transactions.");
 
         Ok(StatelessClientData::<R::Block, R::Header> {
             chain: data.chain,

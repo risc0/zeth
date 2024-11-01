@@ -8,12 +8,12 @@ use alloy::network::Network;
 use anyhow::Context;
 use hashbrown::HashSet;
 use log::{debug, info};
-use reth_revm::db::OriginalValuesKnown;
 use reth_revm::primitives::Bytecode;
 use std::iter::zip;
 use std::mem::replace;
 use std::path::PathBuf;
 use std::sync::Arc;
+use zeth_core::db::into_plain_state;
 use zeth_core::driver::CoreDriver;
 use zeth_core::mpt::MptNode;
 use zeth_core::rescue::Wrapper;
@@ -142,7 +142,7 @@ where
             info!("Executing transactions ...");
             let bundle_state = engine
                 .execute_transactions::<<Self as PreflightClient<C, N, R, P>>::Execution>()?;
-            let state_changeset = bundle_state.into_plain_state(OriginalValuesKnown::Yes);
+            let state_changeset = into_plain_state(bundle_state);
             info!("Provider-backed execution is Done!");
 
             // Rescue the dropped DB and apply the state changeset

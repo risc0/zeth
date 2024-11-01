@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::db::{apply_changeset, MemoryDB};
+use crate::db::{apply_changeset, into_plain_state, MemoryDB};
 use crate::driver::CoreDriver;
 use crate::keccak::keccak;
 use crate::mpt::MptNode;
@@ -22,7 +22,7 @@ use alloy_primitives::map::HashMap;
 use alloy_primitives::Address;
 use anyhow::Context;
 use reth_revm::db::states::StateChangeset;
-use reth_revm::db::{BundleState, OriginalValuesKnown};
+use reth_revm::db::BundleState;
 
 pub trait FinalizationStrategy<Driver: CoreDriver, Database> {
     fn finalize_state(
@@ -49,7 +49,7 @@ impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for RethFinaliza
         // Apply state updates
         assert_eq!(state_trie.hash(), Driver::state_root(parent_header));
 
-        let state_changeset = bundle_state.into_plain_state(OriginalValuesKnown::Yes);
+        let state_changeset = into_plain_state(bundle_state);
 
         // Update the trie data
         let StateChangeset {

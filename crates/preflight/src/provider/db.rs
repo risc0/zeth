@@ -72,9 +72,9 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> Database for ProviderD
         )))
     }
 
-    fn code_by_hash(&mut self, _code_hash: B256) -> Result<Bytecode, Self::Error> {
+    fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error> {
         // not needed because we already load code with basic info
-        unreachable!()
+        unreachable!("ProviderDB::code_by_hash {code_hash}")
     }
 
     fn storage(&mut self, address: Address, index: U256) -> Result<U256, Self::Error> {
@@ -122,9 +122,9 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> DatabaseRef for Provid
         )))
     }
 
-    fn code_by_hash_ref(&self, _: B256) -> Result<Bytecode, Self::Error> {
+    fn code_by_hash_ref(&self, code_hash: B256) -> Result<Bytecode, Self::Error> {
         // not needed because we already load code with basic info
-        unreachable!("code_by_hash_ref")
+        unreachable!("ProviderDB::code_by_hash_ref {code_hash}")
     }
 
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, Self::Error> {

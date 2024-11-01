@@ -135,7 +135,8 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> From<Rescued<PrePostDB
 impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
     pub fn clear(&mut self) -> anyhow::Result<()> {
         let cleared = Self::from(self.inner.db.db.borrow().db.clone());
-        Ok(drop(core::mem::replace(self, cleared)))
+        drop(core::mem::replace(self, cleared));
+        Ok(())
     }
 
     pub fn save_provider(&mut self) -> anyhow::Result<()> {

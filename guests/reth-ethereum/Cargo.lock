@@ -3764,7 +3764,6 @@ dependencies = [
 name = "zeth-core-ethereum"
 version = "0.1.0"
 dependencies = [
- "alloy-consensus",
  "anyhow",
  "reth-chainspec",
  "reth-consensus",

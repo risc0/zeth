@@ -16,9 +16,9 @@ use crate::driver::CoreDriver;
 use alloy_primitives::U256;
 use std::sync::Arc;
 
-pub trait ValidationStrategy<ChainSpec, Driver: CoreDriver, Database> {
+pub trait ValidationStrategy<Driver: CoreDriver, Database> {
     fn validate_header(
-        chain_spec: Arc<ChainSpec>,
+        chain_spec: Arc<Driver::ChainSpec>,
         block: &mut Driver::Block,
         parent_header: &mut Driver::Header,
         total_difficulty: &mut U256,

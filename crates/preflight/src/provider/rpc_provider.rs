@@ -46,6 +46,16 @@ impl<N: Network> Provider<N> for RpcProvider<N> {
         Ok(())
     }
 
+    fn get_chain(&mut self) -> anyhow::Result<NamedChain> {
+        debug!("Querying RPC for chain id");
+
+        let response = self
+            .tokio_handle
+            .block_on(self.http_client.get_chain_id())?;
+
+        Ok(NamedChain::try_from(response).expect("Unknown chain id"))
+    }
+
     fn get_full_block(&mut self, query: &BlockQuery) -> anyhow::Result<N::BlockResponse> {
         debug!("Querying RPC for full block: {:?}", query);
 

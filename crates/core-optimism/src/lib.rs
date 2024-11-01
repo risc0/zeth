@@ -13,11 +13,14 @@
 // limitations under the License.
 
 use anyhow::Context;
+use reth_chainspec::NamedChain;
 use reth_consensus::Consensus;
 use reth_evm::execute::{
     BatchExecutor, BlockExecutionInput, BlockExecutorProvider, ExecutionOutcome,
 };
-use reth_optimism_chainspec::OpChainSpec;
+use reth_optimism_chainspec::{
+    OpChainSpec, BASE_MAINNET, BASE_SEPOLIA, OP_DEV, OP_MAINNET, OP_SEPOLIA,
+};
 use reth_optimism_consensus::OptimismBeaconConsensus;
 use reth_optimism_evm::OpExecutorProvider;
 use reth_primitives::revm_primitives::alloy_primitives::{BlockNumber, Sealable};
@@ -38,7 +41,7 @@ use zeth_core::stateless::validate::ValidationStrategy;
 
 pub struct OpRethStatelessClient;
 
-impl StatelessClient<OpChainSpec, OpRethCoreDriver, MemoryDB> for OpRethStatelessClient {
+impl StatelessClient<OpRethCoreDriver, MemoryDB> for OpRethStatelessClient {
     type Initialization = MemoryDbStrategy;
     type Validation = OpRethValidationStrategy;
     type Execution = OpRethExecutionStrategy;
@@ -47,7 +50,7 @@ impl StatelessClient<OpChainSpec, OpRethCoreDriver, MemoryDB> for OpRethStateles
 
 pub struct OpRethValidationStrategy;
 
-impl<Database: 'static> ValidationStrategy<OpChainSpec, OpRethCoreDriver, Database>
+impl<Database: 'static> ValidationStrategy<OpRethCoreDriver, Database>
     for OpRethValidationStrategy
 {
     fn validate_header(
@@ -88,7 +91,7 @@ impl<Database: 'static> ValidationStrategy<OpChainSpec, OpRethCoreDriver, Databa
 
 pub struct OpRethExecutionStrategy;
 
-impl<Database: reth_revm::Database> ExecutionStrategy<OpChainSpec, OpRethCoreDriver, Database>
+impl<Database: reth_revm::Database> ExecutionStrategy<OpRethCoreDriver, Database>
     for OpRethExecutionStrategy
 where
     Database: 'static,
@@ -129,10 +132,22 @@ where
 pub struct OpRethCoreDriver;
 
 impl CoreDriver for OpRethCoreDriver {
+    type ChainSpec = OpChainSpec;
     type Block = Block;
     type Header = Header;
     type Receipt = Receipt;
     type Transaction = TransactionSigned;
+
+    fn chain_spec(chain: &NamedChain) -> Option<Arc<Self::ChainSpec>> {
+        match chain {
+            NamedChain::Optimism => Some(OP_MAINNET.clone()),
+            NamedChain::OptimismSepolia => Some(OP_SEPOLIA.clone()),
+            NamedChain::Base => Some(BASE_MAINNET.clone()),
+            NamedChain::BaseSepolia => Some(BASE_SEPOLIA.clone()),
+            NamedChain::Dev => Some(OP_DEV.clone()),
+            _ => None,
+        }
+    }
 
     fn parent_hash(header: &Self::Header) -> B256 {
         header.parent_hash

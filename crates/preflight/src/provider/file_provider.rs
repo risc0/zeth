@@ -19,6 +19,7 @@ use alloy::primitives::{Bytes, U256};
 use alloy::rpc::types::EIP1186AccountProofResponse;
 use anyhow::{anyhow, Context};
 use flate2::{read::GzDecoder, write::GzEncoder, Compression};
+use reth_chainspec::NamedChain;
 use serde::{Deserialize, Serialize};
 use std::mem::replace;
 use std::path::Path;
@@ -31,6 +32,8 @@ use std::{
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct FileProvider<N: Network> {
+    #[serde(skip)]
+    chain_id: u64,
     #[serde(skip)]
     block_no: u64,
     #[serde(skip)]
@@ -59,9 +62,9 @@ pub struct FileProvider<N: Network> {
 impl<N: Network> FileProvider<N> {
     /// Creates a new [FileProvider]. If the file exists, it will be read and
     /// deserialized. Otherwise, a new file will be created when saved.
-    pub fn new(dir_path: PathBuf, block_no: u64) -> anyhow::Result<Self> {
-        let file_path = Self::derive_file_path(&dir_path, block_no);
-        let provider = match FileProvider::read(dir_path.clone(), block_no) {
+    pub fn new(dir_path: PathBuf, block_no: u64, chain_id: u64) -> anyhow::Result<Self> {
+        let file_path = Self::derive_file_path(&dir_path, block_no, chain_id);
+        let provider = match FileProvider::read(dir_path.clone(), block_no, chain_id) {
             Ok(provider) => Ok(provider),
             Err(err) => match err.downcast_ref::<io::Error>() {
                 Some(io_err) if io_err.kind() == io::ErrorKind::NotFound => {
@@ -70,6 +73,8 @@ impl<N: Network> FileProvider<N> {
                         fs::create_dir_all(parent)?;
                     }
                     Ok(FileProvider {
+                        chain_id,
+                        block_no,
                         dir_path,
                         dirty: false,
                         full_blocks: Default::default(),
@@ -79,7 +84,6 @@ impl<N: Network> FileProvider<N> {
                         transaction_count: Default::default(),
                         balance: Default::default(),
                         code: Default::default(),
-                        block_no,
                         storage: Default::default(),
                     })
                 }
@@ -89,19 +93,20 @@ impl<N: Network> FileProvider<N> {
         Ok(provider)
     }
 
-    fn derive_file_path(dir_path: &Path, block_no: u64) -> PathBuf {
+    fn derive_file_path(dir_path: &Path, block_no: u64, chain_id: u64) -> PathBuf {
         dir_path
-            .join(block_no.to_string())
+            .join(format!("{chain_id}-{block_no}"))
             .with_extension("json.gz")
     }
 
-    fn read(dir_path: PathBuf, block_no: u64) -> anyhow::Result<Self> {
-        let file_path = Self::derive_file_path(&dir_path, block_no);
+    fn read(dir_path: PathBuf, block_no: u64, chain_id: u64) -> anyhow::Result<Self> {
+        let file_path = Self::derive_file_path(&dir_path, block_no, chain_id);
         let f = File::open(&file_path)?;
         let mut out: Self = serde_json::from_reader(GzDecoder::new(f))?;
         out.dir_path = dir_path;
         out.dirty = false;
         out.block_no = block_no;
+        out.chain_id = chain_id;
 
         Ok(out)
     }
@@ -110,7 +115,7 @@ impl<N: Network> FileProvider<N> {
 impl<N: Network> Provider<N> for FileProvider<N> {
     fn save(&self) -> anyhow::Result<()> {
         if self.dirty {
-            let file_path = Self::derive_file_path(&self.dir_path, self.block_no);
+            let file_path = Self::derive_file_path(&self.dir_path, self.block_no, self.chain_id);
             let f = File::create(&file_path)
                 .with_context(|| format!("Failed to create '{}'", self.dir_path.display()))?;
             let mut encoder = GzEncoder::new(f, Compression::best());
@@ -124,9 +129,13 @@ impl<N: Network> Provider<N> for FileProvider<N> {
     fn advance(&mut self) -> anyhow::Result<()> {
         drop(replace(
             self,
-            FileProvider::new(self.dir_path.clone(), self.block_no + 1)?,
+            FileProvider::new(self.dir_path.clone(), self.block_no + 1, self.chain_id)?,
         ));
         Ok(())
+    }
+
+    fn get_chain(&mut self) -> anyhow::Result<NamedChain> {
+        Ok(NamedChain::try_from(self.chain_id).unwrap())
     }
 
     fn get_full_block(&mut self, query: &BlockQuery) -> anyhow::Result<N::BlockResponse> {
@@ -190,6 +199,10 @@ impl<N: Network> Provider<N> for FileProvider<N> {
 }
 
 impl<N: Network> MutProvider<N> for FileProvider<N> {
+    fn insert_chain(&mut self, chain: NamedChain) {
+        assert_eq!(self.chain_id, chain as u64);
+    }
+
     fn insert_full_block(&mut self, query: BlockQuery, val: N::BlockResponse) {
         self.full_blocks.insert(query, val);
         self.dirty = true;

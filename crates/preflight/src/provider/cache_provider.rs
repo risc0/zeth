@@ -25,9 +25,16 @@ pub struct CachedRpcProvider<N: Network> {
 }
 
 impl<N: Network> CachedRpcProvider<N> {
-    pub fn new(cache_dir: PathBuf, block_no: u64, rpc_url: String) -> anyhow::Result<Self> {
-        let cache = FileProvider::new(cache_dir, block_no).context("failed to init cache")?;
-        let rpc = RpcProvider::new(rpc_url).context("failed to init RPC")?;
+    pub fn new(
+        cache_dir: PathBuf,
+        block_no: u64,
+        rpc_url: String,
+        chain_id: Option<u64>,
+    ) -> anyhow::Result<Self> {
+        let mut rpc = RpcProvider::new(rpc_url).context("failed to init RPC")?;
+        let chain_id = chain_id.unwrap_or_else(|| rpc.get_chain().unwrap() as u64);
+        let cache =
+            FileProvider::new(cache_dir, block_no, chain_id).context("failed to init cache")?;
 
         Ok(CachedRpcProvider { cache, rpc })
     }
@@ -40,6 +47,18 @@ impl<N: Network> Provider<N> for CachedRpcProvider<N> {
 
     fn advance(&mut self) -> anyhow::Result<()> {
         self.cache.advance()
+    }
+
+    fn get_chain(&mut self) -> anyhow::Result<NamedChain> {
+        let cache_out = self.cache.get_chain();
+        if cache_out.is_ok() {
+            return cache_out;
+        }
+
+        let out = self.rpc.get_chain()?;
+        self.cache.insert_chain(out);
+
+        Ok(out)
     }
 
     fn get_full_block(&mut self, query: &BlockQuery) -> anyhow::Result<N::BlockResponse> {

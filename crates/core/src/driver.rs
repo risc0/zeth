@@ -13,15 +13,19 @@
 // limitations under the License.
 
 use alloy_primitives::{BlockNumber, B256, U256};
+use reth_chainspec::NamedChain;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::sync::Arc;
 
 pub trait CoreDriver: Default {
+    type ChainSpec: 'static;
     type Block: Serialize + DeserializeOwned + 'static;
     type Header: Serialize + DeserializeOwned + 'static;
     type Receipt: Serialize + DeserializeOwned + 'static;
     type Transaction: Serialize + DeserializeOwned + 'static;
 
+    fn chain_spec(chain: &NamedChain) -> Option<Arc<Self::ChainSpec>>;
     fn parent_hash(header: &Self::Header) -> B256;
     fn header_hash(header: &Self::Header) -> B256;
     fn state_root(header: &Self::Header) -> B256;

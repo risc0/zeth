@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use anyhow::Context;
-use reth_chainspec::ChainSpec;
+use reth_chainspec::{ChainSpec, NamedChain, DEV, HOLESKY, MAINNET, SEPOLIA};
 use reth_consensus::Consensus;
 use reth_ethereum_consensus::EthBeaconConsensus;
 use reth_evm::execute::{
@@ -38,7 +38,7 @@ use zeth_core::stateless::validate::ValidationStrategy;
 
 pub struct RethStatelessClient;
 
-impl StatelessClient<ChainSpec, RethCoreDriver, MemoryDB> for RethStatelessClient {
+impl StatelessClient<RethCoreDriver, MemoryDB> for RethStatelessClient {
     type Initialization = MemoryDbStrategy;
     type Validation = RethValidationStrategy;
     type Execution = RethExecutionStrategy;
@@ -47,7 +47,7 @@ impl StatelessClient<ChainSpec, RethCoreDriver, MemoryDB> for RethStatelessClien
 
 pub struct RethValidationStrategy;
 
-impl<Database> ValidationStrategy<ChainSpec, RethCoreDriver, Database> for RethValidationStrategy
+impl<Database> ValidationStrategy<RethCoreDriver, Database> for RethValidationStrategy
 where
     Database: 'static,
 {
@@ -89,7 +89,7 @@ where
 
 pub struct RethExecutionStrategy;
 
-impl<Database: reth_revm::Database> ExecutionStrategy<ChainSpec, RethCoreDriver, Database>
+impl<Database: reth_revm::Database> ExecutionStrategy<RethCoreDriver, Database>
     for RethExecutionStrategy
 where
     Database: 'static,
@@ -130,10 +130,21 @@ where
 pub struct RethCoreDriver;
 
 impl CoreDriver for RethCoreDriver {
+    type ChainSpec = ChainSpec;
     type Block = Block;
     type Header = Header;
     type Receipt = Receipt;
     type Transaction = TransactionSigned;
+
+    fn chain_spec(chain: &NamedChain) -> Option<Arc<Self::ChainSpec>> {
+        match chain {
+            NamedChain::Mainnet => Some(MAINNET.clone()),
+            NamedChain::Sepolia => Some(SEPOLIA.clone()),
+            NamedChain::Holesky => Some(HOLESKY.clone()),
+            NamedChain::Dev => Some(DEV.clone()),
+            _ => None,
+        }
+    }
 
     fn parent_hash(header: &Self::Header) -> B256 {
         header.parent_hash

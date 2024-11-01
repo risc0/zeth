@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use reth_chainspec::NamedChain;
 use tokio::task::spawn_blocking;
 use zeth_guests::{ZETH_GUESTS_RETH_OPTIMISM_ELF, ZETH_GUESTS_RETH_OPTIMISM_ID};
 use zeth_preflight_optimism::OpRethBlockBuilder;
@@ -19,9 +20,10 @@ use zeth_preflight_optimism::OpRethBlockBuilder;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     spawn_blocking(move || {
-        zeth::run::<OpRethBlockBuilder, _, _, _, _, _>(
+        zeth::run::<OpRethBlockBuilder, _, _, _, _>(
             ZETH_GUESTS_RETH_OPTIMISM_ELF,
             ZETH_GUESTS_RETH_OPTIMISM_ID,
+            NamedChain::Optimism,
             "optimism",
         )
     })

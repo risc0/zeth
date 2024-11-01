@@ -21,7 +21,6 @@ use anyhow::Context;
 use log::info;
 use provider::query::BlockQuery;
 use std::path::PathBuf;
-use std::sync::Arc;
 use tokio::task::spawn_blocking;
 use zeth_core::driver::CoreDriver;
 use zeth_core::rescue::Recoverable;
@@ -53,7 +52,7 @@ impl Witness {
 }
 
 #[async_trait::async_trait]
-pub trait BlockBuilder<C, N, D, R, P>
+pub trait BlockBuilder<N, D, R, P>
 where
     N: Network,
     D: Recoverable + 'static,
@@ -62,12 +61,11 @@ where
     <R as CoreDriver>::Header: Send + 'static,
     P: PreflightDriver<R, N> + Clone + 'static,
 {
-    type PreflightClient: PreflightClient<C, N, R, P>;
-    type StatelessClient: StatelessClient<C, R, D>;
-
-    fn chain_spec() -> Arc<C>;
+    type PreflightClient: PreflightClient<N, R, P>;
+    type StatelessClient: StatelessClient<R, D>;
 
     async fn build_block(
+        chain_id: Option<u64>,
         cache_dir: Option<PathBuf>,
         rpc_url: Option<String>,
         block_number: u64,
@@ -76,7 +74,7 @@ where
         // Fetch all of the initial data
         let preflight_data: StatelessClientData<R::Block, R::Header> = spawn_blocking(move || {
             <Self::PreflightClient>::preflight(
-                Self::chain_spec(),
+                chain_id,
                 cache_dir,
                 rpc_url,
                 block_number,
@@ -94,34 +92,41 @@ where
         let deserialized_preflight_data: StatelessClientData<R::Block, R::Header> =
             Self::StatelessClient::deserialize_data(build_result.encoded_input.as_slice())
                 .context("input deserialization failed")?;
-        <Self::StatelessClient>::validate(Self::chain_spec(), deserialized_preflight_data)
+        <Self::StatelessClient>::validate(deserialized_preflight_data)
             .expect("Block validation failed");
         info!("Memory run successful ...");
         Ok(build_result)
     }
 
     async fn build_journal(
+        chain_id: Option<u64>,
         cache_dir: Option<PathBuf>,
         rpc_url: Option<String>,
         block_number: u64,
         block_count: u64,
     ) -> anyhow::Result<Vec<u8>> {
         // Fetch the block
-        let validation_tip_block = spawn_blocking(move || {
-            let provider = new_provider::<N>(cache_dir, block_number, rpc_url).unwrap();
+        let (validation_tip_block, chain) = spawn_blocking(move || {
+            let provider = new_provider::<N>(cache_dir, block_number, rpc_url, chain_id).unwrap();
+            let mut provider_mut = provider.borrow_mut();
 
-            let result = provider.borrow_mut().get_full_block(&BlockQuery {
-                block_no: block_number + block_count - 1,
-            });
+            let validation_tip = provider_mut
+                .get_full_block(&BlockQuery {
+                    block_no: block_number + block_count - 1,
+                })
+                .unwrap();
 
-            result
+            let chain = provider_mut.get_chain().unwrap() as u64;
+
+            (validation_tip, chain)
         })
-        .await??;
+        .await?;
 
         let header = P::derive_header_response(validation_tip_block);
 
         let total_difficulty = P::total_difficulty(&header).unwrap_or_default();
         let journal = [
+            chain.to_be_bytes().as_slice(),
             R::header_hash(&P::derive_header(header)).0.as_slice(),
             total_difficulty.to_be_bytes::<32>().as_slice(),
             block_count.to_be_bytes().as_slice(),

@@ -17,9 +17,9 @@ use alloy_primitives::U256;
 use reth_revm::db::BundleState;
 use std::sync::Arc;
 
-pub trait ExecutionStrategy<ChainSpec, Driver: CoreDriver, Database> {
+pub trait ExecutionStrategy<Driver: CoreDriver, Database> {
     fn execute_transactions(
-        chain_spec: Arc<ChainSpec>,
+        chain_spec: Arc<Driver::ChainSpec>,
         block: &mut Driver::Block,
         total_difficulty: &mut U256,
         db: &mut Option<Database>,

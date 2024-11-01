@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use clap::ValueEnum;
+use reth_chainspec::NamedChain;
+use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 
 #[derive(clap::Parser, Debug, Clone)]
@@ -101,6 +104,30 @@ pub struct BuildArgs {
     #[clap(short = 'n', long, require_equals = true, default_value_t = 1)]
     /// Number of blocks to build in a single proof
     pub block_count: u64,
+
+    #[clap(short = 's', long, require_equals = true, value_enum)]
+    /// Which chain spec to use.
+    pub chain: Option<NamedChain>,
+}
+
+#[derive(Debug, Clone, clap::ValueEnum, Hash, Ord, PartialOrd, Eq, PartialEq)]
+pub enum Chain {
+    /// Mainnet
+    Mainnet,
+    /// Sepolia testnet
+    Sepolia,
+    /// Holesky testnet
+    Holesky,
+    /// Devnet
+    Dev,
+}
+
+impl Display for Chain {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        // use the name of the clap::ValueEnum
+        let val = self.to_possible_value().unwrap();
+        write!(f, "{}", val.get_name())
+    }
 }
 
 #[derive(clap::Args, Debug, Clone)]

@@ -48,10 +48,10 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB> for MemoryDbSt
         ancestor_headers: &mut Vec<Driver::Header>,
     ) -> anyhow::Result<MemoryDB> {
         // Verify starting state trie root
-        if Driver::state_root(&parent_header) != state_trie.hash() {
+        if Driver::state_root(parent_header) != state_trie.hash() {
             bail!(
                 "Invalid initial state trie: expected {}, got {}",
-                Driver::state_root(&parent_header),
+                Driver::state_root(parent_header),
                 state_trie.hash()
             );
         }
@@ -118,13 +118,13 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB> for MemoryDbSt
         let mut block_hashes: HashMap<U256, B256> =
             HashMap::with_capacity(ancestor_headers.len() + 1);
         block_hashes.insert(
-            U256::from(Driver::block_number(&parent_header)),
+            U256::from(Driver::block_number(parent_header)),
             Driver::header_hash(parent_header),
         );
         let mut prev = &*parent_header;
         for current in ancestor_headers.iter() {
             let current_hash = Driver::header_hash(current);
-            if Driver::parent_hash(&prev) != current_hash {
+            if Driver::parent_hash(prev) != current_hash {
                 bail!(
                     "Invalid chain: {} is not the parent of {}",
                     Driver::block_number(current),

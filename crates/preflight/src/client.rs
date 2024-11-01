@@ -12,7 +12,6 @@ use reth_revm::primitives::Bytecode;
 use std::iter::zip;
 use std::mem::replace;
 use std::path::PathBuf;
-use std::sync::Arc;
 use zeth_core::db::into_plain_state;
 use zeth_core::driver::CoreDriver;
 use zeth_core::mpt::MptNode;
@@ -22,23 +21,24 @@ use zeth_core::stateless::engine::StatelessClientEngine;
 use zeth_core::stateless::execute::ExecutionStrategy;
 use zeth_core::stateless::validate::ValidationStrategy;
 
-pub trait PreflightClient<C, N: Network, R: CoreDriver, P: PreflightDriver<R, N>>
+pub trait PreflightClient<N: Network, R: CoreDriver, P: PreflightDriver<R, N>>
 where
     R: Clone,
     P: Clone,
 {
-    type Validation: for<'a> ValidationStrategy<C, R, PreflightDB<N, R, P>>;
-    type Execution: for<'a, 'b> ExecutionStrategy<C, R, Wrapper<PreflightDB<N, R, P>>>;
+    type Validation: ValidationStrategy<R, PreflightDB<N, R, P>>;
+    type Execution: ExecutionStrategy<R, Wrapper<PreflightDB<N, R, P>>>;
 
     fn preflight(
-        chain_spec: Arc<C>,
+        chain_id: Option<u64>,
         cache_dir: Option<PathBuf>,
         rpc_url: Option<String>,
         block_no: u64,
         block_count: u64,
     ) -> anyhow::Result<StatelessClientData<R::Block, R::Header>> {
-        let provider = new_provider::<N>(cache_dir.clone(), block_no, rpc_url.clone())?;
+        let provider = new_provider::<N>(cache_dir.clone(), block_no, rpc_url.clone(), chain_id)?;
         let mut provider_mut = provider.borrow_mut();
+        let chain = provider_mut.get_chain()?;
         // Fetch the parent block
         let parent_block = provider_mut.get_full_block(&BlockQuery {
             block_no: block_no - 1,
@@ -91,7 +91,7 @@ where
 
         // Create the provider DB with a fresh provider to reset block_no
         let provider_db = ProviderDB::<N, R, P>::new(
-            new_provider::<N>(cache_dir, block_no, rpc_url)?,
+            new_provider::<N>(cache_dir, block_no, rpc_url, chain_id)?,
             R::block_number(&core_parent_header),
         );
         let preflight_db = PreflightDB::from(provider_db);
@@ -99,6 +99,7 @@ where
         // Create the input data
         let total_difficulty = P::total_difficulty(&parent_header).unwrap_or_default();
         let data = StatelessClientData {
+            chain,
             blocks: blocks.into_iter().rev().collect(),
             state_trie: Default::default(),
             storage_tries: Default::default(),
@@ -109,21 +110,18 @@ where
         };
 
         // Create the block builder, run the transactions and extract the DB
-        Self::preflight_with_db(chain_spec, preflight_db, data, ommers)
+        Self::preflight_with_db(preflight_db, data, ommers)
     }
 
     fn preflight_with_db(
-        chain_spec: Arc<C>,
         preflight_db: PreflightDB<N, R, P>,
         data: StatelessClientData<N::BlockResponse, N::HeaderResponse>,
         ommers: Vec<Vec<N::HeaderResponse>>,
     ) -> anyhow::Result<StatelessClientData<R::Block, R::Header>> {
         // Instantiate the engine with a rescue for the DB
         info!("Running block execution engine ...");
-        let mut engine = StatelessClientEngine::<C, R, PreflightDB<N, R, P>>::new(
-            chain_spec,
+        let mut engine = StatelessClientEngine::<R, PreflightDB<N, R, P>>::new(
             P::derive_data(data.clone(), ommers.clone()),
-            // StatelessClientData::<B, H>::derive(data.clone(), ommers.clone()),
             Some(preflight_db),
         );
 
@@ -138,10 +136,10 @@ where
         for _ in 0..block_count {
             // Run the engine
             info!("Pre execution validation ...");
-            engine.validate_header::<<Self as PreflightClient<C, N, R, P>>::Validation>()?;
+            engine.validate_header::<<Self as PreflightClient<N, R, P>>::Validation>()?;
             info!("Executing transactions ...");
-            let bundle_state = engine
-                .execute_transactions::<<Self as PreflightClient<C, N, R, P>>::Execution>()?;
+            let bundle_state =
+                engine.execute_transactions::<<Self as PreflightClient<N, R, P>>::Execution>()?;
             let state_changeset = into_plain_state(bundle_state);
             info!("Provider-backed execution is Done!");
 
@@ -252,6 +250,7 @@ where
         info!("Transactions: {transactions} total transactions");
 
         Ok(StatelessClientData::<R::Block, R::Header> {
+            chain: data.chain,
             blocks: zip(data.blocks, ommers)
                 .map(|(block, ommers)| P::derive_block(block, ommers))
                 .collect(),

@@ -15,6 +15,7 @@
 use crate::mpt::MptNode;
 use alloy_primitives::map::HashMap;
 use alloy_primitives::{Address, Bytes, U256};
+use reth_chainspec::NamedChain;
 use serde::{Deserialize, Serialize};
 
 /// Represents the state of an account's storage.
@@ -25,6 +26,8 @@ pub type StorageEntry = (MptNode, Vec<U256>);
 /// External block input.
 #[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize, Serialize)]
 pub struct StatelessClientData<Block, Header> {
+    /// The chain for this data
+    pub chain: NamedChain,
     /// Block and transaction data to execute
     pub blocks: Vec<Block>,
     /// State trie of the parent block.

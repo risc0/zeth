@@ -25,15 +25,15 @@ use std::sync::{Arc, Mutex};
 
 pub type RescueDestination<D> = Arc<Mutex<Option<D>>>;
 
-pub trait StatelessClient<ChainSpec, Driver, Database>
+pub trait StatelessClient<Driver, Database>
 where
     Driver: CoreDriver + 'static,
     Database: Recoverable + 'static,
 {
-    type Initialization: for<'a, 'b> InitializationStrategy<Driver, Database>;
-    type Validation: for<'a> ValidationStrategy<ChainSpec, Driver, Database>;
-    type Execution: for<'a, 'b> ExecutionStrategy<ChainSpec, Driver, Wrapper<Database>>;
-    type Finalization: for<'a> FinalizationStrategy<Driver, Database>;
+    type Initialization: InitializationStrategy<Driver, Database>;
+    type Validation: ValidationStrategy<Driver, Database>;
+    type Execution: ExecutionStrategy<Driver, Wrapper<Database>>;
+    type Finalization: FinalizationStrategy<Driver, Database>;
 
     fn deserialize_data<I: Read>(
         reader: I,
@@ -42,12 +42,10 @@ where
     }
 
     fn validate(
-        chain_spec: Arc<ChainSpec>,
         data: StatelessClientData<Driver::Block, Driver::Header>,
-    ) -> anyhow::Result<StatelessClientEngine<ChainSpec, Driver, Database>> {
+    ) -> anyhow::Result<StatelessClientEngine<Driver, Database>> {
         // Instantiate the engine and initialize the database
-        let mut engine =
-            StatelessClientEngine::<ChainSpec, Driver, Database>::new(chain_spec, data, None);
+        let mut engine = StatelessClientEngine::<Driver, Database>::new(data, None);
         engine.initialize_database::<Self::Initialization>()?;
         // Run the engine until all blocks are processed
         while !engine.data.blocks.is_empty() {

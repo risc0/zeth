@@ -18,6 +18,7 @@ use alloy::primitives::{Address, Bytes, B256, U256};
 use alloy::rpc::types::EIP1186AccountProofResponse;
 use anyhow::anyhow;
 use query::{AccountQuery, BlockQuery, ProofQuery, StorageQuery, UncleQuery};
+use reth_chainspec::NamedChain;
 use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -32,9 +33,10 @@ pub mod rpc_provider;
 pub fn new_file_provider<N: Network>(
     dir_path: PathBuf,
     block_no: u64,
+    chain_id: u64,
 ) -> anyhow::Result<Rc<RefCell<dyn Provider<N>>>> {
     Ok(Rc::new(RefCell::new(file_provider::FileProvider::new(
-        dir_path, block_no,
+        dir_path, block_no, chain_id,
     )?)))
 }
 
@@ -50,9 +52,10 @@ pub fn new_cached_rpc_provider<N: Network>(
     dir_path: PathBuf,
     block_no: u64,
     rpc_url: String,
+    chain_id: Option<u64>,
 ) -> anyhow::Result<Rc<RefCell<dyn Provider<N>>>> {
     Ok(Rc::new(RefCell::new(
-        cache_provider::CachedRpcProvider::new(dir_path, block_no, rpc_url)?,
+        cache_provider::CachedRpcProvider::new(dir_path, block_no, rpc_url, chain_id)?,
     )))
 }
 
@@ -60,10 +63,16 @@ pub fn new_provider<N: Network>(
     cache_dir: Option<PathBuf>,
     block_no: u64,
     rpc_url: Option<String>,
+    chain_id: Option<u64>,
 ) -> anyhow::Result<Rc<RefCell<dyn Provider<N>>>> {
     match (cache_dir, rpc_url) {
-        (Some(cache_path), Some(rpc_url)) => new_cached_rpc_provider(cache_path, block_no, rpc_url),
-        (Some(cache_path), None) => new_file_provider(cache_path, block_no),
+        (Some(cache_path), Some(rpc_url)) => {
+            new_cached_rpc_provider(cache_path, block_no, rpc_url, chain_id)
+        }
+        (Some(cache_path), None) => match chain_id {
+            None => Err(anyhow!("No chain_id or rpc_url given")),
+            Some(chain_id) => new_file_provider(cache_path, block_no, chain_id),
+        },
         (None, Some(rpc_url)) => new_rpc_provider(rpc_url),
         (None, None) => Err(anyhow!("No cache_path or rpc_url given")),
     }
@@ -73,6 +82,7 @@ pub trait Provider<N: Network>: Send {
     fn save(&self) -> anyhow::Result<()>;
     fn advance(&mut self) -> anyhow::Result<()>;
 
+    fn get_chain(&mut self) -> anyhow::Result<NamedChain>;
     fn get_full_block(&mut self, query: &BlockQuery) -> anyhow::Result<N::BlockResponse>;
     fn get_uncle_block(&mut self, query: &UncleQuery) -> anyhow::Result<N::BlockResponse>;
     fn get_block_receipts(&mut self, query: &BlockQuery)
@@ -85,6 +95,7 @@ pub trait Provider<N: Network>: Send {
 }
 
 pub trait MutProvider<N: Network>: Provider<N> {
+    fn insert_chain(&mut self, chain: NamedChain);
     fn insert_full_block(&mut self, query: BlockQuery, val: N::BlockResponse);
     fn insert_uncle_block(&mut self, query: UncleQuery, val: N::BlockResponse);
     fn insert_block_receipts(&mut self, query: BlockQuery, val: Vec<N::ReceiptResponse>);

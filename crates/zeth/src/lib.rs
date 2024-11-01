@@ -18,6 +18,7 @@ use alloy::network::Network;
 use alloy::primitives::B256;
 use clap::Parser;
 use log::{error, info};
+use reth_chainspec::NamedChain;
 use risc0_zkvm::{default_executor, default_prover, is_dev_mode, ProverOpts, Receipt};
 use std::fs::File;
 use std::io::{Read, Write};
@@ -33,8 +34,7 @@ pub mod cli;
 pub mod executor;
 
 pub fn run<
-    B: BlockBuilder<C, N, D, R, P> + Send,
-    C,
+    B: BlockBuilder<N, D, R, P> + Send + Sync + 'static,
     N: Network,
     D: Recoverable + 'static,
     R: CoreDriver + Clone + 'static,
@@ -42,6 +42,7 @@ pub fn run<
 >(
     elf: &[u8],
     image_id: [u32; 8],
+    default_chain: NamedChain,
     network_name: &str,
 ) -> anyhow::Result<()>
 where
@@ -51,6 +52,11 @@ where
     env_logger::init();
     let cli = Cli::parse();
     let build_args = cli.build_args();
+    // Fill default chain id if no way to infer it
+    let chain_id = match (&build_args.rpc_url, build_args.chain) {
+        (None, None) => Some(default_chain as u64),
+        (_, chain) => chain.map(|c| c as u64),
+    };
 
     // Prepare the cache directory
     let cache_dir = build_args
@@ -59,6 +65,7 @@ where
         .map(|dir| cache_dir_path(dir, network_name));
     // select a guest program
     let expected_journal = Handle::current().block_on(B::build_journal(
+        chain_id,
         cache_dir.clone(),
         build_args.rpc_url.clone(),
         build_args.block_number,
@@ -107,6 +114,7 @@ where
 
     // preflight the block building process
     let build_result = Handle::current().block_on(B::build_block(
+        chain_id,
         cache_dir.clone(),
         build_args.rpc_url.clone(),
         build_args.block_number,

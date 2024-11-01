@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use reth_chainspec::MAINNET;
 // use c_kzg::KzgSettings;
 use risc0_zkvm::guest::env;
 use risc0_zkvm::guest::env::stdin;
@@ -38,14 +37,17 @@ fn main() {
     let stateless_client_data = RethStatelessClient::deserialize_data(stdin())
         .expect("Failed to load client data from stdin");
     let validation_depth = stateless_client_data.blocks.len() as u64;
+    assert!(stateless_client_data.chain.is_ethereum(), "This program only supports Ethereum chains");
+    let chain_id = stateless_client_data.chain as u64;
     // Build the block
     env::log("Validating blocks");
-    let engine = RethStatelessClient::validate(MAINNET.clone(), stateless_client_data)
+    let engine = RethStatelessClient::validate(stateless_client_data)
         .expect("block validation failed");
     // Build the journal (todo: make this a strategy)
     let block_hash = engine.data.parent_header.hash_slow();
     let total_difficulty = engine.data.total_difficulty;
     let journal = [
+        chain_id.to_be_bytes().as_slice(),
         block_hash.0.as_slice(),
         total_difficulty.to_be_bytes::<32>().as_slice(),
         validation_depth.to_be_bytes().as_slice(),

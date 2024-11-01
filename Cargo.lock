@@ -6295,6 +6295,7 @@ dependencies = [
  "env_logger",
  "log",
  "pot",
+ "reth-chainspec",
  "risc0-zkvm",
  "serde",
  "tokio",
@@ -6331,7 +6332,6 @@ dependencies = [
 name = "zeth-core-ethereum"
 version = "0.1.0"
 dependencies = [
- "alloy-consensus",
  "anyhow",
  "reth-chainspec",
  "reth-consensus",
@@ -6349,6 +6349,7 @@ name = "zeth-core-optimism"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "reth-chainspec",
  "reth-consensus",
  "reth-evm",
  "reth-optimism-chainspec",
@@ -6358,7 +6359,6 @@ dependencies = [
  "reth-revm",
  "reth-storage-errors",
  "zeth-core",
- "zeth-core-ethereum",
 ]
 
 [[package]]
@@ -6373,6 +6373,7 @@ dependencies = [
  "env_logger",
  "log",
  "pot",
+ "reth-chainspec",
  "serde",
  "tokio",
  "tracing",
@@ -6400,6 +6401,7 @@ dependencies = [
  "env_logger",
  "log",
  "pot",
+ "reth-chainspec",
  "serde",
  "tokio",
  "tracing",

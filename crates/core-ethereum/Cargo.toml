@@ -9,8 +9,6 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 
-alloy-consensus.workspace = true
-
 reth-chainspec.workspace = true
 reth-consensus.workspace = true
 reth-ethereum-consensus.workspace = true

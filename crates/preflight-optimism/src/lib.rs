@@ -17,7 +17,7 @@ use alloy::primitives::{Log, B256, U256};
 use alloy::rpc::types::serde_helpers::WithOtherFields;
 use op_alloy_consensus::OpTxType;
 use op_alloy_network::Optimism;
-use reth_optimism_chainspec::{OpChainSpec, OP_MAINNET};
+use reth_optimism_chainspec::OpChainSpec;
 use reth_primitives::{Block, BlockBody, Header, Receipt, TransactionSigned, TxType, Withdrawals};
 use std::iter::zip;
 use std::sync::Arc;
@@ -32,25 +32,21 @@ use zeth_preflight::driver::PreflightDriver;
 use zeth_preflight::BlockBuilder;
 
 #[derive(Clone)]
-pub struct OpRethBlockBuilder;
+pub struct OpRethBlockBuilder {
+    pub chain_spec: Arc<OpChainSpec>,
+}
 
-impl BlockBuilder<OpChainSpec, Optimism, MemoryDB, OpRethCoreDriver, OpRethPreflightDriver>
+impl BlockBuilder<Optimism, MemoryDB, OpRethCoreDriver, OpRethPreflightDriver>
     for OpRethBlockBuilder
 {
     type PreflightClient = OpRethPreflightClient;
     type StatelessClient = OpRethStatelessClient;
-
-    fn chain_spec() -> Arc<OpChainSpec> {
-        OP_MAINNET.clone()
-    }
 }
 
 #[derive(Clone)]
 pub struct OpRethPreflightClient;
 
-impl PreflightClient<OpChainSpec, Optimism, OpRethCoreDriver, OpRethPreflightDriver>
-    for OpRethPreflightClient
-{
+impl PreflightClient<Optimism, OpRethCoreDriver, OpRethPreflightDriver> for OpRethPreflightClient {
     type Validation = OpRethValidationStrategy;
     type Execution = OpRethExecutionStrategy;
 }
@@ -156,6 +152,7 @@ impl PreflightDriver<OpRethCoreDriver, Optimism> for OpRethPreflightDriver {
         <OpRethCoreDriver as CoreDriver>::Header,
     > {
         StatelessClientData {
+            chain: data.chain,
             blocks: zip(data.blocks, ommers)
                 .map(|(block, ommers)| Self::derive_block(block, ommers))
                 .collect(),
@@ -166,7 +163,7 @@ impl PreflightDriver<OpRethCoreDriver, Optimism> for OpRethPreflightDriver {
             ancestor_headers: data
                 .ancestor_headers
                 .into_iter()
-                .map(|h| Self::derive_header(h))
+                .map(Self::derive_header)
                 .collect(),
             total_difficulty: data.total_difficulty,
         }

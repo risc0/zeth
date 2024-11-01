@@ -135,6 +135,7 @@ Options:
   -c, --cache[=<CACHE>]             Cache RPC calls locally; the value specifies the cache directory [default when the flag is present: cache_rpc]
   -b, --block-number=<BLOCK_NUMBER> Starting block number
   -n, --block-count=<BLOCK_COUNT>   Number of blocks to build in a single proof [default: 1]
+  -s, --chain=<CHAIN>               Which chain spec to use
 ```
 
 When run in this mode, Zeth does all the work needed to construct an Ethereum block and verifies the correctness
@@ -168,6 +169,25 @@ Block     Fork
 15537394  Paris / Merge
 17034870  Shanghai
 19426587  Dencun
+```
+
+When no RPC URL is given, the `--chain` parameter defines which chain fork is being used, with network's mainnet chain being the default when the parameter and the RPC URL are missing.
+The supported chains are listed below:
+
+`zeth-ethereum`:
+```
+mainnet           (Ethereum mainnet)
+sepolia           (Ethereum Sepolia testnet)
+holesky           (Ethereum Holesky testnet)
+dev               (Local Ethereum devnet)
+```
+`zeth-optimism`:
+```
+optimism          (Optimism mainnet)
+optimism-sepolia  (Optimism Sepolia testnet)
+base              (Base mainnet)
+base-sepolia      (Base Sepolia testnet)
+dev               (Local Optimism devnet)
 ```
 
 #### run

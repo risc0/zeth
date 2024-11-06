@@ -32,7 +32,7 @@ jobs:
     - uses: risc0/cargo-install@v1
       with:
         crate: cargo-binstall
-    - run: cargo binstall -y --force cargo-risczero@v1.1.2
+    - run: cargo binstall -y --force cargo-risczero@1.1.2
     - run: cargo risczero install --version r0.1.81.0
     - run: cargo test --workspace --all-targets -F debug-guest-build
 

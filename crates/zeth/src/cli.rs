@@ -91,7 +91,7 @@ pub struct BuildArgs {
     /// URL of the execution-layer RPC node
     pub rpc_url: Option<String>,
 
-    #[clap(short, long, require_equals = true, num_args = 0..=1, default_missing_value = "cache_rpc")]
+    #[clap(short = 'a', long, require_equals = true, num_args = 0..=1, default_missing_value = "cache_rpc")]
     /// Cache RPC calls locally; the value specifies the cache directory
     ///
     /// [default when the flag is present: cache_rpc]
@@ -105,7 +105,7 @@ pub struct BuildArgs {
     /// Number of blocks to build in a single proof
     pub block_count: u64,
 
-    #[clap(short = 's', long, require_equals = true, value_enum)]
+    #[clap(short = 'c', long, require_equals = true, value_enum)]
     /// Which chain spec to use.
     pub chain: Option<NamedChain>,
 }
@@ -135,7 +135,7 @@ pub struct RunArgs {
     #[clap(flatten)]
     pub build_args: BuildArgs,
 
-    #[clap(short = 'x', long, require_equals = true, default_value_t = 20)]
+    #[clap(short, long, require_equals = true, default_value_t = 20)]
     /// The maximum cycle count of a segment as a power of 2
     pub execution_po2: u32,
 }

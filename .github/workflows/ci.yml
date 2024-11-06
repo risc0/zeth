@@ -34,7 +34,7 @@ jobs:
         crate: cargo-binstall
     - run: cargo binstall -y --force cargo-risczero@1.1.2
     - run: cargo risczero install --version r0.1.81.0
-    - run: cargo test --all-targets -p zeth -p zeth-core -p zeth-preflight -p zeth-guests -F debug-guest-build
+    - run: cargo test --all-targets -p zeth-core -p zeth-guests -p zeth-preflight -p zeth -F debug-guest-build
     - run: cargo test --all-targets -p zeth-core-ethereum -p zeth-preflight-ethereum -p zeth-ethereum -F debug-guest-build
     - run: cargo test --all-targets -p zeth-core-optimism -p zeth-preflight-optimism -p zeth-optimism -F debug-guest-build
 

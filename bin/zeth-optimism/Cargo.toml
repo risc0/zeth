@@ -31,3 +31,4 @@ tracing.workspace = true
 metal = ["zeth/metal"]
 cuda = ["zeth/cuda"]
 disable-dev-mode = ["zeth/disable-dev-mode"]
+debug-guest-build = ["zeth-guests/debug-guest-build"]

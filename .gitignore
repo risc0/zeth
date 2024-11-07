@@ -13,3 +13,4 @@ log.txt
 *.bin
 *.txt
 *.fake
+*.out

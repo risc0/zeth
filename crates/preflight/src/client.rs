@@ -131,7 +131,7 @@ where
         let mut contracts = data.contracts.clone();
         let mut ancestor_headers: Vec<R::Header> = Default::default();
 
-        for num_blocks in 0..block_count {
+        for num_blocks in 1..=block_count {
             // Run the engine
             info!("Pre execution validation ...");
             engine.validate_header::<<Self as PreflightClient<N, R, P>>::Validation>()?;

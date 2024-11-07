@@ -6282,6 +6282,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeth-benchmark"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "alloy-chains",
+ "anyhow",
+ "clap",
+ "env_logger",
+ "log",
+ "tracing",
+ "zeth",
+ "zeth-core",
+]
+
+[[package]]
 name = "zeth-core"
 version = "0.1.0"
 dependencies = [

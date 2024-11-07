@@ -32,7 +32,7 @@ Zeth primarily requires the availability of archival Ethereum/Optimism RPC provi
 Two complementary types of providers are supported:
 
 * RPC provider.
-  This fetches data from a Web2 RPC provider, such as [Alchemy](https://www.alchemy.com/), whose URL is specified using the `--rpc-url=<RPC_URL>` parameter.
+  This fetches data from a Web2 RPC provider, such as [Alchemy](https://www.alchemy.com/), whose URL is specified using the `--rpc=<RPC_URL>` parameter.
 * Cached RPC provider.
   This fetches RPC data from a local file when possible, and falls back to an RPC provider when necessary.
   It amends the local file with results from the RPC provider so that subsequent runs don't require additional RPC calls.
@@ -131,7 +131,7 @@ Build blocks natively outside the RISC Zero zkVM
 Usage: zeth build [OPTIONS] --block-number=<BLOCK_NUMBER>
 
 Options:
-  -r, --rpc-url=<RPC_URL>           URL of the execution-layer RPC node
+  -r, --rpc=<RPC_URL>           URL of the execution-layer RPC node
   -c, --cache[=<CACHE>]             Cache RPC calls locally; the value specifies the cache directory [default when the flag is present: cache_rpc]
   -b, --block-number=<BLOCK_NUMBER> Starting block number
   -n, --block-count=<BLOCK_COUNT>   Number of blocks to build in a single proof [default: 1]

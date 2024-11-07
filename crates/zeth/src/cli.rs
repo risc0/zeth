@@ -163,17 +163,3 @@ pub struct VerifyArgs {
     /// Receipt file path
     pub file: PathBuf,
 }
-
-#[derive(clap::Args, Debug, Clone)]
-pub struct BenchArgs {
-    #[clap(flatten)]
-    pub prove_args: ProveArgs,
-
-    #[clap(short = 'r', long, require_equals = true)]
-    /// The number of blocks to sample from
-    pub sample_range: u64,
-
-    #[clap(short = 'm', long, require_equals = true)]
-    /// The number of samples to benchmark
-    pub sample_count: u64,
-}

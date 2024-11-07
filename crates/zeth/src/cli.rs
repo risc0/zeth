@@ -87,17 +87,17 @@ impl Cli {
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct BuildArgs {
-    #[clap(short, long, require_equals = true)]
+    #[clap(short = 'u', long, require_equals = true)]
     /// URL of the execution-layer RPC node
-    pub rpc_url: Option<String>,
+    pub rpc: Option<String>,
 
-    #[clap(short = 'a', long, require_equals = true, num_args = 0..=1, default_missing_value = "cache_rpc")]
-    /// Cache RPC calls locally; the value specifies the cache directory
+    #[clap(short = 'd', long, require_equals = true, num_args = 0..=1, default_missing_value = "cache_rpc")]
+    /// Directory for caching RPC data; the value specifies the cache directory
     ///
     /// [default when the flag is present: cache_rpc]
     pub cache: Option<PathBuf>,
 
-    #[clap(short, long, require_equals = true)]
+    #[clap(short = 'b', long, require_equals = true)]
     /// Starting block number
     pub block_number: u64,
 
@@ -135,9 +135,13 @@ pub struct RunArgs {
     #[clap(flatten)]
     pub build_args: BuildArgs,
 
-    #[clap(short, long, require_equals = true, default_value_t = 20)]
+    #[clap(short = 'e', long, require_equals = true, default_value_t = 20)]
     /// The maximum cycle count of a segment as a power of 2
     pub execution_po2: u32,
+
+    #[clap(short = 'p', long, default_value_t = false)]
+    /// Save the profile of the execution in the current working directly
+    pub profile: bool,
 }
 
 #[derive(clap::Args, Debug, Clone)]
@@ -145,8 +149,8 @@ pub struct ProveArgs {
     #[clap(flatten)]
     pub run_args: RunArgs,
 
+    #[clap(short = 's', long, default_value_t = false)]
     /// Convert the resulting STARK receipt into a Groth-16 SNARK
-    #[clap(short, long, default_value_t = false)]
     pub snark: bool,
 }
 
@@ -155,7 +159,21 @@ pub struct VerifyArgs {
     #[clap(flatten)]
     pub build_args: BuildArgs,
 
-    #[clap(short, long, require_equals = true)]
+    #[clap(short = 'f', long, require_equals = true)]
     /// Receipt file path
     pub file: PathBuf,
+}
+
+#[derive(clap::Args, Debug, Clone)]
+pub struct BenchArgs {
+    #[clap(flatten)]
+    pub prove_args: ProveArgs,
+
+    #[clap(short = 'r', long, require_equals = true)]
+    /// The number of blocks to sample from
+    pub sample_range: u64,
+
+    #[clap(short = 'm', long, require_equals = true)]
+    /// The number of samples to benchmark
+    pub sample_count: u64,
 }

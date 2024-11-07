@@ -13,12 +13,32 @@
 // limitations under the License.
 
 use crate::cli::Cli;
+use crate::profile_file_name;
 use risc0_zkvm::ExecutorEnv;
+use zeth_preflight::Witness;
 
-pub fn build_executor_env<'b>(cli: &Cli, input: &'b [u8]) -> anyhow::Result<ExecutorEnv<'b>> {
+pub fn build_executor_env<'b, 'c>(
+    cli: &Cli,
+    witness: &'b Witness,
+    image_id: [u32; 8],
+    network_name: &'c str,
+) -> anyhow::Result<ExecutorEnv<'b>> {
     let run_args = cli.run_args();
     let mut builder = ExecutorEnv::builder();
-    builder.write_slice(input);
+    builder.write_slice(&witness.encoded_input);
     builder.segment_limit_po2(run_args.execution_po2);
+    if run_args.profile {
+        if std::env::var("RISC0_PPROF_OUT").is_ok() {
+            log::warn!("Ignoring RISC0_PPROF_OUT because profiling is enabled through CLI.");
+        }
+        let file_name = profile_file_name(
+            network_name,
+            witness.chain,
+            witness.validated_tail_number,
+            witness.validated_tip_number,
+            image_id,
+        );
+        builder.enable_profiler(file_name);
+    }
     builder.build()
 }

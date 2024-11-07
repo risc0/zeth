@@ -20,6 +20,7 @@ use alloy::primitives::B256;
 use anyhow::Context;
 use log::info;
 use provider::query::BlockQuery;
+use reth_chainspec::NamedChain;
 use std::path::PathBuf;
 use tokio::task::spawn_blocking;
 use zeth_core::driver::CoreDriver;
@@ -36,17 +37,25 @@ pub mod trie;
 #[derive(Debug, Default, Clone)]
 pub struct Witness {
     pub encoded_input: Vec<u8>,
-    pub validated_tip: B256,
-    pub validated_tail: B256,
+    pub validated_tip_hash: B256,
+    pub validated_tip_number: u64,
+    pub validated_tail_hash: B256,
+    pub validated_tail_number: u64,
+    pub chain: NamedChain,
 }
 
 impl Witness {
     pub fn driver_from<R: CoreDriver>(data: &StatelessClientData<R::Block, R::Header>) -> Self {
         let encoded_input = pot::to_vec(&data).expect("serialization failed");
+        let tip = R::block_header(data.blocks.last().unwrap());
+        let tail = &data.parent_header;
         Self {
             encoded_input,
-            validated_tip: R::header_hash(R::block_header(data.blocks.last().unwrap())),
-            validated_tail: R::header_hash(&data.parent_header),
+            validated_tip_hash: R::header_hash(tip),
+            validated_tip_number: R::block_number(tip),
+            validated_tail_hash: R::header_hash(tail),
+            validated_tail_number: R::block_number(tail),
+            chain: data.chain,
         }
     }
 }

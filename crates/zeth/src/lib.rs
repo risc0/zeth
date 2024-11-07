@@ -53,7 +53,7 @@ where
     let cli = Cli::parse();
     let build_args = cli.build_args();
     // Fill default chain id if no way to infer it
-    let chain_id = match (&build_args.rpc_url, build_args.chain) {
+    let chain_id = match (&build_args.rpc, build_args.chain) {
         (None, None) => Some(default_chain as u64),
         (_, chain) => chain.map(|c| c as u64),
     };
@@ -67,7 +67,7 @@ where
     let expected_journal = Handle::current().block_on(B::build_journal(
         chain_id,
         cache_dir.clone(),
-        build_args.rpc_url.clone(),
+        build_args.rpc.clone(),
         build_args.block_number,
         build_args.block_count,
     ))?;
@@ -116,7 +116,7 @@ where
     let build_result = Handle::current().block_on(B::build_blocks(
         chain_id,
         cache_dir.clone(),
-        build_args.rpc_url.clone(),
+        build_args.rpc.clone(),
         build_args.block_number,
         build_args.block_count,
     ))?;
@@ -126,7 +126,7 @@ where
     }
 
     // use the zkvm
-    let exec_env = build_executor_env(&cli, &build_result.encoded_input)?;
+    let exec_env = build_executor_env(&cli, &build_result, image_id, network_name)?;
     let computed_journal = if cli.should_prove() {
         info!("Proving ...");
         let prover_opts = if cli.snark() {
@@ -135,8 +135,8 @@ where
             ProverOpts::succinct()
         };
         let file_name = proof_file_name(
-            build_result.validated_tail,
-            build_result.validated_tip,
+            build_result.validated_tail_hash,
+            build_result.validated_tip_hash,
             image_id,
             &prover_opts,
         );
@@ -203,6 +203,20 @@ pub fn proof_file_name(
     .concat();
     let file_name = B256::from(keccak(data));
     format!("risc0-{version}-{file_name}.{suffix}")
+}
+
+pub fn profile_file_name(
+    network_name: &str,
+    chain_id: NamedChain,
+    block_start: u64,
+    block_end: u64,
+    image_id: [u32; 8],
+) -> String {
+    let version = risc0_zkvm::get_version().unwrap();
+    format!(
+        "risc0-{version}-{network_name}-{chain_id}-{block_start}-{block_end}-{:x}.pb",
+        image_id[0]
+    )
 }
 
 pub fn cache_dir_path(cache_path: &Path, network: &str) -> PathBuf {

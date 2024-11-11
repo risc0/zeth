@@ -1,14 +1,11 @@
 # zeth
 
-NOTICE: Zeth has recently been revised to utilize [reth](https://github.com/paradigmxyz/reth) instead of just [revm](https://github.com/bluealloy/revm). Some features that may be mentioned in the rest of the readme, are still being re-added:
-* Release builds
-
 Zeth is an open-source ZK execution-layer block prover for Ethereum and Optimism built on the RISC Zero zkVM.
 
-Zeth makes it possible to *prove* that a given block is valid
-(i.e., is the result of applying the given list of transactions to the parent block)
+Zeth makes it possible to *prove* that a given sequence of blocks is valid
+(i.e., is the result of applying the given lists of transactions starting from the parent block)
 *without* relying on the validator or sync committees.
-This is because Zeth does *all* the work needed to construct a new block *from within the zkVM*, including:
+This is because Zeth does *all* the work needed to execute blocks *from within the zkVM*, including:
 
 * Verifying transaction signatures.
 * Verifying account & storage state against the parent block’s state root.
@@ -17,22 +14,26 @@ This is because Zeth does *all* the work needed to construct a new block *from w
 * Updating the state root.
 * Etc.
 
-After constructing the new block, Zeth calculates and outputs the block hash.
-By running this process within the zkVM, we obtain a ZK proof that the new block is valid.
+By using reth to run the block execution process within the zkVM, we obtain a ZK proof of valid block execution.
 
 ## Status
 
-Zeth's block building logic uses reth 1.1.0, but its other components are not audited for use in production.
+Zeth's block building logic uses version 1.1.3 of the RISC Zero zkVM and version 1.1.0 of reth, but its other components are not audited for use in production.
+
+## Prerequisites
+1. [rust](https://www.rust-lang.org/tools/install)
+2. [just](https://just.systems/man/en/)
+3. [docker](https://www.docker.com/)
 
 ## Usage
 
-### Prerequisites
+### Requirements
 
 Zeth primarily requires the availability of archival Ethereum/Optimism RPC provider(s) data.
 Two complementary types of providers are supported:
 
 * RPC provider.
-  This fetches data from a Web2 RPC provider, such as [Alchemy](https://www.alchemy.com/), whose URL is specified using the `--rpc=<RPC_URL>` parameter.
+  This fetches data from a Web2 RPC provider, such as [Alchemy](https://www.alchemy.com/), whose URL is specified using the `--rpc=<RPC>` parameter.
 * Cached RPC provider.
   This fetches RPC data from a local file when possible, and falls back to an RPC provider when necessary.
   It amends the local file with results from the RPC provider so that subsequent runs don't require additional RPC calls.
@@ -46,51 +47,38 @@ Follow the installation steps for the RISC Zero zkVM:
 
 https://dev.risczero.com/api/zkvm/install
 
-**Note: v1.81 of the toolchain is required:**
+**Note: At least v1.1.3 is required:**
 
-```shell
-cargo risczero install --version r0.1.81.0
-```
 
 #### zeth
 
-Clone the repository and build with `cargo` using one of the following commands:
+Clone the repository and build using one of the following commands:
 
 * CPU Proving (slow):
 ```shell
-cargo build -p zeth-ethereum --bin zeth-ethereum
-```
-```shell
-cargo build -p zeth-optimism --bin zeth-optimism
+just build
 ```
 
 - GPU Proving (apple/metal)
 ```shell
-cargo build -p zeth-ethereum --bin zeth-ethereum -F metal
-```
-```shell
-cargo build -p zeth-optimism --bin zeth-optimism -F metal
+just metal
 ```
 
 - GPU Proving (nvidia/cuda)
 ```shell
-cargo build -p zeth-ethereum --bin zeth-ethereum -F cuda
+just cuda
 ```
-```shell
-cargo build -p zeth-optimism --bin zeth-optimism -F cuda
-```
-
 
 #### Execution:
 
 Run the built binary (instead of using `cargo run`) using:
 
 ```shell
-RUST_LOG=info ./target/debug/zeth-ethereum
+just ethereum
 ```
 or for Optimism
 ```shell
-RUST_LOG=info ./target/debug/zeth-optimism
+just optimism
 ```
 
 Note that Optimism support is only available for post-Bedrock blocks.
@@ -102,7 +90,7 @@ Note that Optimism support is only available for post-Bedrock blocks.
 Zeth currently has four main modes of execution:
 
 ```shell
-RUST_LOG=info ./target/debug/zeth-ethereum help
+just ethereum help
 ```
 ```console
 Usage: zeth <COMMAND>
@@ -122,7 +110,7 @@ Options:
 #### build
 *This command only natively builds blocks and does not generate any proofs.*
 ```shell
-RUST_LOG=info ./target/debug/zeth-ethereum build --help
+just ethereum build --help
 ```
 
 ```console
@@ -131,7 +119,7 @@ Build blocks natively outside the RISC Zero zkVM
 Usage: zeth build [OPTIONS] --block-number=<BLOCK_NUMBER>
 
 Options:
-  -r, --rpc=<RPC_URL>           URL of the execution-layer RPC node
+  -r, --rpc=<RPC>           URL of the execution-layer RPC node
   -c, --cache[=<CACHE>]             Cache RPC calls locally; the value specifies the cache directory [default when the flag is present: cache_rpc]
   -b, --block-number=<BLOCK_NUMBER> Starting block number
   -n, --block-count=<BLOCK_COUNT>   Number of blocks to build in a single proof [default: 1]
@@ -143,14 +131,14 @@ of the result using the RPC provider.
 No proofs are generated.
 
 **Example**
-The `bin/zeth-ethereum/data` directory comes preloaded with a few cache files that you can use
+The `bin/ethereum/data` directory comes preloaded with a few cache files that you can use
 out of the box without the need to explicitly specify an RPC URL:
 ```shell
-RUST_LOG=info ./target/debug/zeth-ethereum build \
-  --cache=bin/zeth-ethereum/data \
+just ethereum build \
+  --cache=bin/ethereum/data \
   --block-number=1
 ```
-Preloaded cache data is provided under `bin/zeth-ethereum/data` for all major Ethereum fork blocks:
+Preloaded cache data is provided under `bin/ethereum/data` for all major Ethereum fork blocks:
 ```
 Block     Fork
 1         Frontier
@@ -193,7 +181,7 @@ dev               (Local Optimism devnet)
 #### run
 *This command only invokes the RISC Zero executor and does not generate any proofs.*
 ```shell
-RUST_LOG=info ./target/debug/zeth-ethereum run --help  
+just ethereum run --help  
 ```
 ```console
 Build blocks inside the RISC Zero zkVM executor
@@ -214,8 +202,8 @@ No proofs are generated.
 The below example will invoke the executor, which will take a bit more time, and output the number of cycles required
 for execution/proving inside the zkVM:
 ```shell
-RUST_LOG=info ./target/debug/zeth-ethereum run \
-  --cache=bin/zeth-ethereum/data \
+just ethereum run \
+  --cache=bin/ethereum/data \
   --block-number=1
 ```
 
@@ -224,7 +212,7 @@ RUST_LOG=info ./target/debug/zeth-ethereum run \
 
 Generated proofs are saved locally as `.zkp` files (or `.fake` under dev mode).
 ```shell
-RUST_LOG=info ./target/debug/zeth-ethereum prove --help
+just ethereum prove --help
 ```
 ```console
 Provably build blocks inside the RISC Zero zkVM
@@ -249,8 +237,8 @@ Need a Bonsai API key? [Sign up today](https://bonsai.xyz/apply).
 **Example**
 The below example will invoke the prover under dev mode, which will execute quickly and generate a fake receipt locally:
 ```shell
-RUST_LOG=info RISC0_DEV_MODE=1 ./target/debug/zeth-ethereum prove \
-  --cache=bin/zeth-ethereum/data \
+RISC0_DEV_MODE=1 just ethereum prove \
+  --cache=bin/ethereum/data \
   --block-number=1
 ```
 
@@ -260,7 +248,7 @@ are not verifiable outside of dev mode! To generate a real cryptographic proof, 
 #### verify
 *This command verifies a ZK proof.*
 ```shell
-RUST_LOG=info ./target/debug/zeth-ethereum verify --help
+just ethereum verify --help
 ```
 ```console
 Verify a block building proof
@@ -275,15 +263,13 @@ This command first locally fetches some metadata about the specified block(s) to
 and then validates the correctness of the specified receipt file.
 
 **Example**
-The below example will verify a fake receipt, where such verification can only pass under dev mode:
+The below example will verify the generated fake receipt, where such verification can only pass under dev mode:
 ```shell
-RUST_LOG=info RISC0_DEV_MODE=1 ./target/debug/zeth-ethereum verify \
-  --cache=bin/zeth-ethereum/data \
+RISC0_DEV_MODE=1 just ethereum verify \
+  --cache=bin/ethereum/data \
   --block-number=1 \
-  --file=risc0-1.1.2-0x0c5dda870412334fe6011ed1bfdc2b7f7a68b794b4fedc360c1c6db160096036.fake
+  --file=risc0-1.1.3-0x02b54eb99985f0c6728b42adc41b0e472ead6ca0c2bd8ff9bb96352182f94331.fake
 ```
-
-***NOTE*** The aforementioned receipt will very likely have a different name on your machine.
 
 ## Additional resources
 

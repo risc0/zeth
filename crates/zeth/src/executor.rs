@@ -17,11 +17,11 @@ use crate::profile_file_name;
 use risc0_zkvm::ExecutorEnv;
 use zeth_preflight::Witness;
 
-pub fn build_executor_env<'b, 'c>(
+pub fn build_executor_env<'b>(
     cli: &Cli,
     witness: &'b Witness,
     image_id: [u32; 8],
-    network_name: &'c str,
+    network_name: &str,
 ) -> anyhow::Result<ExecutorEnv<'b>> {
     let run_args = cli.run_args();
     let mut builder = ExecutorEnv::builder();

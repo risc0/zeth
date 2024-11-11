@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::process::Command;
 use alloy::primitives::U256;
 use alloy_chains::NamedChain;
 use clap::Parser;
+use std::process::Command;
 use tracing::{error, info};
 use zeth::cli::ProveArgs;
 use zeth_core::keccak::keccak;
@@ -28,7 +28,13 @@ pub struct Cli {
     #[clap(flatten)]
     pub prove_args: ProveArgs,
 
-    #[clap(long, require_equals = true, value_enum, conflicts_with = "chain", required_unless_present = "chain")]
+    #[clap(
+        long,
+        require_equals = true,
+        value_enum,
+        conflicts_with = "chain",
+        required_unless_present = "chain"
+    )]
     /// Which chain spec to use.
     pub chain_id: Option<NamedChain>,
 
@@ -49,10 +55,7 @@ fn main() {
     env_logger::init();
     let cli = Cli::parse();
     let build_args = &cli.prove_args.run_args.build_args;
-    let chain_id = build_args
-        .chain
-        .or(cli.chain_id)
-        .unwrap();
+    let chain_id = build_args.chain.or(cli.chain_id).unwrap();
     // generate sequence of starting block numbers to benchmark
     let seed = keccak(
         [
@@ -75,7 +78,10 @@ fn main() {
         })
         .collect::<Vec<_>>();
     // Report samples
-    info!("Printing {} sample block number(s) to stdout.", block_numbers.len());
+    info!(
+        "Printing {} sample block number(s) to stdout.",
+        block_numbers.len()
+    );
     for n in &block_numbers {
         println!("{n}");
     }
@@ -110,7 +116,9 @@ fn main() {
                     if exit_code.success() {
                         info!("zeth terminated successfully for block {block_number}");
                     } else {
-                        error!("zeth terminated with exit code {exit_code} for block {block_number}");
+                        error!(
+                            "zeth terminated with exit code {exit_code} for block {block_number}"
+                        );
                     }
                 }
                 Err(err) => {

@@ -172,13 +172,13 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
     ) -> anyhow::Result<HashMap<Address, EIP1186AccountProofResponse>> {
         // get initial keys
         let initial_db = &self.inner.db;
-        let mut initial_storage_keys = enumerate_storage_keys(&initial_db.db.borrow());
+        let mut storage_keys = enumerate_storage_keys(&initial_db.db.borrow());
         // merge initial keys with latest db storage keys
         for (address, mut indices) in enumerate_storage_keys(&self.inner) {
-            match initial_storage_keys.get_mut(&address) {
+            match storage_keys.get_mut(&address) {
                 Some(initial_indices) => initial_indices.append(&mut indices),
                 None => {
-                    initial_storage_keys.insert(address, indices);
+                    storage_keys.insert(address, indices);
                 }
             }
         }
@@ -188,7 +188,7 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
         let res = get_proofs(
             initial_db.db.provider.borrow_mut().deref_mut(),
             block_no,
-            initial_storage_keys,
+            storage_keys,
         )?;
         Ok(res)
     }

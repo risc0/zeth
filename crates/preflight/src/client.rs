@@ -145,22 +145,6 @@ where
             let mut preflight_db = engine.db.take().unwrap().unwrap();
             preflight_db.apply_changeset(state_changeset)?;
 
-            // storage sanity check
-            // {
-            //     let init_db = preflight_db.db.db.db.borrow_mut();
-            //     let mut provider_db = init_db.db.clone();
-            //     provider_db.block_no += 1;
-            //     for (address, db_account) in &preflight_db.db.accounts {
-            //         use reth_revm::Database;
-            //         let provider_info = provider_db.basic(*address)?.unwrap();
-            //         if db_account.info != provider_info {
-            //             dbg!(&address);
-            //             dbg!(&db_account.info);
-            //             dbg!(&provider_info);
-            //         }
-            //     }
-            // }
-
             // Save the provider cache
             info!("Saving provider cache ...");
             preflight_db.save_provider()?;

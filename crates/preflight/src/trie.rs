@@ -46,7 +46,7 @@ pub fn extend_proof_tries(
         let finalization_proof = finalization_proofs
             .get(&address)
             .with_context(|| format!("missing finalization proof for address {:#}", &address))?;
-        add_orphaned_leafs(address, &finalization_proof.account_proof, &mut state_nodes)?;
+        add_orphaned_nodes(address, &finalization_proof.account_proof, &mut state_nodes)?;
         // insert inaccessible storage trie
         if let alloy::primitives::map::Entry::Vacant(e) = storage_tries.entry(address) {
             e.insert((initialization_proof.storage_hash.into(), vec![]));
@@ -72,7 +72,7 @@ pub fn extend_proof_tries(
 
         // assure that slots can be deleted from the storage trie
         for storage_proof in &finalization_proof.storage_proof {
-            add_orphaned_leafs(
+            add_orphaned_nodes(
                 storage_proof.key.0,
                 &storage_proof.proof,
                 &mut storage_nodes,
@@ -123,7 +123,7 @@ pub fn proofs_to_tries(
             .with_context(|| format!("missing finalization proof for address {:#}", &address))?;
 
         // assure that addresses can be deleted from the state trie
-        add_orphaned_leafs(address, &finalization_proof.account_proof, &mut state_nodes)?;
+        add_orphaned_nodes(address, &finalization_proof.account_proof, &mut state_nodes)?;
 
         // if no slots are provided, return the trie only consisting of the storage root
         if initialization_proof.storage_proof.is_empty() {
@@ -150,7 +150,7 @@ pub fn proofs_to_tries(
 
         // assure that slots can be deleted from the storage trie
         for storage_proof in &finalization_proof.storage_proof {
-            add_orphaned_leafs(
+            add_orphaned_nodes(
                 storage_proof.key.0,
                 &storage_proof.proof,
                 &mut storage_nodes,
@@ -174,8 +174,8 @@ pub fn proofs_to_tries(
     Ok((state_trie, storage))
 }
 
-/// Adds all the leaf nodes of non-inclusion proofs to the nodes.
-pub fn add_orphaned_leafs(
+/// Adds all the nodes of non-inclusion proofs to the nodes.
+pub fn add_orphaned_nodes(
     key: impl AsRef<[u8]>,
     proof: &[impl AsRef<[u8]>],
     nodes_by_reference: &mut HashMap<MptNodeReference, MptNode>,
@@ -183,11 +183,13 @@ pub fn add_orphaned_leafs(
     if !proof.is_empty() {
         let proof_nodes = parse_proof(proof).context("invalid proof encoding")?;
         if is_not_included(&keccak(key), &proof_nodes)? {
-            // add the leaf node to the nodes
-            let leaf = proof_nodes.last().unwrap();
-            shorten_node_path(leaf).into_iter().for_each(|node| {
-                nodes_by_reference.insert(node.reference(), node);
-            });
+            // extract possible orphan
+            for node in &proof_nodes {
+                nodes_by_reference.insert(node.reference(), node.clone());
+                shorten_node_path(node).into_iter().for_each(|node| {
+                    nodes_by_reference.insert(node.reference(), node);
+                });
+            }
         }
     }
 

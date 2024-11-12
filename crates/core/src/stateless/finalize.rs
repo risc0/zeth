@@ -65,26 +65,30 @@ impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for RethFinaliza
                 storage_trie.clear();
             }
             // apply all new storage entries for the current account (address)
+            let mut deletions = Vec::with_capacity(storage_change.storage.len());
             for (key, value) in &storage_change.storage {
                 let storage_trie_index = keccak(key.to_be_bytes::<32>());
                 if value.is_zero() {
-                    storage_trie
-                        .delete(&storage_trie_index)
-                        .context("storage_trie.delete")?;
+                    deletions.push(storage_trie_index);
                 } else {
                     storage_trie
                         .insert_rlp(&storage_trie_index, value)
                         .context("storage_trie.insert_rlp")?;
                 }
             }
+            // Apply deferred storage trie deletions
+            for storage_trie_index in deletions {
+                storage_trie
+                    .delete(&storage_trie_index)
+                    .context("storage_trie.delete")?;
+            }
         }
         // Apply account info + storage changes
+        let mut deletions = Vec::with_capacity(accounts.len());
         for (address, account_info) in accounts {
             let state_trie_index = keccak(address);
             if account_info.is_none() {
-                state_trie
-                    .delete(&state_trie_index)
-                    .context("state_trie.delete")?;
+                deletions.push(state_trie_index);
                 continue;
             }
             let storage_root = {
@@ -120,6 +124,12 @@ impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for RethFinaliza
                     .insert_rlp(&state_trie_index, state_account)
                     .context("state_trie.insert_rlp (2)")?;
             }
+        }
+        // Apply deferred state trie deletions
+        for state_trie_index in deletions {
+            state_trie
+                .delete(&state_trie_index)
+                .context("state_trie.delete")?;
         }
 
         // Update the database

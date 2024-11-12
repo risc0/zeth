@@ -62,7 +62,7 @@ pub struct MptNode {
 pub enum Error {
     /// Triggered when an operation reaches an unresolved node. The associated `B256`
     /// value provides details about the unresolved node.
-    #[error("reached an unresolved node: {0:#}")]
+    #[error("reached an unresolved node: {0:?}")]
     NodeNotResolved(B256),
     /// Occurs when a value is unexpectedly found in a branch node.
     #[error("branch node with value")]
@@ -526,12 +526,15 @@ impl MptNode {
                                 mem::take(orphan_child),
                             );
                         }
-                        // if the orphan is a branch or digest, convert to an extension
-                        MptNodeData::Branch(_) | MptNodeData::Digest(_) => {
+                        // if the orphan is a branch, convert to an extension
+                        MptNodeData::Branch(_) => {
                             self.data = MptNodeData::Extension(
                                 to_encoded_path(&[index as u8], false),
                                 orphan,
                             );
+                        }
+                        MptNodeData::Digest(digest) => {
+                            return Err(Error::NodeNotResolved(*digest));
                         }
                         MptNodeData::Null => unreachable!(),
                     }
@@ -574,8 +577,10 @@ impl MptNode {
                             mem::take(node),
                         );
                     }
-                    // for a branch or digest, the extension is still correct
-                    MptNodeData::Branch(_) | MptNodeData::Digest(_) => {}
+                    // for a branch, the extension is still correct
+                    MptNodeData::Branch(_) => {}
+                    // if the child were a digest an early return should have been hit
+                    MptNodeData::Digest(_) => unreachable!(),
                 }
             }
             MptNodeData::Digest(digest) => return Err(Error::NodeNotResolved(*digest)),
@@ -993,7 +998,7 @@ pub fn shorten_node_path(node: &MptNode) -> Vec<MptNode> {
     let mut res = Vec::new();
     let nibs = node.nibs();
     match node.as_data() {
-        MptNodeData::Null | MptNodeData::Branch(_) | MptNodeData::Digest(_) => {}
+        MptNodeData::Null | MptNodeData::Branch(_) => {}
         MptNodeData::Leaf(_, value) => {
             for i in 0..=nibs.len() {
                 res.push(MptNodeData::Leaf(to_encoded_path(&nibs[i..], true), value.clone()).into())
@@ -1007,6 +1012,7 @@ pub fn shorten_node_path(node: &MptNode) -> Vec<MptNode> {
                 )
             }
         }
+        MptNodeData::Digest(_) => unreachable!(),
     };
     res
 }

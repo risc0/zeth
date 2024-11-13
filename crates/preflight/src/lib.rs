@@ -18,7 +18,7 @@ use crate::provider::new_provider;
 use alloy::network::Network;
 use alloy::primitives::B256;
 use anyhow::Context;
-use log::info;
+use log::{info, warn};
 use provider::query::BlockQuery;
 use reth_chainspec::NamedChain;
 use std::path::PathBuf;
@@ -114,35 +114,55 @@ where
         block_number: u64,
         block_count: u64,
     ) -> anyhow::Result<Vec<u8>> {
+        let validation_tip_block_no = block_number + block_count - 1;
         // Fetch the block
-        let (validation_tip_block, chain) = spawn_blocking(move || {
+        let (validation_tip_block, chain, client_version) = spawn_blocking(move || {
             let provider = new_provider::<N>(cache_dir, block_number, rpc_url, chain_id).unwrap();
             let mut provider_mut = provider.borrow_mut();
 
             let validation_tip = provider_mut
                 .get_full_block(&BlockQuery {
-                    block_no: block_number + block_count - 1,
+                    block_no: validation_tip_block_no,
                 })
                 .unwrap();
+
+            let client_version = provider_mut.get_client_version().unwrap();
 
             let chain = provider_mut.get_chain().unwrap() as u64;
             provider_mut.save().unwrap();
 
-            (validation_tip, chain)
+            (validation_tip, chain, client_version)
         })
         .await?;
+
+        info!("Connected to provider that uses client version: {client_version}");
 
         let header = P::derive_header_response(validation_tip_block);
 
         let total_difficulty = P::total_difficulty(&header).unwrap_or_default();
+        if total_difficulty.is_zero() {
+            warn!("Building journal with a total chain difficulty value of zero.")
+        }
+        let final_difficulty = R::final_difficulty(
+            validation_tip_block_no,
+            total_difficulty,
+            R::chain_spec(&chain.try_into().unwrap())
+                .expect("Unsupported chain")
+                .as_ref(),
+        );
+
+        if final_difficulty.is_zero() {
+            warn!("Expecting a proof with a final chain difficulty value of zero in the journal.")
+        }
         let journal = [
             chain.to_be_bytes().as_slice(),
             R::header_hash(&P::derive_header(header)).0.as_slice(),
-            total_difficulty.to_be_bytes::<32>().as_slice(),
+            final_difficulty.to_be_bytes::<32>().as_slice(),
             block_count.to_be_bytes().as_slice(),
         ]
         .concat();
 
+        info!("Final chain difficulty: {}", final_difficulty);
         Ok(journal)
     }
 }

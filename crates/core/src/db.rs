@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use crate::rescue::{Recoverable, Wrapper};
-use alloy_primitives::map::HashMap;
+use alloy_primitives::map::{HashMap, HashSet};
 use alloy_primitives::{Address, B256, U256};
 use reth_primitives::revm_primitives::{Account, AccountInfo, Bytecode};
 use reth_primitives::KECCAK_EMPTY;
 use reth_revm::db::states::{PlainStorageChangeset, StateChangeset};
-use reth_revm::db::{BundleState, CacheDB};
+use reth_revm::db::{AccountState, BundleState, CacheDB};
 use reth_revm::{Database, DatabaseCommit, DatabaseRef};
 use reth_storage_errors::db::DatabaseError;
 
@@ -95,6 +95,7 @@ impl<DB: DatabaseRef + Recoverable> DatabaseRef for Wrapper<DB> {
 
 impl<DB: DatabaseCommit + Recoverable> DatabaseCommit for Wrapper<DB> {
     fn commit(&mut self, changes: HashMap<Address, Account>) {
+        dbg!("COMMIT!");
         self.inner.commit(changes)
     }
 }
@@ -103,32 +104,41 @@ pub fn apply_changeset<DB>(
     db: &mut CacheDB<DB>,
     state_changeset: StateChangeset,
 ) -> anyhow::Result<()> {
-    // Update account storages
-    for storage in state_changeset.storage {
-        let db_account = db.accounts.get_mut(&storage.address).unwrap();
-        if storage.wipe_storage {
-            db_account.storage.clear();
-        }
-        for (key, val) in storage.storage {
-            db_account.storage.insert(key, val);
-        }
-    }
     // Update accounts in state trie
-    // let mut code_omissions = Vec::new();
+    let mut was_destroyed = HashSet::new();
     for (address, account_info) in state_changeset.accounts {
+        let db_account = db.accounts.get_mut(&address).unwrap();
         let Some(info) = account_info else {
-            db.accounts.remove(&address);
+            db_account.storage.clear();
+            db_account.account_state = AccountState::NotExisting;
+            db_account.info = AccountInfo::default();
+            was_destroyed.insert(address);
             continue;
         };
-        let db_account = db.accounts.get_mut(&address).unwrap();
         if info.code_hash != db_account.info.code_hash {
-            // if info.code.is_none() && info.code_hash != KECCAK_EMPTY {
-            //     code_omissions.push(address);
-            // }
             db_account.info = info;
         } else {
             db_account.info.balance = info.balance;
             db_account.info.nonce = info.nonce;
+        }
+    }
+    // Update account storages
+    for PlainStorageChangeset {
+        address,
+        wipe_storage,
+        storage,
+    } in state_changeset.storage
+    {
+        if was_destroyed.contains(&address) {
+            continue;
+        }
+        let db_account = db.accounts.get_mut(&address).unwrap();
+        if wipe_storage {
+            db_account.storage.clear();
+            db_account.account_state = AccountState::StorageCleared;
+        }
+        for (key, val) in storage {
+            db_account.storage.insert(key, val);
         }
     }
     Ok(())

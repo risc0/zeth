@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::provider::query::{AccountRangeQueryResponse, StorageRangeQueryResponse};
 use crate::provider::*;
-use alloy::network::Network;
+use alloy::network::{BlockResponse, HeaderResponse, Network};
 use alloy::providers::{Provider as AlloyProvider, ReqwestProvider};
 use anyhow::anyhow;
-use log::debug;
+use log::{debug, error};
 use std::future::IntoFuture;
 
 #[derive(Clone, Debug)]
@@ -44,6 +45,14 @@ impl<N: Network> Provider<N> for RpcProvider<N> {
 
     fn advance(&mut self) -> anyhow::Result<()> {
         Ok(())
+    }
+
+    fn get_client_version(&mut self) -> anyhow::Result<String> {
+        debug!("Getting rpc client version");
+
+        Ok(self
+            .tokio_handle
+            .block_on(self.http_client.get_client_version())?)
     }
 
     fn get_chain(&mut self) -> anyhow::Result<NamedChain> {
@@ -161,5 +170,93 @@ impl<N: Network> Provider<N> for RpcProvider<N> {
         )?;
 
         Ok(out)
+    }
+
+    fn get_preimage(&mut self, query: &PreimageQuery) -> anyhow::Result<Bytes> {
+        debug!("Querying RPC for preimage: {:?}", query);
+
+        match self.tokio_handle.block_on(
+            self.http_client
+                .client()
+                .request("debug_preimage", (query.digest.to_string(),))
+                .into_future(),
+        ) {
+            Ok(out) => return Ok(out),
+            Err(e) => {
+                error!("debug_preimage: {e}");
+            }
+        };
+
+        match self.tokio_handle.block_on(
+            self.http_client
+                .client()
+                .request("debug_dbGet", (query.digest.to_string(),))
+                .into_future(),
+        ) {
+            Ok(out) => Ok(out),
+            Err(e) => {
+                error!("debug_dbGet: {e}");
+                anyhow::bail!(e);
+            }
+        }
+    }
+
+    fn get_next_account(&mut self, query: &AccountRangeQuery) -> anyhow::Result<Address> {
+        let out: AccountRangeQueryResponse = match self.tokio_handle.block_on(
+            self.http_client
+                .client()
+                .request(
+                    "debug_accountRange",
+                    (
+                        format!("{:066x}", query.block_no),
+                        format!("{}", query.start),
+                        query.max_results,
+                        query.no_code,
+                        query.no_storage,
+                        query.incompletes,
+                    ),
+                )
+                .into_future(),
+        ) {
+            Ok(out) => out,
+            Err(e) => {
+                error!("debug_accountRange: {e}");
+                anyhow::bail!(e)
+            }
+        };
+
+        Ok(*out.accounts.keys().next().unwrap())
+    }
+
+    fn get_next_slot(&mut self, query: &StorageRangeQuery) -> anyhow::Result<U256> {
+        let block = self.get_full_block(&BlockQuery {
+            block_no: query.block_no,
+        })?;
+        let hash = block.header().hash();
+
+        let out: StorageRangeQueryResponse = match self.tokio_handle.block_on(
+            self.http_client
+                .client()
+                .request(
+                    "debug_storageRangeAt",
+                    (
+                        // format!("{:#066x}", query.block_no),
+                        format!("{hash}"),
+                        query.tx_index,
+                        query.address,
+                        format!("{}", query.start),
+                        query.max_results,
+                    ),
+                )
+                .into_future(),
+        ) {
+            Ok(out) => out,
+            Err(e) => {
+                error!("debug_storageRangeAt: {e}");
+                anyhow::bail!(e)
+            }
+        };
+
+        Ok(out.storage.values().next().unwrap().key)
     }
 }

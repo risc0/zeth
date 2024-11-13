@@ -6348,6 +6348,7 @@ dependencies = [
  "reth-optimism-chainspec",
  "reth-optimism-consensus",
  "reth-optimism-evm",
+ "reth-optimism-forks",
  "reth-primitives",
  "reth-revm",
  "reth-storage-errors",

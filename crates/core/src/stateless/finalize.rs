@@ -19,7 +19,7 @@ use crate::mpt::MptNode;
 use crate::stateless::data::StorageEntry;
 use alloy_consensus::Account;
 use alloy_primitives::map::HashMap;
-use alloy_primitives::Address;
+use alloy_primitives::{Address, U256};
 use anyhow::Context;
 use reth_revm::db::states::StateChangeset;
 use reth_revm::db::BundleState;
@@ -107,6 +107,12 @@ impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for RethFinaliza
                 .insert_rlp(&state_trie_index, state_account)
                 .context("state_trie.insert_rlp")?;
         }
+        // Apply deferred state trie deletions
+        for state_trie_index in deletions {
+            state_trie
+                .delete(&state_trie_index)
+                .context("state_trie.delete")?;
+        }
         // Apply account storage only changes
         for (address, (storage_trie, _)) in storage_tries {
             if storage_trie.is_reference_cached() {
@@ -125,21 +131,20 @@ impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for RethFinaliza
                     .context("state_trie.insert_rlp (2)")?;
             }
         }
-        // Apply deferred state trie deletions
-        for state_trie_index in deletions {
-            state_trie
-                .delete(&state_trie_index)
-                .context("state_trie.delete")?;
-        }
-
-        // Update the database
-        if let Some(db) = db {
-            apply_changeset(db, state_changeset)?;
-        }
 
         // Validate final state trie
         let header = Driver::block_header(block);
         assert_eq!(Driver::state_root(header), state_trie.hash());
+
+        // Update the database
+        if let Some(db) = db {
+            apply_changeset(db, state_changeset)?;
+
+            db.block_hashes.insert(
+                U256::from(Driver::block_number(header)),
+                Driver::header_hash(header),
+            );
+        }
 
         Ok(())
     }

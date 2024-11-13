@@ -121,6 +121,22 @@ pub enum MptNodeReference {
     Digest(B256),
 }
 
+impl MptNodeReference {
+    pub fn as_digest(&self) -> Self {
+        match self {
+            MptNodeReference::Digest(d) => MptNodeReference::Digest(*d),
+            MptNodeReference::Bytes(b) => MptNodeReference::Digest(keccak(b).into()),
+        }
+    }
+
+    pub fn digest(&self) -> B256 {
+        let MptNodeReference::Digest(d) = self.as_digest() else {
+            unreachable!()
+        };
+        d
+    }
+}
+
 /// Provides a conversion from [MptNodeData] to [MptNode].
 ///
 /// This implementation allows for conversion from [MptNodeData] to [MptNode],
@@ -211,6 +227,9 @@ impl Decodable for MptNode {
     /// on the encoded data. If the RLP data does not match any known prototype or if
     /// there's an error during decoding, an error is returned.
     fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
+        if buf.is_empty() {
+            return Ok(MptNodeData::Null.into());
+        }
         match rlp_parse_head(buf)? {
             (0, _) => Ok(MptNodeData::Null.into()),
             (2, true) => {
@@ -852,7 +871,7 @@ fn lcp(a: &[u8], b: &[u8]) -> usize {
     cmp::min(a.len(), b.len())
 }
 
-fn prefix_nibs(prefix: &[u8]) -> Vec<u8> {
+pub fn prefix_nibs(prefix: &[u8]) -> Vec<u8> {
     let (extension, tail) = prefix.split_first().unwrap();
     // the first bit of the first nibble denotes the parity
     let is_odd = extension & (1 << 4) != 0;
@@ -871,14 +890,15 @@ fn prefix_nibs(prefix: &[u8]) -> Vec<u8> {
 
 /// Parses proof bytes into a vector of MPT nodes.
 pub fn parse_proof(proof: &[impl AsRef<[u8]>]) -> anyhow::Result<Vec<MptNode>> {
-    Ok(proof
+    proof
         .iter()
+        // .filter(|proof| !proof.as_ref().is_empty()) // this is a sign of a malformed proof
         .map(|buf| MptNode::decode(&mut buf.as_ref()))
-        .collect::<Result<Vec<_>, _>>()?)
+        .collect::<Result<Vec<_>, _>>()
+        .context("parse_proof")
 }
 
 /// Creates a Merkle Patricia trie from an EIP-1186 proof.
-/// For inclusion proofs the returned trie contains exactly one leaf with the value.
 pub fn mpt_from_proof(proof_nodes: &[MptNode]) -> anyhow::Result<MptNode> {
     let mut next: Option<MptNode> = None;
     for (i, node) in proof_nodes.iter().enumerate().rev() {
@@ -888,25 +908,26 @@ pub fn mpt_from_proof(proof_nodes: &[MptNode]) -> anyhow::Result<MptNode> {
             continue;
         };
 
-        // the next node must have a digest reference
-        let MptNodeReference::Digest(ref child_ref) = replacement.reference() else {
-            bail!("node {} in proof is not referenced by hash", i + 1);
-        };
         // find the child that references the next node
+        let replacement_digest = replacement.reference().digest();
         let resolved: MptNode = match node.as_data().clone() {
             MptNodeData::Branch(mut children) => {
-                if let Some(child) = children.iter_mut().flatten().find(
-                    |child| matches!(child.as_data(), MptNodeData::Digest(d) if d == child_ref),
-                ) {
-                    *child = Box::new(replacement);
-                } else {
-                    bail!("node {} does not reference the successor", i);
+                children.iter_mut().flatten().for_each(|c| {
+                    if c.reference().digest() == replacement_digest {
+                        *c = Box::new(replacement.clone());
+                    }
+                });
+                if children.iter_mut().all(|child| match child {
+                    None => !replacement.is_empty(),
+                    Some(node) => node.reference().digest() != replacement_digest,
+                }) {
+                    bail!("branch node {} does not reference the successor", i);
                 }
                 MptNodeData::Branch(children).into()
             }
             MptNodeData::Extension(prefix, child) => {
-                if !matches!(child.as_data(), MptNodeData::Digest(d) if d == child_ref) {
-                    bail!("node {} does not reference the successor", i);
+                if child.reference().digest() != replacement_digest {
+                    bail!("extension node {} does not reference the successor", i);
                 }
                 MptNodeData::Extension(prefix, Box::new(replacement)).into()
             }

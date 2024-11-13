@@ -33,4 +33,9 @@ pub trait CoreDriver: Default {
     fn block_header(block: &Self::Block) -> &Self::Header;
     fn block_to_header(block: Self::Block) -> Self::Header;
     fn accumulate_difficulty(total_difficulty: U256, header: &Self::Header) -> U256;
+    fn final_difficulty(
+        block: BlockNumber,
+        total_difficulty: U256,
+        chain_spec: &Self::ChainSpec,
+    ) -> U256;
 }

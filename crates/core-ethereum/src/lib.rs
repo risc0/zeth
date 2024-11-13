@@ -173,4 +173,14 @@ impl CoreDriver for RethCoreDriver {
     fn accumulate_difficulty(total_difficulty: U256, header: &Self::Header) -> U256 {
         total_difficulty + header.difficulty
     }
+
+    fn final_difficulty(
+        block: BlockNumber,
+        total_difficulty: U256,
+        chain_spec: &Self::ChainSpec,
+    ) -> U256 {
+        chain_spec
+            .final_paris_total_difficulty(block)
+            .unwrap_or(total_difficulty)
+    }
 }

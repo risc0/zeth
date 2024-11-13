@@ -13,9 +13,12 @@
 // limitations under the License.
 
 use super::{ordered_map, MutProvider, Provider};
-use crate::provider::query::{AccountQuery, BlockQuery, ProofQuery, StorageQuery, UncleQuery};
+use crate::provider::query::{
+    AccountQuery, AccountRangeQuery, BlockQuery, PreimageQuery, ProofQuery, StorageQuery,
+    StorageRangeQuery, UncleQuery,
+};
 use alloy::network::Network;
-use alloy::primitives::{Bytes, U256};
+use alloy::primitives::{Address, Bytes, U256};
 use alloy::rpc::types::EIP1186AccountProofResponse;
 use anyhow::{anyhow, Context};
 use flate2::{read::GzDecoder, write::GzEncoder, Compression};
@@ -40,23 +43,30 @@ pub struct FileProvider<N: Network> {
     dir_path: PathBuf,
     #[serde(skip)]
     dirty: bool,
-    #[serde(with = "ordered_map")]
-    full_blocks: HashMap<BlockQuery, N::BlockResponse>,
-    #[serde(with = "ordered_map")]
-    uncle_blocks: HashMap<UncleQuery, N::BlockResponse>,
     #[serde(default)]
-    #[serde(with = "ordered_map")]
+    client_version: String,
+    #[serde(with = "ordered_map", default)]
+    full_blocks: HashMap<BlockQuery, N::BlockResponse>,
+    #[serde(with = "ordered_map", default)]
+    uncle_blocks: HashMap<UncleQuery, N::BlockResponse>,
+    #[serde(with = "ordered_map", default)]
     receipts: HashMap<BlockQuery, Vec<N::ReceiptResponse>>,
-    #[serde(with = "ordered_map")]
+    #[serde(with = "ordered_map", default)]
     proofs: HashMap<ProofQuery, EIP1186AccountProofResponse>,
-    #[serde(with = "ordered_map")]
+    #[serde(with = "ordered_map", default)]
     transaction_count: HashMap<AccountQuery, U256>,
-    #[serde(with = "ordered_map")]
+    #[serde(with = "ordered_map", default)]
     balance: HashMap<AccountQuery, U256>,
-    #[serde(with = "ordered_map")]
+    #[serde(with = "ordered_map", default)]
     code: HashMap<AccountQuery, Bytes>,
-    #[serde(with = "ordered_map")]
+    #[serde(with = "ordered_map", default)]
     storage: HashMap<StorageQuery, U256>,
+    #[serde(with = "ordered_map", default)]
+    preimages: HashMap<PreimageQuery, Bytes>,
+    #[serde(with = "ordered_map", default)]
+    next_accounts: HashMap<AccountRangeQuery, Address>,
+    #[serde(with = "ordered_map", default)]
+    next_slots: HashMap<StorageRangeQuery, U256>,
 }
 
 impl<N: Network> FileProvider<N> {
@@ -76,6 +86,7 @@ impl<N: Network> FileProvider<N> {
                         chain_id,
                         block_no,
                         dir_path,
+                        client_version: Default::default(),
                         dirty: false,
                         full_blocks: Default::default(),
                         uncle_blocks: Default::default(),
@@ -85,6 +96,9 @@ impl<N: Network> FileProvider<N> {
                         balance: Default::default(),
                         code: Default::default(),
                         storage: Default::default(),
+                        preimages: Default::default(),
+                        next_accounts: Default::default(),
+                        next_slots: Default::default(),
                     })
                 }
                 _ => Err(err),
@@ -101,8 +115,9 @@ impl<N: Network> FileProvider<N> {
 
     fn read(dir_path: PathBuf, block_no: u64, chain_id: u64) -> anyhow::Result<Self> {
         let file_path = Self::derive_file_path(&dir_path, block_no, chain_id);
-        let f = File::open(&file_path)?;
-        let mut out: Self = serde_json::from_reader(GzDecoder::new(f))?;
+        let file = File::open(&file_path)?;
+        let decompressed = GzDecoder::new(file);
+        let mut out: Self = serde_json::from_reader(decompressed)?;
         out.dir_path = dir_path;
         out.dirty = false;
         out.block_no = block_no;
@@ -132,6 +147,10 @@ impl<N: Network> Provider<N> for FileProvider<N> {
             FileProvider::new(self.dir_path.clone(), self.block_no + 1, self.chain_id)?,
         ));
         Ok(())
+    }
+
+    fn get_client_version(&mut self) -> anyhow::Result<String> {
+        Ok(self.client_version.clone())
     }
 
     fn get_chain(&mut self) -> anyhow::Result<NamedChain> {
@@ -213,9 +232,35 @@ impl<N: Network> Provider<N> for FileProvider<N> {
             None => Err(anyhow!("No data for {:?}", query)),
         }
     }
+
+    fn get_preimage(&mut self, query: &PreimageQuery) -> anyhow::Result<Bytes> {
+        match self.preimages.get(query) {
+            Some(val) => Ok(val.clone()),
+            None => Err(anyhow!("No data for {:?}", query)),
+        }
+    }
+
+    fn get_next_account(&mut self, query: &AccountRangeQuery) -> anyhow::Result<Address> {
+        match self.next_accounts.get(query) {
+            Some(val) => Ok(*val),
+            None => Err(anyhow!("No data for {:?}", query)),
+        }
+    }
+
+    fn get_next_slot(&mut self, query: &StorageRangeQuery) -> anyhow::Result<U256> {
+        match self.next_slots.get(query) {
+            Some(val) => Ok(*val),
+            None => Err(anyhow!("No data for {:?}", query)),
+        }
+    }
 }
 
 impl<N: Network> MutProvider<N> for FileProvider<N> {
+    fn insert_client_version(&mut self, version: String) {
+        self.client_version = version;
+        self.dirty = true;
+    }
+
     fn insert_chain(&mut self, chain: NamedChain) {
         assert_eq!(self.chain_id, chain as u64);
     }
@@ -257,6 +302,21 @@ impl<N: Network> MutProvider<N> for FileProvider<N> {
 
     fn insert_storage(&mut self, query: StorageQuery, val: U256) {
         self.storage.insert(query, val);
+        self.dirty = true;
+    }
+
+    fn insert_preimage(&mut self, query: PreimageQuery, val: Bytes) {
+        self.preimages.insert(query, val);
+        self.dirty = true
+    }
+
+    fn insert_next_account(&mut self, query: AccountRangeQuery, val: Address) {
+        self.next_accounts.insert(query, val);
+        self.dirty = true;
+    }
+
+    fn insert_next_slot(&mut self, query: StorageRangeQuery, val: U256) {
+        self.next_slots.insert(query, val);
         self.dirty = true;
     }
 }

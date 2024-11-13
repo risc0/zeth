@@ -176,4 +176,12 @@ impl CoreDriver for OpRethCoreDriver {
     fn accumulate_difficulty(total_difficulty: U256, header: &Self::Header) -> U256 {
         total_difficulty + header.difficulty
     }
+
+    fn final_difficulty(
+        _block: BlockNumber,
+        total_difficulty: U256,
+        _chain_spec: &Self::ChainSpec,
+    ) -> U256 {
+        total_difficulty
+    }
 }

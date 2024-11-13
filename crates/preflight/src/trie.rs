@@ -16,19 +16,26 @@ use alloy::primitives::map::HashMap;
 use alloy::primitives::{Address, B256, U256};
 use alloy::rpc::types::EIP1186AccountProofResponse;
 use anyhow::Context;
+use std::collections::VecDeque;
+use std::iter;
 use zeth_core::keccak::keccak;
 use zeth_core::mpt::{
-    is_not_included, mpt_from_proof, parse_proof, resolve_nodes, resolve_nodes_in_place,
-    shorten_node_path, MptNode, MptNodeReference,
+    is_not_included, mpt_from_proof, parse_proof, prefix_nibs, resolve_nodes,
+    resolve_nodes_in_place, shorten_node_path, MptNode, MptNodeData, MptNodeReference,
 };
 use zeth_core::stateless::data::StorageEntry;
 
+pub type TrieOrphan = (B256, B256);
+pub type OrphanPair = (Vec<TrieOrphan>, Vec<(Address, TrieOrphan)>);
 pub fn extend_proof_tries(
     state_trie: &mut MptNode,
     storage_tries: &mut HashMap<Address, StorageEntry>,
     initialization_proofs: HashMap<Address, EIP1186AccountProofResponse>,
     finalization_proofs: HashMap<Address, EIP1186AccountProofResponse>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<OrphanPair> {
+    // collected orphan data
+    let mut state_orphans = Vec::new();
+    let mut storage_orphans = Vec::new();
     // storage for encountered trie data
     let mut state_nodes = HashMap::new();
     for (address, initialization_proof) in initialization_proofs {
@@ -42,11 +49,6 @@ pub fn extend_proof_tries(
             assert_eq!(node.size(), 1);
             state_nodes.insert(node.reference(), node);
         });
-        // assure that addresses can be deleted from the state trie
-        let finalization_proof = finalization_proofs
-            .get(&address)
-            .with_context(|| format!("missing finalization proof for address {:#}", &address))?;
-        add_orphaned_nodes(address, &finalization_proof.account_proof, &mut state_nodes)?;
         // insert inaccessible storage trie
         if let alloy::primitives::map::Entry::Vacant(e) = storage_tries.entry(address) {
             e.insert((initialization_proof.storage_hash.into(), vec![]));
@@ -54,9 +56,11 @@ pub fn extend_proof_tries(
         // storage for encountered storage trie data
         let mut storage_nodes = HashMap::new();
         for storage_proof in &initialization_proof.storage_proof {
-            let proof_nodes =
-                parse_proof(&storage_proof.proof).context("invalid storage_proof encoding")?;
-            mpt_from_proof(&proof_nodes).context("invalid storage_proof")?;
+            let proof_nodes = parse_proof(&storage_proof.proof)
+                .context("extend_proof_tries/parse storage proof")?;
+            mpt_from_proof(&proof_nodes).context(format!(
+                "extend_proof_tries/ mpt from storage proof: {initialization_proof:?}"
+            ))?;
             // Load storage entry
             let storage_entry = storage_tries.get_mut(&address).unwrap();
             let storage_key = U256::from_be_bytes(storage_proof.key.0 .0);
@@ -70,23 +74,55 @@ pub fn extend_proof_tries(
             });
         }
 
-        // assure that slots can be deleted from the storage trie
+        // ensure that trie orphans are loaded
+        let finalization_proof = finalization_proofs
+            .get(&address)
+            .with_context(|| format!("missing finalization proof for address {:#}", &address))?;
+        if let Some(state_orphan) =
+            add_orphaned_nodes(address, &finalization_proof.account_proof, &mut state_nodes)?
+        {
+            state_orphans.push(state_orphan);
+        }
+
+        let mut potential_storage_orphans = Vec::new();
         for storage_proof in &finalization_proof.storage_proof {
-            add_orphaned_nodes(
+            if let Some(storage_orphan) = add_orphaned_nodes(
                 storage_proof.key.0,
                 &storage_proof.proof,
                 &mut storage_nodes,
-            )?;
+            )? {
+                potential_storage_orphans.push(storage_orphan);
+            }
         }
 
         let storage_entry = storage_tries.get_mut(&address).unwrap();
         // Load up newly found storage nodes
         resolve_nodes_in_place(&mut storage_entry.0, &storage_nodes);
+        // validate storage orphans
+        for (prefix, digest) in potential_storage_orphans {
+            if let Some(node) = storage_nodes.get(&MptNodeReference::Digest(digest)) {
+                if !node.is_digest() {
+                    // this orphan node has been resolved
+                    continue;
+                }
+            }
+            // defer node resolution
+            storage_orphans.push((address, (prefix, digest)));
+        }
     }
     // Load up newly found state nodes
     resolve_nodes_in_place(state_trie, &state_nodes);
+    let state_orphans = state_orphans
+        .into_iter()
+        .filter(|o| {
+            state_nodes
+                .get(&MptNodeReference::Digest(o.1))
+                .map(|n| !n.is_digest())
+                .unwrap_or_default()
+        })
+        .collect();
 
-    Ok(())
+    Ok((state_orphans, storage_orphans))
 }
 
 pub fn proofs_to_tries(
@@ -134,8 +170,7 @@ pub fn proofs_to_tries(
         let mut storage_nodes = HashMap::new();
         let mut storage_root_node = MptNode::default();
         for storage_proof in &initialization_proof.storage_proof {
-            let proof_nodes =
-                parse_proof(&storage_proof.proof).context("invalid storage_proof encoding")?;
+            let proof_nodes = parse_proof(&storage_proof.proof).context("proofs_to_tries")?;
             mpt_from_proof(&proof_nodes).context("invalid storage_proof")?;
 
             // the first node in the proof is the root
@@ -179,19 +214,65 @@ pub fn add_orphaned_nodes(
     key: impl AsRef<[u8]>,
     proof: &[impl AsRef<[u8]>],
     nodes_by_reference: &mut HashMap<MptNodeReference, MptNode>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Option<TrieOrphan>> {
     if !proof.is_empty() {
         let proof_nodes = parse_proof(proof).context("invalid proof encoding")?;
-        if is_not_included(&keccak(key), &proof_nodes)? {
-            // extract possible orphan
-            for node in &proof_nodes {
-                nodes_by_reference.insert(node.reference(), node.clone());
-                shorten_node_path(node).into_iter().for_each(|node| {
-                    nodes_by_reference.insert(node.reference(), node);
-                });
+        let offset = keccak(key);
+        if is_not_included(&offset, &proof_nodes)? {
+            // extract inferrable orphans
+            let node = proof_nodes.last().unwrap();
+            shorten_node_path(node).into_iter().for_each(|node| {
+                nodes_by_reference.insert(node.reference().as_digest(), node);
+            });
+            if let MptNodeData::Extension(_, target) = node.as_data() {
+                return Ok(Some((
+                    nibbles_to_digest(&proof_nodes_nibbles(&proof_nodes)),
+                    target.hash(),
+                )));
             }
         }
     }
+    Ok(None)
+}
 
-    Ok(())
+pub fn proof_nodes_nibbles(proof_nodes: &[MptNode]) -> Vec<u8> {
+    let mut nibbles = VecDeque::new();
+    let mut last_child = proof_nodes.last().unwrap().reference().as_digest();
+    for node in proof_nodes.iter().rev() {
+        match node.as_data() {
+            MptNodeData::Branch(children) => {
+                for (i, child) in children.iter().enumerate() {
+                    if let Some(child) = child {
+                        if child.reference().as_digest() == last_child {
+                            nibbles.push_front(i as u8);
+                            break;
+                        }
+                    }
+                }
+            }
+            MptNodeData::Leaf(prefix, _) | MptNodeData::Extension(prefix, _) => {
+                prefix_nibs(prefix)
+                    .into_iter()
+                    .rev()
+                    .for_each(|n| nibbles.push_front(n));
+            }
+            MptNodeData::Null | MptNodeData::Digest(_) => unreachable!(),
+        }
+        last_child = node.reference();
+    }
+    nibbles.into()
+}
+
+pub fn nibbles_to_digest(nibbles: &[u8]) -> B256 {
+    let padding = 64 - nibbles.len();
+    let padded: Vec<_> = nibbles
+        .iter()
+        .copied()
+        .chain(iter::repeat(0u8).take(padding))
+        .collect();
+    let bytes: Vec<_> = padded
+        .chunks_exact(2)
+        .map(|byte| (byte[0] << 4) + byte[1])
+        .collect();
+    B256::from_slice(&bytes)
 }

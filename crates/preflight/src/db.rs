@@ -15,11 +15,13 @@
 use crate::driver::PreflightDriver;
 use crate::provider::db::ProviderDB;
 use crate::provider::get_proofs;
-use crate::provider::query::BlockQuery;
+use crate::provider::query::{AccountRangeQuery, BlockQuery, ProofQuery, StorageRangeQuery};
+use crate::trie::TrieOrphan;
 use alloy::network::Network;
 use alloy::primitives::map::HashMap;
 use alloy::primitives::{Address, B256, U256};
 use alloy::rpc::types::EIP1186AccountProofResponse;
+use log::{error, warn};
 use reth_primitives::revm_primitives::{Account, AccountInfo, Bytecode};
 use reth_revm::db::states::StateChangeset;
 use reth_revm::db::CacheDB;
@@ -151,6 +153,48 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
         apply_changeset(&mut self.inner, state_changeset)
     }
 
+    pub fn sanity_check(&mut self, state_changeset: StateChangeset) -> anyhow::Result<()> {
+        // storage sanity check
+        let initial_db = &self.inner.db;
+        let mut provider_db = initial_db.db.borrow().db.clone();
+        provider_db.block_no += 1;
+        for (address, db_account) in &self.inner.accounts {
+            use reth_revm::Database;
+            let provider_info = provider_db.basic(*address)?.unwrap();
+            if db_account.info != provider_info {
+                error!("State difference for account {address}:");
+                if db_account.info.balance != provider_info.balance {
+                    error!(
+                        "Calculated balance is {} while provider reports balance is {}",
+                        db_account.info.balance, provider_info.balance
+                    );
+                }
+                if db_account.info.nonce != provider_info.nonce {
+                    error!(
+                        "Calculated nonce is {} while provider reports nonce is {}",
+                        db_account.info.nonce, provider_info.nonce
+                    );
+                }
+                if db_account.info.code_hash != provider_info.code_hash {
+                    error!(
+                        "Calculated code_hash is {} while provider reports code_hash is {}",
+                        db_account.info.code_hash, provider_info.code_hash
+                    );
+                }
+                if let Some((_, info)) = state_changeset
+                    .accounts
+                    .iter()
+                    .find(|(addr, _)| addr == address)
+                {
+                    error!("Info of account was to be updated to {info:?}");
+                } else {
+                    error!("No update was scheduled for this account.")
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub fn get_initial_proofs(
         &mut self,
     ) -> anyhow::Result<HashMap<Address, EIP1186AccountProofResponse>> {
@@ -215,6 +259,90 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
             })
             .collect();
         Ok(headers)
+    }
+
+    pub fn resolve_orphans(
+        &mut self,
+        block_count: u64,
+        state_orphans: &[TrieOrphan],
+        storage_orphans: &[(Address, TrieOrphan)],
+    ) -> Vec<EIP1186AccountProofResponse> {
+        let state_resolves = self.resolve_state_orphans(state_orphans, block_count);
+        let storage_resolves = self.resolve_storage_orphans(storage_orphans, block_count);
+        state_resolves.into_iter().chain(storage_resolves).collect()
+    }
+
+    pub fn resolve_state_orphans(
+        &mut self,
+        state_orphans: &[TrieOrphan],
+        block_count: u64,
+    ) -> Vec<EIP1186AccountProofResponse> {
+        let initial_db = &self.inner.db.db.borrow_mut();
+        let mut provider = initial_db.db.provider.borrow_mut();
+        let mut result = Vec::new();
+        let block_no = initial_db.db.block_no + block_count - 1;
+        for (start, digest) in state_orphans {
+            // if let Ok(val) = provider.get_preimage(&PreimageQuery { digest: *digest }) {
+            //     continue;
+            // }
+            if let Ok(next_account) = provider.get_next_account(&AccountRangeQuery {
+                block_no,
+                start: *start,
+                max_results: 1,
+                no_code: true,
+                no_storage: true,
+                incompletes: false,
+            }) {
+                if let Ok(proof) = provider.get_proof(&ProofQuery {
+                    block_no,
+                    address: next_account,
+                    indices: Default::default(),
+                }) {
+                    result.push(proof);
+                    continue;
+                }
+                continue;
+            }
+            warn!("state orphan {digest} not found");
+        }
+        result
+    }
+
+    pub fn resolve_storage_orphans(
+        &mut self,
+        storage_orphans: &[(Address, TrieOrphan)],
+        block_count: u64,
+    ) -> Vec<EIP1186AccountProofResponse> {
+        let initial_db = &self.inner.db.db.borrow_mut();
+        let mut provider = initial_db.db.provider.borrow_mut();
+        let mut result = Vec::new();
+        let block_no = initial_db.db.block_no + block_count - 1;
+        for (address, (start, digest)) in storage_orphans {
+            // if let Ok(val) = provider.get_preimage(&PreimageQuery { digest: *digest }) {
+            //     continue;
+            // }
+            if let Ok(next_slot) = provider.get_next_slot(&StorageRangeQuery {
+                block_no,
+                tx_index: 0,
+                address: *address,
+                start: *start,
+                max_results: 1,
+            }) {
+                if let Ok(proof) = provider.get_proof(&ProofQuery {
+                    block_no,
+                    address: *address,
+                    indices: vec![next_slot]
+                        .into_iter()
+                        .map(|x| x.to_be_bytes().into())
+                        .collect(),
+                }) {
+                    result.push(proof);
+                    continue;
+                }
+            }
+            warn!("storage orphan {address}/{digest} not found");
+        }
+        result
     }
 }
 

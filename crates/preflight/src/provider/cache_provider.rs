@@ -49,6 +49,19 @@ impl<N: Network> Provider<N> for CachedRpcProvider<N> {
         self.cache.advance()
     }
 
+    fn get_client_version(&mut self) -> anyhow::Result<String> {
+        if let Ok(cache_out) = self.cache.get_client_version() {
+            if !cache_out.is_empty() {
+                return Ok(cache_out);
+            }
+        }
+
+        let out = self.rpc.get_client_version()?;
+        self.cache.insert_client_version(out.clone());
+
+        Ok(out)
+    }
+
     fn get_chain(&mut self) -> anyhow::Result<NamedChain> {
         let cache_out = self.cache.get_chain();
         if cache_out.is_ok() {
@@ -156,6 +169,42 @@ impl<N: Network> Provider<N> for CachedRpcProvider<N> {
 
         let out = self.rpc.get_storage(query)?;
         self.cache.insert_storage(query.clone(), out);
+
+        Ok(out)
+    }
+
+    fn get_preimage(&mut self, query: &PreimageQuery) -> anyhow::Result<Bytes> {
+        let cache_out = self.cache.get_preimage(query);
+        if cache_out.is_ok() {
+            return cache_out;
+        }
+
+        let out = self.rpc.get_preimage(query)?;
+        self.cache.insert_preimage(query.clone(), out.clone());
+
+        Ok(out)
+    }
+
+    fn get_next_account(&mut self, query: &AccountRangeQuery) -> anyhow::Result<Address> {
+        let cache_out = self.cache.get_next_account(query);
+        if cache_out.is_ok() {
+            return cache_out;
+        }
+
+        let out = self.rpc.get_next_account(query)?;
+        self.cache.insert_next_account(query.clone(), out);
+
+        Ok(out)
+    }
+
+    fn get_next_slot(&mut self, query: &StorageRangeQuery) -> anyhow::Result<U256> {
+        let cache_out = self.cache.get_next_slot(query);
+        if cache_out.is_ok() {
+            return cache_out;
+        }
+
+        let out = self.rpc.get_next_slot(query)?;
+        self.cache.insert_next_slot(query.clone(), out);
 
         Ok(out)
     }

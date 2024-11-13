@@ -5,14 +5,16 @@ use crate::provider::new_provider;
 use crate::provider::query::{BlockQuery, UncleQuery};
 use crate::trie::extend_proof_tries;
 use alloy::network::Network;
+use alloy::primitives::map::HashMap;
 use anyhow::Context;
-use log::{debug, info};
+use log::{debug, info, warn};
 use std::iter::zip;
-use std::mem::replace;
 use std::path::PathBuf;
 use zeth_core::db::into_plain_state;
 use zeth_core::driver::CoreDriver;
-use zeth_core::mpt::MptNode;
+use zeth_core::mpt::{
+    parse_proof, resolve_nodes_in_place, shorten_node_path, MptNode, MptNodeReference,
+};
 use zeth_core::rescue::Wrapper;
 use zeth_core::stateless::data::StatelessClientData;
 use zeth_core::stateless::engine::StatelessClientEngine;
@@ -37,6 +39,7 @@ where
         let provider = new_provider::<N>(cache_dir.clone(), block_no, rpc_url.clone(), chain_id)?;
         let mut provider_mut = provider.borrow_mut();
         let chain = provider_mut.get_chain()?;
+        let chain_spec = R::chain_spec(&chain).expect("Unsupported chain");
         // Fetch the parent block
         let parent_block = provider_mut.get_full_block(&BlockQuery {
             block_no: block_no - 1,
@@ -96,6 +99,18 @@ where
 
         // Create the input data
         let total_difficulty = P::total_difficulty(&parent_header).unwrap_or_default();
+        if total_difficulty.is_zero() {
+            warn!("Provider reported a total chain difficulty value of zero.")
+        }
+        let final_difficulty = R::final_difficulty(
+            R::block_number(&core_parent_header),
+            total_difficulty,
+            chain_spec.as_ref(),
+        );
+        if final_difficulty.is_zero() {
+            warn!("Proving a final chain difficulty value of zero.")
+        }
+
         let data = StatelessClientData {
             chain,
             blocks: blocks.into_iter().rev().collect(),
@@ -104,7 +119,7 @@ where
             contracts: Default::default(),
             parent_header,
             ancestor_headers: vec![],
-            total_difficulty,
+            total_difficulty: final_difficulty,
         };
 
         // Create the block builder, run the transactions and extract the DB
@@ -143,11 +158,15 @@ where
 
             // Rescue the dropped DB and apply the state changeset
             let mut preflight_db = engine.db.take().unwrap().unwrap();
-            preflight_db.apply_changeset(state_changeset)?;
+            preflight_db.apply_changeset(state_changeset.clone())?;
 
             // Save the provider cache
             info!("Saving provider cache ...");
             preflight_db.save_provider()?;
+
+            // info!("Sanity check ...");
+            // preflight_db.sanity_check(state_changeset)?;
+            // preflight_db.save_provider()?;
 
             // Gather inclusion proofs for the initial and final state
             info!("Gathering initial proofs ...");
@@ -161,19 +180,17 @@ where
 
             // Gather proofs for block history
             info!("Gathering ancestor headers ...");
-            let new_ancestor_headers: Vec<_> = preflight_db
+            preflight_db
                 .get_ancestor_headers()?
                 .into_iter()
                 .map(|h| P::derive_header(h))
-                .collect();
-            if ancestor_headers.is_empty()
-                || (!new_ancestor_headers.is_empty()
-                    && R::block_number(new_ancestor_headers.last().unwrap())
-                        < R::block_number(ancestor_headers.last().unwrap()))
-            {
-                let _ = replace(&mut ancestor_headers, new_ancestor_headers);
-            }
-
+                .for_each(|new_ancestor_header| {
+                    let earliest_header = ancestor_headers.last().unwrap_or(&core_parent_header);
+                    if R::block_number(&new_ancestor_header) == R::block_number(earliest_header) - 1
+                    {
+                        ancestor_headers.push(new_ancestor_header);
+                    }
+                });
             info!("Saving provider cache ...");
             preflight_db.save_provider()?;
 
@@ -194,12 +211,78 @@ where
                 initial_proofs.len(),
                 latest_proofs.len()
             );
-            extend_proof_tries(
+            let (state_orphans, storage_orphans) = extend_proof_tries(
                 &mut state_trie,
                 &mut storage_tries,
                 initial_proofs,
                 latest_proofs,
             )?;
+            // dbg!(&state_orphans);
+            // dbg!(&storage_orphans);
+            // resolve potential orphans
+            let orphan_resolves =
+                preflight_db.resolve_orphans(block_count as u64, &state_orphans, &storage_orphans);
+            info!(
+                "Using {} proofs to resolve {} state and {} storage orphans.",
+                orphan_resolves.len(),
+                state_orphans.len(),
+                storage_orphans.len()
+            );
+            for account_proof in orphan_resolves {
+                let node_store = parse_proof(&account_proof.account_proof)?
+                    .iter()
+                    .flat_map(|n| {
+                        vec![vec![n.clone()], shorten_node_path(n)]
+                            .into_iter()
+                            .flatten()
+                    })
+                    .map(|n| (n.reference().as_digest(), n))
+                    .collect();
+                resolve_nodes_in_place(&mut state_trie, &node_store);
+                // resolve storage orphans
+                if let Some((trie, _)) = storage_tries.get_mut(&account_proof.address) {
+                    for storage_proof in account_proof.storage_proof {
+                        // let proof_nodes = parse_proof(&storage_proof.proof)?;
+                        // let proof_trie = mpt_from_proof(&proof_nodes)?;
+                        // dbg!(&proof_trie);
+                        // let proof_nibbles = proof_nodes_nibbles(&proof_nodes);
+                        // let hex_nibs: String =
+                        //     proof_nibbles.iter().map(|n| format!("{:x}", n)).collect();
+                        // dbg!(&hex_nibs);
+                        // let offset = nibbles_to_digest(&proof_nibbles);
+                        // dbg!(account_proof.address);
+                        // dbg!(&storage_proof.key.0);
+                        // dbg!(B256::from(keccak(storage_proof.key.0.as_slice())));
+                        // dbg!(&offset);
+                        let node_store: HashMap<MptNodeReference, MptNode> =
+                            parse_proof(&storage_proof.proof)?
+                                .iter()
+                                .flat_map(|n| {
+                                    vec![vec![n.clone()], shorten_node_path(n)]
+                                        .into_iter()
+                                        .flatten()
+                                })
+                                .map(|n| (n.reference().as_digest(), n))
+                                .collect();
+                        for k in node_store.keys() {
+                            let digest = k.digest();
+                            if storage_orphans
+                                .iter()
+                                .any(|(a, (_, d))| a == &account_proof.address && &digest == d)
+                            {
+                                info!(
+                                    "Resolved storage node {digest} for account {}",
+                                    account_proof.address
+                                );
+                            }
+                        }
+                        resolve_nodes_in_place(trie, &node_store);
+                    }
+                }
+            }
+
+            info!("Saving provider cache ...");
+            preflight_db.save_provider()?;
 
             // Increment block number counter
             preflight_db.advance_provider_block()?;

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::provider::query::{AccountRangeQuery, PreimageQuery, StorageRangeQuery};
 use alloy::network::Network;
 use alloy::primitives::map::HashMap;
 use alloy::primitives::{Address, Bytes, B256, U256};
@@ -82,6 +83,7 @@ pub trait Provider<N: Network>: Send {
     fn save(&self) -> anyhow::Result<()>;
     fn advance(&mut self) -> anyhow::Result<()>;
 
+    fn get_client_version(&mut self) -> anyhow::Result<String>;
     fn get_chain(&mut self) -> anyhow::Result<NamedChain>;
     fn get_full_block(&mut self, query: &BlockQuery) -> anyhow::Result<N::BlockResponse>;
     fn get_uncle_block(&mut self, query: &UncleQuery) -> anyhow::Result<N::BlockResponse>;
@@ -92,9 +94,13 @@ pub trait Provider<N: Network>: Send {
     fn get_balance(&mut self, query: &AccountQuery) -> anyhow::Result<U256>;
     fn get_code(&mut self, query: &AccountQuery) -> anyhow::Result<Bytes>;
     fn get_storage(&mut self, query: &StorageQuery) -> anyhow::Result<U256>;
+    fn get_preimage(&mut self, query: &PreimageQuery) -> anyhow::Result<Bytes>;
+    fn get_next_account(&mut self, query: &AccountRangeQuery) -> anyhow::Result<Address>;
+    fn get_next_slot(&mut self, query: &StorageRangeQuery) -> anyhow::Result<U256>;
 }
 
 pub trait MutProvider<N: Network>: Provider<N> {
+    fn insert_client_version(&mut self, version: String);
     fn insert_chain(&mut self, chain: NamedChain);
     fn insert_full_block(&mut self, query: BlockQuery, val: N::BlockResponse);
     fn insert_uncle_block(&mut self, query: UncleQuery, val: N::BlockResponse);
@@ -104,6 +110,9 @@ pub trait MutProvider<N: Network>: Provider<N> {
     fn insert_balance(&mut self, query: AccountQuery, val: U256);
     fn insert_code(&mut self, query: AccountQuery, val: Bytes);
     fn insert_storage(&mut self, query: StorageQuery, val: U256);
+    fn insert_preimage(&mut self, query: PreimageQuery, val: Bytes);
+    fn insert_next_account(&mut self, query: AccountRangeQuery, val: Address);
+    fn insert_next_slot(&mut self, query: StorageRangeQuery, val: U256);
 }
 
 pub fn get_proofs<N: Network>(
@@ -155,7 +164,37 @@ pub mod ordered_map {
         K: Eq + Hash + Deserialize<'de>,
         V: Deserialize<'de>,
     {
-        let vec = Vec::<(_, _)>::deserialize(deserializer)?;
+        let vec = Vec::<(_, _)>::deserialize(deserializer).unwrap_or_default();
         Ok(vec.into_iter().collect())
+    }
+}
+
+pub mod opt_ordered_map {
+    use std::{collections::HashMap, hash::Hash};
+
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S, K, V>(map: &Option<HashMap<K, V>>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        K: Ord + Serialize,
+        V: Serialize,
+    {
+        let mut vec: Vec<(_, _)> = map
+            .as_ref()
+            .map(|inner| inner.iter().collect())
+            .unwrap_or_default();
+        vec.sort_unstable_by_key(|&(k, _)| k);
+        vec.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D, K, V>(deserializer: D) -> Result<Option<HashMap<K, V>>, D::Error>
+    where
+        D: Deserializer<'de>,
+        K: Eq + Hash + Deserialize<'de>,
+        V: Deserialize<'de>,
+    {
+        let vec = Vec::<(_, _)>::deserialize(deserializer).unwrap_or_default();
+        Ok(Some(vec.into_iter().collect()))
     }
 }

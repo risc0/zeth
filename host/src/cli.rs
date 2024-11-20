@@ -190,7 +190,7 @@ pub struct ProveArgs {
     #[clap(flatten)]
     pub run_args: RunArgs,
 
-    #[clap(short, long, default_value_t = false)]
+    #[clap(long, default_value_t = false)]
     /// Prove remotely using Bonsai
     pub submit_to_bonsai: bool,
 
@@ -201,14 +201,14 @@ pub struct ProveArgs {
 #[derive(clap::Args, Debug, Clone)]
 pub struct SnarkArgs {
     /// Convert the resulting STARK receipt into a Groth-16 SNARK using Bonsai
-    #[clap(short, long, default_value_t = false)]
+    #[clap(long, default_value_t = false)]
     pub snark: bool,
 
-    #[clap(short, long, require_equals = true)]
+    #[clap(long, require_equals = true)]
     /// URL of the Ethereum RPC node for SNARK verification.
     pub verifier_rpc_url: Option<String>,
 
-    #[clap(short, long, require_equals = true)]
+    #[clap(long, require_equals = true)]
     /// Address of the RiscZeroGroth16Verifier contract. Requires `eth_rpc_url` or
     /// `verifier_rpc_url` to be set.
     pub verifier_contract: Option<String>,

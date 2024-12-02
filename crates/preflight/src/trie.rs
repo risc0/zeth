@@ -58,9 +58,9 @@ pub fn extend_proof_tries(
         for storage_proof in &initialization_proof.storage_proof {
             let proof_nodes = parse_proof(&storage_proof.proof)
                 .context("extend_proof_tries/parse storage proof")?;
-            mpt_from_proof(&proof_nodes).context(format!(
-                "extend_proof_tries/ mpt from storage proof: {initialization_proof:?}"
-            ))?;
+            mpt_from_proof(&proof_nodes).with_context(|| {
+                format!("extend_proof_tries/ mpt from storage proof: {initialization_proof:?}")
+            })?;
             // Load storage entry
             let storage_entry = storage_tries.get_mut(&address).unwrap();
             let storage_key = U256::from_be_bytes(storage_proof.key.0 .0);

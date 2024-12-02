@@ -95,7 +95,7 @@ impl<DB: DatabaseRef + Recoverable> DatabaseRef for Wrapper<DB> {
 
 impl<DB: DatabaseCommit + Recoverable> DatabaseCommit for Wrapper<DB> {
     fn commit(&mut self, changes: HashMap<Address, Account>) {
-        dbg!("COMMIT!");
+        // dbg!("COMMIT!");
         self.inner.commit(changes)
     }
 }

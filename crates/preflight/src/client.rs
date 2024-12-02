@@ -242,18 +242,6 @@ where
                 // resolve storage orphans
                 if let Some((trie, _)) = storage_tries.get_mut(&account_proof.address) {
                     for storage_proof in account_proof.storage_proof {
-                        // let proof_nodes = parse_proof(&storage_proof.proof)?;
-                        // let proof_trie = mpt_from_proof(&proof_nodes)?;
-                        // dbg!(&proof_trie);
-                        // let proof_nibbles = proof_nodes_nibbles(&proof_nodes);
-                        // let hex_nibs: String =
-                        //     proof_nibbles.iter().map(|n| format!("{:x}", n)).collect();
-                        // dbg!(&hex_nibs);
-                        // let offset = nibbles_to_digest(&proof_nibbles);
-                        // dbg!(account_proof.address);
-                        // dbg!(&storage_proof.key.0);
-                        // dbg!(B256::from(keccak(storage_proof.key.0.as_slice())));
-                        // dbg!(&offset);
                         let node_store: HashMap<MptNodeReference, MptNode> =
                             parse_proof(&storage_proof.proof)?
                                 .iter()

@@ -168,33 +168,3 @@ pub mod ordered_map {
         Ok(vec.into_iter().collect())
     }
 }
-
-pub mod opt_ordered_map {
-    use std::{collections::HashMap, hash::Hash};
-
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-    pub fn serialize<S, K, V>(map: &Option<HashMap<K, V>>, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-        K: Ord + Serialize,
-        V: Serialize,
-    {
-        let mut vec: Vec<(_, _)> = map
-            .as_ref()
-            .map(|inner| inner.iter().collect())
-            .unwrap_or_default();
-        vec.sort_unstable_by_key(|&(k, _)| k);
-        vec.serialize(serializer)
-    }
-
-    pub fn deserialize<'de, D, K, V>(deserializer: D) -> Result<Option<HashMap<K, V>>, D::Error>
-    where
-        D: Deserializer<'de>,
-        K: Eq + Hash + Deserialize<'de>,
-        V: Deserialize<'de>,
-    {
-        let vec = Vec::<(_, _)>::deserialize(deserializer).unwrap_or_default();
-        Ok(Some(vec.into_iter().collect()))
-    }
-}

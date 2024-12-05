@@ -17,6 +17,7 @@ use std::fmt::Debug;
 use alloy_primitives::{Address, Bytes, TxHash};
 use alloy_rlp::{Decodable, Encodable};
 use anyhow::ensure;
+use linea::LineaTxEssence;
 use serde::{Deserialize, Serialize};
 
 use self::{
@@ -26,11 +27,13 @@ use self::{
 use crate::{keccak::keccak, transactions::ethereum::EthereumTxEssence, U256};
 
 pub mod ethereum;
+pub mod linea;
 pub mod optimism;
 pub mod signature;
 
 pub type EthereumTransaction = Transaction<EthereumTxEssence>;
 pub type OptimismTransaction = Transaction<OptimismTxEssence>;
+pub type LineaTransaction = Transaction<LineaTxEssence>;
 
 /// Represents a complete transaction, encompassing its core essence and the associated
 /// signature.

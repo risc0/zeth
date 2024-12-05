@@ -97,6 +97,13 @@ pub static OP_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
     ]),
 });
 
+// pub static LINEA_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
+//     chain_id: 59144,
+//     max_spec_id: todo!(),
+//     hard_forks: todo!(),
+//     gas_constants: todo!(),
+// });
+
 /// The condition at which a fork is activated.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub enum ForkCondition {

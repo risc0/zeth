@@ -20,7 +20,9 @@ use revm::{primitives::SpecId, Database, DatabaseCommit};
 use serde::Serialize;
 use zeth_primitives::{
     block::Header,
-    transactions::{ethereum::EthereumTxEssence, optimism::OptimismTxEssence, TxEssence},
+    transactions::{
+        ethereum::EthereumTxEssence, linea::LineaTxEssence, optimism::OptimismTxEssence, TxEssence,
+    },
     trie::MptNode,
 };
 
@@ -210,3 +212,13 @@ impl BlockBuilderStrategy for OptimismStrategy {
     type TxExecStrategy = OpTxExecStrategy;
     type BlockFinalizeStrategy = MemDbBlockFinalizeStrategy;
 }
+
+pub struct LineaStrategy {}
+
+// impl BlockBuilderStrategy for LineaStrategy {
+//     type TxEssence = LineaTxEssence,
+//     type DbInitStrategy = todo!();
+//     type HeaderPrepStrategy = todo!();
+//     type TxExecStrategy = todo!();
+//     type BlockFinalizeStrategy = todo!();
+// }

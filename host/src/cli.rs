@@ -97,6 +97,7 @@ pub enum Network {
     Optimism,
     /// Optimism Mainnet as derived from the Ethereum Mainnet
     OptimismDerived,
+    Linea,
 }
 
 impl fmt::Display for Network {

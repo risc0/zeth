@@ -97,12 +97,16 @@ pub static OP_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
     ]),
 });
 
-// pub static LINEA_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
-//     chain_id: 59144,
-//     max_spec_id: todo!(),
-//     hard_forks: todo!(),
-//     gas_constants: todo!(),
-// });
+pub static LINEA_MAINNET_CHAIN_SPEC: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
+    chain_id: 59144,
+    max_spec_id: SpecId::LONDON,
+    hard_forks: BTreeMap::from([
+        (SpecId::MERGE, ForkCondition::Block(15537394)), // TODO: Check forks
+        (SpecId::SHANGHAI, ForkCondition::Timestamp(1681338455)),
+        (SpecId::CANCUN, ForkCondition::Timestamp(1710338135)),
+    ]),
+    gas_constants: BTreeMap::from([(SpecId::LONDON, ETH_MAINNET_EIP1559_CONSTANTS)]),
+});
 
 /// The condition at which a fork is activated.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

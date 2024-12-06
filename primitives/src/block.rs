@@ -101,6 +101,38 @@ mod tests {
 
     use super::*;
 
+    // #[test]
+    // fn london() {
+    //     // First block after the London network upgrade (Block 12,965,000)
+    //     let value = json!({
+    //         "parent_hash": "0x3de6bb3849a138e6ab0b83a3a00dc7433f1e83f7fd488e4bba78f2fe2631a633",
+    //         "ommers_hash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+    //         "beneficiary": "0x7777788200b672a42421017f65ede4fc759564c8",
+    //         "state_root": "0x41cf6e8e60fd087d2b00360dc29e5bfb21959bce1f4c242fd1ad7c4da968eb87",
+    //         "transactions_root": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+    //         "receipts_root": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+    //         "logs_bloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    //         "difficulty": "0x0",
+    //         "number": 12965000,
+    //         "gas_limit": "0x1c9c380",
+    //         "gas_used": "0x0",
+    //         "timestamp": "0x6113c418",
+    //         "extra_data": "0x",
+    //         "mix_hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    //         "nonce": "0xb223da049adf2216",
+    //         "base_fee_per_gas": "0x3b9aca00"
+    //     });
+    //     let header: Header = serde_json::from_value(value).unwrap();
+
+    //     // verify that bincode serialization works
+    //     let _: Header = bincode::deserialize(&bincode::serialize(&header).unwrap()).unwrap();
+
+    //     assert_eq!(
+    //         "0x9b83c12c69edb74f6c8dd5d052765c1adf940e320bd1291696e6fa07829eee71",
+    //         header.hash().to_string()
+    //     )
+    // }
+
     #[test]
     fn paris() {
         // first block after the Paris network upgrade

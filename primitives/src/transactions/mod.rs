@@ -17,10 +17,10 @@ use std::fmt::Debug;
 use alloy_primitives::{Address, Bytes, TxHash};
 use alloy_rlp::{Decodable, Encodable};
 use anyhow::ensure;
-use linea::LineaTxEssence;
 use serde::{Deserialize, Serialize};
 
 use self::{
+    linea::LineaTxEssence,
     optimism::{OptimismTxEssence, OPTIMISM_DEPOSITED_TX_TYPE},
     signature::TxSignature,
 };

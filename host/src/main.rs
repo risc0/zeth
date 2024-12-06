@@ -24,8 +24,8 @@ use zeth::{
 };
 use zeth_guests::*;
 use zeth_lib::{
-    builder::{EthereumStrategy, OptimismStrategy},
-    consts::{ETH_MAINNET_CHAIN_SPEC, OP_MAINNET_CHAIN_SPEC},
+    builder::{EthereumStrategy, LineaStrategy, OptimismStrategy},
+    consts::{ETH_MAINNET_CHAIN_SPEC, LINEA_MAINNET_CHAIN_SPEC, OP_MAINNET_CHAIN_SPEC},
 };
 
 #[tokio::main]
@@ -38,6 +38,7 @@ async fn main() -> Result<()> {
     info!("  op-block: {}", Digest::from(OP_BLOCK_ID));
     info!("  op-derive: {}", Digest::from(OP_DERIVE_ID));
     info!("  op-compose: {}", Digest::from(OP_COMPOSE_ID));
+    info!("  linea-block: {}", Digest::from(LINEA_BLOCK_ID));
 
     // execute the command
     let build_args = cli.build_args();
@@ -77,6 +78,19 @@ async fn main() -> Result<()> {
             } else {
                 (OP_DERIVE_ID, rollups::derive_rollup_blocks(&cli).await?)
             }
+        }
+        Network::Linea => {
+            let rpc_url = build_args.op_rpc_url.clone();
+            (
+                LINEA_BLOCK_ID,
+                build::build_block::<LineaStrategy>(
+                    &cli,
+                    rpc_url,
+                    &LINEA_MAINNET_CHAIN_SPEC,
+                    LINEA_BLOCK_ELF,
+                )
+                .await?,
+            )
         }
     };
 

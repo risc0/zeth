@@ -16,6 +16,7 @@
 use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
+use execute::linea::LineaTxExecStrategy;
 use revm::{primitives::SpecId, Database, DatabaseCommit};
 use serde::Serialize;
 use zeth_primitives::{
@@ -215,10 +216,10 @@ impl BlockBuilderStrategy for OptimismStrategy {
 
 pub struct LineaStrategy {}
 
-// impl BlockBuilderStrategy for LineaStrategy {
-//     type TxEssence = LineaTxEssence,
-//     type DbInitStrategy = todo!();
-//     type HeaderPrepStrategy = todo!();
-//     type TxExecStrategy = todo!();
-//     type BlockFinalizeStrategy = todo!();
-// }
+impl BlockBuilderStrategy for LineaStrategy {
+    type TxEssence = LineaTxEssence;
+    type DbInitStrategy = MemDbInitStrategy;
+    type HeaderPrepStrategy = EthHeaderPrepStrategy;
+    type TxExecStrategy = LineaTxExecStrategy;
+    type BlockFinalizeStrategy = MemDbBlockFinalizeStrategy;
+}

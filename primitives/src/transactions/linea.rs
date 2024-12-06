@@ -10,13 +10,13 @@ use crate::transactions::{
     SignedDecodable, TxEssence,
 };
 
-pub const LINEA_DEPOSITEDP_TX_TYPE: u8 = 0x7E; // Check!
+pub const LINEA_DEPOSITED_TX_TYPE: u8 = 0x7E; // Check!
 
 #[derive(
     Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, RlpEncodable, RlpDecodable,
 )]
 pub struct TxEssenceLineaDeposited {
-    pub soruce_hash: B256,
+    pub source_hash: B256,
     pub from: Address,
     pub to: TransactionKind,
     pub mint: U256,
@@ -72,7 +72,7 @@ impl TxEssence for LineaTxEssence {
     fn tx_type(&self) -> u8 {
         match self {
             LineaTxEssence::Ethereum(eth) => eth.tx_type(),
-            LineaTxEssence::LineaDeposited(_) => LINEA_DEPOSITEDP_TX_TYPE,
+            LineaTxEssence::LineaDeposited(_) => LINEA_DEPOSITED_TX_TYPE,
         }
     }
 
@@ -109,6 +109,13 @@ impl TxEssence for LineaTxEssence {
             LineaTxEssence::Ethereum(eth) => eth.data(),
             LineaTxEssence::LineaDeposited(linea) => &linea.data,
         }
+    }
+}
+
+impl From<ethers_core::types::transaction::response::Transaction> for LineaTxEssence {
+    fn from(tx: ethers_core::types::transaction::response::Transaction) -> Self {
+        // Convert standard Ethereum transactions to LineaTxEssence::Ethereum variant
+        todo!()
     }
 }
 

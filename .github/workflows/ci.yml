@@ -22,14 +22,14 @@ env:
 
 jobs:
   test:
-    name: test
+    name: cargo test
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
     - uses: actions/checkout@v4
     - uses: risc0/risc0/.github/actions/rustup@main
     - uses: risc0/risc0/.github/actions/sccache@main
-    - uses: ./.github/actions/cargo-risczero-install
+    - uses: ./.github/actions/risczero
       with:
         version: ${{ env.RISC0_VERSION }}
         toolchain-version: ${{ env.RISC0_TOOLCHAIN_VERSION }}
@@ -38,7 +38,7 @@ jobs:
     - run: cargo test --all-targets -p zeth-core-optimism -p zeth-preflight-optimism -p zeth-optimism -F debug-guest-build
 
   ef-tests:
-    name: test
+    name: Ethereum execution tests
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -54,7 +54,7 @@ jobs:
       - run: cargo test --all-targets -p zeth-testeth -F debug-guest-build,ef-tests
 
   clippy:
-    name: clippy
+    name: cargo clippy
     runs-on: [self-hosted, prod, "${{ matrix.os }}"]
     strategy:
       fail-fast: false
@@ -85,7 +85,7 @@ jobs:
           clippy_flags: -F $FEATURE --workspace --all-targets -- -Dwarnings
 
   fmt:
-    name: fmt
+    name: cargo fmt
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

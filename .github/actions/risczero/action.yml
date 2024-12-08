@@ -1,0 +1,32 @@
+name: risczero toolchain install
+description: Install risczero toolchain
+
+inputs:
+  version:
+    description: 'Version of the RISC Zero to install'
+    required: true
+    type: string
+  toolchain-version:
+    description: 'Version of the RISC Zero toolchains to install'
+    required: false
+    default: ''
+    type: string
+
+runs:
+  using: composite
+  steps:
+    - uses: risc0/cargo-install@v3
+      with:
+        crate: cargo-binstall
+        version: '=1.6'
+        locked: true
+
+    - run: cargo binstall -y --force cargo-risczero@${{ inputs.ref }}
+      shell: bash
+
+    - run: cargo risczero install ${{ inputs.toolchain-version != '' && format('--version {0}', inputs.toolchain-version) || '' }}
+      shell: bash
+
+    - name: test risczero
+      shell: bash
+      run: cargo risczero --version

@@ -13,7 +13,7 @@ cuda: (build "--release -F cuda")
 metal: (build "--release -F metal")
 
 run bin +ARGS:
-    RUST_LOG=info ./target/release/zeth-{{bin}} {{ARGS}}
+    RUST_LOG=info ./target/debug/zeth-{{bin}} {{ARGS}}
 
 ethereum +ARGS: (run "ethereum" ARGS)
 

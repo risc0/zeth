@@ -161,7 +161,7 @@ dependencies = [
  "rustc-hash",
  "serde",
  "sha3",
- "tiny-keccak",
+ "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -257,7 +257,7 @@ dependencies = [
  "quote",
  "syn 2.0.85",
  "syn-solidity",
- "tiny-keccak",
+ "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -742,9 +742,9 @@ checksum = "c3ac9f8b63eca6fd385229b3675f6cc0dc5c8a5c8a54a59d4f52ffd670d87b0c"
 
 [[package]]
 name = "bytemuck"
-version = "1.19.0"
+version = "1.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8334215b81e418a0a7bdb8ef0849474f40bb10c8b71f1c4ed315cff49f32494d"
+checksum = "8b37c88a63ffd85d15b406896cc343916d7cf57838a847b3a6f2ca5d39a5695a"
 dependencies = [
  "bytemuck_derive",
 ]
@@ -2665,9 +2665,7 @@ dependencies = [
 
 [[package]]
 name = "risc0-binfmt"
-version = "1.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9749a29181f87bebd2580b39b3ec0368daaaefbb30429ff429383a7ade360321"
+version = "1.3.0-alpha.1"
 dependencies = [
  "anyhow",
  "borsh",
@@ -2675,15 +2673,26 @@ dependencies = [
  "risc0-zkp",
  "risc0-zkvm-platform",
  "serde",
- "syn 2.0.85",
+ "tracing",
+]
+
+[[package]]
+name = "risc0-circuit-keccak"
+version = "1.3.0-alpha.1"
+dependencies = [
+ "anyhow",
+ "bytemuck",
+ "paste",
+ "risc0-binfmt",
+ "risc0-circuit-recursion",
+ "risc0-core",
+ "risc0-zkp",
  "tracing",
 ]
 
 [[package]]
 name = "risc0-circuit-recursion"
-version = "1.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90745aa984e4eb404f0e0eb6a7ab2e956d963a0dad751fb89ef138cc6e4e3afc"
+version = "1.3.0-alpha.1"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -2696,9 +2705,7 @@ dependencies = [
 
 [[package]]
 name = "risc0-circuit-rv32im"
-version = "1.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "079b2c6789c6cbfee3500aff69108f853bdfe13fd0071ac1fbe3cbf7d0866420"
+version = "1.3.0-alpha.1"
 dependencies = [
  "anyhow",
  "metal",
@@ -2712,9 +2719,7 @@ dependencies = [
 
 [[package]]
 name = "risc0-core"
-version = "1.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fd39ba3f881fcf0197464bde04391602dbbb886f87fddc372a68d79aa9de9d9"
+version = "1.3.0-alpha.1"
 dependencies = [
  "bytemuck",
  "rand_core",
@@ -2722,9 +2727,7 @@ dependencies = [
 
 [[package]]
 name = "risc0-groth16"
-version = "1.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c86b43367c2f29ce1a0ee5730f0af6892e5b6197c8dded614c7ff1068afcd302"
+version = "1.3.0-alpha.1"
 dependencies = [
  "anyhow",
  "ark-bn254",
@@ -2738,13 +2741,12 @@ dependencies = [
  "risc0-binfmt",
  "risc0-zkp",
  "serde",
+ "stability",
 ]
 
 [[package]]
 name = "risc0-zkp"
-version = "1.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15b5525e1f2abaa5954579e50df0d6a5d01b456b0ac6aae0e87cf92f073e12f7"
+version = "1.3.0-alpha.1"
 dependencies = [
  "anyhow",
  "blake2",
@@ -2766,16 +2768,16 @@ dependencies = [
 
 [[package]]
 name = "risc0-zkvm"
-version = "1.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de11138ba073e43ec494d15728baeddbf3155fc95d5710000077eb5f7f345070"
+version = "1.3.0-alpha.1"
 dependencies = [
  "anyhow",
  "borsh",
  "bytemuck",
  "getrandom",
  "hex",
+ "keccak",
  "risc0-binfmt",
+ "risc0-circuit-keccak",
  "risc0-circuit-recursion",
  "risc0-circuit-rv32im",
  "risc0-core",
@@ -2786,15 +2788,14 @@ dependencies = [
  "semver 1.0.23",
  "serde",
  "sha2",
+ "sha3",
  "stability",
  "tracing",
 ]
 
 [[package]]
 name = "risc0-zkvm-platform"
-version = "1.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57748f1916078b24faed0bc620aa6dfc386e066e6f75a710ec0ac68f7126e7d7"
+version = "1.3.0-alpha.1"
 dependencies = [
  "bytemuck",
  "getrandom",
@@ -3352,6 +3353,15 @@ dependencies = [
 [[package]]
 name = "tiny-keccak"
 version = "2.0.2"
+dependencies = [
+ "crunchy",
+ "risc0-zkvm",
+ "risc0-zkvm-platform",
+]
+
+[[package]]
+name = "tiny-keccak"
+version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c9d3793400a45f954c52e73d068316d76b6f4e36977e3fcebb13a2721e80237"
 dependencies = [
@@ -3758,7 +3768,7 @@ dependencies = [
  "reth-storage-errors",
  "serde",
  "thiserror",
- "tiny-keccak",
+ "tiny-keccak 2.0.2",
 ]
 
 [[package]]

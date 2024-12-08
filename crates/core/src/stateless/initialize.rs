@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::default::Default;
 use crate::db::MemoryDB;
 use crate::driver::CoreDriver;
 use crate::keccak::keccak;
@@ -27,6 +26,7 @@ use reth_primitives::revm_primitives::Bytecode;
 use reth_primitives::KECCAK_EMPTY;
 use reth_revm::db::{AccountState, DbAccount};
 use reth_revm::primitives::AccountInfo;
+use std::default::Default;
 
 pub trait InitializationStrategy<Driver: CoreDriver, Database> {
     fn initialize_database(
@@ -64,7 +64,8 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB> for MemoryDbSt
             .collect();
 
         // Load account data into db
-        let mut accounts = HashMap::with_capacity_and_hasher(storage_tries.len(), Default::default());
+        let mut accounts =
+            HashMap::with_capacity_and_hasher(storage_tries.len(), Default::default());
         for (address, (storage_trie, slots)) in storage_tries {
             // consume the slots, as they are no longer needed afterward
             let slots = take(slots);

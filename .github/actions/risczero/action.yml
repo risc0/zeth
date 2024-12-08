@@ -21,7 +21,7 @@ runs:
         version: '=1.6'
         locked: true
 
-    - run: cargo binstall -y --force cargo-risczero@${{ inputs.ref }}
+    - run: cargo binstall -y --force cargo-risczero@${{ inputs.version }}
       shell: bash
 
     - run: cargo risczero install ${{ inputs.toolchain-version != '' && format('--version {0}', inputs.toolchain-version) || '' }}

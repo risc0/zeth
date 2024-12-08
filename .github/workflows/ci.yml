@@ -44,14 +44,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: true
       - uses: risc0/risc0/.github/actions/rustup@main
       - uses: risc0/risc0/.github/actions/sccache@main
       - uses: ./.github/actions/risczero
         with:
           version: ${{ env.RISC0_VERSION }}
           toolchain-version: ${{ env.RISC0_TOOLCHAIN_VERSION }}
-      - run: cargo test --all-targets -p zeth-testeth -F debug-guest-build,ef-tests
+      - run: cargo test --all-targets -p zeth-testeth -F ef-tests
 
   clippy:
     name: cargo clippy

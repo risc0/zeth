@@ -2,11 +2,11 @@ default:
     just --summary --unsorted
 
 build +ARGS="--release":
-    RISC0_FEATURE_bigint2=true cargo build -p zeth-ethereum --bin zeth-ethereum {{ARGS}}
+    cargo build -p zeth-ethereum --bin zeth-ethereum {{ARGS}}
 
-    RISC0_FEATURE_bigint2=true cargo build -p zeth-optimism --bin zeth-optimism {{ARGS}}
+    cargo build -p zeth-optimism --bin zeth-optimism {{ARGS}}
 
-    RISC0_FEATURE_bigint2=true cargo build -p zeth-benchmark --bin zeth-benchmark {{ARGS}}
+    cargo build -p zeth-benchmark --bin zeth-benchmark {{ARGS}}
 
 cuda: (build "--release -F cuda")
 

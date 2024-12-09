@@ -3,6 +3,7 @@ target/
 tmp/
 cache_rpc/
 cache_zkp/
+profiles/
 log.txt
 *.pb
 *.zkp
@@ -11,3 +12,5 @@ log.txt
 *.zip
 *.bin
 *.txt
+*.fake
+*.out

@@ -1,0 +1,28 @@
+[package]
+name = "zeth-preflight"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies.zeth-core]
+workspace = true
+
+[dependencies]
+alloy.workspace = true
+anyhow.workspace = true
+async-trait.workspace = true
+env_logger.workspace = true
+hashbrown.workspace = true
+log.workspace = true
+serde.workspace = true
+flate2.workspace = true
+
+reth-chainspec.workspace = true
+reth-evm-ethereum.workspace = true
+reth-revm.workspace = true
+reth-primitives.workspace = true
+reth-storage-errors.workspace = true
+
+pot.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true

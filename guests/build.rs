@@ -1,4 +1,4 @@
-// Copyright 2024 RISC Zero, Inc.
+// Copyright 2023, 2024 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ fn main() {
     let cwd = std::env::current_dir().unwrap();
     let root_dir = cwd.parent().map(|d| d.to_path_buf());
     let build_opts = std::collections::HashMap::from_iter(
-        ["eth-block", "op-block", "op-derive", "op-compose"]
+        ["zeth-guests-reth-ethereum", "zeth-guests-reth-optimism"]
             .into_iter()
             .map(|guest_pkg| {
                 (

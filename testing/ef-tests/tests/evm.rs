@@ -14,10 +14,11 @@
 
 #![cfg(feature = "ef-tests")]
 
-use alloy::network::Ethereum;
+use alloy::{network::Ethereum, primitives::BlockHash};
 use rstest::rstest;
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
-use zeth_preflight::{client::PreflightClient, BlockBuilder, Witness};
+use zeth_core::{db::MemoryDB, stateless::client::StatelessClient};
+use zeth_preflight::{client::PreflightClient, provider::Provider, BlockBuilder, Witness};
 use zeth_preflight_ethereum::{RethBlockBuilder, RethPreflightDriver};
 use zeth_testeth::{read_eth_execution_tests, TestCoreDriver, TestProvider};
 
@@ -37,18 +38,18 @@ fn evm(
     for mut json in read_eth_execution_tests(path) {
         // only one block supported for now
         if json.blocks.len() > 1 {
-            println!("skipping (blockchain)");
-            break;
+            println!("skipping (multiple blocks)");
+            continue;
         };
         let block = json.blocks.pop().unwrap();
 
         // skip failing tests for now
         if let Some(message) = block.expect_exception {
             println!("skipping ({})", message);
-            break;
+            continue;
         }
 
-        let expected_header = block.block_header.as_ref().unwrap();
+        let expected_header = block.block_header.as_ref().expect("Missing block header");
         let expected_hash = expected_header.hash;
 
         // using the empty/default state for the input prepares all accounts for deletion
@@ -56,18 +57,25 @@ fn evm(
         let post_state = json.post_state.clone().unwrap_or_default();
 
         let provider = TestProvider::new(json.genesis_block_header, block, json.pre, post_state);
-        let provider = Rc::new(RefCell::new(provider));
 
-        let preflight_data =
-            <<RethBlockBuilder as BlockBuilder<_, _, TestCoreDriver, _>>::PreflightClient as PreflightClient<
-                Ethereum,
-                TestCoreDriver,
-                RethPreflightDriver,
-            >>::preflight_with_provider(provider, 1, 1)
-                .unwrap();
-        let build_result = Witness::driver_from::<TestCoreDriver>(&preflight_data);
-
-        // the header should match
-        assert_eq!(build_result.validated_tip_hash, expected_hash);
+        run::<RethBlockBuilder>(Rc::new(RefCell::new(provider)), expected_hash);
     }
+}
+
+fn run<R>(provider: Rc<RefCell<dyn Provider<Ethereum>>>, expected_hash: BlockHash)
+where
+    R: BlockBuilder<Ethereum, MemoryDB, TestCoreDriver, RethPreflightDriver>,
+{
+    let preflight_data = R::PreflightClient::preflight_with_provider(provider.clone(), 1, 1)
+        .expect("Preflight failed");
+    let build_result = Witness::driver_from::<TestCoreDriver>(&preflight_data);
+
+    // The header should match.
+    assert_eq!(build_result.validated_tip_hash, expected_hash);
+
+    let deserialized_preflight_data =
+        R::StatelessClient::deserialize_data(build_result.encoded_input.as_slice())
+            .expect("Input deserialization failed");
+
+    R::StatelessClient::validate(deserialized_preflight_data).expect("Block validation failed");
 }

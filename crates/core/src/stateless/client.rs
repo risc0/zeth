@@ -21,9 +21,6 @@ use crate::stateless::finalize::FinalizationStrategy;
 use crate::stateless::initialize::InitializationStrategy;
 use crate::stateless::validate::ValidationStrategy;
 use std::io::Read;
-use std::sync::{Arc, Mutex};
-
-pub type RescueDestination<D> = Arc<Mutex<Option<D>>>;
 
 pub trait StatelessClient<Driver, Database>
 where

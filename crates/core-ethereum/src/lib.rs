@@ -105,10 +105,7 @@ where
         let mut executor = EthExecutorProvider::ethereum(chain_spec.clone())
             .batch_executor(db.take().expect("Missing database."));
         // Execute transactions
-        // let block_with_senders = BlockWithSenders {
-        //     block,
-        //     senders: vec![], // todo: recover signers with non-det hints
-        // };
+        // todo: recover signers with non-det hints
         let block_with_senders = take(block)
             .with_recovered_senders()
             .expect("Senders recovery failed");

@@ -18,7 +18,7 @@ By using reth to run the block execution process within the zkVM, we obtain a ZK
 
 ## Status
 
-Zeth's block building logic uses version 1.1.3 of the RISC Zero zkVM and version 1.1.0 of reth, but its other components are not audited for use in production.
+Zeth uses version 1.1.3 of the RISC Zero zkVM and version 1.1.0 of reth (backed by revm 14.0.3), but its other components are not audited for use in production.
 
 ## Prerequisites
 1. [rust](https://www.rust-lang.org/tools/install)

@@ -1546,7 +1546,7 @@ dependencies = [
 [[package]]
 name = "k256"
 version = "0.13.3"
-source = "git+https://github.com/risc0/RustCrypto-elliptic-curves?rev=7571741274b94a50a4c8178ce1946f9626aa18fa#7571741274b94a50a4c8178ce1946f9626aa18fa"
+source = "git+https://github.com/risc0/RustCrypto-elliptic-curves?rev=c2750428558944954af5fe147b01a67711a65062#c2750428558944954af5fe147b01a67711a65062"
 dependencies = [
  "bytemuck",
  "cfg-if",
@@ -2673,9 +2673,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-bigint2"
-version = "1.2.0-rc.1"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b95b6692674cb64b7df6a20090f3c2c7a097601480c766b5d020b7a87b3eaa18"
+checksum = "4f4c185a3bfaee681eed5bfac1440128184bf0b6544c345fb4d7bd4317c909fb"
 dependencies = [
  "include_bytes_aligned",
  "stability",

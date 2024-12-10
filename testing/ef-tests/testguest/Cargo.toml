@@ -14,4 +14,4 @@ zeth-lib = { path = "../../../lib", default-features = false }
 crypto-bigint = { git = "https://github.com/risc0/RustCrypto-crypto-bigint", tag = "v0.5.5-risczero.0" }
 k256 = { git = "https://github.com/risc0/RustCrypto-elliptic-curves", rev = "c2750428558944954af5fe147b01a67711a65062" }
 sha2 = { git = "https://github.com/risc0/RustCrypto-hashes", tag = "sha2-v0.10.6-risczero.0" }
-tiny-keccak = { git = "https://github.com/risc0/tiny-keccak", rev = "14e23f4a4e47c901635aea705f0dc646305d10bd" }
+tiny-keccak = { git = "https://github.com/risc0/tiny-keccak", rev = "33920ca9ce7060c2b88002356fea34f309a0517a" }

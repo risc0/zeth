@@ -38,6 +38,7 @@ default-features = false
 alloy = { version = "0.4.2", features = ["full"] }
 alloy-chains = "0.1.38"
 alloy-consensus = "0.4.2"
+alloy-genesis = "0.4.2"
 alloy-primitives = { version = "0.8.8", default-features = false }
 alloy-rlp = "0.3.8"
 op-alloy-consensus = "0.4.0"
@@ -93,8 +94,10 @@ bytemuck = "1.19.0"
 clap = { version = "4.0", features = ["derive"] }
 env_logger = "0.11.5"
 hashbrown = { version = "0.15.0", features = ["inline-more"] }
+k256 = { version = "0.13.3", features = ["serde", "pem"] }
 log = "0.4.22"
 flate2 = "1.0.34"
+once_cell = "1.20.2"
 pot = "3.0.1"
 serde = { version = "1.0.210", features = ["derive"] }
 serde_json = { version = "1.0.128", features = ["alloc"] }

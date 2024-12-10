@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-ef-tests = []
 cuda = []
+ef-tests = []
 metal = []
 
 [dependencies]

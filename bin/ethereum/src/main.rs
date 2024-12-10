@@ -13,19 +13,16 @@
 // limitations under the License.
 
 use reth_chainspec::NamedChain;
-use tokio::task::spawn_blocking;
 use zeth_guests::{ZETH_GUESTS_RETH_ETHEREUM_ELF, ZETH_GUESTS_RETH_ETHEREUM_ID};
 use zeth_preflight_ethereum::RethBlockBuilder;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    spawn_blocking(move || {
-        zeth::run::<RethBlockBuilder, _, _, _, _>(
-            ZETH_GUESTS_RETH_ETHEREUM_ELF,
-            ZETH_GUESTS_RETH_ETHEREUM_ID,
-            NamedChain::Mainnet,
-            "ethereum",
-        )
-    })
-    .await?
+    zeth::run::<RethBlockBuilder, _, _, _, _>(
+        ZETH_GUESTS_RETH_ETHEREUM_ELF,
+        ZETH_GUESTS_RETH_ETHEREUM_ID,
+        NamedChain::Mainnet,
+        "ethereum",
+    )
+    .await
 }

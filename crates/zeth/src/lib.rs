@@ -23,7 +23,6 @@ use risc0_zkvm::{default_executor, default_prover, is_dev_mode, ProverOpts, Rece
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use tokio::runtime::Handle;
 use zeth_core::driver::CoreDriver;
 use zeth_core::keccak::keccak;
 use zeth_core::rescue::Recoverable;
@@ -33,7 +32,7 @@ use zeth_preflight::BlockBuilder;
 pub mod cli;
 pub mod executor;
 
-pub fn run<
+pub async fn run<
     B: BlockBuilder<N, D, R, P> + Send + Sync + 'static,
     N: Network,
     D: Recoverable + 'static,
@@ -63,14 +62,16 @@ where
         .cache
         .as_ref()
         .map(|dir| cache_dir_path(dir, network_name));
+
     // select a guest program
-    let expected_journal = Handle::current().block_on(B::build_journal(
+    let expected_journal = B::build_journal(
         chain_id,
         cache_dir.clone(),
         build_args.rpc.clone(),
         build_args.block_number,
         build_args.block_count,
-    ))?;
+    )
+    .await?;
     info!("Journal prepared.");
 
     if !cli.should_build() {
@@ -113,13 +114,14 @@ where
     }
 
     // preflight the block building process
-    let build_result = Handle::current().block_on(B::build_blocks(
+    let build_result = B::build_blocks(
         chain_id,
         cache_dir.clone(),
         build_args.rpc.clone(),
         build_args.block_number,
         build_args.block_count,
-    ))?;
+    )
+    .await?;
 
     if !cli.should_execute() {
         return Ok(());

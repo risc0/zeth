@@ -138,6 +138,7 @@ where
         let data = StatelessClientData {
             chain,
             blocks: blocks.into_iter().rev().collect(),
+            signers: Default::default(),
             state_trie: Default::default(),
             storage_tries: Default::default(),
             contracts: Default::default(),
@@ -326,11 +327,14 @@ where
             .sum();
         info!("{transactions} total transactions.");
 
-        Ok(StatelessClientData::<R::Block, R::Header> {
+        let blocks: Vec<_> = zip(data.blocks, ommers)
+            .map(|(block, ommers)| P::derive_block(block, ommers))
+            .collect();
+        let signers = blocks.iter().map(P::recover_signers).collect();
+        Ok(StatelessClientData {
             chain: data.chain,
-            blocks: zip(data.blocks, ommers)
-                .map(|(block, ommers)| P::derive_block(block, ommers))
-                .collect(),
+            blocks,
+            signers,
             state_trie,
             storage_tries,
             contracts,

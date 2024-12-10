@@ -58,3 +58,6 @@ test-cache-eth: (build "")
     RUST_LOG=info RISC0_DEV_MODE=1 ./target/debug/zeth-ethereum build --cache=bin/ethereum/data -b=15537394
     RUST_LOG=info RISC0_DEV_MODE=1 ./target/debug/zeth-ethereum build --cache=bin/ethereum/data -b=17034870
     RUST_LOG=info RISC0_DEV_MODE=1 ./target/debug/zeth-ethereum build --cache=bin/ethereum/data -b=19426587
+
+test-cache-op: (build "")
+    RUST_LOG=info ./target/debug/zeth-optimism build --cache=bin/optimism/data -c=optimism-sepolia -b=17664000

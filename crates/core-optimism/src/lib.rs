@@ -118,12 +118,8 @@ where
                 if matches!(tx.tx_type(), TxType::Deposit) {
                     tx.recover_signer().unwrap()
                 } else {
-                    recover_sender(
-                        vk.next().unwrap(),
-                        *tx.signature(),
-                        tx.signature_hash(),
-                    )
-                    .expect("Sender recovery failed")
+                    recover_sender(vk.next().unwrap(), *tx.signature(), tx.signature_hash())
+                        .expect("Sender recovery failed")
                 }
             })
             .collect::<Vec<_>>();

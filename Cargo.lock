@@ -1692,6 +1692,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fffa369a668c8af7dbf8b5e56c9f744fbd399949ed171606040001947de40b1c"
 dependencies = [
  "const-oid",
+ "pem-rfc7468",
  "zeroize",
 ]
 
@@ -1876,6 +1877,7 @@ dependencies = [
  "digest 0.10.7",
  "elliptic-curve",
  "rfc6979",
+ "serdect",
  "signature",
  "spki",
 ]
@@ -1904,9 +1906,11 @@ dependencies = [
  "ff",
  "generic-array",
  "group",
+ "pem-rfc7468",
  "pkcs8",
  "rand_core",
  "sec1",
+ "serdect",
  "subtle",
  "zeroize",
 ]
@@ -2677,7 +2681,9 @@ dependencies = [
  "ecdsa",
  "elliptic-curve",
  "once_cell",
+ "serdect",
  "sha2",
+ "signature",
 ]
 
 [[package]]
@@ -3313,6 +3319,15 @@ name = "paste"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "de3145af08024dea9fa9914f381a17b8fc6034dfb00f3a84013f7ff43f29ed4c"
+
+[[package]]
+name = "pem-rfc7468"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88b39c9bfcfc231068454382784bb460aae594343fb030d46e9f50a645418412"
+dependencies = [
+ "base64ct",
+]
 
 [[package]]
 name = "percent-encoding"
@@ -4913,6 +4928,7 @@ dependencies = [
  "der",
  "generic-array",
  "pkcs8",
+ "serdect",
  "subtle",
  "zeroize",
 ]
@@ -5039,11 +5055,11 @@ dependencies = [
 
 [[package]]
 name = "serde_with"
-version = "3.7.0"
+version = "3.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee80b0e361bbf88fd2f6e242ccd19cfda072cb0faa6ae694ecee08199938569a"
+checksum = "8e28bdad6db2b8340e449f7108f020b3b092e8583a9e3fb82713e1d4e71fe817"
 dependencies = [
- "base64 0.21.7",
+ "base64 0.22.1",
  "chrono",
  "hex",
  "indexmap 1.9.3",
@@ -5057,14 +5073,24 @@ dependencies = [
 
 [[package]]
 name = "serde_with_macros"
-version = "3.7.0"
+version = "3.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6561dc161a9224638a31d876ccdfefbc1df91d3f3a8342eddb35f055d48c7655"
+checksum = "9d846214a9854ef724f3da161b426242d8de7c1fc7de2f89bb1efcb154dca79d"
 dependencies = [
  "darling",
  "proc-macro2",
  "quote",
  "syn 2.0.87",
+]
+
+[[package]]
+name = "serdect"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a84f14a19e9a014bb9f4512488d9829a68e04ecabffb0f9904cd1ace94598177"
+dependencies = [
+ "base16ct",
+ "serde",
 ]
 
 [[package]]
@@ -6272,12 +6298,8 @@ dependencies = [
  "clap",
  "env_logger",
  "log",
- "pot",
  "reth-chainspec",
  "risc0-zkvm",
- "serde",
- "tokio",
- "tracing",
  "zeth-core",
  "zeth-guests",
  "zeth-preflight",
@@ -6306,13 +6328,9 @@ dependencies = [
  "alloy-primitives",
  "alloy-rlp",
  "anyhow",
- "hashbrown 0.15.0",
+ "k256",
  "pot",
  "reth-chainspec",
- "reth-consensus",
- "reth-ethereum-consensus",
- "reth-evm",
- "reth-evm-ethereum",
  "reth-primitives",
  "reth-revm",
  "reth-storage-errors",
@@ -6325,7 +6343,10 @@ dependencies = [
 name = "zeth-core-ethereum"
 version = "0.1.0"
 dependencies = [
+ "alloy-genesis",
  "anyhow",
+ "k256",
+ "once_cell",
  "reth-chainspec",
  "reth-consensus",
  "reth-ethereum-consensus",
@@ -6341,7 +6362,10 @@ dependencies = [
 name = "zeth-core-optimism"
 version = "0.1.0"
 dependencies = [
+ "alloy-genesis",
  "anyhow",
+ "k256",
+ "once_cell",
  "reth-chainspec",
  "reth-consensus",
  "reth-evm",
@@ -6359,18 +6383,9 @@ dependencies = [
 name = "zeth-ethereum"
 version = "0.1.0"
 dependencies = [
- "alloy",
  "anyhow",
- "bincode",
- "bytemuck",
- "clap",
- "env_logger",
- "log",
- "pot",
  "reth-chainspec",
- "serde",
  "tokio",
- "tracing",
  "zeth",
  "zeth-guests",
  "zeth-preflight-ethereum",
@@ -6387,18 +6402,9 @@ dependencies = [
 name = "zeth-optimism"
 version = "0.1.0"
 dependencies = [
- "alloy",
  "anyhow",
- "bincode",
- "bytemuck",
- "clap",
- "env_logger",
- "log",
- "pot",
  "reth-chainspec",
- "serde",
  "tokio",
- "tracing",
  "zeth",
  "zeth-guests",
  "zeth-preflight-optimism",
@@ -6411,20 +6417,17 @@ dependencies = [
  "alloy",
  "anyhow",
  "async-trait",
- "env_logger",
  "flate2",
- "hashbrown 0.15.0",
+ "k256",
  "log",
  "pot",
  "reth-chainspec",
- "reth-evm-ethereum",
  "reth-primitives",
  "reth-revm",
  "reth-storage-errors",
  "serde",
  "serde_json",
  "tokio",
- "tracing",
  "zeth-core",
 ]
 

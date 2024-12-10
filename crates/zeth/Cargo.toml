@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies.risc0-zkvm]
 workspace = true
-features = ["std", "client"]
+features = ["std", "client", "unstable"]
 
 [dependencies.zeth-guests]
 workspace = true
@@ -24,14 +24,11 @@ bytemuck.workspace = true
 clap.workspace = true
 env_logger.workspace = true
 log.workspace = true
-pot.workspace = true
 reth-chainspec.workspace = true
-serde.workspace = true
-tokio.workspace = true
-tracing.workspace = true
 
 [features]
-metal = ["risc0-zkvm/metal"]
-cuda = ["risc0-zkvm/cuda"]
-disable-dev-mode = ["risc0-zkvm/disable-dev-mode"]
 debug-guest-build = ["zeth-guests/debug-guest-build"]
+disable-dev-mode = ["risc0-zkvm/disable-dev-mode"]
+cuda = ["risc0-zkvm/cuda"]
+metal = ["risc0-zkvm/metal"]
+prove = ["risc0-zkvm/prove"]

@@ -145,10 +145,11 @@ where
         data: StatelessClientData<N::BlockResponse, N::HeaderResponse>,
         ommers: Vec<Vec<N::HeaderResponse>>,
     ) -> anyhow::Result<StatelessClientData<R::Block, R::Header>> {
+        let chain_spec = R::chain_spec(&data.chain).expect("Unsupported chain");
         // Instantiate the engine with a rescue for the DB
         info!("Running block execution engine ...");
         let mut engine = StatelessClientEngine::<R, PreflightDB<N, R, P>>::new(
-            P::derive_data(data.clone(), ommers.clone()),
+            P::derive_data(data.clone(), ommers.clone(), &chain_spec),
             Some(preflight_db),
         );
 
@@ -318,7 +319,7 @@ where
         Ok(StatelessClientData::<R::Block, R::Header> {
             chain: data.chain,
             blocks: zip(data.blocks, ommers)
-                .map(|(block, ommers)| P::derive_block(block, ommers))
+                .map(|(block, ommers)| P::derive_block(block, ommers, &chain_spec))
                 .collect(),
             state_trie,
             storage_tries,

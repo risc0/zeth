@@ -80,6 +80,7 @@ impl PreflightDriver<OpRethCoreDriver, Optimism> for OpRethPreflightDriver {
     fn derive_block(
         block: <Optimism as Network>::BlockResponse,
         ommers: Vec<<Optimism as Network>::HeaderResponse>,
+        _chain_spec: &Arc<OpChainSpec>,
     ) -> <OpRethCoreDriver as CoreDriver>::Block {
         Block {
             header: Self::derive_header(block.header),
@@ -147,6 +148,7 @@ impl PreflightDriver<OpRethCoreDriver, Optimism> for OpRethPreflightDriver {
             <Optimism as Network>::HeaderResponse,
         >,
         ommers: Vec<Vec<<Optimism as Network>::HeaderResponse>>,
+        chain_spec: &Arc<OpChainSpec>,
     ) -> StatelessClientData<
         <OpRethCoreDriver as CoreDriver>::Block,
         <OpRethCoreDriver as CoreDriver>::Header,
@@ -154,7 +156,7 @@ impl PreflightDriver<OpRethCoreDriver, Optimism> for OpRethPreflightDriver {
         StatelessClientData {
             chain: data.chain,
             blocks: zip(data.blocks, ommers)
-                .map(|(block, ommers)| Self::derive_block(block, ommers))
+                .map(|(block, ommers)| Self::derive_block(block, ommers, chain_spec))
                 .collect(),
             state_trie: data.state_trie,
             storage_tries: data.storage_tries,

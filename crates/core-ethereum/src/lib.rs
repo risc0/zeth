@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloy_genesis::Genesis;
 use anyhow::Context;
 use reth_chainspec::{
     Chain, ChainSpec, ChainSpecBuilder, NamedChain, DEV, HOLESKY, MAINNET, SEPOLIA,
@@ -30,7 +31,6 @@ use reth_storage_errors::provider::ProviderError;
 use std::fmt::Display;
 use std::mem::take;
 use std::sync::Arc;
-use alloy_genesis::Genesis;
 use zeth_core::db::MemoryDB;
 use zeth_core::driver::CoreDriver;
 use zeth_core::stateless::client::StatelessClient;

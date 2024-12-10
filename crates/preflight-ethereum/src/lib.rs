@@ -14,7 +14,7 @@
 
 use alloy::network::ReceiptResponse;
 use alloy::network::{Ethereum, Network};
-use alloy::primitives::{B256, U256};
+use alloy::primitives::{B256, U256, Address};
 use alloy::rpc::types::serde_helpers::WithOtherFields;
 use reth_chainspec::ChainSpec;
 use reth_primitives::{Block, BlockBody, Header, Log, Receipt, TransactionSigned, Withdrawals};
@@ -73,8 +73,9 @@ impl PreflightDriver<RethCoreDriver, Ethereum> for RethPreflightDriver {
     fn derive_block(
         block: <Ethereum as Network>::BlockResponse,
         ommers: Vec<<Ethereum as Network>::HeaderResponse>,
+        chain_spec: &Arc<ChainSpec>,
     ) -> Block {
-        Block {
+        let mut block = Block {
             header: Self::derive_header(block.header),
             body: BlockBody {
                 transactions: block
@@ -86,7 +87,16 @@ impl PreflightDriver<RethCoreDriver, Ethereum> for RethPreflightDriver {
                 withdrawals: block.withdrawals.map(Withdrawals::new),
                 requests: None,
             },
+        };
+
+        // NOTE: Linea (0xe708) uses clique consensus - the block reward is credited to the signer.
+        //       The clique beneficiary address is extracted from the genesis extra data.
+        if chain_spec.chain.id() == 0xe708 {
+            let addr = Address::from_slice(&chain_spec.genesis().extra_data[32..52]);
+            block.header.beneficiary = addr;
         }
+
+        block
     }
 
     fn derive_header_response(
@@ -131,11 +141,12 @@ impl PreflightDriver<RethCoreDriver, Ethereum> for RethPreflightDriver {
             <Ethereum as Network>::HeaderResponse,
         >,
         ommers: Vec<Vec<<Ethereum as Network>::HeaderResponse>>,
+        chain_spec: &Arc<ChainSpec>,
     ) -> StatelessClientData<Block, Header> {
         StatelessClientData {
             chain: data.chain,
             blocks: zip(data.blocks, ommers)
-                .map(|(block, ommers)| Self::derive_block(block, ommers))
+                .map(|(block, ommers)| Self::derive_block(block, ommers, chain_spec))
                 .collect(),
             state_trie: data.state_trie,
             storage_tries: data.storage_tries,

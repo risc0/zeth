@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use alloy::network::Network;
 use alloy::primitives::{B256, U256};
 use zeth_core::driver::CoreDriver;
@@ -22,7 +23,7 @@ pub trait PreflightDriver<Core: CoreDriver, N: Network> {
     fn count_transactions(block: &N::BlockResponse) -> usize;
     fn derive_transaction(transaction: N::TransactionResponse) -> Core::Transaction;
     fn derive_header(header: N::HeaderResponse) -> Core::Header;
-    fn derive_block(block: N::BlockResponse, ommers: Vec<N::HeaderResponse>) -> Core::Block;
+    fn derive_block(block: N::BlockResponse, ommers: Vec<N::HeaderResponse>, chain_spec: &Arc<Core::ChainSpec>) -> Core::Block;
     fn derive_header_response(block: N::BlockResponse) -> N::HeaderResponse;
     fn header_response(block: &N::BlockResponse) -> &N::HeaderResponse;
     fn uncles(block: &N::BlockResponse) -> &Vec<B256>;
@@ -30,5 +31,6 @@ pub trait PreflightDriver<Core: CoreDriver, N: Network> {
     fn derive_data(
         data: StatelessClientData<N::BlockResponse, N::HeaderResponse>,
         ommers: Vec<Vec<N::HeaderResponse>>,
+        chain_spec: &Arc<Core::ChainSpec>
     ) -> StatelessClientData<Core::Block, Core::Header>;
 }

@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use anyhow::Context;
-use reth_chainspec::{ChainSpec, NamedChain, DEV, HOLESKY, MAINNET, SEPOLIA};
+use reth_chainspec::{
+    Chain, ChainSpec, ChainSpecBuilder, NamedChain, DEV, HOLESKY, MAINNET, SEPOLIA,
+};
 use reth_consensus::Consensus;
 use reth_ethereum_consensus::EthBeaconConsensus;
 use reth_evm::execute::{
@@ -28,6 +30,7 @@ use reth_storage_errors::provider::ProviderError;
 use std::fmt::Display;
 use std::mem::take;
 use std::sync::Arc;
+use alloy_genesis::Genesis;
 use zeth_core::db::MemoryDB;
 use zeth_core::driver::CoreDriver;
 use zeth_core::stateless::client::StatelessClient;
@@ -138,6 +141,19 @@ impl CoreDriver for RethCoreDriver {
             NamedChain::Mainnet => Some(MAINNET.clone()),
             NamedChain::Sepolia => Some(SEPOLIA.clone()),
             NamedChain::Holesky => Some(HOLESKY.clone()),
+            NamedChain::Linea => {
+                // TODO: Move this somewhere it belongs
+                let genesis_json = include_str!(".././../../genesis/linea-mainnet.json");
+                let genesis: Genesis = serde_json::from_str(genesis_json).unwrap();
+                let linea_chain_spec = Arc::new(
+                    ChainSpecBuilder::default()
+                        .chain(Chain::linea())
+                        .genesis(genesis)
+                        .paris_activated()
+                        .build(),
+                );
+                Some(linea_chain_spec)
+            }
             NamedChain::Dev => Some(DEV.clone()),
             _ => None,
         }

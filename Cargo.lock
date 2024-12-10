@@ -6325,6 +6325,7 @@ dependencies = [
 name = "zeth-core-ethereum"
 version = "0.1.0"
 dependencies = [
+ "alloy-genesis",
  "anyhow",
  "reth-chainspec",
  "reth-consensus",
@@ -6334,6 +6335,7 @@ dependencies = [
  "reth-primitives",
  "reth-revm",
  "reth-storage-errors",
+ "serde_json",
  "zeth-core",
 ]
 

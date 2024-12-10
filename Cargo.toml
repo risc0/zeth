@@ -37,6 +37,7 @@ default-features = false
 # Alloy
 alloy = { version = "0.4.2", features = ["full"] }
 alloy-chains = "0.1.38"
+alloy-genesis = "0.4.2"
 alloy-consensus = "0.4.2"
 alloy-primitives = { version = "0.8.8", default-features = false }
 alloy-rlp = "0.3.8"

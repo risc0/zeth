@@ -9,6 +9,7 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 
+alloy-genesis.workspace = true
 reth-chainspec.workspace = true
 reth-consensus.workspace = true
 reth-ethereum-consensus.workspace = true
@@ -17,3 +18,4 @@ reth-evm-ethereum.workspace = true
 reth-primitives.workspace = true
 reth-revm.workspace = true
 reth-storage-errors.workspace = true
+serde_json.workspace = true

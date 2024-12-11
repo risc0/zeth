@@ -91,6 +91,12 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> Database for ProviderD
             .map_err(db_error)?;
         let bytecode = Bytecode::new_raw(code);
 
+        // if the account is empty return None
+        // in the EVM, emptiness is treated as equivalent to nonexistence
+        if nonce.is_zero() && balance.is_zero() && bytecode.is_empty() {
+            return Ok(None);
+        }
+
         // index the code by its hash, so that we can later use code_by_hash
         let code_hash = bytecode.hash_slow();
         self.contracts.insert(code_hash, bytecode);

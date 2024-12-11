@@ -219,13 +219,13 @@ where
             info!("Saving provider cache ...");
             preflight_db.save_provider()?;
 
-            // collect the code from each account
-            info!("Collecting contracts ...");
+            // collect the code of the used contracts
             let initial_db = preflight_db.inner.db.db.borrow();
             for code in initial_db.contracts.values() {
                 contracts.push(code.bytes().clone());
             }
             drop(initial_db);
+            info!("Collected contracts: {}", contracts.len());
 
             // construct the sparse MPTs from the inclusion proofs
             info!(

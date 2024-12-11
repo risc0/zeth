@@ -185,19 +185,15 @@ impl ProviderState {
         let account = self.0.get(&key);
 
         let mut storage_proof = Vec::new();
-        if let Some(account) = account {
-            for index in indices {
-                let key = keccak256(index);
-                let (_, proof) = mpt_proof(
-                    account.storage.iter().map(|(k, v)| (k, v.1)),
-                    iter::once(&key),
-                );
-                storage_proof.push(EIP1186StorageProof {
-                    key: (*index).into(),
-                    value: account.storage.get(&key).map(|v| v.1).unwrap_or_default(),
-                    proof,
-                })
-            }
+        let storage = account.map(|a| &a.storage).cloned().unwrap_or_default();
+        for index in indices {
+            let key = keccak256(index);
+            let (_, proof) = mpt_proof(storage.iter().map(|(k, v)| (k, v.1)), iter::once(&key));
+            storage_proof.push(EIP1186StorageProof {
+                key: (*index).into(),
+                value: storage.get(&key).map(|v| v.1).unwrap_or_default(),
+                proof,
+            })
         }
 
         let account = account.map(|a| a.acc.clone()).unwrap_or_default();

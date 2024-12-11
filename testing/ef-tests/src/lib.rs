@@ -14,364 +14,144 @@
 
 #![cfg(feature = "ef-tests")]
 
-use anyhow::bail;
-use hashbrown::HashMap;
-use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, NoneAsEmptyString};
-use zeth_lib::{
-    builder::{BlockBuilder, BlockBuilderStrategy, EthereumStrategy},
-    consts::ChainSpec,
-    host::{
-        preflight::Data,
-        provider::{AccountQuery, BlockQuery, ProofQuery, Provider, StorageQuery},
-        provider_db::ProviderDb,
-    },
-    input::{BlockBuildInput, StateInput},
-    mem_db::{AccountState, DbAccount, MemDb},
+use alloy::{
+    primitives::{Address, Bytes, B256, U256},
+    rpc::types::{Header, Transaction, Withdrawal},
 };
-use zeth_primitives::{
-    access_list::{AccessList, AccessListItem},
-    alloy_rlp,
-    block::Header,
-    ethers::from_ethers_h160,
-    keccak::keccak,
-    transactions::{
-        ethereum::{
-            EthereumTxEssence, TransactionKind, TxEssenceEip1559, TxEssenceEip2930, TxEssenceLegacy,
-        },
-        signature::TxSignature,
-        EthereumTransaction,
-    },
-    trie::{self, MptNode, MptNodeData, StateAccount},
-    withdrawal::Withdrawal,
-    Address, Bloom, Bytes, StorageKey, B256, B64, U256, U64,
-};
+use serde::Deserialize;
+use serde_with::{serde_as, TryFromInto};
+use std::{collections::HashMap, default::Default, fs::File, io::BufReader, path::PathBuf};
 
-use crate::ethers::TestProvider;
+mod driver;
+mod provider;
 
-pub mod ethers;
-pub mod ethtests;
+pub use driver::TestCoreDriver;
+pub use provider::TestProvider;
 
-pub mod guests {
-    include!(concat!(env!("OUT_DIR"), "/methods.rs"));
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde_as]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TestJson {
-    pub blocks: Vec<TestBlock>,
-    #[serde(rename = "genesisBlockHeader")]
-    pub genesis: TestHeader,
+pub struct Test {
+    #[serde_as(as = "TryFromInto<TestHeader>")]
+    pub genesis_block_header: Header,
     #[serde(rename = "genesisRLP")]
     pub genesis_rlp: Bytes,
+    pub blocks: Vec<TestBlock>,
     pub network: String,
     pub pre: TestState,
-    #[serde(rename = "postState")]
-    pub post: Option<TestState>,
+    pub post_state: Option<TestState>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(transparent)]
+pub struct TestHeader(serde_json::Map<String, serde_json::Value>);
+
+#[serde_as]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TestBlock {
-    pub block_header: Option<TestHeader>,
+    #[serde_as(as = "Option<TryFromInto<TestHeader>>")]
+    pub block_header: Option<Header>,
     pub expect_exception: Option<String>,
     pub rlp: Bytes,
     #[serde(default)]
-    pub transactions: Vec<TestTransaction>,
+    #[serde_as(as = "Vec<TryFromInto<TestTransaction>>")]
+    pub transactions: Vec<Transaction>,
     #[serde(default)]
-    pub uncle_headers: Vec<TestHeader>,
+    #[serde_as(as = "Vec<TryFromInto<TestHeader>>")]
+    pub uncle_headers: Vec<Header>,
     pub withdrawals: Option<Vec<Withdrawal>>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(transparent)]
+pub struct TestTransaction(serde_json::Map<String, serde_json::Value>);
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TestState(HashMap<Address, TestAccount>);
+
+#[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TestAccount {
     pub balance: U256,
-    pub nonce: U64,
-    pub code: Bytes,
+    #[serde(with = "alloy::serde::quantity")]
+    pub nonce: u64,
     pub storage: HashMap<U256, U256>,
+    pub code: Bytes,
 }
 
-impl From<DbAccount> for TestAccount {
-    fn from(account: DbAccount) -> Self {
-        TestAccount {
-            balance: account.info.balance,
-            nonce: U64::from(account.info.nonce),
-            code: account.info.code.unwrap().bytecode,
-            storage: account.storage.into_iter().collect(),
-        }
+impl TryFrom<TestHeader> for Header {
+    type Error = serde_json::Error;
+
+    fn try_from(h: TestHeader) -> Result<Self, Self::Error> {
+        let mut map = h.0;
+
+        // rename some fields
+        map.remove("uncleHash")
+            .map(|v| map.insert("sha3Uncles".to_string(), v));
+        map.remove("coinbase")
+            .map(|v| map.insert("miner".to_string(), v));
+        map.remove("transactionsTrie")
+            .map(|v| map.insert("transactionsRoot".to_string(), v));
+        map.remove("receiptTrie")
+            .map(|v| map.insert("receiptsRoot".to_string(), v));
+        map.remove("bloom")
+            .map(|v| map.insert("logsBloom".to_string(), v));
+
+        serde_json::from_value(map.into())
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct TestState(pub HashMap<Address, TestAccount>);
+impl TryFrom<TestTransaction> for Transaction {
+    type Error = serde_json::Error;
 
-impl From<&MemDb> for TestState {
-    fn from(db: &MemDb) -> Self {
-        TestState(
-            db.accounts
-                .iter()
-                .filter(|(_, account)| account.state != AccountState::Deleted)
-                .map(|(addr, account)| (*addr, account.clone().into()))
-                .collect(),
-        )
-    }
-}
+    fn try_from(tx: TestTransaction) -> Result<Self, Self::Error> {
+        let mut map = tx.0;
 
-impl From<&ProviderDb> for TestState {
-    fn from(db: &ProviderDb) -> Self {
-        (&db.latest_db).into()
-    }
-}
+        // rename some fields
+        map.remove("data")
+            .map(|v| map.insert("input".to_string(), v));
+        map.remove("gasLimit")
+            .map(|v| map.insert("gas".to_string(), v));
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TestHeader {
-    pub base_fee_per_gas: Option<U256>,
-    pub bloom: Bloom,
-    pub coinbase: Address,
-    pub extra_data: Bytes,
-    pub difficulty: U256,
-    pub gas_limit: U256,
-    pub gas_used: U256,
-    pub hash: B256,
-    pub mix_hash: B256,
-    pub nonce: B64,
-    pub number: U64,
-    pub parent_hash: B256,
-    pub receipt_trie: B256,
-    pub state_root: B256,
-    pub timestamp: U256,
-    pub transactions_trie: B256,
-    pub uncle_hash: B256,
-    pub withdrawals_root: Option<B256>,
-}
+        // add defaults for missing fields
+        map.entry("hash")
+            .or_insert_with(|| serde_json::to_value(B256::default()).unwrap());
+        map.entry("from")
+            .or_insert_with(|| serde_json::to_value(Address::default()).unwrap());
 
-impl From<TestHeader> for Header {
-    fn from(header: TestHeader) -> Self {
-        Header {
-            parent_hash: header.parent_hash,
-            ommers_hash: header.uncle_hash,
-            beneficiary: header.coinbase,
-            state_root: header.state_root,
-            transactions_root: header.transactions_trie,
-            receipts_root: header.receipt_trie,
-            logs_bloom: header.bloom,
-            difficulty: header.difficulty,
-            number: header.number.try_into().unwrap(),
-            gas_limit: header.gas_limit,
-            gas_used: header.gas_used,
-            timestamp: header.timestamp,
-            extra_data: header.extra_data,
-            mix_hash: header.mix_hash,
-            nonce: header.nonce,
-            base_fee_per_gas: header.base_fee_per_gas.unwrap(),
-            withdrawals_root: header.withdrawals_root,
-        }
-    }
-}
-
-#[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TestTransaction {
-    pub data: Bytes,
-    pub access_list: Option<TestAccessList>,
-    pub gas_limit: U256,
-    pub gas_price: Option<U256>,
-    pub max_fee_per_gas: Option<U256>,
-    pub max_priority_fee_per_gas: Option<U256>,
-    pub value: U256,
-    #[serde_as(as = "NoneAsEmptyString")]
-    pub to: Option<Address>,
-    pub nonce: U64,
-    pub v: U64,
-    pub r: U256,
-    pub s: U256,
-}
-
-impl From<TestTransaction> for EthereumTransaction {
-    fn from(tx: TestTransaction) -> Self {
-        let signature = TxSignature {
-            v: tx.v.try_into().unwrap(),
-            r: tx.r,
-            s: tx.s,
-        };
-        let essence = if tx.access_list.is_none() {
-            EthereumTxEssence::Legacy(TxEssenceLegacy {
-                chain_id: None,
-                nonce: tx.nonce.try_into().unwrap(),
-                gas_price: tx.gas_price.unwrap(),
-                gas_limit: tx.gas_limit,
-                to: match tx.to {
-                    Some(addr) => TransactionKind::Call(addr),
-                    None => TransactionKind::Create,
-                },
-                value: tx.value,
-                data: tx.data,
-            })
-        } else if tx.max_fee_per_gas.is_none() {
-            EthereumTxEssence::Eip2930(TxEssenceEip2930 {
-                chain_id: 1,
-                nonce: tx.nonce.try_into().unwrap(),
-                gas_price: tx.gas_price.unwrap(),
-                gas_limit: tx.gas_limit,
-                to: match tx.to {
-                    Some(addr) => TransactionKind::Call(addr),
-                    None => TransactionKind::Create,
-                },
-                value: tx.value,
-                data: tx.data,
-                access_list: tx.access_list.unwrap().into(),
-            })
-        } else {
-            EthereumTxEssence::Eip1559(TxEssenceEip1559 {
-                chain_id: 1,
-                nonce: tx.nonce.try_into().unwrap(),
-                max_priority_fee_per_gas: tx.max_priority_fee_per_gas.unwrap(),
-                max_fee_per_gas: tx.max_fee_per_gas.unwrap(),
-                gas_limit: tx.gas_limit,
-                to: match tx.to {
-                    Some(addr) => TransactionKind::Call(addr),
-                    None => TransactionKind::Create,
-                },
-                value: tx.value,
-                data: tx.data,
-                access_list: tx.access_list.unwrap().into(),
-            })
-        };
-        EthereumTransaction { essence, signature }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TestAccessList(pub Vec<TestAccessListItem>);
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TestAccessListItem {
-    pub address: Address,
-    pub storage_keys: Vec<StorageKey>,
-}
-
-impl From<TestAccessList> for AccessList {
-    fn from(list: TestAccessList) -> Self {
-        AccessList(
-            list.0
-                .into_iter()
-                .map(|item| AccessListItem {
-                    address: item.address,
-                    storage_keys: item.storage_keys,
-                })
-                .collect(),
-        )
-    }
-}
-
-/// Computes the Merkle proof for the given key in the trie.
-pub fn mpt_proof(root: &MptNode, key: impl AsRef<[u8]>) -> Result<Vec<Vec<u8>>, anyhow::Error> {
-    let mut path = proof_internal(root, &trie::to_nibs(key.as_ref()))?;
-    path.reverse();
-    Ok(path)
-}
-
-fn proof_internal(node: &MptNode, key_nibs: &[u8]) -> Result<Vec<Vec<u8>>, anyhow::Error> {
-    if key_nibs.is_empty() {
-        return Ok(vec![alloy_rlp::encode(node)]);
-    }
-
-    let mut path: Vec<Vec<u8>> = match node.as_data() {
-        MptNodeData::Null | MptNodeData::Leaf(_, _) => vec![],
-        MptNodeData::Branch(children) => {
-            let (i, tail) = key_nibs.split_first().unwrap();
-            match &children[*i as usize] {
-                Some(child) => proof_internal(child, tail)?,
-                None => vec![],
+        // it seems that for pre-EIP-155 txs, the chain ID is sometimes incorrectly set to 0
+        if let serde_json::map::Entry::Occupied(entry) = map.entry("chainId") {
+            if entry.get().as_str() == Some("0x00") {
+                entry.remove();
             }
         }
-        MptNodeData::Extension(_, child) => {
-            if let Some(tail) = key_nibs.strip_prefix(node.nibs().as_slice()) {
-                proof_internal(child, tail)?
-            } else {
-                vec![]
+        // recipient field should be missing instead of empty
+        if let serde_json::map::Entry::Occupied(entry) = map.entry("to") {
+            if entry.get().as_str() == Some("") {
+                entry.remove();
             }
         }
-        MptNodeData::Digest(_) => bail!("Cannot descend pointer!"),
-    };
-    path.push(alloy_rlp::encode(node));
 
-    Ok(path)
+        serde_json::from_value(map.into())
+    }
 }
 
-/// The size of the stack to use for the EVM.
-pub const BIG_STACK_SIZE: usize = 8 * 1024 * 1024;
+pub fn read_eth_execution_tests(path: PathBuf) -> impl Iterator<Item = Test> {
+    println!("Using file: {}", path.display());
+    let f = File::open(path).unwrap();
 
-pub fn create_input(
-    chain_spec: &ChainSpec,
-    parent_header: Header,
-    parent_state: TestState,
-    header: Header,
-    transactions: Vec<TestTransaction>,
-    withdrawals: Vec<Withdrawal>,
-    state: TestState,
-) -> BlockBuildInput<EthereumTxEssence> {
-    // create the provider DB
-    let provider_db = ProviderDb::new(
-        Box::new(TestProvider {
-            state: parent_state,
-            header: parent_header.clone(),
-            post: state,
-        }),
-        parent_header.number,
-    );
+    let tests: HashMap<String, Test> = serde_json::from_reader(BufReader::new(f)).unwrap();
+    tests.into_iter().filter_map(|(name, test)| {
+        println!("test '{}'", name);
 
-    let transactions: Vec<EthereumTransaction> = transactions
-        .into_iter()
-        .map(EthereumTransaction::from)
-        .collect();
-    let input = BlockBuildInput {
-        state_input: StateInput {
-            beneficiary: header.beneficiary,
-            gas_limit: header.gas_limit,
-            timestamp: header.timestamp,
-            extra_data: header.extra_data.clone(),
-            mix_hash: header.mix_hash,
-            transactions: transactions.clone(),
-            withdrawals: withdrawals.clone(),
-            parent_header: parent_header.clone(),
-        },
-        parent_state_trie: Default::default(),
-        parent_storage: Default::default(),
-        contracts: vec![],
+        // skip tests with an unsupported network version
+        if test.network.as_str() != "Cancun" {
+            println!("skipping ({})", test.network);
+            return None;
+        }
 
-        ancestor_headers: vec![],
-    };
-
-    // create and run the block builder once to create the initial DB
-    let mut builder = BlockBuilder::new(chain_spec, input, None)
-        .with_db(provider_db)
-        .prepare_header::<<EthereumStrategy as BlockBuilderStrategy>::HeaderPrepStrategy>()
-        .unwrap()
-        .execute_transactions::<<EthereumStrategy as BlockBuilderStrategy>::TxExecStrategy>()
-        .unwrap();
-    let provider_db = builder.mut_db().unwrap();
-
-    let parent_proofs = provider_db.get_initial_proofs().unwrap();
-    let proofs = provider_db.get_latest_proofs().unwrap();
-    let ancestor_headers = provider_db.get_ancestor_headers().unwrap();
-
-    let preflight_data = Data {
-        db: provider_db.get_initial_db().clone(),
-        parent_header,
-        parent_proofs,
-        header: Some(header),
-        transactions,
-        withdrawals,
-        proofs,
-        ancestor_headers,
-    };
-
-    preflight_data.try_into().unwrap()
+        Some(test)
+    })
 }

@@ -82,6 +82,7 @@ pub fn new_provider<N: Network>(
 pub trait Provider<N: Network>: Send {
     fn save(&self) -> anyhow::Result<()>;
     fn advance(&mut self) -> anyhow::Result<()>;
+    fn reset(&mut self, block_number: u64) -> anyhow::Result<()>;
 
     fn get_client_version(&mut self) -> anyhow::Result<String>;
     fn get_chain(&mut self) -> anyhow::Result<NamedChain>;
@@ -120,7 +121,7 @@ pub fn get_proofs<N: Network>(
     block_no: u64,
     storage_keys: HashMap<Address, Vec<U256>>,
 ) -> Result<HashMap<Address, EIP1186AccountProofResponse>, anyhow::Error> {
-    let mut out = HashMap::new();
+    let mut out = HashMap::default();
 
     for (address, indices) in storage_keys {
         let proof = {

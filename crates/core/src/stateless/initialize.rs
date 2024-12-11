@@ -26,6 +26,7 @@ use reth_primitives::revm_primitives::Bytecode;
 use reth_primitives::KECCAK_EMPTY;
 use reth_revm::db::{AccountState, DbAccount};
 use reth_revm::primitives::AccountInfo;
+use std::default::Default;
 
 pub trait InitializationStrategy<Driver: CoreDriver, Database> {
     fn initialize_database(
@@ -63,7 +64,8 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB> for MemoryDbSt
             .collect();
 
         // Load account data into db
-        let mut accounts = HashMap::with_capacity(storage_tries.len());
+        let mut accounts =
+            HashMap::with_capacity_and_hasher(storage_tries.len(), Default::default());
         for (address, (storage_trie, slots)) in storage_tries {
             // consume the slots, as they are no longer needed afterward
             let slots = take(slots);
@@ -93,7 +95,7 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB> for MemoryDbSt
             };
 
             // load storage reads
-            let mut storage = HashMap::with_capacity(slots.len());
+            let mut storage = HashMap::with_capacity_and_hasher(slots.len(), Default::default());
             for slot in slots {
                 let value: U256 = storage_trie
                     .get_rlp(&keccak(slot.to_be_bytes::<32>()))?
@@ -117,7 +119,7 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB> for MemoryDbSt
 
         // prepare block hash history
         let mut block_hashes: HashMap<U256, B256> =
-            HashMap::with_capacity(ancestor_headers.len() + 1);
+            HashMap::with_capacity_and_hasher(ancestor_headers.len() + 1, Default::default());
         block_hashes.insert(
             U256::from(Driver::block_number(parent_header)),
             Driver::header_hash(parent_header),

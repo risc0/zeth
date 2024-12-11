@@ -15,15 +15,17 @@
 use crate::db::PreflightDB;
 use crate::driver::PreflightDriver;
 use crate::provider::db::ProviderDB;
-use crate::provider::new_provider;
 use crate::provider::query::{BlockQuery, UncleQuery};
+use crate::provider::{new_provider, Provider};
 use crate::trie::extend_proof_tries;
 use alloy::network::Network;
 use alloy::primitives::map::HashMap;
 use anyhow::Context;
 use log::{debug, info, warn};
+use std::cell::RefCell;
 use std::iter::zip;
 use std::path::PathBuf;
+use std::rc::Rc;
 use zeth_core::db::into_plain_state;
 use zeth_core::driver::CoreDriver;
 use zeth_core::mpt::{
@@ -51,6 +53,14 @@ where
         block_count: u64,
     ) -> anyhow::Result<StatelessClientData<R::Block, R::Header>> {
         let provider = new_provider::<N>(cache_dir.clone(), block_no, rpc_url.clone(), chain_id)?;
+        Self::preflight_with_provider(provider, block_no, block_count)
+    }
+
+    fn preflight_with_provider(
+        provider: Rc<RefCell<dyn Provider<N>>>,
+        block_no: u64,
+        block_count: u64,
+    ) -> anyhow::Result<StatelessClientData<R::Block, R::Header>> {
         let mut provider_mut = provider.borrow_mut();
         let chain = provider_mut.get_chain()?;
         let chain_spec = R::chain_spec(&chain).expect("Unsupported chain");
@@ -105,10 +115,10 @@ where
         ommers.reverse();
 
         // Create the provider DB with a fresh provider to reset block_no
-        let provider_db = ProviderDB::<N, R, P>::new(
-            new_provider::<N>(cache_dir, block_no, rpc_url, chain_id)?,
-            R::block_number(&core_parent_header),
-        );
+        provider_mut.reset(block_no)?;
+        drop(provider_mut);
+        let provider_db =
+            ProviderDB::<N, R, P>::new(provider, R::block_number(&core_parent_header));
         let preflight_db = PreflightDB::from(provider_db);
 
         // Create the input data
@@ -230,7 +240,8 @@ where
                 &mut storage_tries,
                 initial_proofs,
                 latest_proofs,
-            )?;
+            )
+            .context("failed to extend proof tries")?;
             // resolve potential orphans
             let orphan_resolves =
                 preflight_db.resolve_orphans(block_count as u64, &state_orphans, &storage_orphans);

@@ -49,6 +49,10 @@ impl<N: Network> Provider<N> for CachedRpcProvider<N> {
         self.cache.advance()
     }
 
+    fn reset(&mut self, block_no: u64) -> anyhow::Result<()> {
+        self.cache.reset(block_no)
+    }
+
     fn get_client_version(&mut self) -> anyhow::Result<String> {
         if let Ok(cache_out) = self.cache.get_client_version() {
             if !cache_out.is_empty() {

@@ -47,6 +47,10 @@ impl<N: Network> Provider<N> for RpcProvider<N> {
         Ok(())
     }
 
+    fn reset(&mut self, _block_number: u64) -> anyhow::Result<()> {
+        Ok(())
+    }
+
     fn get_client_version(&mut self) -> anyhow::Result<String> {
         debug!("Getting rpc client version");
 

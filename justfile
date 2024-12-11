@@ -28,12 +28,16 @@ clippy:
 
     RISC0_SKIP_BUILD=1 cargo clippy -p zeth-benchmark
 
+    RISC0_SKIP_BUILD=1 cargo clippy -p zeth-testeth
+
 test:
     cargo test --all-targets -p zeth-core -p zeth-preflight -p zeth-guests -p zeth -p zeth-benchmark -F debug-guest-build
 
     cargo test --all-targets -p zeth-core-ethereum -p zeth-preflight-ethereum -p zeth-ethereum -F debug-guest-build
 
     cargo test --all-targets -p zeth-core-optimism -p zeth-preflight-optimism -p zeth-optimism -F debug-guest-build
+
+    cargo test --all-targets -p zeth-testeth -F ef-tests
 
     just test-cache-eth
 

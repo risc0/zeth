@@ -33,9 +33,10 @@ pub extern "C" fn __ctzsi2(x: u32) -> usize {
 
 fn main() {
     // todo: load up revm with hashbrown feat
+    let stateless_client_data_rkyv = env::read_frame();
     let stateless_client_data_pot = env::read_frame();
     env::log("Deserializing input data");
-    let stateless_client_data = OpRethStatelessClient::data_from_slice(&stateless_client_data_pot)
+    let stateless_client_data = OpRethStatelessClient::data_from_parts(&stateless_client_data_rkyv, &stateless_client_data_pot)
         .expect("Failed to load client data from stdin");
     let validation_depth = stateless_client_data.blocks.len() as u64;
     assert!(stateless_client_data.chain.is_optimism(), "This program only supports Optimism chains");

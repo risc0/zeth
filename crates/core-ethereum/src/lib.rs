@@ -12,8 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod chain_spec;
+
+use crate::chain_spec::{DEV, HOLESKY, MAINNET, SEPOLIA};
 use anyhow::Context;
-use reth_chainspec::{ChainSpec, NamedChain, DEV, HOLESKY, MAINNET, SEPOLIA};
+use k256::ecdsa::VerifyingKey;
+use reth_chainspec::{ChainSpec, NamedChain};
 use reth_consensus::Consensus;
 use reth_ethereum_consensus::EthBeaconConsensus;
 use reth_evm::execute::{
@@ -30,6 +34,7 @@ use std::mem::take;
 use std::sync::Arc;
 use zeth_core::db::MemoryDB;
 use zeth_core::driver::CoreDriver;
+use zeth_core::recover_sender;
 use zeth_core::stateless::client::StatelessClient;
 use zeth_core::stateless::execute::ExecutionStrategy;
 use zeth_core::stateless::finalize::RethFinalizationStrategy;
@@ -98,17 +103,22 @@ where
     fn execute_transactions(
         chain_spec: Arc<ChainSpec>,
         block: &mut Block,
+        signers: &[VerifyingKey],
         total_difficulty: &mut U256,
         db: &mut Option<Database>,
     ) -> anyhow::Result<BundleState> {
         // Instantiate execution engine using database
         let mut executor = EthExecutorProvider::ethereum(chain_spec.clone())
             .batch_executor(db.take().expect("Missing database."));
+        // Recover transaction signer addresses with non-det vk hints
+        let senders = core::iter::zip(signers, block.body.transactions())
+            .map(|(vk, tx)| {
+                recover_sender(vk, *tx.signature(), tx.signature_hash())
+                    .expect("Sender recovery failed")
+            })
+            .collect::<Vec<_>>();
         // Execute transactions
-        // todo: recover signers with non-det hints
-        let block_with_senders = take(block)
-            .with_recovered_senders()
-            .expect("Senders recovery failed");
+        let block_with_senders = take(block).with_senders_unchecked(senders);
         executor
             .execute_and_verify_one(BlockExecutionInput {
                 block: &block_with_senders,

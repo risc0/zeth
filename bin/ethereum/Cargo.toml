@@ -14,21 +14,13 @@ workspace = true
 
 
 [dependencies]
-alloy.workspace = true
 anyhow.workspace = true
-bincode.workspace = true
-bytemuck.workspace = true
-clap.workspace = true
-env_logger.workspace = true
-log.workspace = true
-pot.workspace = true
 reth-chainspec.workspace = true
-serde.workspace = true
 tokio.workspace = true
-tracing.workspace = true
 
 [features]
-metal = ["zeth/metal"]
-cuda = ["zeth/cuda"]
-disable-dev-mode = ["zeth/disable-dev-mode"]
 debug-guest-build = ["zeth-guests/debug-guest-build"]
+disable-dev-mode = ["zeth/disable-dev-mode"]
+cuda = ["zeth/cuda"]
+metal = ["zeth/metal"]
+prove = ["zeth/prove"]

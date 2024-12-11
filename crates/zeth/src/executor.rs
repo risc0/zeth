@@ -25,7 +25,7 @@ pub fn build_executor_env<'b>(
 ) -> anyhow::Result<ExecutorEnv<'b>> {
     let run_args = cli.run_args();
     let mut builder = ExecutorEnv::builder();
-    builder.write_slice(&witness.encoded_input);
+    builder.write_frame(&witness.encoded_input);
     builder.segment_limit_po2(run_args.execution_po2);
     if run_args.profile {
         if std::env::var("RISC0_PPROF_OUT").is_ok() {

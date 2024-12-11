@@ -112,6 +112,7 @@ impl<Driver: CoreDriver, Database: Recoverable> StatelessClientEngine<Driver, Da
                 StatelessClientData {
                     chain,
                     blocks,
+                    signers,
                     total_difficulty,
                     ..
                 },
@@ -122,6 +123,7 @@ impl<Driver: CoreDriver, Database: Recoverable> StatelessClientEngine<Driver, Da
         let bundle_state = T::execute_transactions(
             Driver::chain_spec(chain).unwrap(),
             blocks.last_mut().unwrap(),
+            signers.last().unwrap(),
             total_difficulty,
             db,
         )

@@ -14,6 +14,7 @@
 
 use crate::driver::CoreDriver;
 use alloy_primitives::U256;
+use k256::ecdsa::VerifyingKey;
 use reth_revm::db::BundleState;
 use std::sync::Arc;
 
@@ -21,6 +22,7 @@ pub trait ExecutionStrategy<Driver: CoreDriver, Database> {
     fn execute_transactions(
         chain_spec: Arc<Driver::ChainSpec>,
         block: &mut Driver::Block,
+        signers: &[VerifyingKey],
         total_difficulty: &mut U256,
         db: &mut Option<Database>,
     ) -> anyhow::Result<BundleState>;

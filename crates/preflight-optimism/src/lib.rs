@@ -15,6 +15,7 @@
 use alloy::network::{Network, ReceiptResponse};
 use alloy::primitives::{Log, B256, U256};
 use alloy::rpc::types::serde_helpers::WithOtherFields;
+use alloy::signers::k256::ecdsa::VerifyingKey;
 use op_alloy_consensus::OpTxType;
 use op_alloy_network::Optimism;
 use reth_optimism_chainspec::OpChainSpec;
@@ -151,11 +152,14 @@ impl PreflightDriver<OpRethCoreDriver, Optimism> for OpRethPreflightDriver {
         <OpRethCoreDriver as CoreDriver>::Block,
         <OpRethCoreDriver as CoreDriver>::Header,
     > {
+        let blocks: Vec<_> = zip(data.blocks, ommers)
+            .map(|(block, ommers)| Self::derive_block(block, ommers))
+            .collect();
+        let signers = blocks.iter().map(Self::recover_signers).collect();
         StatelessClientData {
             chain: data.chain,
-            blocks: zip(data.blocks, ommers)
-                .map(|(block, ommers)| Self::derive_block(block, ommers))
-                .collect(),
+            blocks,
+            signers,
             state_trie: data.state_trie,
             storage_tries: data.storage_tries,
             contracts: data.contracts,
@@ -167,5 +171,18 @@ impl PreflightDriver<OpRethCoreDriver, Optimism> for OpRethPreflightDriver {
                 .collect(),
             total_difficulty: data.total_difficulty,
         }
+    }
+
+    fn recover_signers(block: &Block) -> Vec<VerifyingKey> {
+        block
+            .body
+            .transactions()
+            .filter(|tx| !matches!(tx.tx_type(), TxType::Deposit))
+            .map(|tx| {
+                tx.signature()
+                    .recover_from_prehash(&tx.signature_hash())
+                    .unwrap()
+            })
+            .collect()
     }
 }

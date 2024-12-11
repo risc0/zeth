@@ -14,6 +14,7 @@
 
 use alloy::network::Network;
 use alloy::primitives::{B256, U256};
+use k256::ecdsa::VerifyingKey;
 use zeth_core::driver::CoreDriver;
 use zeth_core::stateless::data::StatelessClientData;
 
@@ -31,4 +32,5 @@ pub trait PreflightDriver<Core: CoreDriver, N: Network> {
         data: StatelessClientData<N::BlockResponse, N::HeaderResponse>,
         ommers: Vec<Vec<N::HeaderResponse>>,
     ) -> StatelessClientData<Core::Block, Core::Header>;
+    fn recover_signers(block: &Core::Block) -> Vec<VerifyingKey>;
 }

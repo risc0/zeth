@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use anyhow::Context;
+use k256::ecdsa::VerifyingKey;
 use reth_chainspec::NamedChain;
 use reth_consensus::Consensus;
 use reth_evm::execute::{
@@ -25,7 +26,7 @@ use reth_optimism_consensus::OptimismBeaconConsensus;
 use reth_optimism_evm::OpExecutorProvider;
 use reth_primitives::revm_primitives::alloy_primitives::{BlockNumber, Sealable};
 use reth_primitives::revm_primitives::{B256, U256};
-use reth_primitives::{Block, Header, Receipt, SealedHeader, TransactionSigned};
+use reth_primitives::{Block, Header, Receipt, SealedHeader, TransactionSigned, TxType};
 use reth_revm::db::BundleState;
 use reth_storage_errors::provider::ProviderError;
 use std::fmt::Display;
@@ -33,6 +34,7 @@ use std::mem::take;
 use std::sync::Arc;
 use zeth_core::db::MemoryDB;
 use zeth_core::driver::CoreDriver;
+use zeth_core::recover_sender;
 use zeth_core::stateless::client::StatelessClient;
 use zeth_core::stateless::execute::ExecutionStrategy;
 use zeth_core::stateless::finalize::RethFinalizationStrategy;
@@ -100,17 +102,29 @@ where
     fn execute_transactions(
         chain_spec: Arc<OpChainSpec>,
         block: &mut Block,
+        signers: &[VerifyingKey],
         total_difficulty: &mut U256,
         db: &mut Option<Database>,
     ) -> anyhow::Result<BundleState> {
         // Instantiate execution engine using database
         let mut executor = OpExecutorProvider::optimism(chain_spec.clone())
             .batch_executor(db.take().expect("Missing database"));
+        // Recover transaction signer addresses with non-det vk hints
+        let mut vk = signers.iter();
+        let senders = block
+            .body
+            .transactions()
+            .map(|tx| {
+                if matches!(tx.tx_type(), TxType::Deposit) {
+                    tx.recover_signer().unwrap()
+                } else {
+                    recover_sender(vk.next().unwrap(), *tx.signature(), tx.signature_hash())
+                        .expect("Sender recovery failed")
+                }
+            })
+            .collect::<Vec<_>>();
         // Execute transactions
-        // todo: recover signers with non-det hints
-        let block_with_senders = take(block)
-            .with_recovered_senders()
-            .expect("Senders recovery failed");
+        let block_with_senders = take(block).with_senders_unchecked(senders);
         executor
             .execute_and_verify_one(BlockExecutionInput {
                 block: &block_with_senders,

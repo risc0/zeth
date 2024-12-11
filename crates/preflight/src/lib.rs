@@ -99,7 +99,7 @@ where
             build_result.encoded_input.len()
         );
         let deserialized_preflight_data: StatelessClientData<R::Block, R::Header> =
-            Self::StatelessClient::deserialize_data(build_result.encoded_input.as_slice())
+            Self::StatelessClient::data_from_reader(build_result.encoded_input.as_slice())
                 .context("input deserialization failed")?;
         <Self::StatelessClient>::validate(deserialized_preflight_data)
             .expect("Block validation failed");

@@ -19,6 +19,7 @@ tracing.workspace = true
 log = "0.4.22"
 
 [features]
-metal = ["zeth/metal"]
-cuda = ["zeth/cuda"]
 disable-dev-mode = ["zeth/disable-dev-mode"]
+cuda = ["zeth/cuda"]
+metal = ["zeth/metal"]
+prove = ["zeth/prove"]

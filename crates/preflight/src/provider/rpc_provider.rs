@@ -15,20 +15,31 @@
 use crate::provider::query::{AccountRangeQueryResponse, StorageRangeQueryResponse};
 use crate::provider::*;
 use alloy::network::{BlockResponse, HeaderResponse, Network};
-use alloy::providers::{Provider as AlloyProvider, ReqwestProvider};
+use alloy::providers::{Provider as AlloyProvider, ProviderBuilder, RootProvider};
+use alloy::rpc::client::RpcClient;
+use alloy::transports::{
+    http::{Client, Http},
+    layers::{RetryBackoffLayer, RetryBackoffService},
+};
 use anyhow::anyhow;
 use log::{debug, error};
 use std::future::IntoFuture;
 
 #[derive(Clone, Debug)]
 pub struct RpcProvider<N: Network> {
-    http_client: ReqwestProvider<N>,
+    http_client: RootProvider<RetryBackoffService<Http<Client>>, N>,
     tokio_handle: tokio::runtime::Handle,
 }
 
 impl<N: Network> RpcProvider<N> {
     pub fn new(rpc_url: String) -> anyhow::Result<Self> {
-        let http_client = ReqwestProvider::new_http(rpc_url.parse()?);
+        let retry_layer = RetryBackoffLayer::new(5, 500, 100);
+
+        let client = RpcClient::builder()
+            .layer(retry_layer)
+            .http(rpc_url.parse()?);
+        let http_client = ProviderBuilder::new().network().on_client(client);
+
         let tokio_handle = tokio::runtime::Handle::current();
 
         Ok(RpcProvider {

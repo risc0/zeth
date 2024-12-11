@@ -16,6 +16,7 @@ use alloy::network::ReceiptResponse;
 use alloy::network::{Ethereum, Network};
 use alloy::primitives::{B256, U256};
 use alloy::rpc::types::serde_helpers::WithOtherFields;
+use alloy::signers::k256::ecdsa::VerifyingKey;
 use reth_chainspec::ChainSpec;
 use reth_primitives::{Block, BlockBody, Header, Log, Receipt, TransactionSigned, Withdrawals};
 use std::iter::zip;
@@ -132,11 +133,14 @@ impl PreflightDriver<RethCoreDriver, Ethereum> for RethPreflightDriver {
         >,
         ommers: Vec<Vec<<Ethereum as Network>::HeaderResponse>>,
     ) -> StatelessClientData<Block, Header> {
+        let blocks: Vec<_> = zip(data.blocks, ommers)
+            .map(|(block, ommers)| Self::derive_block(block, ommers))
+            .collect();
+        let signers = blocks.iter().map(Self::recover_signers).collect();
         StatelessClientData {
             chain: data.chain,
-            blocks: zip(data.blocks, ommers)
-                .map(|(block, ommers)| Self::derive_block(block, ommers))
-                .collect(),
+            blocks,
+            signers,
             state_trie: data.state_trie,
             storage_tries: data.storage_tries,
             contracts: data.contracts,
@@ -148,5 +152,17 @@ impl PreflightDriver<RethCoreDriver, Ethereum> for RethPreflightDriver {
                 .collect(),
             total_difficulty: data.total_difficulty,
         }
+    }
+
+    fn recover_signers(block: &Block) -> Vec<VerifyingKey> {
+        block
+            .body
+            .transactions()
+            .map(|tx| {
+                tx.signature()
+                    .recover_from_prehash(&tx.signature_hash())
+                    .unwrap()
+            })
+            .collect()
     }
 }

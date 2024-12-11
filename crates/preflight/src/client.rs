@@ -20,6 +20,7 @@ use crate::provider::{new_provider, Provider};
 use crate::trie::extend_proof_tries;
 use alloy::network::Network;
 use alloy::primitives::map::HashMap;
+use alloy::primitives::Bytes;
 use anyhow::Context;
 use log::{debug, info, warn};
 use std::cell::RefCell;
@@ -167,7 +168,7 @@ where
         let core_parent_header = P::derive_header(data.parent_header.clone());
         let mut state_trie = MptNode::from(R::state_root(&core_parent_header));
         let mut storage_tries = Default::default();
-        let mut contracts = data.contracts.clone();
+        let mut contracts: Vec<Bytes> = Default::default();
         let mut ancestor_headers: Vec<R::Header> = Default::default();
 
         for num_blocks in 1..=block_count {
@@ -221,11 +222,8 @@ where
             // collect the code from each account
             info!("Collecting contracts ...");
             let initial_db = preflight_db.inner.db.db.borrow();
-            for (address, account) in initial_db.accounts.iter() {
-                let code = account.info.code.clone().context("missing code")?;
-                if !code.is_empty() && !contracts.contains_key(address) {
-                    contracts.insert(*address, code.bytes());
-                }
+            for code in initial_db.contracts.values() {
+                contracts.push(code.bytes().clone());
             }
             drop(initial_db);
 

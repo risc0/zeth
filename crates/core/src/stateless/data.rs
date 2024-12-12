@@ -94,7 +94,7 @@ pub struct _StatelessClientData<Block, Header> {
     /// Maps each address with its storage trie and the used storage slots.
     pub storage_tries: HashMap<Address, StorageEntry>,
     /// The code for each account
-    pub contracts: HashMap<Address, Bytes>,
+    pub contracts: Vec<Bytes>,
     /// Immediate parent header
     pub parent_header: Header,
     /// List of at most 256 previous block headers
@@ -131,8 +131,8 @@ pub struct StatelessClientData<Block, Header> {
     #[rkyv(with = rkyv::with::MapKV<AddressDef, StorageEntry>)]
     pub storage_tries: HashMap<Address, StorageEntry>,
     /// The code for each account
-    #[rkyv(with = rkyv::with::MapKV<AddressDef, EncodeBytes>)]
-    pub contracts: HashMap<Address, Bytes>,
+    #[rkyv(with = rkyv::with::Map<EncodeBytes>)]
+    pub contracts: Vec<Bytes>,
     /// Immediate parent header
     pub parent_header: Header,
     /// List of at most 256 previous block headers
@@ -168,8 +168,8 @@ pub struct RkyvStatelessClientData {
     #[rkyv(with = rkyv::with::MapKV<AddressDef, StorageEntry>)]
     pub storage_tries: HashMap<Address, StorageEntry>,
     /// The code for each account
-    #[rkyv(with = rkyv::with::MapKV<AddressDef, EncodeBytes>)]
-    pub contracts: HashMap<Address, Bytes>,
+    #[rkyv(with = rkyv::with::Map<EncodeBytes>)]
+    pub contracts: Vec<Bytes>,
     /// Total difficulty before executing block
     #[rkyv(with = U256Def)]
     pub total_difficulty: U256,

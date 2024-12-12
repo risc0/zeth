@@ -23,15 +23,15 @@ use alloy_primitives::{Address, Bytes, B256, U256};
 use anyhow::bail;
 use core::mem::take;
 use reth_primitives::revm_primitives::Bytecode;
-use reth_primitives::KECCAK_EMPTY;
 use reth_revm::db::{AccountState, DbAccount};
 use reth_revm::primitives::AccountInfo;
+use std::default::Default;
 
 pub trait InitializationStrategy<Driver: CoreDriver, Database> {
     fn initialize_database(
         state_trie: &mut MptNode,
         storage_tries: &mut HashMap<Address, StorageEntry>,
-        contracts: &mut HashMap<Address, Bytes>,
+        contracts: &mut Vec<Bytes>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
     ) -> anyhow::Result<Database>;
@@ -43,7 +43,7 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB> for MemoryDbSt
     fn initialize_database(
         state_trie: &mut MptNode,
         storage_tries: &mut HashMap<Address, StorageEntry>,
-        contracts: &mut HashMap<Address, Bytes>,
+        contracts: &mut Vec<Bytes>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
     ) -> anyhow::Result<MemoryDB> {
@@ -57,13 +57,14 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB> for MemoryDbSt
         }
 
         // hash all the contract code
-        let mut contracts: HashMap<Address, (B256, Bytes)> = take(contracts)
+        let contracts = take(contracts)
             .into_iter()
-            .map(|(address, bytes)| (address, (keccak(&bytes).into(), bytes)))
+            .map(|bytes| (keccak(&bytes).into(), Bytecode::new_raw(bytes)))
             .collect();
 
         // Load account data into db
-        let mut accounts = HashMap::with_capacity(storage_tries.len());
+        let mut accounts =
+            HashMap::with_capacity_and_hasher(storage_tries.len(), Default::default());
         for (
             address,
             StorageEntry {
@@ -89,18 +90,8 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB> for MemoryDbSt
                 );
             }
 
-            // load the corresponding code
-            let code_hash = state_account.code_hash;
-            let bytecode = if code_hash.0 == KECCAK_EMPTY.0 {
-                Bytecode::new()
-            } else {
-                let (bytecode_hash, bytes) = contracts.remove(address).unwrap();
-                assert_eq!(bytecode_hash, code_hash);
-                Bytecode::new_raw(bytes)
-            };
-
             // load storage reads
-            let mut storage = HashMap::with_capacity(slots.len());
+            let mut storage = HashMap::with_capacity_and_hasher(slots.len(), Default::default());
             for slot in slots {
                 let value: U256 = storage_trie
                     .get_rlp(&keccak(slot.to_be_bytes::<32>()))?
@@ -113,7 +104,7 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB> for MemoryDbSt
                     balance: state_account.balance,
                     nonce: state_account.nonce,
                     code_hash: state_account.code_hash,
-                    code: Some(bytecode),
+                    code: None,
                 },
                 account_state: AccountState::None,
                 storage,
@@ -124,7 +115,7 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB> for MemoryDbSt
 
         // prepare block hash history
         let mut block_hashes: HashMap<U256, B256> =
-            HashMap::with_capacity(ancestor_headers.len() + 1);
+            HashMap::with_capacity_and_hasher(ancestor_headers.len() + 1, Default::default());
         block_hashes.insert(
             U256::from(Driver::block_number(parent_header)),
             Driver::header_hash(parent_header),
@@ -155,6 +146,7 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB> for MemoryDbSt
         // Initialize database
         Ok(MemoryDB {
             accounts,
+            contracts,
             block_hashes,
             ..Default::default()
         })

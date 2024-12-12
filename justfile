@@ -28,6 +28,8 @@ clippy:
 
     RISC0_SKIP_BUILD=1 cargo clippy -p zeth-benchmark
 
+    RISC0_SKIP_BUILD=1 cargo clippy -p zeth-testeth
+
 test:
     cargo test --all-targets -p zeth-core -p zeth-preflight -p zeth-guests -p zeth -p zeth-benchmark -F debug-guest-build
 
@@ -35,9 +37,11 @@ test:
 
     cargo test --all-targets -p zeth-core-optimism -p zeth-preflight-optimism -p zeth-optimism -F debug-guest-build
 
+    cargo test --all-targets -p zeth-testeth -F ef-tests
+
     just test-cache-eth
 
-test-cache-eth +ARGS: (build ARGS)
+test-cache-eth +ARGS="": (build ARGS)
     RUST_LOG=info ./target/debug/zeth-ethereum build --cache=bin/ethereum/data -b=1
     RUST_LOG=info ./target/debug/zeth-ethereum build --cache=bin/ethereum/data -b=1150000
     RUST_LOG=info ./target/debug/zeth-ethereum build --cache=bin/ethereum/data -b=1920000
@@ -55,5 +59,5 @@ test-cache-eth +ARGS: (build ARGS)
     RUST_LOG=info ./target/debug/zeth-ethereum build --cache=bin/ethereum/data -b=17034870
     RUST_LOG=info ./target/debug/zeth-ethereum build --cache=bin/ethereum/data -b=19426587
 
-test-cache-op +ARGS: (build ARGS)
+test-cache-op +ARGS="": (build ARGS)
     RUST_LOG=info ./target/debug/zeth-optimism build --cache=bin/optimism/data -c=optimism-sepolia -b=17664000

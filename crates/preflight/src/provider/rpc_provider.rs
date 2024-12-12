@@ -33,7 +33,7 @@ pub struct RpcProvider<N: Network> {
 
 impl<N: Network> RpcProvider<N> {
     pub fn new(rpc_url: String) -> anyhow::Result<Self> {
-        let retry_layer = RetryBackoffLayer::new(5, 500, 100);
+        let retry_layer = RetryBackoffLayer::new(100, 50, 300);
 
         let client = RpcClient::builder()
             .layer(retry_layer)
@@ -55,6 +55,10 @@ impl<N: Network> Provider<N> for RpcProvider<N> {
     }
 
     fn advance(&mut self) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn reset(&mut self, _block_number: u64) -> anyhow::Result<()> {
         Ok(())
     }
 

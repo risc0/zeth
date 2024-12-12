@@ -9,26 +9,26 @@ ef-tests = []
 metal = []
 
 [dependencies]
-anyhow = "1.0"
-ethers-core = { version = "2.0", features = ["optimism"] }
-hashbrown = { workspace = true }
-revm = { workspace = true }
-serde = "1.0"
-serde_json = "1.0"
-serde_with = "3.1"
-zeth-lib = { path = "../../lib" }
-zeth-primitives = { path = "../../primitives" }
+alloy = { workspace = true, features = ["full","serde","rlp"] }
+alloy-trie = "0.6"
+anyhow = { workspace = true }
+nybbles = "0.2"
+reth-chainspec  = { workspace = true }
+reth-primitives = { workspace = true }
+reth-revm = { workspace = true }
+reth-storage-errors = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_with = { workspace = true }
+zeth-core = { workspace = true }
+zeth-core-ethereum = { workspace = true }
+zeth-preflight ={ workspace = true }
+zeth-preflight-ethereum ={ workspace = true }
 
 [dev-dependencies]
-diff = "0.1"
 env_logger = "0.11"
 log = "0.4"
-risc0-zkvm = { workspace = true, features = ["prove"] }
-rstest = "0.18"
-tempfile = "3.6"
-
-[build-dependencies]
-risc0-build = { workspace = true }
+rstest = "0.23"
 
 [package.metadata.risc0]
 methods = ["testguest"]

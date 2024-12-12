@@ -37,7 +37,7 @@ pub fn extend_proof_tries(
     let mut state_orphans = Vec::new();
     let mut storage_orphans = Vec::new();
     // storage for encountered trie data
-    let mut state_nodes = HashMap::new();
+    let mut state_nodes = HashMap::default();
     for (address, initialization_proof) in initialization_proofs {
         // Create individual nodes from proof
         let proof_nodes = parse_proof(&initialization_proof.account_proof)
@@ -57,7 +57,7 @@ pub fn extend_proof_tries(
             });
         }
         // storage for encountered storage trie data
-        let mut storage_nodes = HashMap::new();
+        let mut storage_nodes = HashMap::default();
         for storage_proof in &initialization_proof.storage_proof {
             let proof_nodes = parse_proof(&storage_proof.proof)
                 .context("extend_proof_tries/parse storage proof")?;
@@ -80,9 +80,10 @@ pub fn extend_proof_tries(
         // ensure that trie orphans are loaded
         let finalization_proof = finalization_proofs
             .get(&address)
-            .with_context(|| format!("missing finalization proof for address {:#}", &address))?;
+            .with_context(|| format!("missing finalization proof for address {}", &address))?;
         if let Some(state_orphan) =
-            add_orphaned_nodes(address, &finalization_proof.account_proof, &mut state_nodes)?
+            add_orphaned_nodes(address, &finalization_proof.account_proof, &mut state_nodes)
+                .with_context(|| format!("failed to add orphaned nodes for address {}", &address))?
         {
             state_orphans.push(state_orphan);
         }
@@ -93,7 +94,9 @@ pub fn extend_proof_tries(
                 storage_proof.key.0,
                 &storage_proof.proof,
                 &mut storage_nodes,
-            )? {
+            )
+            .context("failed to add orphaned nodes")?
+            {
                 potential_storage_orphans.push(storage_orphan);
             }
         }
@@ -135,13 +138,13 @@ pub fn proofs_to_tries(
 ) -> anyhow::Result<(MptNode, HashMap<Address, StorageEntry>)> {
     // if no addresses are provided, return the trie only consisting of the state root
     if initialization_proofs.is_empty() {
-        return Ok((state_root.into(), HashMap::new()));
+        return Ok((state_root.into(), HashMap::default()));
     }
 
     let mut storage: HashMap<Address, StorageEntry> =
-        HashMap::with_capacity(initialization_proofs.len());
+        HashMap::with_capacity_and_hasher(initialization_proofs.len(), Default::default());
 
-    let mut state_nodes = HashMap::new();
+    let mut state_nodes = HashMap::default();
     let mut state_root_node = MptNode::default();
     for (address, initialization_proof) in initialization_proofs {
         let proof_nodes = parse_proof(&initialization_proof.account_proof)
@@ -176,7 +179,7 @@ pub fn proofs_to_tries(
             continue;
         }
 
-        let mut storage_nodes = HashMap::new();
+        let mut storage_nodes = HashMap::default();
         let mut storage_root_node = MptNode::default();
         for storage_proof in &initialization_proof.storage_proof {
             let proof_nodes = parse_proof(&storage_proof.proof).context("proofs_to_tries")?;

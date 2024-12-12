@@ -6,12 +6,14 @@ edition = "2021"
 [workspace]
 
 [dependencies.risc0-zkvm]
-version = "1.2.1-rc.0"
+git = "https://github.com/risc0/risc0"
+rev = "e98cdad96cfecb3d959cb62abf566e5b17a0d649"
 default-features = false
 features = ["std", "unstable"]
 
 [dependencies.risc0-zkvm-platform]
-version = "1.2.1-rc.0"
+git = "https://github.com/risc0/risc0"
+rev = "e98cdad96cfecb3d959cb62abf566e5b17a0d649"
 features = ["sys-getenv"]
 
 [dependencies.zeth-core]
@@ -27,11 +29,13 @@ anyhow = { version = "1.0.86", default-features = false }
 c-kzg = { version = "=1.0.3", features = ["risc0-ffi"] }
 lazy_static = "1.5.0"
 
-reth-optimism-chainspec = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false, features = ["std"] }
+reth-optimism-chainspec = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false, features = [
+    "std",
+] }
 
 [patch.crates-io]
 c-kzg = { git = "https://github.com/risc0/c-kzg-4844.git", branch = "p1.0.3" }
 crypto-bigint = { git = "https://github.com/risc0/RustCrypto-crypto-bigint", tag = "v0.5.5-risczero.0" }
-k256 = { git = "https://github.com/risc0/RustCrypto-elliptic-curves", rev = "c2750428558944954af5fe147b01a67711a65062" }
+k256 = { git = "https://github.com/risc0/RustCrypto-elliptic-curves", tag = "k256/v0.13.3-risczero.1" }
 sha2 = { git = "https://github.com/risc0/RustCrypto-hashes", tag = "sha2-v0.10.6-risczero.0" }
-tiny-keccak = { git = "https://github.com/risc0/tiny-keccak", rev = "14e23f4a4e47c901635aea705f0dc646305d10bd" }
+tiny-keccak = { git = "https://github.com/risc0/tiny-keccak", rev = "b93afa7dc803d2db6ddae7df15e9db5a79212ba0" }

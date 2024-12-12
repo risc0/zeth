@@ -12,8 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod chain_spec;
+
+use crate::chain_spec::{DEV, HOLESKY, MAINNET, SEPOLIA};
 use anyhow::Context;
-use reth_chainspec::{ChainSpec, NamedChain, DEV, HOLESKY, MAINNET, SEPOLIA};
+use k256::ecdsa::signature::hazmat::PrehashVerifier;
+use k256::ecdsa::VerifyingKey;
+use reth_chainspec::{ChainSpec, NamedChain};
 use reth_consensus::Consensus;
 use reth_ethereum_consensus::EthBeaconConsensus;
 use reth_evm::execute::{
@@ -21,7 +26,7 @@ use reth_evm::execute::{
 };
 use reth_evm_ethereum::execute::EthExecutorProvider;
 use reth_primitives::revm_primitives::alloy_primitives::{BlockNumber, Sealable};
-use reth_primitives::revm_primitives::{B256, U256};
+use reth_primitives::revm_primitives::{Address, B256, U256};
 use reth_primitives::{Block, Header, Receipt, SealedHeader, TransactionSigned};
 use reth_revm::db::BundleState;
 use reth_storage_errors::provider::ProviderError;
@@ -98,23 +103,36 @@ where
     fn execute_transactions(
         chain_spec: Arc<ChainSpec>,
         block: &mut Block,
+        signers: &[VerifyingKey],
         total_difficulty: &mut U256,
         db: &mut Option<Database>,
     ) -> anyhow::Result<BundleState> {
         // Instantiate execution engine using database
         let mut executor = EthExecutorProvider::ethereum(chain_spec.clone())
             .batch_executor(db.take().expect("Missing database."));
+
+        // Verify the transaction signatures and compute senders
+        let mut senders = Vec::with_capacity(block.body.transactions.len());
+        for (i, tx) in block.body.transactions().enumerate() {
+            let vk = &signers[i];
+            let sig = tx.signature();
+
+            sig.to_k256()
+                .and_then(|sig| vk.verify_prehash(tx.signature_hash().as_slice(), &sig))
+                .with_context(|| format!("invalid signature for tx {i}"))?;
+
+            senders.push(Address::from_public_key(vk))
+        }
+
         // Execute transactions
-        // todo: recover signers with non-det hints
-        let block_with_senders = take(block)
-            .with_recovered_senders()
-            .expect("Senders recovery failed");
+        let block_with_senders = take(block).with_senders_unchecked(senders);
         executor
             .execute_and_verify_one(BlockExecutionInput {
                 block: &block_with_senders,
                 total_difficulty: *total_difficulty,
             })
-            .expect("Execution failed");
+            .context("execution failed")?;
+
         // Return block
         *block = block_with_senders.block;
         // Return bundle state

@@ -74,7 +74,7 @@ where
     assert_eq!(build_result.validated_tip_hash, expected_hash);
 
     let deserialized_preflight_data =
-        R::StatelessClient::deserialize_data(build_result.encoded_input.as_slice())
+        R::StatelessClient::data_from_reader(build_result.encoded_input.as_slice())
             .expect("Input deserialization failed");
 
     R::StatelessClient::validate(deserialized_preflight_data).expect("Block validation failed");

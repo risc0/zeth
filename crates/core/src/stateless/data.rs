@@ -15,6 +15,7 @@
 use crate::mpt::MptNode;
 use alloy_primitives::map::HashMap;
 use alloy_primitives::{Address, Bytes, U256};
+use k256::ecdsa::VerifyingKey;
 use reth_chainspec::NamedChain;
 use serde::{Deserialize, Serialize};
 
@@ -30,6 +31,8 @@ pub struct StatelessClientData<Block, Header> {
     pub chain: NamedChain,
     /// Block and transaction data to execute
     pub blocks: Vec<Block>,
+    /// List of public keys for transaction signatures
+    pub signers: Vec<Vec<VerifyingKey>>,
     /// State trie of the parent block.
     pub state_trie: MptNode,
     /// Maps each address with its storage trie and the used storage slots.

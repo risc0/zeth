@@ -26,7 +26,9 @@ use tokio::task::spawn_blocking;
 use zeth_core::driver::CoreDriver;
 use zeth_core::rescue::Recoverable;
 use zeth_core::stateless::client::StatelessClient;
-use zeth_core::stateless::data::StatelessClientData;
+use zeth_core::stateless::data::{
+    RkyvStatelessClientData, StatelessClientChainData, StatelessClientData,
+};
 
 pub mod client;
 pub mod db;
@@ -36,7 +38,8 @@ pub mod trie;
 
 #[derive(Debug, Default, Clone)]
 pub struct Witness {
-    pub encoded_input: Vec<u8>,
+    pub encoded_rkyv_input: Vec<u8>,
+    pub encoded_chain_input: Vec<u8>,
     pub validated_tip_hash: B256,
     pub validated_tip_number: u64,
     pub validated_tail_hash: B256,
@@ -46,11 +49,18 @@ pub struct Witness {
 
 impl Witness {
     pub fn driver_from<R: CoreDriver>(data: &StatelessClientData<R::Block, R::Header>) -> Self {
-        let encoded_input = pot::to_vec(&data).expect("serialization failed");
+        let rkyv_data = RkyvStatelessClientData::from(data.clone());
+        let encoded_rkyv_input = rkyv::to_bytes::<rkyv::rancor::Error>(&rkyv_data)
+            .expect("rkyv serialization failed")
+            .to_vec();
+        let chain_data = StatelessClientChainData::<R::Block, R::Header>::from(data.clone());
+        let encoded_chain_input = pot::to_vec(&chain_data).expect("pot serialization failed");
+        // let encoded_input = pot::to_vec(&data).expect("serialization failed");
         let tip = R::block_header(data.blocks.last().unwrap());
         let tail = &data.parent_header;
         Self {
-            encoded_input,
+            encoded_rkyv_input,
+            encoded_chain_input,
             validated_tip_hash: R::header_hash(tip),
             validated_tip_number: R::block_number(tip),
             validated_tail_hash: R::header_hash(tail),
@@ -96,11 +106,15 @@ where
         // Verify that the transactions run correctly
         info!(
             "Running from memory (Input size: {} bytes) ...",
-            build_result.encoded_input.len()
+            // build_result.encoded_input.len()
+            build_result.encoded_rkyv_input.len() + build_result.encoded_chain_input.len()
         );
         let deserialized_preflight_data: StatelessClientData<R::Block, R::Header> =
-            Self::StatelessClient::deserialize_data(build_result.encoded_input.as_slice())
-                .context("input deserialization failed")?;
+            Self::StatelessClient::data_from_parts(
+                build_result.encoded_rkyv_input.as_slice(),
+                build_result.encoded_chain_input.as_slice(),
+            )
+            .context("input deserialization failed")?;
         <Self::StatelessClient>::validate(deserialized_preflight_data)
             .expect("Block validation failed");
         info!("Memory run successful ...");

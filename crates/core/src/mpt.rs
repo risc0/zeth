@@ -1,4 +1,4 @@
-// Copyright 2024, 2024 RISC Zero, Inc.
+// Copyright 2023, 2024 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,13 +43,41 @@ pub const EMPTY_ROOT: B256 =
 /// optimizing storage. However, operations targeting a truncated part will fail and
 /// return an error. Another distinction of this implementation is that branches cannot
 /// store values, aligning with the construction of MPTs in Ethereum.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
+#[derive(
+    Clone,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    Ord,
+    PartialOrd,
+    Serialize,
+    Deserialize,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
+#[rkyv(bytecheck(
+    bounds(
+        __C: rkyv::validation::ArchiveContext,
+        __C::Error: rkyv::rancor::Source,
+    )
+))]
+#[rkyv(serialize_bounds(
+    __S: rkyv::ser::Writer + rkyv::ser::Allocator,
+    __S::Error: rkyv::rancor::Source,
+))]
+#[rkyv(deserialize_bounds(
+    __D::Error: rkyv::rancor::Source
+))]
 pub struct MptNode {
     /// The type and data of the node.
-    data: MptNodeData,
+    #[rkyv(omit_bounds)]
+    pub data: MptNodeData,
     /// Cache for a previously computed reference of this node. This is skipped during
     /// serialization.
     #[serde(skip)]
+    #[rkyv(with = rkyv::with::Skip)]
     cached_reference: RefCell<Option<MptNodeReference>>,
 }
 
@@ -88,21 +116,64 @@ impl From<B256> for MptNode {
 /// Each node in the trie can be of one of several types, each with its own specific data
 /// structure. This enum provides a clear and type-safe way to represent the data
 /// associated with each node type.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
+#[derive(
+    Clone,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    Ord,
+    PartialOrd,
+    Serialize,
+    Deserialize,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
+#[rkyv(bytecheck(
+    bounds(
+        __C: rkyv::validation::ArchiveContext,
+    )
+))]
+#[rkyv(serialize_bounds(
+    __S: rkyv::ser::Writer + rkyv::ser::Allocator,
+    __S::Error: rkyv::rancor::Source,
+))]
+#[rkyv(deserialize_bounds(
+    __D::Error: rkyv::rancor::Source
+))]
 pub enum MptNodeData {
     /// Represents an empty trie node.
     #[default]
     Null,
     /// A node that can have up to 16 children. Each child is an optional boxed [MptNode].
-    Branch([Option<Box<MptNode>>; 16]),
+    Branch(
+        // #[rkyv(with = rkyv::with::Map<rkyv::with::Map<Box<ArchivedMptNode>>>)]
+        #[rkyv(omit_bounds)] [Option<Box<MptNode>>; 16],
+    ),
     /// A leaf node that contains a key and a value, both represented as byte vectors.
     Leaf(Vec<u8>, Vec<u8>),
     /// A node that has exactly one child and is used to represent a shared prefix of
     /// several keys.
-    Extension(Vec<u8>, Box<MptNode>),
+    Extension(
+        Vec<u8>,
+        // #[rkyv(with = Box<ArchivedMptNode>)]
+        #[rkyv(omit_bounds)] Box<MptNode>,
+    ),
     /// Represents a sub-trie by its hash, allowing for efficient storage of large
     /// sub-tries without storing their entire content.
-    Digest(B256),
+    Digest(#[rkyv(with = B256Def)] B256),
+}
+
+#[derive(Clone, Debug, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+#[rkyv(remote = B256)]
+#[rkyv(archived = ArchivedB256)]
+pub struct B256Def(pub [u8; 32]);
+
+impl From<B256Def> for B256 {
+    fn from(value: B256Def) -> Self {
+        B256::new(value.0)
+    }
 }
 
 /// Represents the ways in which one node can reference another node inside the sparse

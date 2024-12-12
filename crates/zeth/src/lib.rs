@@ -23,7 +23,7 @@ use risc0_zkvm::{default_executor, default_prover, is_dev_mode, ProverOpts, Rece
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use tokio::runtime::Handle;
+use tokio::task::spawn_blocking;
 use zeth_core::driver::CoreDriver;
 use zeth_core::keccak::keccak;
 use zeth_core::rescue::Recoverable;
@@ -33,7 +33,7 @@ use zeth_preflight::BlockBuilder;
 pub mod cli;
 pub mod executor;
 
-pub fn run<
+pub async fn run<
     B: BlockBuilder<N, D, R, P> + Send + Sync + 'static,
     N: Network,
     D: Recoverable + 'static,
@@ -63,14 +63,16 @@ where
         .cache
         .as_ref()
         .map(|dir| cache_dir_path(dir, network_name));
+
     // select a guest program
-    let expected_journal = Handle::current().block_on(B::build_journal(
+    let expected_journal = B::build_journal(
         chain_id,
         cache_dir.clone(),
         build_args.rpc.clone(),
         build_args.block_number,
         build_args.block_count,
-    ))?;
+    )
+    .await?;
     info!("Journal prepared.");
 
     if !cli.should_build() {
@@ -113,20 +115,20 @@ where
     }
 
     // preflight the block building process
-    let build_result = Handle::current().block_on(B::build_blocks(
+    let build_result = B::build_blocks(
         chain_id,
         cache_dir.clone(),
         build_args.rpc.clone(),
         build_args.block_number,
         build_args.block_count,
-    ))?;
+    )
+    .await?;
 
     if !cli.should_execute() {
         return Ok(());
     }
 
     // use the zkvm
-    let exec_env = build_executor_env(&cli, &build_result, image_id, network_name)?;
     let computed_journal = if cli.should_prove() {
         info!("Proving ...");
         let prover_opts = if cli.snark() {
@@ -149,8 +151,16 @@ where
         } else {
             info!("Computing uncached receipt. This might take some time.");
             // run prover
-            let prover = default_prover();
-            let prove_info = prover.prove_with_opts(exec_env, elf, &prover_opts)?;
+            let network_name = String::from(network_name);
+            let elf = elf.to_owned();
+            let prove_info = spawn_blocking(move || {
+                let prover = default_prover();
+                let exec_env = build_executor_env(&cli, &build_result, image_id, &network_name)
+                    .expect("Failed to build executor environment");
+                prover.prove_with_opts(exec_env, &elf, &prover_opts)
+            })
+            .await??;
+
             info!(
                 "Proof of {} total cycles ({} user cycles) computed.",
                 prove_info.stats.total_cycles, prove_info.stats.user_cycles
@@ -175,6 +185,7 @@ where
     } else {
         info!("Executing ...");
         // run executor only
+        let exec_env = build_executor_env(&cli, &build_result, image_id, network_name)?;
         let executor = default_executor();
         let session_info = executor.execute(exec_env, elf)?;
         info!("{} user cycles executed.", session_info.cycles());

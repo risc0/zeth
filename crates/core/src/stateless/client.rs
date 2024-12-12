@@ -14,13 +14,14 @@
 
 use crate::driver::CoreDriver;
 use crate::rescue::{Recoverable, Wrapper};
-use crate::stateless::data::StatelessClientData;
+use crate::stateless::data::{
+    RkyvStatelessClientData, StatelessClientChainData, StatelessClientData,
+};
 use crate::stateless::engine::StatelessClientEngine;
 use crate::stateless::execute::ExecutionStrategy;
 use crate::stateless::finalize::FinalizationStrategy;
 use crate::stateless::initialize::InitializationStrategy;
 use crate::stateless::validate::ValidationStrategy;
-use std::io::Read;
 
 pub trait StatelessClient<Driver, Database>
 where
@@ -32,10 +33,21 @@ where
     type Execution: ExecutionStrategy<Driver, Wrapper<Database>>;
     type Finalization: FinalizationStrategy<Driver, Database>;
 
-    fn deserialize_data<I: Read>(
-        reader: I,
+    fn data_from_parts(
+        rkyv_slice: &[u8],
+        pot_slice: &[u8],
     ) -> anyhow::Result<StatelessClientData<Driver::Block, Driver::Header>> {
-        Ok(pot::from_reader(reader)?)
+        let rkyv_data =
+            rkyv::from_bytes::<RkyvStatelessClientData, rkyv::rancor::Error>(rkyv_slice)?;
+        let chain_data =
+            pot::from_slice::<StatelessClientChainData<Driver::Block, Driver::Header>>(pot_slice)?;
+        Ok(StatelessClientData::<Driver::Block, Driver::Header>::from_parts(rkyv_data, chain_data))
+    }
+
+    fn data_from_slice(
+        slice: &[u8],
+    ) -> anyhow::Result<StatelessClientData<Driver::Block, Driver::Header>> {
+        Ok(pot::from_slice(slice)?)
     }
 
     fn validate(

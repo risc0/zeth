@@ -73,9 +73,11 @@ where
     // The header should match.
     assert_eq!(build_result.validated_tip_hash, expected_hash);
 
-    let deserialized_preflight_data =
-        R::StatelessClient::deserialize_data(build_result.encoded_input.as_slice())
-            .expect("Input deserialization failed");
+    let deserialized_preflight_data = R::StatelessClient::data_from_parts(
+        build_result.encoded_rkyv_input.as_slice(),
+        build_result.encoded_chain_input.as_slice(),
+    )
+    .expect("Input deserialization failed");
 
     R::StatelessClient::validate(deserialized_preflight_data).expect("Block validation failed");
 }

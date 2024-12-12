@@ -20,8 +20,8 @@ use std::sync::Arc;
 
 pub trait CoreDriver: Default {
     type ChainSpec: 'static;
-    type Block: Serialize + DeserializeOwned + 'static;
-    type Header: Serialize + DeserializeOwned + 'static;
+    type Block: Clone + Serialize + DeserializeOwned + 'static;
+    type Header: Clone + Serialize + DeserializeOwned + 'static;
     type Receipt: Serialize + DeserializeOwned + 'static;
     type Transaction: Serialize + DeserializeOwned + 'static;
 

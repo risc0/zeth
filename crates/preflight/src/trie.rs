@@ -51,7 +51,10 @@ pub fn extend_proof_tries(
         });
         // insert inaccessible storage trie
         if let alloy::primitives::map::Entry::Vacant(e) = storage_tries.entry(address) {
-            e.insert((initialization_proof.storage_hash.into(), vec![]));
+            e.insert(StorageEntry {
+                storage_trie: initialization_proof.storage_hash.into(),
+                slots: vec![],
+            });
         }
         // storage for encountered storage trie data
         let mut storage_nodes = HashMap::default();
@@ -65,8 +68,8 @@ pub fn extend_proof_tries(
             let storage_entry = storage_tries.get_mut(&address).unwrap();
             let storage_key = U256::from_be_bytes(storage_proof.key.0 .0);
             // Push the storage key if new
-            if !storage_entry.1.contains(&storage_key) {
-                storage_entry.1.push(storage_key);
+            if !storage_entry.slots.contains(&storage_key) {
+                storage_entry.slots.push(storage_key);
             }
             // Load storage trie nodes into store
             proof_nodes.into_iter().for_each(|node| {
@@ -100,7 +103,7 @@ pub fn extend_proof_tries(
 
         let storage_entry = storage_tries.get_mut(&address).unwrap();
         // Load up newly found storage nodes
-        resolve_nodes_in_place(&mut storage_entry.0, &storage_nodes);
+        resolve_nodes_in_place(&mut storage_entry.storage_trie, &storage_nodes);
         // validate storage orphans
         for (prefix, digest) in potential_storage_orphans {
             if let Some(node) = storage_nodes.get(&MptNodeReference::Digest(digest)) {
@@ -166,7 +169,13 @@ pub fn proofs_to_tries(
 
         // if no slots are provided, return the trie only consisting of the storage root
         if initialization_proof.storage_proof.is_empty() {
-            storage.insert(address, (initialization_proof.storage_hash.into(), vec![]));
+            storage.insert(
+                address,
+                StorageEntry {
+                    storage_trie: initialization_proof.storage_hash.into(),
+                    slots: vec![],
+                },
+            );
             continue;
         }
 
@@ -204,7 +213,13 @@ pub fn proofs_to_tries(
             .iter()
             .map(|p| U256::from_be_bytes(p.key.0 .0))
             .collect();
-        storage.insert(address, (storage_trie, slots));
+        storage.insert(
+            address,
+            StorageEntry {
+                storage_trie,
+                slots,
+            },
+        );
     }
     let state_trie = resolve_nodes(&state_root_node, &state_nodes);
     assert_eq!(state_trie.hash(), state_root);

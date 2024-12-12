@@ -66,7 +66,14 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB> for MemoryDbSt
         // Load account data into db
         let mut accounts =
             HashMap::with_capacity_and_hasher(storage_tries.len(), Default::default());
-        for (address, (storage_trie, slots)) in storage_tries {
+        for (
+            address,
+            StorageEntry {
+                storage_trie,
+                slots,
+            },
+        ) in storage_tries
+        {
             // consume the slots, as they are no longer needed afterward
             let slots = take(slots);
 

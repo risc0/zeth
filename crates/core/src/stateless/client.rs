@@ -32,10 +32,16 @@ where
     type Execution: ExecutionStrategy<Driver, Wrapper<Database>>;
     type Finalization: FinalizationStrategy<Driver, Database>;
 
-    fn deserialize_data<I: Read>(
+    fn data_from_reader<I: Read>(
         reader: I,
     ) -> anyhow::Result<StatelessClientData<Driver::Block, Driver::Header>> {
         Ok(pot::from_reader(reader)?)
+    }
+
+    fn data_from_slice(
+        slice: &[u8],
+    ) -> anyhow::Result<StatelessClientData<Driver::Block, Driver::Header>> {
+        Ok(pot::from_slice(slice)?)
     }
 
     fn validate(

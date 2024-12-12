@@ -6412,6 +6412,7 @@ dependencies = [
  "anyhow",
  "k256",
  "once_cell",
+ "op-alloy-consensus",
  "reth-chainspec",
  "reth-consensus",
  "reth-evm",

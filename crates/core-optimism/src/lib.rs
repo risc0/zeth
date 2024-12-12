@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use anyhow::Context;
+use k256::ecdsa::signature::hazmat::PrehashVerifier;
 use k256::ecdsa::VerifyingKey;
+use op_alloy_consensus::TxDeposit;
 use reth_chainspec::NamedChain;
 use reth_consensus::Consensus;
 use reth_evm::execute::{
@@ -25,8 +27,8 @@ use reth_optimism_chainspec::{
 use reth_optimism_consensus::OptimismBeaconConsensus;
 use reth_optimism_evm::OpExecutorProvider;
 use reth_primitives::revm_primitives::alloy_primitives::{BlockNumber, Sealable};
-use reth_primitives::revm_primitives::{B256, U256};
-use reth_primitives::{Block, Header, Receipt, SealedHeader, TransactionSigned, TxType};
+use reth_primitives::revm_primitives::{Address, B256, U256};
+use reth_primitives::{Block, Header, Receipt, SealedHeader, Transaction, TransactionSigned};
 use reth_revm::db::BundleState;
 use reth_storage_errors::provider::ProviderError;
 use std::fmt::Display;
@@ -34,7 +36,6 @@ use std::mem::take;
 use std::sync::Arc;
 use zeth_core::db::MemoryDB;
 use zeth_core::driver::CoreDriver;
-use zeth_core::recover_sender;
 use zeth_core::stateless::client::StatelessClient;
 use zeth_core::stateless::execute::ExecutionStrategy;
 use zeth_core::stateless::finalize::RethFinalizationStrategy;
@@ -109,20 +110,27 @@ where
         // Instantiate execution engine using database
         let mut executor = OpExecutorProvider::optimism(chain_spec.clone())
             .batch_executor(db.take().expect("Missing database"));
-        // Recover transaction signer addresses with non-det vk hints
-        let mut vk = signers.iter();
-        let senders = block
-            .body
-            .transactions()
-            .map(|tx| {
-                if matches!(tx.tx_type(), TxType::Deposit) {
-                    tx.recover_signer().unwrap()
-                } else {
-                    recover_sender(vk.next().unwrap(), *tx.signature(), tx.signature_hash())
-                        .expect("Sender recovery failed")
-                }
-            })
-            .collect::<Vec<_>>();
+
+        // Verify the transaction signatures and compute senders
+        let mut vk_it = signers.iter();
+        let mut senders = Vec::with_capacity(block.body.transactions.len());
+        for (i, tx) in block.body.transactions().enumerate() {
+            let sender = if let Transaction::Deposit(TxDeposit { from, .. }) = tx.transaction {
+                // Deposit transactions are unsigned and contain the sender
+                from
+            } else {
+                let vk = vk_it.next().unwrap();
+                let sig = tx.signature();
+
+                sig.to_k256()
+                    .and_then(|sig| vk.verify_prehash(tx.signature_hash().as_slice(), &sig))
+                    .with_context(|| format!("invalid signature for tx {i}"))?;
+
+                Address::from_public_key(vk)
+            };
+            senders.push(sender);
+        }
+
         // Execute transactions
         let block_with_senders = take(block).with_senders_unchecked(senders);
         executor
@@ -130,7 +138,8 @@ where
                 block: &block_with_senders,
                 total_difficulty: *total_difficulty,
             })
-            .expect("Execution failed");
+            .context("execution failed")?;
+
         // Return block
         *block = block_with_senders.block;
         // Return bundle state

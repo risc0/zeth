@@ -40,6 +40,7 @@ test:
     cargo test --all-targets -p zeth-testeth -F ef-tests
 
     just test-cache-eth
+    just test-cache-op
 
 test-cache-eth: (build "")
     RUST_LOG=info RISC0_DEV_MODE=1 ./target/debug/zeth-ethereum build --cache=bin/ethereum/data -b=1

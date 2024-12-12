@@ -33,12 +33,6 @@ where
     type Execution: ExecutionStrategy<Driver, Wrapper<Database>>;
     type Finalization: FinalizationStrategy<Driver, Database>;
 
-    fn data_from_slice(
-        slice: &[u8],
-    ) -> anyhow::Result<StatelessClientData<Driver::Block, Driver::Header>> {
-        Ok(pot::from_slice(slice)?)
-    }
-
     fn data_from_parts(
         rkyv_slice: &[u8],
         pot_slice: &[u8],
@@ -48,6 +42,12 @@ where
         let chain_data =
             pot::from_slice::<StatelessClientChainData<Driver::Block, Driver::Header>>(pot_slice)?;
         Ok(StatelessClientData::<Driver::Block, Driver::Header>::from_parts(rkyv_data, chain_data))
+    }
+
+    fn data_from_slice(
+        slice: &[u8],
+    ) -> anyhow::Result<StatelessClientData<Driver::Block, Driver::Header>> {
+        Ok(pot::from_slice(slice)?)
     }
 
     fn validate(

@@ -11,6 +11,7 @@ alloy-genesis.workspace = true
 anyhow.workspace = true
 k256.workspace = true
 once_cell.workspace = true
+op-alloy-consensus.workspace = true
 
 reth-chainspec.workspace = true
 reth-consensus.workspace = true

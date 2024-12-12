@@ -1,3 +1,4 @@
+use alloy::signers::k256::ecdsa::VerifyingKey;
 use alloy::{
     eips::eip1559::BaseFeeParams,
     network::{Ethereum, Network},
@@ -164,12 +165,14 @@ where
     fn execute_transactions(
         chain_spec: Arc<ChainSpec>,
         block: &mut reth_primitives::Block,
+        signers: &[VerifyingKey],
         total_difficulty: &mut U256,
         db: &mut Option<Database>,
     ) -> anyhow::Result<reth_revm::db::BundleState> {
         <RethExecutionStrategy as ExecutionStrategy<RethCoreDriver, Database>>::execute_transactions(
             chain_spec,
             block,
+            signers,
             total_difficulty,
             db,
         )
@@ -242,5 +245,9 @@ impl PreflightDriver<TestCoreDriver, Ethereum> for RethPreflightDriver {
         <RethPreflightDriver as PreflightDriver<RethCoreDriver, Ethereum>>::derive_data(
             data, ommers,
         )
+    }
+
+    fn recover_signers(block: &<TestCoreDriver as CoreDriver>::Block) -> Vec<VerifyingKey> {
+        <RethPreflightDriver as PreflightDriver<RethCoreDriver, Ethereum>>::recover_signers(block)
     }
 }

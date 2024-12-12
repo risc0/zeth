@@ -23,5 +23,3 @@ reth-chainspec.workspace = true
 reth-revm.workspace = true
 reth-primitives.workspace = true
 reth-storage-errors.workspace = true
-
-risc0-zkvm.workspace = true

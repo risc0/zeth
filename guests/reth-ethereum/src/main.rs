@@ -36,15 +36,21 @@ fn main() {
     let stateless_client_data_rkyv = env::read_frame();
     let stateless_client_data_pot = env::read_frame();
     env::log("Deserializing input data");
-    let stateless_client_data = RethStatelessClient::data_from_parts(&stateless_client_data_rkyv, &stateless_client_data_pot)
-        .expect("Failed to load client data from stdin");
+    let stateless_client_data = RethStatelessClient::data_from_parts(
+        &stateless_client_data_rkyv,
+        &stateless_client_data_pot,
+    )
+    .expect("Failed to load client data from stdin");
     let validation_depth = stateless_client_data.blocks.len() as u64;
-    assert!(stateless_client_data.chain.is_ethereum(), "This program only supports Ethereum chains");
+    assert!(
+        stateless_client_data.chain.is_ethereum(),
+        "This program only supports Ethereum chains"
+    );
     let chain_id = stateless_client_data.chain as u64;
     // Build the block
     env::log("Validating blocks");
-    let engine = RethStatelessClient::validate(stateless_client_data)
-        .expect("block validation failed");
+    let engine =
+        RethStatelessClient::validate(stateless_client_data).expect("block validation failed");
     // Build the journal (todo: make this a strategy)
     let block_hash = engine.data.parent_header.hash_slow();
     let total_difficulty = engine.data.total_difficulty;

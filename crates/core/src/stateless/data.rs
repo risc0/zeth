@@ -360,17 +360,3 @@ where
         Ok(res)
     }
 }
-
-// impl<S> SerializeWith<Bytes, S> for EncodeBytes
-// where
-//     S: rkyv::rancor::Fallible + rkyv::ser::Allocator + rkyv::ser::Writer + ?Sized,
-// {
-//     fn serialize_with(field: &Bytes, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
-//         ArchivedVec::<u8>::serialize_from_slice(&field.0, serializer)
-//     }
-// }
-
-// impl<D> DeserializeWith<Archived<Vec<u8>>, Bytes, D> for EncodeBytes
-// where
-//     D: rkyv::rancor::Fallible + ?Sized,
-// {}

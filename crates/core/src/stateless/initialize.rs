@@ -17,10 +17,11 @@ use crate::driver::CoreDriver;
 use crate::keccak::keccak;
 use crate::mpt::MptNode;
 use crate::stateless::data::StorageEntry;
+use alloy_consensus::constants::EMPTY_ROOT_HASH;
 use alloy_consensus::Account;
 use alloy_primitives::map::HashMap;
 use alloy_primitives::{Address, Bytes, B256, U256};
-use anyhow::bail;
+use anyhow::{bail, ensure};
 use core::mem::take;
 use reth_primitives::revm_primitives::Bytecode;
 use reth_revm::db::{AccountState, DbAccount};
@@ -76,38 +77,44 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB> for MemoryDbSt
             // consume the slots, as they are no longer needed afterward
             let slots = take(slots);
 
-            // load the account from the state trie or empty if it does not exist
-            let state_account = state_trie
-                .get_rlp::<Account>(&keccak(address))?
-                .unwrap_or_default();
-            // Verify storage trie root
-            if storage_trie.hash() != state_account.storage_root {
-                bail!(
-                    "Invalid storage trie for {:?}: expected {}, got {}",
-                    address,
-                    state_account.storage_root,
-                    storage_trie.hash()
-                );
-            }
+            // load the account from the state trie
+            let state_account = state_trie.get_rlp::<Account>(&keccak(address))?;
 
-            // load storage reads
-            let mut storage = HashMap::with_capacity_and_hasher(slots.len(), Default::default());
-            for slot in slots {
-                let value: U256 = storage_trie
-                    .get_rlp(&keccak(slot.to_be_bytes::<32>()))?
-                    .unwrap_or_default();
-                storage.insert(slot, value);
-            }
+            // check that the account storage root matches the storage trie root of the input
+            let storage_root = state_account.map_or(EMPTY_ROOT_HASH, |a| a.storage_root);
+            ensure!(
+                storage_root == storage_trie.hash(),
+                "Invalid storage trie for {}: expected {}, got {}",
+                address,
+                storage_root,
+                storage_trie.hash()
+            );
 
-            let mem_account = DbAccount {
-                info: AccountInfo {
-                    balance: state_account.balance,
-                    nonce: state_account.nonce,
-                    code_hash: state_account.code_hash,
-                    code: None,
-                },
-                account_state: AccountState::None,
-                storage,
+            // load the account into memory
+            let mem_account = match state_account {
+                None => DbAccount::new_not_existing(),
+                Some(state_account) => {
+                    // load storage reads
+                    let mut storage =
+                        HashMap::with_capacity_and_hasher(slots.len(), Default::default());
+                    for slot in slots {
+                        let value: U256 = storage_trie
+                            .get_rlp(&keccak(slot.to_be_bytes::<32>()))?
+                            .unwrap_or_default();
+                        storage.insert(slot, value);
+                    }
+
+                    DbAccount {
+                        info: AccountInfo {
+                            balance: state_account.balance,
+                            nonce: state_account.nonce,
+                            code_hash: state_account.code_hash,
+                            code: None,
+                        },
+                        account_state: AccountState::None,
+                        storage,
+                    }
+                }
             };
 
             accounts.insert(*address, mem_account);

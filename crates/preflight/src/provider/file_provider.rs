@@ -142,9 +142,13 @@ impl<N: Network> Provider<N> for FileProvider<N> {
     }
 
     fn advance(&mut self) -> anyhow::Result<()> {
+        self.reset(self.block_no + 1)
+    }
+
+    fn reset(&mut self, block_no: u64) -> anyhow::Result<()> {
         drop(replace(
             self,
-            FileProvider::new(self.dir_path.clone(), self.block_no + 1, self.chain_id)?,
+            FileProvider::new(self.dir_path.clone(), block_no, self.chain_id)?,
         ));
         Ok(())
     }

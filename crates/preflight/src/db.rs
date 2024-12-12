@@ -26,48 +26,33 @@ use reth_primitives::revm_primitives::{Account, AccountInfo, Bytecode};
 use reth_revm::db::states::StateChangeset;
 use reth_revm::db::CacheDB;
 use reth_revm::{Database, DatabaseCommit, DatabaseRef};
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell};
 use std::marker::PhantomData;
 use std::ops::DerefMut;
 use zeth_core::db::apply_changeset;
 use zeth_core::driver::CoreDriver;
 use zeth_core::rescue::{Recoverable, Rescued};
 
-#[derive(Clone)]
-pub struct MutCacheDB<T: DatabaseRef> {
-    pub db: RefCell<CacheDB<T>>,
+/// Wraps a [`Database`] to provide a [`DatabaseRef`] implementation.
+#[derive(Clone, Debug, Default)]
+pub struct MutDB<T> {
+    pub db: RefCell<T>,
 }
 
-impl<T: DatabaseRef> MutCacheDB<T> {
-    pub fn new(db: CacheDB<T>) -> Self {
+impl<T: Database> MutDB<T> {
+    pub fn new(db: T) -> Self {
         Self {
             db: RefCell::new(db),
         }
     }
-}
 
-impl<T: DatabaseRef> Database for MutCacheDB<T> {
-    type Error = <CacheDB<T> as Database>::Error;
-
-    fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
-        self.db.borrow_mut().basic(address)
-    }
-
-    fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error> {
-        self.db.borrow_mut().code_by_hash(code_hash)
-    }
-
-    fn storage(&mut self, address: Address, index: U256) -> Result<U256, Self::Error> {
-        self.db.borrow_mut().storage(address, index)
-    }
-
-    fn block_hash(&mut self, number: u64) -> Result<B256, Self::Error> {
-        self.db.borrow_mut().block_hash(number)
+    pub fn borrow_db(&self) -> Ref<T> {
+        self.db.borrow()
     }
 }
 
-impl<T: DatabaseRef> DatabaseRef for MutCacheDB<T> {
-    type Error = <CacheDB<T> as DatabaseRef>::Error;
+impl<T: Database> DatabaseRef for MutDB<T> {
+    type Error = <T as Database>::Error;
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
         self.db.borrow_mut().basic(address)
@@ -86,7 +71,7 @@ impl<T: DatabaseRef> DatabaseRef for MutCacheDB<T> {
     }
 }
 
-pub type PrePostDB<N, R, P> = CacheDB<MutCacheDB<ProviderDB<N, R, P>>>;
+pub type PrePostDB<N, R, P> = CacheDB<MutDB<CacheDB<MutDB<ProviderDB<N, R, P>>>>>;
 
 #[derive(Clone)]
 pub struct PreflightDB<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> {
@@ -109,7 +94,7 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> From<ProviderDB<N, R, 
 {
     fn from(value: ProviderDB<N, R, P>) -> Self {
         Self {
-            inner: CacheDB::new(MutCacheDB::new(CacheDB::new(value))),
+            inner: CacheDB::new(MutDB::new(CacheDB::new(MutDB::new(value)))),
             driver: PhantomData,
         }
     }
@@ -136,17 +121,24 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> From<Rescued<PrePostDB
 
 impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
     pub fn clear(&mut self) -> anyhow::Result<()> {
-        let cleared = Self::from(self.inner.db.db.borrow().db.clone());
+        let cleared = Self::from(self.inner.db.borrow_db().db.borrow_db().clone());
         drop(core::mem::replace(self, cleared));
         Ok(())
     }
 
     pub fn save_provider(&mut self) -> anyhow::Result<()> {
-        self.inner.db.db.borrow_mut().db.save_provider()
+        self.inner.db.db.borrow_mut().db.db.borrow().save_provider()
     }
 
     pub fn advance_provider_block(&mut self) -> anyhow::Result<()> {
-        self.inner.db.db.borrow_mut().db.advance_provider_block()
+        self.inner
+            .db
+            .db
+            .borrow_mut()
+            .db
+            .db
+            .borrow_mut()
+            .advance_provider_block()
     }
 
     pub fn apply_changeset(&mut self, state_changeset: StateChangeset) -> anyhow::Result<()> {
@@ -156,11 +148,11 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
     pub fn sanity_check(&mut self, state_changeset: StateChangeset) -> anyhow::Result<()> {
         // storage sanity check
         let initial_db = &self.inner.db;
-        let mut provider_db = initial_db.db.borrow().db.clone();
+        let mut provider_db = initial_db.db.borrow().db.db.borrow().clone();
         provider_db.block_no += 1;
         for (address, db_account) in &self.inner.accounts {
             use reth_revm::Database;
-            let provider_info = provider_db.basic(*address)?.unwrap();
+            let provider_info = provider_db.basic(*address)?.unwrap_or_default();
             if db_account.info != provider_info {
                 error!("State difference for account {address}:");
                 if db_account.info.balance != provider_info.balance {
@@ -198,13 +190,11 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
     pub fn get_initial_proofs(
         &mut self,
     ) -> anyhow::Result<HashMap<Address, EIP1186AccountProofResponse>> {
-        let initial_db = &self.inner.db;
-        let storage_keys = enumerate_storage_keys(&initial_db.db.borrow());
-
-        let initial_db = self.inner.db.db.borrow_mut();
-        let block_no = initial_db.db.block_no;
+        let initial_db = self.inner.db.borrow_db();
+        let storage_keys = enumerate_storage_keys(&initial_db);
+        let block_no = initial_db.db.borrow_db().block_no;
         let res = get_proofs(
-            initial_db.db.provider.borrow_mut().deref_mut(),
+            initial_db.db.borrow_db().provider.borrow_mut().deref_mut(),
             block_no,
             storage_keys,
         )?;
@@ -215,8 +205,8 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
         &mut self,
     ) -> anyhow::Result<HashMap<Address, EIP1186AccountProofResponse>> {
         // get initial keys
-        let initial_db = &self.inner.db;
-        let mut storage_keys = enumerate_storage_keys(&initial_db.db.borrow());
+        let initial_db = self.inner.db.borrow_db();
+        let mut storage_keys = enumerate_storage_keys(&initial_db);
         // merge initial keys with latest db storage keys
         for (address, mut indices) in enumerate_storage_keys(&self.inner) {
             match storage_keys.get_mut(&address) {
@@ -227,10 +217,9 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
             }
         }
         // return proofs as of next block
-        let initial_db = self.inner.db.db.borrow_mut();
-        let block_no = initial_db.db.block_no + 1;
+        let block_no = initial_db.db.borrow_db().block_no + 1;
         let res = get_proofs(
-            initial_db.db.provider.borrow_mut().deref_mut(),
+            initial_db.db.borrow_db().provider.borrow_mut().deref_mut(),
             block_no,
             storage_keys,
         )?;
@@ -238,8 +227,8 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
     }
 
     pub fn get_ancestor_headers(&mut self) -> anyhow::Result<Vec<N::HeaderResponse>> {
-        let initial_db = &self.inner.db.db.borrow_mut();
-        let db_block_number = initial_db.db.block_no;
+        let initial_db = self.inner.db.db.borrow_mut();
+        let db_block_number = initial_db.db.borrow_db().block_no;
         let earliest_block = initial_db
             .block_hashes
             .keys()
@@ -247,7 +236,8 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
             .copied()
             .map(|v| v.to())
             .unwrap_or(db_block_number);
-        let mut provider = initial_db.db.provider.borrow_mut();
+        let provider_db = initial_db.db.borrow_db();
+        let mut provider = provider_db.provider.borrow_mut();
         let headers = (earliest_block..db_block_number)
             .rev()
             .map(|block_no| {
@@ -277,14 +267,12 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
         state_orphans: &[TrieOrphan],
         block_count: u64,
     ) -> Vec<EIP1186AccountProofResponse> {
-        let initial_db = &self.inner.db.db.borrow_mut();
-        let mut provider = initial_db.db.provider.borrow_mut();
+        let initial_db = self.inner.db.db.borrow_mut();
+        let provider_db = initial_db.db.borrow_db();
+        let mut provider = provider_db.provider.borrow_mut();
         let mut result = Vec::new();
-        let block_no = initial_db.db.block_no + block_count - 1;
+        let block_no = initial_db.db.borrow_db().block_no + block_count - 1;
         for (start, digest) in state_orphans {
-            // if let Ok(val) = provider.get_preimage(&PreimageQuery { digest: *digest }) {
-            //     continue;
-            // }
             if let Ok(next_account) = provider.get_next_account(&AccountRangeQuery {
                 block_no,
                 start: *start,
@@ -313,10 +301,11 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
         storage_orphans: &[(Address, TrieOrphan)],
         block_count: u64,
     ) -> Vec<EIP1186AccountProofResponse> {
-        let initial_db = &self.inner.db.db.borrow_mut();
-        let mut provider = initial_db.db.provider.borrow_mut();
+        let initial_db = self.inner.db.db.borrow_mut();
+        let provider_db = initial_db.db.borrow_db();
+        let mut provider = provider_db.provider.borrow_mut();
         let mut result = Vec::new();
-        let block_no = initial_db.db.block_no + block_count - 1;
+        let block_no = initial_db.db.borrow_db().block_no + block_count - 1;
         for (address, (start, digest)) in storage_orphans {
             // if let Ok(val) = provider.get_preimage(&PreimageQuery { digest: *digest }) {
             //     continue;

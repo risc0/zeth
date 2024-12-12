@@ -1,10 +1,6 @@
 [workspace]
 resolver = "2"
-members = [
-    "bin/*",
-    "crates/*",
-    "guests",
-]
+members = ["bin/*", "crates/*", "guests"]
 
 # Always optimize; building and running the guest takes much longer without optimization.
 [profile.dev]
@@ -22,15 +18,18 @@ opt-level = 3
 
 # RISC Zero
 [workspace.dependencies.bonsai-sdk]
-version = "1.2.1-rc.0"
+git = "https://github.com/risc0/risc0"
+rev = "e98cdad96cfecb3d959cb62abf566e5b17a0d649"
 features = ["non_blocking"]
 
 [workspace.dependencies.risc0-build]
-version = "1.2.1-rc.0"
+git = "https://github.com/risc0/risc0"
+rev = "e98cdad96cfecb3d959cb62abf566e5b17a0d649"
 features = ["unstable"]
 
 [workspace.dependencies.risc0-zkvm]
-version = "1.2.1-rc.0"
+git = "https://github.com/risc0/risc0"
+rev = "e98cdad96cfecb3d959cb62abf566e5b17a0d649"
 default-features = false
 
 # External
@@ -48,18 +47,33 @@ op-alloy-provider = "0.4.0"
 op-alloy-rpc-types = "0.4.0"
 
 # Reth
-reth-chainspec = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false, features = ["std"] }
+reth-chainspec = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false, features = [
+    "std",
+] }
 reth-consensus = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd" }
 reth-ethereum-consensus = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd" }
-reth-evm = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false, features = ["std"] }
-reth-evm-ethereum = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false, features = ["std"] }
-reth-optimism-chainspec = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false, features = ["std"] }
+reth-evm = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false, features = [
+    "std",
+] }
+reth-evm-ethereum = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false, features = [
+    "std",
+] }
+reth-optimism-chainspec = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false, features = [
+    "std",
+] }
 reth-optimism-consensus = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd" }
 reth-optimism-evm = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false }
 reth-optimism-forks = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false }
-reth-primitives = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false, features = ["std", "alloy-compat"] }
-reth-revm = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false, features = ["std"] }
-reth-storage-errors = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false, features = ["std"] }
+reth-primitives = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false, features = [
+    "std",
+    "alloy-compat",
+] }
+reth-revm = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false, features = [
+    "std",
+] }
+reth-storage-errors = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false, features = [
+    "std",
+] }
 
 # Zeth
 zeth = { path = "crates/zeth" }

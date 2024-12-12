@@ -12,11 +12,9 @@ workspace = true
 [dependencies]
 alloy.workspace = true
 alloy-chains.workspace = true
-anyhow.workspace = true
 clap.workspace = true
 env_logger.workspace = true
 tracing.workspace = true
-log.workspace = true
 
 [features]
 disable-dev-mode = ["zeth/disable-dev-mode"]

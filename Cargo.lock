@@ -6359,10 +6359,8 @@ version = "0.1.0"
 dependencies = [
  "alloy",
  "alloy-chains",
- "anyhow",
  "clap",
  "env_logger",
- "log",
  "tracing",
  "zeth",
  "zeth-core",
@@ -6486,7 +6484,6 @@ dependencies = [
  "alloy",
  "reth-chainspec",
  "reth-primitives",
- "reth-revm",
  "zeth-core",
  "zeth-core-ethereum",
  "zeth-preflight",

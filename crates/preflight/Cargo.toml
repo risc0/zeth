@@ -10,16 +10,16 @@ workspace = true
 alloy.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
+flate2.workspace = true
 k256.workspace = true
 log.workspace = true
+pot.workspace = true
+rkyv.workspace = true
 serde.workspace = true
-flate2.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
 
 reth-chainspec.workspace = true
 reth-revm.workspace = true
 reth-primitives.workspace = true
 reth-storage-errors.workspace = true
-
-pot.workspace = true
-serde_json.workspace = true
-tokio.workspace = true

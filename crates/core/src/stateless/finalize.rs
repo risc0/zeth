@@ -59,7 +59,8 @@ impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for RethFinaliza
         for storage_change in storage {
             // getting a mutable reference is more efficient than calling remove
             // every account must have an entry, even newly created accounts
-            let (storage_trie, _) = storage_tries.get_mut(&storage_change.address).unwrap();
+            let StorageEntry { storage_trie, .. } =
+                storage_tries.get_mut(&storage_change.address).unwrap();
             // for cleared accounts always start from the empty trie
             if storage_change.wipe_storage {
                 storage_trie.clear();
@@ -92,7 +93,7 @@ impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for RethFinaliza
                 continue;
             }
             let storage_root = {
-                let (storage_trie, _) = storage_tries.get(address).unwrap();
+                let StorageEntry { storage_trie, .. } = storage_tries.get(address).unwrap();
                 storage_trie.hash()
             };
 
@@ -114,7 +115,7 @@ impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for RethFinaliza
                 .context("state_trie.delete")?;
         }
         // Apply account storage only changes
-        for (address, (storage_trie, _)) in storage_tries {
+        for (address, StorageEntry { storage_trie, .. }) in storage_tries {
             if storage_trie.is_reference_cached() {
                 continue;
             }

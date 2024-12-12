@@ -10,6 +10,7 @@ alloy-primitives.workspace = true
 alloy-rlp.workspace = true
 k256.workspace = true
 pot.workspace = true
+rkyv.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tiny-keccak.workspace = true
@@ -18,4 +19,3 @@ reth-chainspec.workspace = true
 reth-primitives.workspace = true
 reth-revm.workspace = true
 reth-storage-errors.workspace = true
-

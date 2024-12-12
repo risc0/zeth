@@ -3,6 +3,9 @@ name = "zeth"
 version = "0.1.0"
 edition = "2021"
 
+[dependencies.bonsai-sdk]
+workspace = true
+
 [dependencies.risc0-zkvm]
 workspace = true
 features = ["std", "client", "unstable"]
@@ -25,6 +28,7 @@ clap.workspace = true
 env_logger.workspace = true
 log.workspace = true
 reth-chainspec.workspace = true
+tokio.workspace = true
 
 [features]
 debug-guest-build = ["zeth-guests/debug-guest-build"]

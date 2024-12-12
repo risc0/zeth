@@ -110,7 +110,6 @@ where
         // Instantiate execution engine using database
         let mut executor = EthExecutorProvider::ethereum(chain_spec.clone())
             .batch_executor(db.take().expect("Missing database."));
-
         // Verify the transaction signatures and compute senders
         let mut senders = Vec::with_capacity(block.body.transactions.len());
         for (i, tx) in block.body.transactions().enumerate() {

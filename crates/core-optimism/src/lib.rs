@@ -110,7 +110,6 @@ where
         // Instantiate execution engine using database
         let mut executor = OpExecutorProvider::optimism(chain_spec.clone())
             .batch_executor(db.take().expect("Missing database"));
-
         // Verify the transaction signatures and compute senders
         let mut vk_it = signers.iter();
         let mut senders = Vec::with_capacity(block.body.transactions.len());

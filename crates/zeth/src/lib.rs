@@ -23,6 +23,7 @@ use risc0_zkvm::{default_executor, default_prover, is_dev_mode, ProverOpts, Rece
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use tokio::task::spawn_blocking;
 use zeth_core::driver::CoreDriver;
 use zeth_core::keccak::keccak;
 use zeth_core::rescue::Recoverable;
@@ -128,7 +129,6 @@ where
     }
 
     // use the zkvm
-    let exec_env = build_executor_env(&cli, &build_result, image_id, network_name)?;
     let computed_journal = if cli.should_prove() {
         info!("Proving ...");
         let prover_opts = if cli.snark() {
@@ -151,8 +151,16 @@ where
         } else {
             info!("Computing uncached receipt. This might take some time.");
             // run prover
-            let prover = default_prover();
-            let prove_info = prover.prove_with_opts(exec_env, elf, &prover_opts)?;
+            let network_name = String::from(network_name);
+            let elf = elf.to_owned();
+            let prove_info = spawn_blocking(move || {
+                let prover = default_prover();
+                let exec_env = build_executor_env(&cli, &build_result, image_id, &network_name)
+                    .expect("Failed to build executor environment");
+                prover.prove_with_opts(exec_env, &elf, &prover_opts)
+            })
+            .await??;
+
             info!(
                 "Proof of {} total cycles ({} user cycles) computed.",
                 prove_info.stats.total_cycles, prove_info.stats.user_cycles
@@ -177,6 +185,7 @@ where
     } else {
         info!("Executing ...");
         // run executor only
+        let exec_env = build_executor_env(&cli, &build_result, image_id, network_name)?;
         let executor = default_executor();
         let session_info = executor.execute(exec_env, elf)?;
         info!("{} user cycles executed.", session_info.cycles());

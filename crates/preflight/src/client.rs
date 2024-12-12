@@ -33,7 +33,7 @@ use zeth_core::mpt::{
     parse_proof, resolve_nodes_in_place, shorten_node_path, MptNode, MptNodeReference,
 };
 use zeth_core::rescue::Wrapper;
-use zeth_core::stateless::data::StatelessClientData;
+use zeth_core::stateless::data::{StatelessClientData, StorageEntry};
 use zeth_core::stateless::engine::StatelessClientEngine;
 use zeth_core::stateless::execute::ExecutionStrategy;
 use zeth_core::stateless::validate::ValidationStrategy;
@@ -262,7 +262,9 @@ where
                     .collect();
                 resolve_nodes_in_place(&mut state_trie, &node_store);
                 // resolve storage orphans
-                if let Some((trie, _)) = storage_tries.get_mut(&account_proof.address) {
+                if let Some(StorageEntry { storage_trie, .. }) =
+                    storage_tries.get_mut(&account_proof.address)
+                {
                     for storage_proof in account_proof.storage_proof {
                         let node_store: HashMap<MptNodeReference, MptNode> =
                             parse_proof(&storage_proof.proof)?
@@ -286,7 +288,7 @@ where
                                 );
                             }
                         }
-                        resolve_nodes_in_place(trie, &node_store);
+                        resolve_nodes_in_place(storage_trie, &node_store);
                     }
                 }
             }
@@ -309,8 +311,8 @@ where
             // Report stats
             info!("State trie: {} nodes", state_trie.size());
             let storage_nodes: u64 = storage_tries
-                .iter()
-                .map(|(_, (n, _))| n.size() as u64)
+                .values()
+                .map(|e| e.storage_trie.size() as u64)
                 .sum();
             info!(
                 "Storage tries: {storage_nodes} total nodes over {} accounts",

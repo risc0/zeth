@@ -6,16 +6,23 @@ edition = "2021"
 [workspace]
 
 [profile.dev]
+codegen-units = 1
+debug = 1
+lto = "fat"
 opt-level = 3
 
 [profile.dev.build-override]
+codegen-units = 1
 opt-level = 3
 
 [profile.release]
+codegen-units = 1
 debug = 1
-lto = true
+lto = "fat"
+opt-level = 3
 
 [profile.release.build-override]
+codegen-units = 1
 opt-level = 3
 
 [dependencies.risc0-zkvm]

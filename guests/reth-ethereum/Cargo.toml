@@ -5,6 +5,19 @@ edition = "2021"
 
 [workspace]
 
+[profile.dev]
+opt-level = 3
+
+[profile.dev.build-override]
+opt-level = 3
+
+[profile.release]
+debug = 1
+lto = true
+
+[profile.release.build-override]
+opt-level = 3
+
 [dependencies.risc0-zkvm]
 git = "https://github.com/risc0/risc0"
 rev = "e98cdad96cfecb3d959cb62abf566e5b17a0d649"

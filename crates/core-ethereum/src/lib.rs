@@ -33,7 +33,7 @@ use reth_storage_errors::provider::ProviderError;
 use std::fmt::Display;
 use std::mem::take;
 use std::sync::Arc;
-use zeth_core::db::MemoryDB;
+use zeth_core::db::memory::MemoryDB;
 use zeth_core::driver::CoreDriver;
 use zeth_core::stateless::client::StatelessClient;
 use zeth_core::stateless::execute::ExecutionStrategy;

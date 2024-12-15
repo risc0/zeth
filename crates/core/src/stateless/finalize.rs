@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::db::{apply_changeset, into_plain_state, MemoryDB};
+use crate::db::memory::MemoryDB;
 use crate::driver::CoreDriver;
 use crate::keccak::keccak;
 use crate::mpt::MptNode;
@@ -23,6 +23,7 @@ use alloy_primitives::{Address, U256};
 use anyhow::Context;
 use reth_revm::db::states::StateChangeset;
 use reth_revm::db::BundleState;
+use crate::db::changeset::{into_plain_state, ApplyChangeset};
 
 pub trait FinalizationStrategy<Driver: CoreDriver, Database> {
     fn finalize_state(
@@ -139,7 +140,7 @@ impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for RethFinaliza
 
         // Update the database
         if let Some(db) = db {
-            apply_changeset(db, state_changeset)?;
+            db.apply_changeset(state_changeset)?;
 
             db.block_hashes.insert(
                 U256::from(Driver::block_number(header)),

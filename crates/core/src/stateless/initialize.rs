@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::db::MemoryDB;
+use crate::db::memory::MemoryDB;
 use crate::driver::CoreDriver;
 use crate::keccak::keccak;
 use crate::mpt::MptNode;

@@ -9,8 +9,8 @@ use reth_chainspec::{
     NamedChain,
 };
 use std::{fmt::Display, sync::Arc};
+use zeth_core::db::memory::MemoryDB;
 use zeth_core::{
-    db::MemoryDB,
     driver::CoreDriver,
     stateless::{
         client::StatelessClient, data::StatelessClientData, execute::ExecutionStrategy,

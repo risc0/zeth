@@ -17,7 +17,8 @@
 use alloy::{network::Ethereum, primitives::BlockHash};
 use rstest::rstest;
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
-use zeth_core::{db::MemoryDB, stateless::client::StatelessClient};
+use zeth_core::db::memory::MemoryDB;
+use zeth_core::stateless::client::StatelessClient;
 use zeth_preflight::{client::PreflightClient, provider::Provider, BlockBuilder, Witness};
 use zeth_preflight_ethereum::{RethBlockBuilder, RethPreflightDriver};
 use zeth_testeth::{read_eth_execution_tests, TestCoreDriver, TestProvider};

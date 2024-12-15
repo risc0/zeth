@@ -22,7 +22,7 @@ use reth_optimism_chainspec::OpChainSpec;
 use reth_primitives::{Block, BlockBody, Header, Receipt, TransactionSigned, TxType, Withdrawals};
 use std::iter::zip;
 use std::sync::Arc;
-use zeth_core::db::MemoryDB;
+use zeth_core::db::memory::MemoryDB;
 use zeth_core::driver::CoreDriver;
 use zeth_core::stateless::data::StatelessClientData;
 use zeth_core_optimism::{

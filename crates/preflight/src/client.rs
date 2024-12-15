@@ -27,7 +27,7 @@ use std::cell::RefCell;
 use std::iter::zip;
 use std::path::PathBuf;
 use std::rc::Rc;
-use zeth_core::db::changeset::into_plain_state;
+use zeth_core::db::update::into_plain_state;
 use zeth_core::driver::CoreDriver;
 use zeth_core::mpt::{
     parse_proof, resolve_nodes_in_place, shorten_node_path, MptNode, MptNodeReference,

@@ -147,6 +147,7 @@ impl<Driver: CoreDriver, Database: Recoverable> StatelessClientEngine<Driver, Da
     pub fn finalize_state<T: FinalizationStrategy<Driver, Database>>(
         &mut self,
         bundle_state: BundleState,
+        with_further_updates: bool,
     ) -> anyhow::Result<()> {
         // Unpack input
         let StatelessClientEngine {
@@ -171,6 +172,7 @@ impl<Driver: CoreDriver, Database: Recoverable> StatelessClientEngine<Driver, Da
             parent_header,
             db.map(|db| &mut db.inner),
             bundle_state,
+            with_further_updates,
         )
         .context("StatelessClientEngine::finalize")?;
         // Prepare for next block

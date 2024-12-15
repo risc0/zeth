@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloy_primitives::{B256, U256};
+use reth_primitives::KECCAK_EMPTY;
 use reth_revm::db::states::{PlainStorageChangeset, StateChangeset};
 use reth_revm::db::BundleState;
-use reth_primitives::KECCAK_EMPTY;
 
-pub trait ApplyChangeset {
+pub trait Update {
     fn apply_changeset(&mut self, changeset: StateChangeset) -> anyhow::Result<()>;
+    fn insert_block_hash(&mut self, block_number: U256, block_hash: B256) -> anyhow::Result<()>;
 }
 
 /// This function is a modified version of [`BundleState::into_plane_state`] from the revm crate:

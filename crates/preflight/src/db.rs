@@ -29,7 +29,7 @@ use reth_revm::{Database, DatabaseCommit, DatabaseRef};
 use std::cell::{Ref, RefCell};
 use std::marker::PhantomData;
 use std::ops::DerefMut;
-use zeth_core::db::changeset::ApplyChangeset;
+use zeth_core::db::update::Update;
 use zeth_core::driver::CoreDriver;
 use zeth_core::rescue::{Recoverable, Rescued};
 

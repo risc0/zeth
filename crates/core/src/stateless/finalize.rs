@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::db::memory::MemoryDB;
+use crate::db::update::{into_plain_state, Update};
 use crate::driver::CoreDriver;
 use crate::keccak::keccak;
 use crate::mpt::MptNode;
@@ -20,10 +20,9 @@ use crate::stateless::data::StorageEntry;
 use alloy_consensus::Account;
 use alloy_primitives::map::HashMap;
 use alloy_primitives::{Address, U256};
-use anyhow::Context;
+use anyhow::{bail, Context};
 use reth_revm::db::states::StateChangeset;
 use reth_revm::db::BundleState;
-use crate::db::changeset::{into_plain_state, ApplyChangeset};
 
 pub trait FinalizationStrategy<Driver: CoreDriver, Database> {
     fn finalize_state(
@@ -33,25 +32,34 @@ pub trait FinalizationStrategy<Driver: CoreDriver, Database> {
         parent_header: &mut Driver::Header,
         db: Option<&mut Database>,
         bundle_state: BundleState,
+        with_further_updates: bool,
     ) -> anyhow::Result<()>;
 }
 
 pub struct RethFinalizationStrategy;
 
-impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for RethFinalizationStrategy {
+impl<Driver: CoreDriver, Database: Update> FinalizationStrategy<Driver, Database>
+    for RethFinalizationStrategy
+{
     fn finalize_state(
         block: &mut Driver::Block,
         state_trie: &mut MptNode,
         storage_tries: &mut HashMap<Address, StorageEntry>,
         parent_header: &mut Driver::Header,
-        db: Option<&mut MemoryDB>,
+        db: Option<&mut Database>,
         bundle_state: BundleState,
+        with_further_updates: bool,
     ) -> anyhow::Result<()> {
         // Apply state updates
-        assert_eq!(state_trie.hash(), Driver::state_root(parent_header));
-
+        if state_trie.hash() != Driver::state_root(parent_header) {
+            bail!(
+                "Invalid state root (expected {:?}, got {:?})",
+                Driver::state_root(parent_header),
+                state_trie.hash()
+            );
+        }
+        // Convert the state update bundle
         let state_changeset = into_plain_state(bundle_state);
-
         // Update the trie data
         let StateChangeset {
             accounts, storage, ..
@@ -138,14 +146,16 @@ impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for RethFinaliza
         let header = Driver::block_header(block);
         assert_eq!(Driver::state_root(header), state_trie.hash());
 
-        // Update the database
-        if let Some(db) = db {
-            db.apply_changeset(state_changeset)?;
+        // Update the database if available
+        if with_further_updates {
+            if let Some(db) = db {
+                db.apply_changeset(state_changeset)?;
 
-            db.block_hashes.insert(
-                U256::from(Driver::block_number(header)),
-                Driver::header_hash(header),
-            );
+                db.insert_block_hash(
+                    U256::from(Driver::block_number(header)),
+                    Driver::header_hash(header),
+                )?;
+            }
         }
 
         Ok(())

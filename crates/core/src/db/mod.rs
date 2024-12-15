@@ -14,5 +14,5 @@
 
 pub mod memory;
 pub mod unreachable;
+pub mod update;
 pub mod wrapper;
-pub mod changeset;

@@ -13,9 +13,10 @@
 // limitations under the License.
 
 use crate::db::unreachable::UnreachableDB;
-use crate::db::changeset::ApplyChangeset;
+use crate::db::update::Update;
 use crate::rescue::Recoverable;
 use alloy_primitives::map::HashSet;
+use alloy_primitives::{B256, U256};
 use reth_primitives::revm_primitives::AccountInfo;
 use reth_revm::db::states::{PlainStorageChangeset, StateChangeset};
 use reth_revm::db::{AccountState, CacheDB};
@@ -28,7 +29,7 @@ impl<DB: Default> Recoverable for CacheDB<DB> {
     }
 }
 
-impl<DB> ApplyChangeset for CacheDB<DB> {
+impl<DB> Update for CacheDB<DB> {
     fn apply_changeset(&mut self, changeset: StateChangeset) -> anyhow::Result<()> {
         // Update accounts in state trie
         let mut was_destroyed = HashSet::new();
@@ -67,6 +68,10 @@ impl<DB> ApplyChangeset for CacheDB<DB> {
                 db_account.storage.insert(key, val);
             }
         }
+        Ok(())
+    }
+    fn insert_block_hash(&mut self, block_number: U256, block_hash: B256) -> anyhow::Result<()> {
+        self.block_hashes.insert(block_number, block_hash);
         Ok(())
     }
 }

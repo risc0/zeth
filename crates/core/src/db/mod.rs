@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub mod memory;
+pub mod trie;
 pub mod unreachable;
 pub mod update;
 pub mod wrapper;

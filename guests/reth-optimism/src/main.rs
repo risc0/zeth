@@ -14,8 +14,9 @@
 
 // use c_kzg::KzgSettings;
 use risc0_zkvm::guest::env;
+use zeth_core::db::trie::TrieDB;
 use zeth_core::stateless::client::StatelessClient;
-use zeth_core_optimism::OpRethStatelessClient;
+use zeth_core_optimism::{OpRethCoreDriver, OpRethStatelessClient};
 // todo: use this instead of the alloy KzgEnv to save cycles
 // lazy_static::lazy_static! {
 //     /// KZG Ceremony data
@@ -36,11 +37,12 @@ fn main() {
     let stateless_client_data_rkyv = env::read_frame();
     let stateless_client_data_pot = env::read_frame();
     env::log("Deserializing input data");
-    let stateless_client_data = OpRethStatelessClient::data_from_parts(
-        &stateless_client_data_rkyv,
-        &stateless_client_data_pot,
-    )
-    .expect("Failed to load client data from stdin");
+    let stateless_client_data =
+        <OpRethStatelessClient as StatelessClient<OpRethCoreDriver, TrieDB>>::data_from_parts(
+            &stateless_client_data_rkyv,
+            &stateless_client_data_pot,
+        )
+        .expect("Failed to load client data from stdin");
     let validation_depth = stateless_client_data.blocks.len() as u64;
     assert!(
         stateless_client_data.chain.is_optimism(),
@@ -49,8 +51,10 @@ fn main() {
     let chain_id = stateless_client_data.chain as u64;
     // Build the block
     env::log("Validating blocks");
-    let engine =
-        OpRethStatelessClient::validate(stateless_client_data).expect("block validation failed");
+    let engine = <OpRethStatelessClient as StatelessClient<OpRethCoreDriver, TrieDB>>::validate(
+        stateless_client_data,
+    )
+    .expect("block validation failed");
     // Build the journal (todo: make this a strategy)
     let block_hash = engine.data.parent_header.hash_slow();
     let total_difficulty = engine.data.total_difficulty;

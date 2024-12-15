@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use crate::db::memory::MemoryDB;
+use crate::db::trie::TrieDB;
 use crate::driver::CoreDriver;
 use crate::keccak::keccak;
 use crate::mpt::MptNode;
@@ -38,9 +39,75 @@ pub trait InitializationStrategy<Driver: CoreDriver, Database> {
     ) -> anyhow::Result<Database>;
 }
 
-pub struct MemoryDbStrategy;
+pub struct TrieDbInitializationStrategy;
 
-impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB> for MemoryDbStrategy {
+impl<Driver: CoreDriver> InitializationStrategy<Driver, TrieDB> for TrieDbInitializationStrategy {
+    fn initialize_database(
+        state_trie: &mut MptNode,
+        storage_tries: &mut HashMap<Address, StorageEntry>,
+        contracts: &mut Vec<Bytes>,
+        parent_header: &mut Driver::Header,
+        ancestor_headers: &mut Vec<Driver::Header>,
+    ) -> anyhow::Result<TrieDB> {
+        // Verify starting state trie root
+        if Driver::state_root(parent_header) != state_trie.hash() {
+            bail!(
+                "Invalid initial state trie: expected {}, got {}",
+                Driver::state_root(parent_header),
+                state_trie.hash()
+            );
+        }
+
+        // hash all the contract code
+        let contracts = take(contracts)
+            .into_iter()
+            .map(|bytes| (keccak(&bytes).into(), Bytecode::new_raw(bytes)))
+            .collect();
+
+        // prepare block hash history
+        let mut block_hashes: HashMap<u64, B256> =
+            HashMap::with_capacity_and_hasher(ancestor_headers.len() + 1, Default::default());
+        block_hashes.insert(
+            Driver::block_number(parent_header),
+            Driver::header_hash(parent_header),
+        );
+        let mut prev = &*parent_header;
+        for current in ancestor_headers.iter() {
+            let current_hash = Driver::header_hash(current);
+            if Driver::parent_hash(prev) != current_hash {
+                bail!(
+                    "Invalid chain: {} is not the parent of {}",
+                    Driver::block_number(current),
+                    Driver::block_number(prev)
+                );
+            }
+            if Driver::block_number(parent_header) < Driver::block_number(current)
+                || Driver::block_number(parent_header) - Driver::block_number(current) >= 256
+            {
+                bail!(
+                    "Invalid chain: {} is not one of the {} most recent blocks",
+                    Driver::block_number(current),
+                    256,
+                );
+            }
+            block_hashes.insert(Driver::block_number(current), current_hash);
+            prev = current;
+        }
+
+        Ok(TrieDB {
+            accounts: take(state_trie),
+            storage: take(storage_tries),
+            contracts,
+            block_hashes,
+        })
+    }
+}
+
+pub struct MemoryDbInitializationStrategy;
+
+impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB>
+    for MemoryDbInitializationStrategy
+{
     fn initialize_database(
         state_trie: &mut MptNode,
         storage_tries: &mut HashMap<Address, StorageEntry>,

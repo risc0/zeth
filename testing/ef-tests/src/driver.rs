@@ -14,7 +14,7 @@ use zeth_core::{
     driver::CoreDriver,
     stateless::{
         client::StatelessClient, data::StatelessClientData, execute::ExecutionStrategy,
-        finalize::RethFinalizationStrategy, initialize::MemoryDbStrategy,
+        finalize::MemoryDbFinalizationStrategy, initialize::MemoryDbInitializationStrategy,
         validate::ValidationStrategy,
     },
 };
@@ -129,10 +129,10 @@ impl PreflightClient<Ethereum, TestCoreDriver, RethPreflightDriver> for RethPref
 }
 
 impl StatelessClient<TestCoreDriver, MemoryDB> for RethStatelessClient {
-    type Initialization = MemoryDbStrategy;
+    type Initialization = MemoryDbInitializationStrategy;
     type Validation = RethValidationStrategy;
     type Execution = RethExecutionStrategy;
-    type Finalization = RethFinalizationStrategy;
+    type Finalization = MemoryDbFinalizationStrategy;
 }
 
 impl<Database> ValidationStrategy<TestCoreDriver, Database>

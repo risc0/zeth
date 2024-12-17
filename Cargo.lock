@@ -4808,6 +4808,7 @@ dependencies = [
  "addr2line 0.22.0",
  "anyhow",
  "bincode",
+ "bonsai-sdk",
  "borsh",
  "bytemuck",
  "bytes",

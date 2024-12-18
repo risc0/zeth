@@ -2772,7 +2772,7 @@ dependencies = [
 [[package]]
 name = "risc0-binfmt"
 version = "1.3.0-alpha.1"
-source = "git+https://github.com/risc0/risc0?rev=f74920596c745a8bb7e8a6f1dfdefb44d03ed06f#f74920596c745a8bb7e8a6f1dfdefb44d03ed06f"
+source = "git+https://github.com/risc0/risc0?rev=8801e2e3cd030acea2f03f01bd91f37e47e79e23#8801e2e3cd030acea2f03f01bd91f37e47e79e23"
 dependencies = [
  "anyhow",
  "borsh",
@@ -2786,7 +2786,7 @@ dependencies = [
 [[package]]
 name = "risc0-circuit-keccak"
 version = "1.3.0-alpha.1"
-source = "git+https://github.com/risc0/risc0?rev=f74920596c745a8bb7e8a6f1dfdefb44d03ed06f#f74920596c745a8bb7e8a6f1dfdefb44d03ed06f"
+source = "git+https://github.com/risc0/risc0?rev=8801e2e3cd030acea2f03f01bd91f37e47e79e23#8801e2e3cd030acea2f03f01bd91f37e47e79e23"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -2801,7 +2801,7 @@ dependencies = [
 [[package]]
 name = "risc0-circuit-recursion"
 version = "1.3.0-alpha.1"
-source = "git+https://github.com/risc0/risc0?rev=f74920596c745a8bb7e8a6f1dfdefb44d03ed06f#f74920596c745a8bb7e8a6f1dfdefb44d03ed06f"
+source = "git+https://github.com/risc0/risc0?rev=8801e2e3cd030acea2f03f01bd91f37e47e79e23#8801e2e3cd030acea2f03f01bd91f37e47e79e23"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -2815,7 +2815,7 @@ dependencies = [
 [[package]]
 name = "risc0-circuit-rv32im"
 version = "1.3.0-alpha.1"
-source = "git+https://github.com/risc0/risc0?rev=f74920596c745a8bb7e8a6f1dfdefb44d03ed06f#f74920596c745a8bb7e8a6f1dfdefb44d03ed06f"
+source = "git+https://github.com/risc0/risc0?rev=8801e2e3cd030acea2f03f01bd91f37e47e79e23#8801e2e3cd030acea2f03f01bd91f37e47e79e23"
 dependencies = [
  "anyhow",
  "metal",
@@ -2830,7 +2830,7 @@ dependencies = [
 [[package]]
 name = "risc0-core"
 version = "1.3.0-alpha.1"
-source = "git+https://github.com/risc0/risc0?rev=f74920596c745a8bb7e8a6f1dfdefb44d03ed06f#f74920596c745a8bb7e8a6f1dfdefb44d03ed06f"
+source = "git+https://github.com/risc0/risc0?rev=8801e2e3cd030acea2f03f01bd91f37e47e79e23#8801e2e3cd030acea2f03f01bd91f37e47e79e23"
 dependencies = [
  "bytemuck",
  "rand_core",
@@ -2839,7 +2839,7 @@ dependencies = [
 [[package]]
 name = "risc0-groth16"
 version = "1.3.0-alpha.1"
-source = "git+https://github.com/risc0/risc0?rev=f74920596c745a8bb7e8a6f1dfdefb44d03ed06f#f74920596c745a8bb7e8a6f1dfdefb44d03ed06f"
+source = "git+https://github.com/risc0/risc0?rev=8801e2e3cd030acea2f03f01bd91f37e47e79e23#8801e2e3cd030acea2f03f01bd91f37e47e79e23"
 dependencies = [
  "anyhow",
  "ark-bn254",
@@ -2859,7 +2859,7 @@ dependencies = [
 [[package]]
 name = "risc0-zkp"
 version = "1.3.0-alpha.1"
-source = "git+https://github.com/risc0/risc0?rev=f74920596c745a8bb7e8a6f1dfdefb44d03ed06f#f74920596c745a8bb7e8a6f1dfdefb44d03ed06f"
+source = "git+https://github.com/risc0/risc0?rev=8801e2e3cd030acea2f03f01bd91f37e47e79e23#8801e2e3cd030acea2f03f01bd91f37e47e79e23"
 dependencies = [
  "anyhow",
  "blake2",
@@ -2882,7 +2882,7 @@ dependencies = [
 [[package]]
 name = "risc0-zkvm"
 version = "1.3.0-alpha.1"
-source = "git+https://github.com/risc0/risc0?rev=f74920596c745a8bb7e8a6f1dfdefb44d03ed06f#f74920596c745a8bb7e8a6f1dfdefb44d03ed06f"
+source = "git+https://github.com/risc0/risc0?rev=8801e2e3cd030acea2f03f01bd91f37e47e79e23#8801e2e3cd030acea2f03f01bd91f37e47e79e23"
 dependencies = [
  "anyhow",
  "borsh",
@@ -2908,7 +2908,7 @@ dependencies = [
 [[package]]
 name = "risc0-zkvm-platform"
 version = "1.3.0-alpha.1"
-source = "git+https://github.com/risc0/risc0?rev=f74920596c745a8bb7e8a6f1dfdefb44d03ed06f#f74920596c745a8bb7e8a6f1dfdefb44d03ed06f"
+source = "git+https://github.com/risc0/risc0?rev=8801e2e3cd030acea2f03f01bd91f37e47e79e23#8801e2e3cd030acea2f03f01bd91f37e47e79e23"
 dependencies = [
  "bytemuck",
  "getrandom",
@@ -3513,7 +3513,7 @@ dependencies = [
 [[package]]
 name = "tiny-keccak"
 version = "2.0.2"
-source = "git+https://github.com/risc0/tiny-keccak?rev=37645712de2d24f56410f3ba0bfc71175df51cc8#37645712de2d24f56410f3ba0bfc71175df51cc8"
+source = "git+https://github.com/risc0/tiny-keccak?rev=01e787dcb9b8a5d21857af37c4d51a4028a03fc4#01e787dcb9b8a5d21857af37c4d51a4028a03fc4"
 dependencies = [
  "crunchy",
  "risc0-zkvm",

@@ -9,7 +9,6 @@ edition = "2021"
 codegen-units = 1
 debug = 1
 lto = "fat"
-opt-level = 3
 
 [profile.release.build-override]
 codegen-units = 1

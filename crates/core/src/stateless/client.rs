@@ -60,11 +60,9 @@ where
         while !engine.data.blocks.is_empty() {
             engine.validate_header::<Self::Validation>()?;
             let bundle_state = engine.execute_transactions::<Self::Execution>()?;
-            // Skip the database update if we're finalizing the last block
-            if engine.data.blocks.len() == 1 {
-                engine.db.take();
-            }
-            engine.finalize_state::<Self::Finalization>(bundle_state)?;
+            // Finalize the state updates
+            engine
+                .finalize_state::<Self::Finalization>(bundle_state, engine.data.blocks.len() > 1)?;
         }
         // Return the engine for inspection
         Ok(engine)

@@ -34,21 +34,31 @@ use reth_storage_errors::provider::ProviderError;
 use std::fmt::Display;
 use std::mem::take;
 use std::sync::Arc;
-use zeth_core::db::MemoryDB;
+use zeth_core::db::memory::MemoryDB;
+use zeth_core::db::trie::TrieDB;
 use zeth_core::driver::CoreDriver;
 use zeth_core::stateless::client::StatelessClient;
 use zeth_core::stateless::execute::ExecutionStrategy;
-use zeth_core::stateless::finalize::RethFinalizationStrategy;
-use zeth_core::stateless::initialize::MemoryDbStrategy;
+use zeth_core::stateless::finalize::{MemoryDbFinalizationStrategy, TrieDbFinalizationStrategy};
+use zeth_core::stateless::initialize::{
+    MemoryDbInitializationStrategy, TrieDbInitializationStrategy,
+};
 use zeth_core::stateless::validate::ValidationStrategy;
 
 pub struct OpRethStatelessClient;
 
 impl StatelessClient<OpRethCoreDriver, MemoryDB> for OpRethStatelessClient {
-    type Initialization = MemoryDbStrategy;
+    type Initialization = MemoryDbInitializationStrategy;
     type Validation = OpRethValidationStrategy;
     type Execution = OpRethExecutionStrategy;
-    type Finalization = RethFinalizationStrategy;
+    type Finalization = MemoryDbFinalizationStrategy;
+}
+
+impl StatelessClient<OpRethCoreDriver, TrieDB> for OpRethStatelessClient {
+    type Initialization = TrieDbInitializationStrategy;
+    type Validation = OpRethValidationStrategy;
+    type Execution = OpRethExecutionStrategy;
+    type Finalization = TrieDbFinalizationStrategy;
 }
 
 pub struct OpRethValidationStrategy;

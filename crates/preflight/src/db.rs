@@ -29,7 +29,7 @@ use reth_revm::{Database, DatabaseCommit, DatabaseRef};
 use std::cell::{Ref, RefCell};
 use std::marker::PhantomData;
 use std::ops::DerefMut;
-use zeth_core::db::apply_changeset;
+use zeth_core::db::update::Update;
 use zeth_core::driver::CoreDriver;
 use zeth_core::rescue::{Recoverable, Rescued};
 
@@ -142,7 +142,7 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
     }
 
     pub fn apply_changeset(&mut self, state_changeset: StateChangeset) -> anyhow::Result<()> {
-        apply_changeset(&mut self.inner, state_changeset)
+        self.inner.apply_changeset(state_changeset)
     }
 
     pub fn sanity_check(&mut self, state_changeset: StateChangeset) -> anyhow::Result<()> {

@@ -21,7 +21,7 @@ use reth_chainspec::ChainSpec;
 use reth_primitives::{Block, BlockBody, Header, Log, Receipt, TransactionSigned, Withdrawals};
 use std::iter::zip;
 use std::sync::Arc;
-use zeth_core::db::MemoryDB;
+use zeth_core::db::memory::MemoryDB;
 use zeth_core::driver::CoreDriver;
 use zeth_core::stateless::data::StatelessClientData;
 use zeth_core_ethereum::RethStatelessClient;

@@ -34,13 +34,7 @@ path = "../../crates/core-ethereum"
 default-features = false
 
 [dependencies]
-anyhow = { version = "1.0.86", default-features = false }
 c-kzg = { version = "=1.0.3", features = ["risc0-ffi"] }
-lazy_static = "1.5.0"
-
-reth-chainspec = { git = "https://github.com/risc0/reth", branch = "p1.1.0_zstd", default-features = false, features = [
-    "std",
-] }
 
 [patch.crates-io]
 c-kzg = { git = "https://github.com/risc0/c-kzg-4844.git", branch = "p1.0.3" }

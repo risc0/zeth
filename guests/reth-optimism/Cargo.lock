@@ -771,7 +771,7 @@ dependencies = [
 [[package]]
 name = "c-kzg"
 version = "1.0.3"
-source = "git+https://github.com/risc0/c-kzg-4844.git?branch=p1.0.3#795934e2e8768d0a4dcb79e280e58fd73d6c9e17"
+source = "git+https://github.com/risc0/c-kzg-4844.git?branch=p1.0.3#a42f908740c7e7d66b2d8b9846eeab67cf5fb76c"
 dependencies = [
  "blst",
  "cc",
@@ -3991,10 +3991,7 @@ dependencies = [
 name = "zeth-guests-reth-optimism"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "c-kzg",
- "lazy_static",
- "reth-optimism-chainspec",
  "risc0-zkvm",
  "risc0-zkvm-platform",
  "zeth-core",

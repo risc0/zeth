@@ -3991,10 +3991,7 @@ dependencies = [
 name = "zeth-guests-reth-optimism"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "c-kzg",
- "lazy_static",
- "reth-optimism-chainspec",
  "risc0-zkvm",
  "risc0-zkvm-platform",
  "zeth-core",

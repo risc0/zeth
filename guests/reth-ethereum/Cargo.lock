@@ -3948,10 +3948,7 @@ dependencies = [
 name = "zeth-guests-reth-ethereum"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "c-kzg",
- "lazy_static",
- "reth-chainspec",
  "risc0-zkvm",
  "risc0-zkvm-platform",
  "zeth-core",

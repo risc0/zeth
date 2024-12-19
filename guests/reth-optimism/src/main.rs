@@ -12,20 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// use c_kzg::KzgSettings;
 use risc0_zkvm::guest::env;
 use zeth_core::db::trie::TrieDB;
 use zeth_core::stateless::client::StatelessClient;
 use zeth_core_optimism::{OpRethCoreDriver, OpRethStatelessClient};
-// todo: use this instead of the alloy KzgEnv to save cycles
-// lazy_static::lazy_static! {
-//     /// KZG Ceremony data
-//     pub static ref KZG: (Vec<u8>, KzgSettings) = {
-//         let mut data = Vec::from(include_bytes!("../kzg_settings_raw.bin"));
-//         let settings = KzgSettings::from_u8_slice(&mut data);
-//         (data, settings)
-//     };
-// }
 
 #[no_mangle]
 pub extern "C" fn __ctzsi2(x: u32) -> usize {

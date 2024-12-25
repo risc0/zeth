@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use crate::keccak::keccak;
-use crate::mpt::MptNode;
 use crate::rescue::Recoverable;
-use crate::stateless::data::StorageEntry;
+use crate::stateless::data::entry::StorageEntry;
+use crate::trie::node::MptNode;
 use alloy_consensus::Account;
 use alloy_primitives::map::HashMap;
 use alloy_primitives::{Address, B256, U256};

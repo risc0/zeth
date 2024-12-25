@@ -50,6 +50,11 @@ pub struct Witness {
 impl Witness {
     pub fn driver_from<R: CoreDriver>(data: &StatelessClientData<R::Block, R::Header>) -> Self {
         let rkyv_data = RkyvStatelessClientData::from(data.clone());
+        // Populate cached references
+        let _ = rkyv_data.state_trie.reference();
+        for (_, trie) in rkyv_data.storage_tries.iter() {
+            let _ = trie.storage_trie.reference();
+        }
         let encoded_rkyv_input = rkyv::to_bytes::<rkyv::rancor::Error>(&rkyv_data)
             .expect("rkyv serialization failed")
             .to_vec();

@@ -19,11 +19,17 @@ use anyhow::Context;
 use std::collections::VecDeque;
 use std::iter;
 use zeth_core::keccak::keccak;
-use zeth_core::mpt::{
-    is_not_included, mpt_from_proof, parse_proof, prefix_nibs, resolve_nodes,
-    resolve_nodes_in_place, shorten_node_path, MptNode, MptNodeData, MptNodeReference,
+use zeth_core::stateless::data::entry::StorageEntry;
+use zeth_core::trie::node::MptNode;
+use zeth_core::trie::util::prefix_nibs;
+use zeth_core::trie::{
+    data::MptNodeData,
+    reference::MptNodeReference,
+    resolve::{
+        is_not_included, mpt_from_proof, parse_proof, resolve_nodes, resolve_nodes_in_place,
+        shorten_node_path,
+    },
 };
-use zeth_core::stateless::data::StorageEntry;
 
 pub type TrieOrphan = (B256, B256);
 pub type OrphanPair = (Vec<TrieOrphan>, Vec<(Address, TrieOrphan)>);
@@ -106,7 +112,8 @@ pub fn extend_proof_tries(
         resolve_nodes_in_place(&mut storage_entry.storage_trie, &storage_nodes);
         // validate storage orphans
         for (prefix, digest) in potential_storage_orphans {
-            if let Some(node) = storage_nodes.get(&MptNodeReference::Digest(digest)) {
+            let node_ref: MptNodeReference = digest.0.into();
+            if let Some(node) = storage_nodes.get(&node_ref) {
                 if !node.is_digest() {
                     // this orphan node has been resolved
                     continue;
@@ -121,8 +128,9 @@ pub fn extend_proof_tries(
     let state_orphans = state_orphans
         .into_iter()
         .filter(|o| {
+            let node_ref: MptNodeReference = o.1 .0.into();
             state_nodes
-                .get(&MptNodeReference::Digest(o.1))
+                .get(&node_ref)
                 .map(|n| !n.is_digest())
                 .unwrap_or_default()
         })
@@ -240,7 +248,7 @@ pub fn add_orphaned_nodes(
             // extract inferrable orphans
             let node = proof_nodes.last().unwrap();
             shorten_node_path(node).into_iter().for_each(|node| {
-                nodes_by_reference.insert(node.reference().as_digest(), node);
+                nodes_by_reference.insert(node.hash().0.into(), node);
             });
             if let MptNodeData::Extension(_, target) = node.as_data() {
                 return Ok(Some((
@@ -255,13 +263,13 @@ pub fn add_orphaned_nodes(
 
 pub fn proof_nodes_nibbles(proof_nodes: &[MptNode]) -> Vec<u8> {
     let mut nibbles = VecDeque::new();
-    let mut last_child = proof_nodes.last().unwrap().reference().as_digest();
+    let mut last_child = proof_nodes.last().unwrap().hash();
     for node in proof_nodes.iter().rev() {
         match node.as_data() {
             MptNodeData::Branch(children) => {
                 for (i, child) in children.iter().enumerate() {
                     if let Some(child) = child {
-                        if child.reference().as_digest() == last_child {
+                        if child.hash() == last_child {
                             nibbles.push_front(i as u8);
                             break;
                         }
@@ -276,7 +284,7 @@ pub fn proof_nodes_nibbles(proof_nodes: &[MptNode]) -> Vec<u8> {
             }
             MptNodeData::Null | MptNodeData::Digest(_) => unreachable!(),
         }
-        last_child = node.reference();
+        last_child = node.hash();
     }
     nibbles.into()
 }

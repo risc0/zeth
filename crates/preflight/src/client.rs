@@ -20,7 +20,7 @@ use crate::provider::{new_provider, Provider};
 use crate::trie::extend_proof_tries;
 use alloy::network::Network;
 use alloy::primitives::map::HashMap;
-use alloy::primitives::Bytes;
+use alloy::primitives::{Bytes, B256};
 use anyhow::Context;
 use log::{debug, info, warn};
 use std::cell::RefCell;
@@ -29,14 +29,18 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use zeth_core::db::update::into_plain_state;
 use zeth_core::driver::CoreDriver;
-use zeth_core::mpt::{
-    parse_proof, resolve_nodes_in_place, shorten_node_path, MptNode, MptNodeReference,
-};
+use zeth_core::keccak::keccak;
 use zeth_core::rescue::Wrapper;
-use zeth_core::stateless::data::{StatelessClientData, StorageEntry};
+use zeth_core::stateless::data::entry::StorageEntry;
+use zeth_core::stateless::data::StatelessClientData;
 use zeth_core::stateless::engine::StatelessClientEngine;
 use zeth_core::stateless::execute::ExecutionStrategy;
 use zeth_core::stateless::validate::ValidationStrategy;
+use zeth_core::trie::node::MptNode;
+use zeth_core::trie::{
+    reference::MptNodeReference,
+    resolve::{parse_proof, resolve_nodes_in_place, shorten_node_path},
+};
 
 pub trait PreflightClient<N: Network, R: CoreDriver, P: PreflightDriver<R, N>>
 where
@@ -258,7 +262,7 @@ where
                             .into_iter()
                             .flatten()
                     })
-                    .map(|n| (n.reference().as_digest(), n))
+                    .map(|n| (n.hash().0.into(), n))
                     .collect();
                 resolve_nodes_in_place(&mut state_trie, &node_store);
                 // resolve storage orphans
@@ -274,10 +278,13 @@ where
                                         .into_iter()
                                         .flatten()
                                 })
-                                .map(|n| (n.reference().as_digest(), n))
+                                .map(|n| (n.hash().0.into(), n))
                                 .collect();
                         for k in node_store.keys() {
-                            let digest = k.digest();
+                            let digest = match k.len() {
+                                32 => B256::from_slice(k.as_slice()),
+                                _ => B256::new(keccak(k.as_slice())),
+                            };
                             if storage_orphans
                                 .iter()
                                 .any(|(a, (_, d))| a == &account_proof.address && &digest == d)

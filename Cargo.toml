@@ -88,6 +88,7 @@ zeth-preflight-optimism = { path = "crates/preflight-optimism" }
 # Others
 anyhow = "1.0.89"
 async-trait = "0.1.83"
+arrayvec = { version = "0.7.6", features = ["serde"] }
 bincode = "1.3.3"
 bytemuck = "1.19.0"
 clap = { version = "4.0", features = ["derive"] }
@@ -97,7 +98,7 @@ log = "0.4.22"
 flate2 = "1.0.34"
 once_cell = "1.20.2"
 pot = "3.0.1"
-rkyv = "0.8.9"
+rkyv = { version = "0.8.9", features = ["arrayvec-0_7"] }
 serde = { version = "1.0.210", features = ["derive"] }
 serde_json = { version = "1.0.128", features = ["alloc"] }
 serde_with = "3.11.0"

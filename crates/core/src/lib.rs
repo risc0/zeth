@@ -18,3 +18,4 @@ pub mod keccak;
 pub mod mpt;
 pub mod rescue;
 pub mod stateless;
+pub mod trie;

@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{iter, mem};
 use crate::trie::node::MptNode;
 use crate::trie::util;
 use crate::trie::util::Error;
 use alloy_primitives::B256;
 use serde::{Deserialize, Serialize};
+use std::{iter, mem};
 
 /// Represents the various types of data that can be stored within a node in the sparse
 /// Merkle Patricia Trie (MPT).
@@ -65,6 +65,12 @@ pub enum MptNodeData {
     /// Represents a sub-trie by its hash, allowing for efficient storage of large
     /// sub-tries without storing their entire content.
     Digest(#[rkyv(with = crate::trie::util::B256Def)] B256),
+}
+
+impl Default for ArchivedMptNodeData {
+    fn default() -> Self {
+        Self::Null
+    }
 }
 
 impl MptNodeData {
@@ -146,14 +152,14 @@ impl MptNodeData {
                             util::to_encoded_path(&self_nibs[split_point..], true),
                             mem::take(old_value),
                         )
-                            .into(),
+                        .into(),
                     ));
                     children[key_nibs[common_len] as usize] = Some(Box::new(
                         MptNodeData::Leaf(
                             util::to_encoded_path(&key_nibs[split_point..], true),
                             value,
                         )
-                            .into(),
+                        .into(),
                     ));
 
                     let branch = MptNodeData::Branch(children);
@@ -190,7 +196,7 @@ impl MptNodeData {
                                 util::to_encoded_path(&self_nibs[split_point..], false),
                                 mem::take(existing_child),
                             )
-                                .into(),
+                            .into(),
                         ))
                     } else {
                         Some(mem::take(existing_child))
@@ -200,7 +206,7 @@ impl MptNodeData {
                             util::to_encoded_path(&key_nibs[split_point..], true),
                             value,
                         )
-                            .into(),
+                        .into(),
                     ));
 
                     let branch = MptNodeData::Branch(children);

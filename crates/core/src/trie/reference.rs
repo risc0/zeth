@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::trie::util::EMPTY_ROOT;
 use arrayvec::ArrayVec;
 use rkyv::with::{ArchiveWith, DeserializeWith, SerializeWith};
 use rkyv::{Archive, Place};
@@ -28,7 +29,11 @@ impl ArchiveWith<CachedMptRef> for ForceCachedRef {
     type Resolver = rkyv::Resolver<MptNodeReference>;
 
     fn resolve_with(field: &CachedMptRef, resolver: Self::Resolver, out: Place<Self::Archived>) {
-        field.borrow().as_ref().unwrap().resolve(resolver, out);
+        let digest = field
+            .borrow()
+            .clone()
+            .unwrap_or(MptNodeReference::from(EMPTY_ROOT.0));
+        digest.resolve(resolver, out);
     }
 }
 
@@ -40,7 +45,11 @@ where
         field: &CachedMptRef,
         serializer: &mut S,
     ) -> Result<Self::Resolver, S::Error> {
-        rkyv::Serialize::serialize(field.borrow().as_ref().unwrap(), serializer)
+        let digest = field
+            .borrow()
+            .clone()
+            .unwrap_or(MptNodeReference::from(EMPTY_ROOT.0));
+        rkyv::Serialize::serialize(&digest, serializer)
     }
 }
 

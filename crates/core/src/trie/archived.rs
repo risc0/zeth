@@ -106,7 +106,7 @@ impl ArchivedMptNode {
 
     #[inline]
     pub fn get(&self, key: &[u8]) -> Result<Option<&[u8]>, Error> {
-        self.get_internal(&to_nibs(key))
+        self.data.get(&to_nibs(key))
     }
 
     #[inline]
@@ -116,14 +116,16 @@ impl ArchivedMptNode {
             None => Ok(None),
         }
     }
+}
 
-    fn get_internal(&self, key_nibs: &[u8]) -> Result<Option<&[u8]>, Error> {
-        match &self.data {
+impl ArchivedMptNodeData {
+    pub fn get(&self, key_nibs: &[u8]) -> Result<Option<&[u8]>, Error> {
+        match self {
             ArchivedMptNodeData::Null => Ok(None),
             ArchivedMptNodeData::Branch(nodes) => {
                 if let Some((i, tail)) = key_nibs.split_first() {
                     match nodes[*i as usize] {
-                        ArchivedOption::Some(ref node) => node.get_internal(tail),
+                        ArchivedOption::Some(ref node) => node.data.get(tail),
                         ArchivedOption::None => Ok(None),
                     }
                 } else {
@@ -139,7 +141,7 @@ impl ArchivedMptNode {
             }
             ArchivedMptNodeData::Extension(prefix, node) => {
                 if let Some(tail) = key_nibs.strip_prefix(prefix_nibs(prefix).as_slice()) {
-                    node.get_internal(tail)
+                    node.data.get(tail)
                 } else {
                     Ok(None)
                 }

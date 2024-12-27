@@ -15,6 +15,7 @@
 pub mod archived;
 pub mod data;
 pub mod node;
+pub mod pointer;
 pub mod reference;
 pub mod resolve;
 pub mod rlp;

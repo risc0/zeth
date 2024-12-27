@@ -62,6 +62,25 @@ pub struct StatelessClientData<Block, Header> {
     pub total_difficulty: U256,
 }
 
+impl<Block, Header> StatelessClientData<Block, Header> {
+    pub fn from_parts(
+        rkyved: RkyvStatelessClientData,
+        chain: StatelessClientChainData<Block, Header>,
+    ) -> Self {
+        Self {
+            chain: rkyved.chain,
+            blocks: chain.blocks,
+            signers: rkyved.signers,
+            state_trie: rkyved.state_trie,
+            storage_tries: rkyved.storage_tries,
+            contracts: rkyved.contracts,
+            parent_header: chain.parent_header,
+            ancestor_headers: chain.ancestor_headers,
+            total_difficulty: rkyved.total_difficulty,
+        }
+    }
+}
+
 /// External block input.
 #[derive(
     Debug,
@@ -136,25 +155,6 @@ impl<B, H> From<StatelessClientData<B, H>> for StatelessClientChainData<B, H> {
             blocks: value.blocks,
             parent_header: value.parent_header,
             ancestor_headers: value.ancestor_headers,
-        }
-    }
-}
-
-impl<Block, Header> StatelessClientData<Block, Header> {
-    pub fn from_parts(
-        rkyved: RkyvStatelessClientData,
-        chain: StatelessClientChainData<Block, Header>,
-    ) -> Self {
-        Self {
-            chain: rkyved.chain,
-            blocks: chain.blocks,
-            signers: rkyved.signers,
-            state_trie: rkyved.state_trie,
-            storage_tries: rkyved.storage_tries,
-            contracts: rkyved.contracts,
-            parent_header: chain.parent_header,
-            ancestor_headers: chain.ancestor_headers,
-            total_difficulty: rkyved.total_difficulty,
         }
     }
 }

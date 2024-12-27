@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::trie::util::EMPTY_ROOT;
+use alloy_consensus::EMPTY_ROOT_HASH;
 use arrayvec::ArrayVec;
 use rkyv::with::{ArchiveWith, DeserializeWith, SerializeWith};
 use rkyv::{Archive, Place};
@@ -32,7 +32,7 @@ impl ArchiveWith<CachedMptRef> for ForceCachedRef {
         let digest = field
             .borrow()
             .clone()
-            .unwrap_or(MptNodeReference::from(EMPTY_ROOT.0));
+            .unwrap_or(MptNodeReference::from(EMPTY_ROOT_HASH.0));
         digest.resolve(resolver, out);
     }
 }
@@ -48,7 +48,7 @@ where
         let digest = field
             .borrow()
             .clone()
-            .unwrap_or(MptNodeReference::from(EMPTY_ROOT.0));
+            .unwrap_or(MptNodeReference::from(EMPTY_ROOT_HASH.0));
         rkyv::Serialize::serialize(&digest, serializer)
     }
 }

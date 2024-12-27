@@ -26,7 +26,8 @@ mod tests {
     use crate::keccak::keccak;
     use crate::trie::data::MptNodeData;
     use crate::trie::node::MptNode;
-    use crate::trie::util::{lcp, to_encoded_path, EMPTY_ROOT};
+    use crate::trie::util::{lcp, to_encoded_path};
+    use alloy_consensus::EMPTY_ROOT_HASH;
     use alloy_primitives::hex;
     use alloy_rlp::EMPTY_STRING_CODE;
     use alloy_rlp::{Decodable, Encodable};
@@ -111,11 +112,11 @@ mod tests {
         let mut trie = MptNode::default();
         trie.insert(b"dog", b"puppy".to_vec()).unwrap();
         assert!(!trie.is_empty());
-        assert_ne!(trie.hash(), EMPTY_ROOT);
+        assert_ne!(trie.hash(), EMPTY_ROOT_HASH);
 
         trie.clear();
         assert!(trie.is_empty());
-        assert_eq!(trie.hash(), EMPTY_ROOT);
+        assert_eq!(trie.hash(), EMPTY_ROOT_HASH);
     }
 
     #[test]

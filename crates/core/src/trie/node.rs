@@ -16,7 +16,8 @@ use crate::keccak::keccak;
 use crate::trie::data::MptNodeData;
 use crate::trie::reference::{CachedMptRef, MptNodeReference};
 use crate::trie::util;
-use crate::trie::util::{Error, EMPTY_ROOT};
+use crate::trie::util::Error;
+use alloy_consensus::EMPTY_ROOT_HASH;
 use alloy_primitives::B256;
 use alloy_rlp::{Decodable, Encodable};
 use arrayvec::ArrayVec;
@@ -72,7 +73,7 @@ pub struct MptNode {
 impl From<B256> for MptNode {
     fn from(digest: B256) -> Self {
         match digest {
-            EMPTY_ROOT | B256::ZERO => MptNode::default(),
+            EMPTY_ROOT_HASH | B256::ZERO => MptNode::default(),
             _ => MptNodeData::Digest(digest).into(),
         }
     }
@@ -150,7 +151,7 @@ impl MptNode {
     #[inline]
     pub fn hash(&self) -> B256 {
         match self.data {
-            MptNodeData::Null => EMPTY_ROOT,
+            MptNodeData::Null => EMPTY_ROOT_HASH,
             _ => match self
                 .cached_reference
                 .borrow_mut()

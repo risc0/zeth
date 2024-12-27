@@ -12,13 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloy_primitives::{b256, B256};
+use alloy_primitives::B256;
 use std::{cmp, iter};
 use thiserror::Error as ThisError;
-
-/// Root hash of an empty trie.
-pub const EMPTY_ROOT: B256 =
-    b256!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421");
 
 /// Represents custom error types for the sparse Merkle Patricia Trie (MPT).
 ///

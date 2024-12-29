@@ -47,14 +47,14 @@ use zeth_core::stateless::validate::ValidationStrategy;
 
 pub struct OpRethStatelessClient;
 
-impl StatelessClient<OpRethCoreDriver, MemoryDB> for OpRethStatelessClient {
+impl StatelessClient<'_, OpRethCoreDriver, MemoryDB> for OpRethStatelessClient {
     type Initialization = MemoryDbInitializationStrategy;
     type Validation = OpRethValidationStrategy;
     type Execution = OpRethExecutionStrategy;
     type Finalization = MemoryDbFinalizationStrategy;
 }
 
-impl StatelessClient<OpRethCoreDriver, TrieDB> for OpRethStatelessClient {
+impl<'a> StatelessClient<'a, OpRethCoreDriver, TrieDB<'a>> for OpRethStatelessClient {
     type Initialization = TrieDbInitializationStrategy;
     type Validation = OpRethValidationStrategy;
     type Execution = OpRethExecutionStrategy;
@@ -63,9 +63,7 @@ impl StatelessClient<OpRethCoreDriver, TrieDB> for OpRethStatelessClient {
 
 pub struct OpRethValidationStrategy;
 
-impl<Database: 'static> ValidationStrategy<OpRethCoreDriver, Database>
-    for OpRethValidationStrategy
-{
+impl<Database> ValidationStrategy<OpRethCoreDriver, Database> for OpRethValidationStrategy {
     fn validate_header(
         chain_spec: Arc<OpChainSpec>,
         block: &mut Block,
@@ -107,7 +105,6 @@ pub struct OpRethExecutionStrategy;
 impl<Database: reth_revm::Database> ExecutionStrategy<OpRethCoreDriver, Database>
     for OpRethExecutionStrategy
 where
-    Database: 'static,
     <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
 {
     fn execute_transactions(

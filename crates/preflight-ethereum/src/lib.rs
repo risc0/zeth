@@ -36,7 +36,9 @@ pub struct RethBlockBuilder {
     pub chain_spec: Arc<ChainSpec>,
 }
 
-impl BlockBuilder<Ethereum, MemoryDB, RethCoreDriver, RethPreflightDriver> for RethBlockBuilder {
+impl BlockBuilder<'_, Ethereum, MemoryDB, RethCoreDriver, RethPreflightDriver>
+    for RethBlockBuilder
+{
     type PreflightClient = RethPreflightClient;
     type StatelessClient = RethStatelessClient;
 }

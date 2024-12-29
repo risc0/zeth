@@ -15,9 +15,7 @@
 use crate::db::memory::MemoryDB;
 use crate::db::trie::TrieDB;
 use crate::driver::CoreDriver;
-use crate::keccak::keccak;
 use crate::stateless::data::entry::StorageEntry;
-use crate::trie::node::MptNode;
 use alloy_consensus::constants::EMPTY_ROOT_HASH;
 use alloy_consensus::Account;
 use alloy_primitives::map::HashMap;
@@ -28,11 +26,13 @@ use reth_primitives::revm_primitives::Bytecode;
 use reth_revm::db::{AccountState, DbAccount};
 use reth_revm::primitives::AccountInfo;
 use std::default::Default;
+use zeth_trie::keccak::keccak;
+use zeth_trie::pointer::MptNodePointer;
 
-pub trait InitializationStrategy<Driver: CoreDriver, Database> {
+pub trait InitializationStrategy<'a, Driver: CoreDriver, Database> {
     fn initialize_database(
-        state_trie: &mut MptNode,
-        storage_tries: &mut HashMap<Address, StorageEntry>,
+        state_trie: &mut MptNodePointer<'a>,
+        storage_tries: &mut HashMap<Address, StorageEntry<'a>>,
         contracts: &mut Vec<Bytes>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
@@ -41,14 +41,16 @@ pub trait InitializationStrategy<Driver: CoreDriver, Database> {
 
 pub struct TrieDbInitializationStrategy;
 
-impl<Driver: CoreDriver> InitializationStrategy<Driver, TrieDB> for TrieDbInitializationStrategy {
+impl<'a, Driver: CoreDriver> InitializationStrategy<'a, Driver, TrieDB<'a>>
+    for TrieDbInitializationStrategy
+{
     fn initialize_database(
-        state_trie: &mut MptNode,
-        storage_tries: &mut HashMap<Address, StorageEntry>,
+        state_trie: &mut MptNodePointer<'a>,
+        storage_tries: &mut HashMap<Address, StorageEntry<'a>>,
         contracts: &mut Vec<Bytes>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
-    ) -> anyhow::Result<TrieDB> {
+    ) -> anyhow::Result<TrieDB<'a>> {
         // Verify starting state trie root
         if Driver::state_root(parent_header) != state_trie.hash() {
             bail!(
@@ -105,11 +107,11 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, TrieDB> for TrieDbInitia
 
 pub struct MemoryDbInitializationStrategy;
 
-impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB>
+impl<Driver: CoreDriver> InitializationStrategy<'_, Driver, MemoryDB>
     for MemoryDbInitializationStrategy
 {
     fn initialize_database(
-        state_trie: &mut MptNode,
+        state_trie: &mut MptNodePointer,
         storage_tries: &mut HashMap<Address, StorageEntry>,
         contracts: &mut Vec<Bytes>,
         parent_header: &mut Driver::Header,

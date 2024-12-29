@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::trie::node::MptNode;
 use alloy_primitives::U256;
 use rkyv::with::{ArchiveWith, DeserializeWith, SerializeWith};
 use rkyv::{Archive, Place};
 use serde::{Deserialize, Serialize};
+use zeth_trie::node::MptNode;
 
 /// Represents the state of an account's storage.
 /// The storage trie together with the used storage slots allow us to reconstruct all the
@@ -33,43 +33,52 @@ use serde::{Deserialize, Serialize};
     rkyv::Serialize,
     rkyv::Deserialize,
 )]
-pub struct StorageEntry {
-    pub storage_trie: MptNode,
+pub struct StorageEntry<'a> {
+    pub storage_trie: MptNode<'a>,
     #[rkyv(with = rkyv::with::Map<crate::stateless::data::rkyval::U256Def>)]
     pub slots: Vec<U256>,
 }
 
-impl ArchiveWith<StorageEntry> for StorageEntry {
-    type Archived = ArchivedStorageEntry;
-    type Resolver = StorageEntryResolver;
+// #[derive(Debug, Clone, Eq, PartialEq)]
+// pub enum StorageEntryPointer<'a> {
+//
+// }
 
-    fn resolve_with(field: &StorageEntry, resolver: Self::Resolver, out: Place<Self::Archived>) {
+impl<'a> ArchiveWith<StorageEntry<'a>> for StorageEntry<'a> {
+    type Archived = ArchivedStorageEntry<'a>;
+    type Resolver = StorageEntryResolver<'a>;
+
+    fn resolve_with(
+        field: &StorageEntry<'a>,
+        resolver: Self::Resolver,
+        out: Place<Self::Archived>,
+    ) {
         field.resolve(resolver, out);
     }
 }
 
-impl<S> SerializeWith<StorageEntry, S> for StorageEntry
+impl<'a, S> SerializeWith<StorageEntry<'a>, S> for StorageEntry<'a>
 where
     S: rkyv::rancor::Fallible + rkyv::ser::Allocator + rkyv::ser::Writer + ?Sized,
     <S as rkyv::rancor::Fallible>::Error: rkyv::rancor::Source,
 {
     fn serialize_with(
-        field: &StorageEntry,
+        field: &StorageEntry<'a>,
         serializer: &mut S,
     ) -> Result<Self::Resolver, S::Error> {
         rkyv::Serialize::serialize(field, serializer)
     }
 }
 
-impl<D> DeserializeWith<ArchivedStorageEntry, StorageEntry, D> for StorageEntry
+impl<'a, D> DeserializeWith<ArchivedStorageEntry<'a>, StorageEntry<'a>, D> for StorageEntry<'a>
 where
     D: rkyv::rancor::Fallible + ?Sized,
     <D as rkyv::rancor::Fallible>::Error: rkyv::rancor::Source,
 {
     fn deserialize_with(
-        field: &ArchivedStorageEntry,
+        field: &ArchivedStorageEntry<'a>,
         deserializer: &mut D,
-    ) -> Result<StorageEntry, D::Error> {
+    ) -> Result<StorageEntry<'a>, D::Error> {
         rkyv::Deserialize::deserialize(field, deserializer)
     }
 }

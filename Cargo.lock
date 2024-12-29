@@ -6532,6 +6532,7 @@ dependencies = [
  "zeth-core",
  "zeth-guests",
  "zeth-preflight",
+ "zeth-trie",
 ]
 
 [[package]]
@@ -6545,6 +6546,7 @@ dependencies = [
  "tracing",
  "zeth",
  "zeth-core",
+ "zeth-trie",
 ]
 
 [[package]]
@@ -6553,9 +6555,7 @@ version = "0.1.0"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
- "alloy-rlp",
  "anyhow",
- "arrayvec",
  "k256",
  "pot",
  "reth-chainspec",
@@ -6564,8 +6564,7 @@ dependencies = [
  "reth-storage-errors",
  "rkyv",
  "serde",
- "thiserror",
- "tiny-keccak",
+ "zeth-trie",
 ]
 
 [[package]]
@@ -6660,6 +6659,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "zeth-core",
+ "zeth-trie",
 ]
 
 [[package]]
@@ -6719,6 +6719,21 @@ dependencies = [
  "zeth-core-ethereum",
  "zeth-preflight",
  "zeth-preflight-ethereum",
+]
+
+[[package]]
+name = "zeth-trie"
+version = "0.1.0"
+dependencies = [
+ "alloy-consensus",
+ "alloy-primitives",
+ "alloy-rlp",
+ "anyhow",
+ "arrayvec",
+ "rkyv",
+ "serde",
+ "thiserror",
+ "tiny-keccak",
 ]
 
 [[package]]

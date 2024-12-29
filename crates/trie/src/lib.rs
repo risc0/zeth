@@ -14,6 +14,7 @@
 
 pub mod archived;
 pub mod data;
+pub mod keccak;
 pub mod node;
 pub mod pointer;
 pub mod reference;
@@ -23,10 +24,10 @@ pub mod util;
 
 #[cfg(test)]
 mod tests {
+    use crate::data::MptNodeData;
     use crate::keccak::keccak;
-    use crate::trie::data::MptNodeData;
-    use crate::trie::node::MptNode;
-    use crate::trie::util::{lcp, to_encoded_path};
+    use crate::node::MptNode;
+    use crate::util::{lcp, to_encoded_path};
     use alloy_consensus::EMPTY_ROOT_HASH;
     use alloy_primitives::hex;
     use alloy_rlp::EMPTY_STRING_CODE;

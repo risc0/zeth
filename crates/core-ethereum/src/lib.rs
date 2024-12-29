@@ -46,14 +46,14 @@ use zeth_core::stateless::validate::ValidationStrategy;
 
 pub struct RethStatelessClient;
 
-impl StatelessClient<RethCoreDriver, MemoryDB> for RethStatelessClient {
+impl StatelessClient<'_, RethCoreDriver, MemoryDB> for RethStatelessClient {
     type Initialization = MemoryDbInitializationStrategy;
     type Validation = RethValidationStrategy;
     type Execution = RethExecutionStrategy;
     type Finalization = MemoryDbFinalizationStrategy;
 }
 
-impl StatelessClient<RethCoreDriver, TrieDB> for RethStatelessClient {
+impl<'a> StatelessClient<'a, RethCoreDriver, TrieDB<'a>> for RethStatelessClient {
     type Initialization = TrieDbInitializationStrategy;
     type Validation = RethValidationStrategy;
     type Execution = RethExecutionStrategy;
@@ -62,10 +62,7 @@ impl StatelessClient<RethCoreDriver, TrieDB> for RethStatelessClient {
 
 pub struct RethValidationStrategy;
 
-impl<Database> ValidationStrategy<RethCoreDriver, Database> for RethValidationStrategy
-where
-    Database: 'static,
-{
+impl<Database> ValidationStrategy<RethCoreDriver, Database> for RethValidationStrategy {
     fn validate_header(
         chain_spec: Arc<ChainSpec>,
         block: &mut Block,
@@ -107,7 +104,6 @@ pub struct RethExecutionStrategy;
 impl<Database: reth_revm::Database> ExecutionStrategy<RethCoreDriver, Database>
     for RethExecutionStrategy
 where
-    Database: 'static,
     <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
 {
     fn execute_transactions(

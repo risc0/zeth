@@ -18,7 +18,7 @@ use clap::Parser;
 use std::process::Command;
 use tracing::{error, info};
 use zeth::cli::ProveArgs;
-use zeth_core::keccak::keccak;
+use zeth_trie::keccak::keccak;
 
 #[derive(clap::Parser, Debug, Clone)]
 #[command(name = "zeth-benchmark")]

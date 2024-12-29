@@ -100,6 +100,7 @@ pub fn prefix_nibs(prefix: &[u8]) -> Vec<u8> {
 #[derive(Clone, Debug, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 #[rkyv(remote = B256)]
 #[rkyv(archived = ArchivedB256)]
+#[rkyv(derive(Debug, Eq, PartialEq))]
 pub struct B256Def(pub [u8; 32]);
 
 impl From<B256Def> for B256 {

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::trie::data::MptNodeData;
-use crate::trie::node::MptNode;
+use crate::data::MptNodeData;
+use crate::node::MptNode;
 use alloy_primitives::bytes::Buf;
 use alloy_primitives::B256;
 use alloy_rlp::{Decodable, Encodable};
@@ -22,7 +22,7 @@ use alloy_rlp::{Decodable, Encodable};
 ///
 /// This implementation allows for the serialization of an [MptNode] into its RLP-encoded
 /// form. The encoding is done based on the type of node data ([MptNodeData]) it holds.
-impl Encodable for MptNode {
+impl Encodable for MptNode<'_> {
     /// Encodes the node into the provided `out` buffer.
     ///
     /// The encoding is done using the Recursive Length Prefix (RLP) encoding scheme. The
@@ -87,7 +87,7 @@ impl Encodable for MptNode {
 /// into its original form. The decoding is done based on the prototype of the RLP data,
 /// ensuring that the node is reconstructed accurately.
 ///
-impl Decodable for MptNode {
+impl Decodable for MptNode<'_> {
     /// Decodes an RLP-encoded node from the provided `rlp` buffer.
     ///
     /// The method handles different RLP prototypes and reconstructs the `MptNode` based
@@ -104,7 +104,7 @@ impl Decodable for MptNode {
                 let prefix = path[0];
                 if (prefix & (2 << 4)) == 0 {
                     let node = MptNode::decode(buf)?;
-                    Ok(MptNodeData::Extension(path, Box::new(node)).into())
+                    Ok(MptNodeData::Extension(path, Box::new(node.into())).into())
                 } else {
                     let header = alloy_rlp::Header::decode(buf)?;
                     let value = Vec::from(&buf[..header.payload_length]);
@@ -120,7 +120,7 @@ impl Decodable for MptNode {
                             buf.advance(1);
                             node_list.push(None);
                         }
-                        _ => node_list.push(Some(Box::new(MptNode::decode(buf)?))),
+                        _ => node_list.push(Some(Box::new(MptNode::decode(buf)?.into()))),
                     }
                 }
                 let value: Vec<u8> = Vec::from(alloy_rlp::Header::decode_bytes(buf, false)?);

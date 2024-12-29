@@ -22,9 +22,9 @@ pub type MptNodeReference = ArrayVec<u8, 32>;
 
 pub type CachedMptRef = RefCell<Option<MptNodeReference>>;
 
-pub struct ForceCachedRef;
+pub struct RequireCachedRef;
 
-impl ArchiveWith<CachedMptRef> for ForceCachedRef {
+impl ArchiveWith<CachedMptRef> for RequireCachedRef {
     type Archived = rkyv::Archived<MptNodeReference>;
     type Resolver = rkyv::Resolver<MptNodeReference>;
 
@@ -37,7 +37,7 @@ impl ArchiveWith<CachedMptRef> for ForceCachedRef {
     }
 }
 
-impl<S> SerializeWith<CachedMptRef, S> for ForceCachedRef
+impl<S> SerializeWith<CachedMptRef, S> for RequireCachedRef
 where
     S: rkyv::rancor::Fallible + rkyv::ser::Allocator + rkyv::ser::Writer + ?Sized,
 {
@@ -53,7 +53,7 @@ where
     }
 }
 
-impl<D> DeserializeWith<rkyv::Archived<MptNodeReference>, CachedMptRef, D> for ForceCachedRef
+impl<D> DeserializeWith<rkyv::Archived<MptNodeReference>, CachedMptRef, D> for RequireCachedRef
 where
     D: rkyv::rancor::Fallible + ?Sized,
     <D as rkyv::rancor::Fallible>::Error: rkyv::rancor::Source,

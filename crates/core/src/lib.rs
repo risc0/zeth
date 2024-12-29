@@ -14,7 +14,5 @@
 
 pub mod db;
 pub mod driver;
-pub mod keccak;
 pub mod rescue;
 pub mod stateless;
-pub mod trie;

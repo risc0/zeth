@@ -84,6 +84,7 @@ zeth-guests = { path = "guests" }
 zeth-preflight = { path = "crates/preflight" }
 zeth-preflight-ethereum = { path = "crates/preflight-ethereum" }
 zeth-preflight-optimism = { path = "crates/preflight-optimism" }
+zeth-trie = { path = "crates/trie" }
 
 # Others
 anyhow = "1.0.89"

@@ -16,21 +16,21 @@ use crate::db::memory::MemoryDB;
 use crate::db::trie::TrieDB;
 use crate::db::update::{into_plain_state, Update};
 use crate::driver::CoreDriver;
-use crate::keccak::keccak;
 use crate::stateless::data::entry::StorageEntry;
-use crate::trie::node::MptNode;
 use alloy_consensus::Account;
 use alloy_primitives::map::HashMap;
 use alloy_primitives::{Address, U256};
 use anyhow::{bail, Context};
 use reth_revm::db::states::StateChangeset;
 use reth_revm::db::BundleState;
+use zeth_trie::keccak::keccak;
+use zeth_trie::pointer::MptNodePointer;
 
-pub trait FinalizationStrategy<Driver: CoreDriver, Database> {
+pub trait FinalizationStrategy<'a, Driver: CoreDriver, Database> {
     fn finalize_state(
         block: &mut Driver::Block,
-        state_trie: &mut MptNode,
-        storage_tries: &mut HashMap<Address, StorageEntry>,
+        state_trie: &mut MptNodePointer<'a>,
+        storage_tries: &mut HashMap<Address, StorageEntry<'a>>,
         parent_header: &mut Driver::Header,
         db: Option<&mut Database>,
         bundle_state: BundleState,
@@ -40,13 +40,15 @@ pub trait FinalizationStrategy<Driver: CoreDriver, Database> {
 
 pub struct TrieDbFinalizationStrategy;
 
-impl<Driver: CoreDriver> FinalizationStrategy<Driver, TrieDB> for TrieDbFinalizationStrategy {
+impl<'a, Driver: CoreDriver> FinalizationStrategy<'a, Driver, TrieDB<'a>>
+    for TrieDbFinalizationStrategy
+{
     fn finalize_state(
         block: &mut Driver::Block,
-        _state_trie: &mut MptNode,
-        _storage_tries: &mut HashMap<Address, StorageEntry>,
+        _state_trie: &mut MptNodePointer<'a>,
+        _storage_tries: &mut HashMap<Address, StorageEntry<'a>>,
         parent_header: &mut Driver::Header,
-        db: Option<&mut TrieDB>,
+        db: Option<&mut TrieDB<'a>>,
         bundle_state: BundleState,
         with_further_updates: bool,
     ) -> anyhow::Result<()> {
@@ -85,10 +87,12 @@ impl<Driver: CoreDriver> FinalizationStrategy<Driver, TrieDB> for TrieDbFinaliza
 
 pub struct MemoryDbFinalizationStrategy;
 
-impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for MemoryDbFinalizationStrategy {
+impl<Driver: CoreDriver> FinalizationStrategy<'_, Driver, MemoryDB>
+    for MemoryDbFinalizationStrategy
+{
     fn finalize_state(
         block: &mut Driver::Block,
-        state_trie: &mut MptNode,
+        state_trie: &mut MptNodePointer,
         storage_tries: &mut HashMap<Address, StorageEntry>,
         parent_header: &mut Driver::Header,
         db: Option<&mut MemoryDB>,

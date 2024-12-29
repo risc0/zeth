@@ -14,49 +14,43 @@
 
 use crate::driver::CoreDriver;
 use crate::rescue::{Recoverable, Wrapper};
-use crate::stateless::data::{
-    RkyvStatelessClientData, StatelessClientChainData, StatelessClientData,
-};
+use crate::stateless::data::{ChainData, CommonData, StatelessClientData};
 use crate::stateless::engine::StatelessClientEngine;
 use crate::stateless::execute::ExecutionStrategy;
 use crate::stateless::finalize::FinalizationStrategy;
 use crate::stateless::initialize::InitializationStrategy;
 use crate::stateless::validate::ValidationStrategy;
 
-pub trait StatelessClient<Driver, Database>
+pub trait StatelessClient<'a, Driver, Database>
 where
-    Driver: CoreDriver + 'static,
-    Database: Recoverable + 'static,
+    Driver: CoreDriver,
+    Database: Recoverable,
 {
-    type Initialization: InitializationStrategy<Driver, Database>;
+    type Initialization: InitializationStrategy<'a, Driver, Database>;
     type Validation: ValidationStrategy<Driver, Database>;
     type Execution: ExecutionStrategy<Driver, Wrapper<Database>>;
-    type Finalization: FinalizationStrategy<Driver, Database>;
+    type Finalization: FinalizationStrategy<'a, Driver, Database>;
 
     fn data_from_parts(
         rkyv_slice: &[u8],
         pot_slice: &[u8],
-    ) -> anyhow::Result<StatelessClientData<Driver::Block, Driver::Header>> {
+    ) -> anyhow::Result<StatelessClientData<'a, Driver::Block, Driver::Header>> {
         // let rkyv_access = rkyv::access::<crate::stateless::data::ArchivedRkyvStatelessClientData, rkyv::rancor::Error>(rkyv_slice)?;
         // let rkyv_data = rkyv::deserialize::<RkyvStatelessClientData, rkyv::rancor::Error>(rkyv_access)?;
-        let rkyv_data =
-            rkyv::from_bytes::<RkyvStatelessClientData, rkyv::rancor::Error>(rkyv_slice)?;
-        let chain_data =
-            pot::from_slice::<StatelessClientChainData<Driver::Block, Driver::Header>>(pot_slice)?;
-        Ok(StatelessClientData::<Driver::Block, Driver::Header>::from_parts(rkyv_data, chain_data))
-    }
-
-    fn data_from_slice(
-        slice: &[u8],
-    ) -> anyhow::Result<StatelessClientData<Driver::Block, Driver::Header>> {
-        Ok(pot::from_slice(slice)?)
+        let rkyv_data = rkyv::from_bytes::<CommonData<'a>, rkyv::rancor::Error>(rkyv_slice)?;
+        let chain_data = pot::from_slice::<ChainData<Driver::Block, Driver::Header>>(pot_slice)?;
+        Ok(
+            StatelessClientData::<'a, Driver::Block, Driver::Header>::from_parts(
+                rkyv_data, chain_data,
+            ),
+        )
     }
 
     fn validate(
-        data: StatelessClientData<Driver::Block, Driver::Header>,
+        data: StatelessClientData<'a, Driver::Block, Driver::Header>,
     ) -> anyhow::Result<StatelessClientEngine<Driver, Database>> {
         // Instantiate the engine and initialize the database
-        let mut engine = StatelessClientEngine::<Driver, Database>::new(data, None);
+        let mut engine = StatelessClientEngine::<'a, Driver, Database>::new(data, None);
         engine.initialize_database::<Self::Initialization>()?;
         // Run the engine until all blocks are processed
         while !engine.data.blocks.is_empty() {

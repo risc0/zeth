@@ -23,16 +23,16 @@ use anyhow::Context;
 use reth_revm::db::BundleState;
 
 /// A generic builder for building a block.
-pub struct StatelessClientEngine<Driver: CoreDriver, Database: Recoverable> {
-    pub data: StatelessClientData<Driver::Block, Driver::Header>,
+pub struct StatelessClientEngine<'a, Driver: CoreDriver, Database: Recoverable> {
+    pub data: StatelessClientData<'a, Driver::Block, Driver::Header>,
     pub db: Option<Wrapper<Database>>,
     pub db_rescued: Option<Rescued<Database>>,
 }
 
-impl<Driver: CoreDriver, Database: Recoverable> StatelessClientEngine<Driver, Database> {
+impl<'a, Driver: CoreDriver, Database: Recoverable> StatelessClientEngine<'a, Driver, Database> {
     /// Creates a new stateless validator
     pub fn new(
-        data: StatelessClientData<Driver::Block, Driver::Header>,
+        data: StatelessClientData<'a, Driver::Block, Driver::Header>,
         db: Option<Database>,
     ) -> Self {
         let db = db.map(|db| Wrapper::from(db));
@@ -45,7 +45,7 @@ impl<Driver: CoreDriver, Database: Recoverable> StatelessClientEngine<Driver, Da
     }
 
     /// Initializes the database from the input.
-    pub fn initialize_database<T: InitializationStrategy<Driver, Database>>(
+    pub fn initialize_database<T: InitializationStrategy<'a, Driver, Database>>(
         &mut self,
     ) -> anyhow::Result<Option<Database>> {
         let StatelessClientEngine {
@@ -144,7 +144,7 @@ impl<Driver: CoreDriver, Database: Recoverable> StatelessClientEngine<Driver, Da
     }
 
     /// Finalizes the state trie.
-    pub fn finalize_state<T: FinalizationStrategy<Driver, Database>>(
+    pub fn finalize_state<T: FinalizationStrategy<'a, Driver, Database>>(
         &mut self,
         bundle_state: BundleState,
         with_further_updates: bool,

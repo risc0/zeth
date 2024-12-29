@@ -26,9 +26,7 @@ use tokio::task::spawn_blocking;
 use zeth_core::driver::CoreDriver;
 use zeth_core::rescue::Recoverable;
 use zeth_core::stateless::client::StatelessClient;
-use zeth_core::stateless::data::{
-    RkyvStatelessClientData, StatelessClientChainData, StatelessClientData,
-};
+use zeth_core::stateless::data::{ChainData, CommonData, StatelessClientData};
 
 pub mod client;
 pub mod db;
@@ -49,7 +47,7 @@ pub struct Witness {
 
 impl Witness {
     pub fn driver_from<R: CoreDriver>(data: &StatelessClientData<R::Block, R::Header>) -> Self {
-        let rkyv_data = RkyvStatelessClientData::from(data.clone());
+        let rkyv_data = CommonData::from(data.clone());
         // Populate cached references
         let _ = rkyv_data.state_trie.reference();
         for (_, trie) in rkyv_data.storage_tries.iter() {
@@ -58,7 +56,7 @@ impl Witness {
         let encoded_rkyv_input = rkyv::to_bytes::<rkyv::rancor::Error>(&rkyv_data)
             .expect("rkyv serialization failed")
             .to_vec();
-        let chain_data = StatelessClientChainData::<R::Block, R::Header>::from(data.clone());
+        let chain_data = ChainData::<R::Block, R::Header>::from(data.clone());
         let encoded_chain_input = pot::to_vec(&chain_data).expect("pot serialization failed");
         // let encoded_input = pot::to_vec(&data).expect("serialization failed");
         let tip = R::block_header(data.blocks.last().unwrap());
@@ -76,7 +74,7 @@ impl Witness {
 }
 
 #[async_trait::async_trait]
-pub trait BlockBuilder<N, D, R, P>
+pub trait BlockBuilder<'a, N, D, R, P>
 where
     N: Network,
     D: Recoverable + 'static,
@@ -86,7 +84,7 @@ where
     P: PreflightDriver<R, N> + Clone + 'static,
 {
     type PreflightClient: PreflightClient<N, R, P>;
-    type StatelessClient: StatelessClient<R, D>;
+    type StatelessClient: StatelessClient<'a, R, D>;
 
     async fn build_blocks(
         chain_id: Option<u64>,
@@ -96,16 +94,17 @@ where
         block_count: u64,
     ) -> anyhow::Result<Witness> {
         // Fetch all of the initial data
-        let preflight_data: StatelessClientData<R::Block, R::Header> = spawn_blocking(move || {
-            <Self::PreflightClient>::preflight(
-                chain_id,
-                cache_dir,
-                rpc_url,
-                block_number,
-                block_count,
-            )
-        })
-        .await??;
+        let preflight_data: StatelessClientData<'_, R::Block, R::Header> =
+            spawn_blocking(move || {
+                <Self::PreflightClient>::preflight(
+                    chain_id,
+                    cache_dir,
+                    rpc_url,
+                    block_number,
+                    block_count,
+                )
+            })
+            .await??;
         let build_result = Witness::driver_from::<R>(&preflight_data);
 
         // Verify that the transactions run correctly

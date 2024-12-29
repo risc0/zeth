@@ -37,7 +37,7 @@ pub struct OpRethBlockBuilder {
     pub chain_spec: Arc<OpChainSpec>,
 }
 
-impl BlockBuilder<Optimism, MemoryDB, OpRethCoreDriver, OpRethPreflightDriver>
+impl BlockBuilder<'_, Optimism, MemoryDB, OpRethCoreDriver, OpRethPreflightDriver>
     for OpRethBlockBuilder
 {
     type PreflightClient = OpRethPreflightClient;

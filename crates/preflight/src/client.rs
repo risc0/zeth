@@ -29,18 +29,16 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use zeth_core::db::update::into_plain_state;
 use zeth_core::driver::CoreDriver;
-use zeth_core::keccak::keccak;
 use zeth_core::rescue::Wrapper;
 use zeth_core::stateless::data::entry::StorageEntry;
 use zeth_core::stateless::data::StatelessClientData;
 use zeth_core::stateless::engine::StatelessClientEngine;
 use zeth_core::stateless::execute::ExecutionStrategy;
 use zeth_core::stateless::validate::ValidationStrategy;
-use zeth_core::trie::node::MptNode;
-use zeth_core::trie::{
-    reference::MptNodeReference,
-    resolve::{parse_proof, resolve_nodes_in_place, shorten_node_path},
-};
+use zeth_trie::keccak::keccak;
+use zeth_trie::node::MptNode;
+use zeth_trie::reference::MptNodeReference;
+use zeth_trie::resolve::{parse_proof, resolve_nodes_in_place, shorten_node_path};
 
 pub trait PreflightClient<N: Network, R: CoreDriver, P: PreflightDriver<R, N>>
 where
@@ -56,7 +54,7 @@ where
         rpc_url: Option<String>,
         block_no: u64,
         block_count: u64,
-    ) -> anyhow::Result<StatelessClientData<R::Block, R::Header>> {
+    ) -> anyhow::Result<StatelessClientData<'static, R::Block, R::Header>> {
         let provider = new_provider::<N>(cache_dir.clone(), block_no, rpc_url.clone(), chain_id)?;
         Self::preflight_with_provider(provider, block_no, block_count)
     }
@@ -65,7 +63,7 @@ where
         provider: Rc<RefCell<dyn Provider<N>>>,
         block_no: u64,
         block_count: u64,
-    ) -> anyhow::Result<StatelessClientData<R::Block, R::Header>> {
+    ) -> anyhow::Result<StatelessClientData<'static, R::Block, R::Header>> {
         let mut provider_mut = provider.borrow_mut();
         let chain = provider_mut.get_chain()?;
         let chain_spec = R::chain_spec(&chain).expect("Unsupported chain");
@@ -158,9 +156,9 @@ where
 
     fn preflight_with_db(
         preflight_db: PreflightDB<N, R, P>,
-        data: StatelessClientData<N::BlockResponse, N::HeaderResponse>,
+        data: StatelessClientData<'static, N::BlockResponse, N::HeaderResponse>,
         ommers: Vec<Vec<N::HeaderResponse>>,
-    ) -> anyhow::Result<StatelessClientData<R::Block, R::Header>> {
+    ) -> anyhow::Result<StatelessClientData<'static, R::Block, R::Header>> {
         // Instantiate the engine with a rescue for the DB
         info!("Running block execution engine ...");
         let mut engine = StatelessClientEngine::<R, PreflightDB<N, R, P>>::new(
@@ -342,7 +340,7 @@ where
             chain: data.chain,
             blocks,
             signers,
-            state_trie,
+            state_trie: state_trie.into(),
             storage_tries,
             contracts,
             parent_header: P::derive_header(data.parent_header),

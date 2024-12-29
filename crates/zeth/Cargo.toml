@@ -19,6 +19,9 @@ workspace = true
 [dependencies.zeth-preflight]
 workspace = true
 
+[dependencies.zeth-trie]
+workspace = true
+
 [dependencies]
 alloy.workspace = true
 anyhow.workspace = true

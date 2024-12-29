@@ -3915,9 +3915,7 @@ version = "0.1.0"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
- "alloy-rlp",
  "anyhow",
- "arrayvec",
  "k256",
  "pot",
  "reth-chainspec",
@@ -3926,8 +3924,7 @@ dependencies = [
  "reth-storage-errors",
  "rkyv",
  "serde",
- "thiserror",
- "tiny-keccak",
+ "zeth-trie",
 ]
 
 [[package]]
@@ -3958,6 +3955,21 @@ dependencies = [
  "risc0-zkvm-platform",
  "zeth-core",
  "zeth-core-ethereum",
+]
+
+[[package]]
+name = "zeth-trie"
+version = "0.1.0"
+dependencies = [
+ "alloy-consensus",
+ "alloy-primitives",
+ "alloy-rlp",
+ "anyhow",
+ "arrayvec",
+ "rkyv",
+ "serde",
+ "thiserror",
+ "tiny-keccak",
 ]
 
 [[package]]

@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::trie::data::MptNodeData;
-use crate::trie::node::MptNode;
-use crate::trie::reference::MptNodeReference;
-use crate::trie::util;
+use crate::data::MptNodeData;
+use crate::node::MptNode;
+use crate::reference::MptNodeReference;
+use crate::util;
 use alloy_primitives::map::HashMap;
 use alloy_rlp::Decodable;
 use anyhow::{bail, Context};
 
 /// Parses proof bytes into a vector of MPT nodes.
-pub fn parse_proof(proof: &[impl AsRef<[u8]>]) -> anyhow::Result<Vec<MptNode>> {
+pub fn parse_proof(proof: &[impl AsRef<[u8]>]) -> anyhow::Result<Vec<MptNode<'static>>> {
     proof
         .iter()
         // .filter(|proof| !proof.as_ref().is_empty()) // this is a sign of a malformed proof
@@ -31,8 +31,8 @@ pub fn parse_proof(proof: &[impl AsRef<[u8]>]) -> anyhow::Result<Vec<MptNode>> {
 }
 
 /// Creates a Merkle Patricia trie from an EIP-1186 proof.
-pub fn mpt_from_proof(proof_nodes: &[MptNode]) -> anyhow::Result<MptNode> {
-    let mut next: Option<MptNode> = None;
+pub fn mpt_from_proof(proof_nodes: &[MptNode<'static>]) -> anyhow::Result<MptNode<'static>> {
+    let mut next: Option<MptNode<'static>> = None;
     for (i, node) in proof_nodes.iter().enumerate().rev() {
         // there is nothing to replace for the last node
         let Some(replacement) = next else {
@@ -42,11 +42,11 @@ pub fn mpt_from_proof(proof_nodes: &[MptNode]) -> anyhow::Result<MptNode> {
 
         // find the child that references the next node
         let replacement_digest = replacement.hash();
-        let resolved: MptNode = match node.as_data().clone() {
+        let resolved: MptNode<'static> = match node.as_data().clone() {
             MptNodeData::Branch(mut children) => {
                 children.iter_mut().flatten().for_each(|c| {
                     if c.hash() == replacement_digest {
-                        *c = Box::new(replacement.clone());
+                        *c = Box::new(replacement.clone().into());
                     }
                 });
                 if children.iter_mut().all(|child| match child {
@@ -61,7 +61,7 @@ pub fn mpt_from_proof(proof_nodes: &[MptNode]) -> anyhow::Result<MptNode> {
                 if child.hash() != replacement_digest {
                     bail!("extension node {} does not reference the successor", i);
                 }
-                MptNodeData::Extension(prefix, Box::new(replacement)).into()
+                MptNodeData::Extension(prefix, Box::new(replacement.into())).into()
             }
             MptNodeData::Null | MptNodeData::Leaf(_, _) | MptNodeData::Digest(_) => {
                 bail!("node {} has no children to replace", i);
@@ -76,7 +76,7 @@ pub fn mpt_from_proof(proof_nodes: &[MptNode]) -> anyhow::Result<MptNode> {
 }
 
 /// Verifies that the given proof is a valid proof of exclusion for the given key.
-pub fn is_not_included(key: &[u8], proof_nodes: &[MptNode]) -> anyhow::Result<bool> {
+pub fn is_not_included(key: &[u8], proof_nodes: &[MptNode<'static>]) -> anyhow::Result<bool> {
     let proof_trie = mpt_from_proof(proof_nodes).context("invalid trie")?;
     // for valid proofs, the get must not fail
     let value = proof_trie.get(key).context("invalid trie")?;
@@ -85,24 +85,28 @@ pub fn is_not_included(key: &[u8], proof_nodes: &[MptNode]) -> anyhow::Result<bo
 }
 
 /// Creates a new MPT trie where all the digests contained in `node_store` are resolved.
-pub fn resolve_nodes(root: &MptNode, node_store: &HashMap<MptNodeReference, MptNode>) -> MptNode {
+pub fn resolve_nodes(
+    root: &MptNode<'static>,
+    node_store: &HashMap<MptNodeReference, MptNode<'static>>,
+) -> MptNode<'static> {
     let trie = match root.as_data() {
         MptNodeData::Null | MptNodeData::Leaf(_, _) => root.clone(),
         MptNodeData::Branch(children) => {
             let children: Vec<_> = children
                 .iter()
                 .map(|child| {
-                    child
-                        .as_ref()
-                        .map(|node| Box::new(resolve_nodes(node, node_store)))
+                    child.as_ref().map(|node| {
+                        Box::new(resolve_nodes(&node.clone().to_rw(), node_store).into())
+                    })
                 })
                 .collect();
             MptNodeData::Branch(children.try_into().unwrap()).into()
         }
-        MptNodeData::Extension(prefix, target) => {
-            MptNodeData::Extension(prefix.clone(), Box::new(resolve_nodes(target, node_store)))
-                .into()
-        }
+        MptNodeData::Extension(prefix, target) => MptNodeData::Extension(
+            prefix.clone(),
+            Box::new(resolve_nodes(&target.clone().to_rw(), node_store).into()),
+        )
+        .into(),
         MptNodeData::Digest(_) => {
             if let Some(node) = node_store.get(&root.reference()) {
                 resolve_nodes(node, node_store)
@@ -118,18 +122,21 @@ pub fn resolve_nodes(root: &MptNode, node_store: &HashMap<MptNodeReference, MptN
 }
 
 /// Creates a new MPT trie where all the digests contained in `node_store` are resolved.
-pub fn resolve_nodes_in_place(root: &mut MptNode, node_store: &HashMap<MptNodeReference, MptNode>) {
+pub fn resolve_nodes_in_place<'a>(
+    root: &mut MptNode<'a>,
+    node_store: &HashMap<MptNodeReference, MptNode<'a>>,
+) {
     let starting_hash = root.hash();
     let replacement = match root.as_data_mut() {
         MptNodeData::Null | MptNodeData::Leaf(_, _) => None,
         MptNodeData::Branch(children) => {
             for child in children.iter_mut().flatten() {
-                resolve_nodes_in_place(child, node_store);
+                resolve_nodes_in_place(child.as_mut_node().unwrap(), node_store);
             }
             None
         }
         MptNodeData::Extension(_, target) => {
-            resolve_nodes_in_place(target, node_store);
+            resolve_nodes_in_place(target.as_mut_node().unwrap(), node_store);
             None
         }
         MptNodeData::Digest(_) => node_store.get(&root.reference()),
@@ -147,7 +154,7 @@ pub fn resolve_nodes_in_place(root: &mut MptNode, node_store: &HashMap<MptNodeRe
 /// given node.
 /// When nodes in an MPT are deleted, leaves or extensions may be extended. To still be
 /// able to identify the original nodes, we create all shortened versions of the node.
-pub fn shorten_node_path(node: &MptNode) -> Vec<MptNode> {
+pub fn shorten_node_path<'a>(node: &MptNode<'a>) -> Vec<MptNode<'a>> {
     let mut res = Vec::new();
     let nibs = node.nibs();
     match node.as_data() {

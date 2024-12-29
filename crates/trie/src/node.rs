@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::data::MptNodeData;
 use crate::keccak::keccak;
-use crate::trie::data::MptNodeData;
-use crate::trie::reference::{CachedMptRef, MptNodeReference};
-use crate::trie::util;
-use crate::trie::util::Error;
+use crate::reference::{CachedMptRef, MptNodeReference};
+use crate::util;
+use crate::util::Error;
 use alloy_consensus::EMPTY_ROOT_HASH;
 use alloy_primitives::B256;
 use alloy_rlp::{Decodable, Encodable};
@@ -36,10 +36,8 @@ use std::fmt::{Debug, Write};
     Clone,
     Debug,
     Default,
-    PartialEq,
     Eq,
-    Ord,
-    PartialOrd,
+    PartialEq,
     Serialize,
     Deserialize,
     rkyv::Archive,
@@ -59,18 +57,19 @@ use std::fmt::{Debug, Write};
 #[rkyv(deserialize_bounds(
     __D::Error: rkyv::rancor::Source
 ))]
-pub struct MptNode {
+#[rkyv(derive(Debug, Eq, PartialEq))]
+pub struct MptNode<'a> {
     /// The type and data of the node.
     #[rkyv(omit_bounds)]
-    pub data: MptNodeData,
+    pub data: MptNodeData<'a>,
     /// Cache for a previously computed reference of this node. This is skipped during
     /// serialization.
     #[serde(skip)]
-    #[rkyv(with = crate::trie::reference::ForceCachedRef)]
+    #[rkyv(with = crate::reference::RequireCachedRef)]
     pub cached_reference: CachedMptRef,
 }
 
-impl From<B256> for MptNode {
+impl From<B256> for MptNode<'_> {
     fn from(digest: B256) -> Self {
         match digest {
             EMPTY_ROOT_HASH | B256::ZERO => MptNode::default(),
@@ -84,8 +83,8 @@ impl From<B256> for MptNode {
 /// This implementation allows for conversion from [MptNodeData] to [MptNode],
 /// initializing the `data` field with the provided value and setting the
 /// `cached_reference` field to `None`.
-impl From<MptNodeData> for MptNode {
-    fn from(value: MptNodeData) -> Self {
+impl<'a> From<MptNodeData<'a>> for MptNode<'a> {
+    fn from(value: MptNodeData<'a>) -> Self {
         Self {
             data: value,
             cached_reference: RefCell::new(None),
@@ -99,7 +98,7 @@ impl From<MptNodeData> for MptNode {
 /// the MPT. It provides methods for manipulating the trie, such as inserting, deleting,
 /// and retrieving values, as well as utility methods for encoding, decoding, and
 /// debugging.
-impl MptNode {
+impl<'a> MptNode<'a> {
     /// Clears the trie, replacing its data with an empty node, [MptNodeData::Null].
     ///
     /// This method effectively removes all key-value pairs from the trie.
@@ -114,7 +113,7 @@ impl MptNode {
     /// This method provides a reference to the node's data, allowing for inspection and
     /// manipulation.
     #[inline]
-    pub fn as_data(&self) -> &MptNodeData {
+    pub fn as_data(&self) -> &MptNodeData<'a> {
         &self.data
     }
 
@@ -123,7 +122,7 @@ impl MptNode {
     /// This method provides a reference to the node's data, allowing for inspection and
     /// manipulation.
     #[inline]
-    pub fn as_data_mut(&mut self) -> &mut MptNodeData {
+    pub fn as_data_mut(&mut self) -> &mut MptNodeData<'a> {
         &mut self.data
     }
 
@@ -203,7 +202,7 @@ impl MptNode {
             _ => {
                 let encoded = alloy_rlp::encode(self);
                 if encoded.len() < 32 {
-                    ArrayVec::from_iter(encoded.into_iter())
+                    ArrayVec::from_iter(encoded)
                 } else {
                     keccak(encoded).into()
                 }
@@ -336,7 +335,7 @@ impl MptNode {
         });
 
         match self.as_data() {
-            MptNodeData::Null => vec![format!("{:?}", MptNodeData::Null)],
+            MptNodeData::Null => vec![String::from("MptNodeData::Null")],
             MptNodeData::Branch(children) => children
                 .iter()
                 .enumerate()

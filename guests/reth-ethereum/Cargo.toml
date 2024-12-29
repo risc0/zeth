@@ -35,6 +35,8 @@ default-features = false
 
 [dependencies]
 c-kzg = { version = "=1.0.3", features = ["risc0-ffi"] }
+pot = "3.0.1"
+rkyv = { version = "0.8.9", features = ["arrayvec-0_7"] }
 
 [patch.crates-io]
 c-kzg = { git = "https://github.com/risc0/c-kzg-4844.git", branch = "p1.0.3" }

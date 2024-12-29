@@ -3951,8 +3951,10 @@ name = "zeth-guests-reth-ethereum"
 version = "0.1.0"
 dependencies = [
  "c-kzg",
+ "pot",
  "risc0-zkvm",
  "risc0-zkvm-platform",
+ "rkyv",
  "zeth-core",
  "zeth-core-ethereum",
 ]

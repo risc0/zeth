@@ -73,7 +73,7 @@ impl<'a> MptNodeData<'a> {
             MptNodeData::Branch(nodes) => {
                 if let Some((i, tail)) = key_nibs.split_first() {
                     match nodes[*i as usize] {
-                        Some(ref node) => node.get_data(tail),
+                        Some(ref node) => node.data_get(tail),
                         None => Ok(None),
                     }
                 } else {
@@ -89,7 +89,7 @@ impl<'a> MptNodeData<'a> {
             }
             MptNodeData::Extension(prefix, node) => {
                 if let Some(tail) = key_nibs.strip_prefix(util::prefix_nibs(prefix).as_slice()) {
-                    node.get_data(tail)
+                    node.data_get(tail)
                 } else {
                     Ok(None)
                 }
@@ -108,10 +108,9 @@ impl<'a> MptNodeData<'a> {
                     let child = &mut children[*i as usize];
                     match child {
                         Some(node) => {
-                            if !node.insert_data(tail, value)? {
+                            if !node.data_insert(tail, value)? {
                                 return Ok(false);
                             }
-                            node.invalidate_ref_cache();
                         }
                         // if the corresponding child is empty, insert a new leaf
                         None => {
@@ -172,10 +171,9 @@ impl<'a> MptNodeData<'a> {
                 let common_len = util::lcp(&self_nibs, key_nibs);
                 if common_len == self_nibs.len() {
                     // traverse down for update
-                    if !existing_child.insert_data(&key_nibs[common_len..], value)? {
+                    if !existing_child.data_insert(&key_nibs[common_len..], value)? {
                         return Ok(false);
                     }
-                    existing_child.invalidate_ref_cache();
                 } else if common_len == key_nibs.len() {
                     return Err(Error::ValueInBranch);
                 } else {
@@ -227,15 +225,12 @@ impl<'a> MptNodeData<'a> {
                     let child = &mut children[*i as usize];
                     match child {
                         Some(node) => {
-                            if !node.delete_data(tail)? {
+                            if !node.data_delete(tail)? {
                                 return Ok(false);
                             }
                             if node.is_empty() {
                                 // if the node is now empty, remove it
                                 *child = None;
-                            } else {
-                                // invalidate cached node reference
-                                node.invalidate_ref_cache();
                             }
                         }
                         None => return Ok(false),
@@ -254,12 +249,12 @@ impl<'a> MptNodeData<'a> {
             }
             MptNodeData::Extension(prefix, child) => {
                 let self_nibs = util::prefix_nibs(prefix);
-                if let Some(tail) = key_nibs.strip_prefix(self_nibs.as_slice()) {
-                    if !child.delete_data(tail)? {
-                        return Ok(false);
-                    }
-                    child.invalidate_ref_cache();
-                } else {
+
+                let Some(tail) = key_nibs.strip_prefix(self_nibs.as_slice()) else {
+                    return Ok(false);
+                };
+
+                if !child.data_delete(tail)? {
                     return Ok(false);
                 }
 

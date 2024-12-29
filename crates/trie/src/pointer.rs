@@ -54,6 +54,13 @@ impl<'a> MptNodePointer<'a> {
         }
     }
 
+    pub fn data_get(&self, key_nibs: &[u8]) -> Result<Option<&[u8]>, Error> {
+        match self {
+            MptNodePointer::Ref(node) => node.data.get(key_nibs),
+            MptNodePointer::Own(node) => node.data.get(key_nibs),
+        }
+    }
+
     #[inline]
     pub fn get_rlp<T: Decodable>(&self, key: &[u8]) -> Result<Option<T>, Error> {
         match self {
@@ -76,6 +83,25 @@ impl<'a> MptNodePointer<'a> {
         }
     }
 
+    pub fn data_delete(&mut self, key_nibs: &[u8]) -> Result<bool, Error> {
+        match self {
+            MptNodePointer::Ref(node) => {
+                let Some(replacement) = node.data.delete(key_nibs)? else {
+                    return Ok(false);
+                };
+                *self = MptNodePointer::Own(replacement.into());
+                Ok(true)
+            }
+            MptNodePointer::Own(node) => {
+                if !node.data.delete(key_nibs)? {
+                    return Ok(false);
+                };
+                node.invalidate_ref_cache();
+                Ok(true)
+            }
+        }
+    }
+
     #[inline]
     pub fn insert(&mut self, key: &[u8], value: Vec<u8>) -> Result<bool, Error> {
         match self {
@@ -90,44 +116,28 @@ impl<'a> MptNodePointer<'a> {
         }
     }
 
+    pub fn data_insert(&mut self, key_nibs: &[u8], value: Vec<u8>) -> Result<bool, Error> {
+        match self {
+            MptNodePointer::Ref(node) => {
+                let Some(replacement) = node.data.insert(key_nibs, value)? else {
+                    return Ok(false);
+                };
+                *self = MptNodePointer::Own(replacement.into());
+                Ok(true)
+            }
+            MptNodePointer::Own(node) => {
+                if !node.data.insert(key_nibs, value)? {
+                    return Ok(false);
+                };
+                node.invalidate_ref_cache();
+                Ok(true)
+            }
+        }
+    }
+
     #[inline]
     pub fn insert_rlp(&mut self, key: &[u8], value: impl Encodable) -> Result<bool, Error> {
         self.insert(key, alloy_rlp::encode(value))
-    }
-
-    pub fn get_data(&self, key_nibs: &[u8]) -> Result<Option<&[u8]>, Error> {
-        match self {
-            MptNodePointer::Ref(node) => node.data.get(key_nibs),
-            MptNodePointer::Own(node) => node.data.get(key_nibs),
-        }
-    }
-
-    pub fn insert_data(&mut self, key_nibs: &[u8], value: Vec<u8>) -> Result<bool, Error> {
-        match self {
-            MptNodePointer::Ref(node) => {
-                if let Some(replacement) = node.data.insert(key_nibs, value)? {
-                    *self = MptNodePointer::Own(replacement.into());
-                    Ok(true)
-                } else {
-                    Ok(false)
-                }
-            }
-            MptNodePointer::Own(node) => node.data.insert(key_nibs, value),
-        }
-    }
-
-    pub fn delete_data(&mut self, key_nibs: &[u8]) -> Result<bool, Error> {
-        match self {
-            MptNodePointer::Ref(node) => {
-                if let Some(replacement) = node.data.delete(key_nibs)? {
-                    *self = MptNodePointer::Own(replacement.into());
-                    Ok(true)
-                } else {
-                    Ok(false)
-                }
-            }
-            MptNodePointer::Own(node) => node.data.delete(key_nibs),
-        }
     }
 
     pub fn invalidate_ref_cache(&mut self) {
@@ -196,13 +206,13 @@ impl<'a> MptNodePointer<'a> {
             MptNodePointer::Ref(field) => {
                 rkyv::deserialize::<MptNode, rkyv::rancor::Error>(field).unwrap()
             }
-            MptNodePointer::Own(data) => data,
+            MptNodePointer::Own(node) => node,
         }
     }
 
     pub fn as_mut_node(&mut self) -> anyhow::Result<&mut MptNode<'a>> {
         match self {
-            MptNodePointer::Own(data) => Ok(data),
+            MptNodePointer::Own(node) => Ok(node),
             _ => anyhow::bail!("attempted mutable access to read-only ptr"),
         }
     }
@@ -216,9 +226,11 @@ impl<'a> rkyv::Archive for MptNodePointer<'a> {
         match self {
             MptNodePointer::Ref(field) => {
                 let data = rkyv::deserialize::<MptNode, rkyv::rancor::Error>(*field).unwrap();
+                data.hash();
                 data.resolve(resolver, out);
             }
             MptNodePointer::Own(data) => {
+                data.hash();
                 data.resolve(resolver, out);
             }
         }
@@ -234,9 +246,13 @@ where
         match self {
             MptNodePointer::Ref(field) => {
                 let data = rkyv::deserialize::<MptNode, rkyv::rancor::Error>(*field).unwrap();
+                data.hash();
                 rkyv::Serialize::serialize(&data, serializer)
             }
-            MptNodePointer::Own(data) => rkyv::Serialize::serialize(data, serializer),
+            MptNodePointer::Own(data) => {
+                data.hash();
+                rkyv::Serialize::serialize(data, serializer)
+            }
         }
     }
 }
@@ -268,9 +284,13 @@ impl serde::Serialize for MptNodePointer<'_> {
         match self {
             MptNodePointer::Ref(ptr) => {
                 let data = rkyv::deserialize::<MptNode, rkyv::rancor::Error>(*ptr).unwrap();
+                data.hash();
                 serde::Serialize::serialize(&data, serializer)
             }
-            MptNodePointer::Own(data) => serde::Serialize::serialize(&data, serializer),
+            MptNodePointer::Own(data) => {
+                data.hash();
+                serde::Serialize::serialize(&data, serializer)
+            }
         }
     }
 }
@@ -286,6 +306,7 @@ mod tests {
     use super::*;
     use crate::data::MptNodeData;
     use crate::node::{ArchivedMptNode, MptNode};
+    use anyhow::Context;
 
     #[test]
     pub fn round_trip() -> anyhow::Result<()> {
@@ -294,11 +315,15 @@ mod tests {
         let _ = MptNodePointer::Own(trie.clone());
         let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&trie)?;
         let archived = rkyv::access::<ArchivedMptNode, rkyv::rancor::Error>(&bytes)?;
+        archived.verify_reference().context("archived node")?;
         let ptr = MptNodePointer::Ref(&archived);
         let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&ptr)?;
         let archived = rkyv::access::<ArchivedMptNode, rkyv::rancor::Error>(&bytes)?;
+        archived.verify_reference().context("archived pointer")?;
         let deserialized = rkyv::deserialize::<MptNodePointer, rkyv::rancor::Error>(archived)?;
-        assert_eq!(trie, deserialized.to_rw());
+        let de_trie = deserialized.to_rw();
+        de_trie.hash();
+        assert_eq!(trie, de_trie);
 
         Ok(())
     }

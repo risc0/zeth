@@ -42,8 +42,9 @@ impl<'a> ArchivedMptNode<'a> {
         let Some(replacement) = self.data.delete(&util::to_nibs(key))? else {
             return Ok(None);
         };
+        let node = MptNode::from(replacement);
 
-        Ok(Some(replacement.into()))
+        Ok(Some(node))
     }
 
     #[inline]
@@ -56,7 +57,9 @@ impl<'a> ArchivedMptNode<'a> {
             return Ok(None);
         };
 
-        Ok(Some(replacement.into()))
+        let node = MptNode::from(replacement);
+
+        Ok(Some(node))
     }
 
     #[inline]
@@ -225,9 +228,9 @@ impl<'a> ArchivedMptNodeData<'a> {
                 };
 
                 let mut new_children: [Option<Box<MptNodePointer>>; 16] = Default::default();
-                for (i, c) in children.iter().enumerate() {
+                for (j, c) in children.iter().enumerate() {
                     if let ArchivedOption::Some(c) = c {
-                        new_children[i] = Some(Box::new(MptNodePointer::Ref(c.as_ref())))
+                        new_children[j] = Some(Box::new(MptNodePointer::Ref(c.as_ref())))
                     }
                 }
                 new_children[*i as usize] = Some(Box::new(replacement.into()));
@@ -235,7 +238,7 @@ impl<'a> ArchivedMptNodeData<'a> {
                 Ok(Some(MptNodeData::Branch(new_children)))
             }
             ArchivedMptNodeData::Leaf(prefix, old_value) => {
-                let self_nibs = util::prefix_nibs(prefix);
+                let self_nibs = prefix_nibs(prefix);
                 let common_len = util::lcp(&self_nibs, key_nibs);
                 if common_len == self_nibs.len() && common_len == key_nibs.len() {
                     // if self_nibs == key_nibs, update the value if it is different
@@ -279,16 +282,19 @@ impl<'a> ArchivedMptNodeData<'a> {
                 }
             }
             ArchivedMptNodeData::Extension(prefix, existing_child) => {
-                let self_nibs = util::prefix_nibs(prefix);
+                let self_nibs = prefix_nibs(prefix);
                 let common_len = util::lcp(&self_nibs, key_nibs);
                 if common_len == self_nibs.len() {
                     // traverse down for update
-                    let Some(replacement) =
+                    let Some(new_child) =
                         existing_child.data.insert(&key_nibs[common_len..], value)?
                     else {
                         return Ok(None);
                     };
-                    Ok(Some(replacement))
+                    Ok(Some(MptNodeData::Extension(
+                        prefix.to_vec(),
+                        Box::new(new_child.into()),
+                    )))
                 } else if common_len == key_nibs.len() {
                     Err(Error::ValueInBranch)
                 } else {
@@ -351,9 +357,9 @@ impl<'a> ArchivedMptNodeData<'a> {
                 };
 
                 let mut new_children: [Option<Box<MptNodePointer>>; 16] = Default::default();
-                for (i, c) in children.iter().enumerate() {
+                for (j, c) in children.iter().enumerate() {
                     if let ArchivedOption::Some(c) = c {
-                        new_children[i] = Some(Box::new(MptNodePointer::Ref(c.as_ref())))
+                        new_children[j] = Some(Box::new(MptNodePointer::Ref(c.as_ref())))
                     }
                 }
                 // set option to none and maybe collapse if new child is null
@@ -452,5 +458,50 @@ impl Encodable for ArchivedMptNode<'_> {
     fn length(&self) -> usize {
         let payload_length = self.payload_length();
         payload_length + alloy_rlp::length_of_length(payload_length)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    pub fn test_read_write() {
+        let mut owned = MptNodePointer::default();
+        for i in 0..10000u128 {
+            let data = i.to_be_bytes();
+            owned
+                .insert(&keccak(data.as_slice()), data.to_vec())
+                .unwrap();
+        }
+        let encoded = rkyv::to_bytes::<rkyv::rancor::Error>(&owned).unwrap();
+        let rkyved = rkyv::access::<ArchivedMptNode, rkyv::rancor::Error>(&encoded).unwrap();
+        let mut ref_ptr = MptNodePointer::Ref(rkyved);
+        assert_eq!(owned.hash(), ref_ptr.hash());
+        for i in 10000..20000u128 {
+            println!("insert {i}");
+            let data = i.to_be_bytes();
+            let key = keccak(data.as_slice());
+            assert!(owned.insert(&key, data.to_vec()).unwrap());
+            assert!(ref_ptr.insert(&key, data.to_vec()).unwrap());
+            assert_eq!(owned.hash(), ref_ptr.hash());
+        }
+        for i in 0..20000u128 {
+            println!("get {i}");
+            let data = i.to_be_bytes();
+            let key = keccak(data.as_slice());
+            assert_eq!(owned.get(&key).unwrap().unwrap().to_vec(), data.to_vec());
+            assert_eq!(ref_ptr.get(&key).unwrap().unwrap().to_vec(), data.to_vec());
+        }
+        for i in 0..20000u128 {
+            println!("delete {i}");
+            let data = i.to_be_bytes();
+            let key = keccak(data.as_slice());
+            assert!(owned.delete(&key).unwrap());
+            assert!(ref_ptr.delete(&key).unwrap());
+            assert_eq!(owned.hash(), ref_ptr.hash());
+        }
+        assert!(owned.is_empty());
+        assert!(ref_ptr.is_empty());
     }
 }

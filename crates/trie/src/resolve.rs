@@ -161,10 +161,7 @@ pub fn shorten_node_path<'a>(node: &MptNode<'a>) -> Vec<MptNode<'a>> {
         MptNodeData::Null | MptNodeData::Branch(_) => {}
         MptNodeData::Leaf(_, value) => {
             for i in 0..=nibs.len() {
-                res.push(
-                    MptNodeData::Leaf(util::to_encoded_path(&nibs[i..], true), value.clone())
-                        .into(),
-                )
+                res.push(MptNodeData::Leaf(nibs[i..].to_vec(), value.clone()).into())
             }
         }
         MptNodeData::Extension(_, child) => {

@@ -80,8 +80,8 @@ impl<'a> MptNodeData<'a> {
                     Ok(None)
                 }
             }
-            MptNodeData::Leaf(prefix, value) => {
-                if util::prefix_nibs(prefix) == key_nibs {
+            MptNodeData::Leaf(prefix_nibs, value) => {
+                if prefix_nibs == key_nibs {
                     Ok(Some(value))
                 } else {
                     Ok(None)
@@ -101,7 +101,7 @@ impl<'a> MptNodeData<'a> {
     pub fn insert(&mut self, key_nibs: &[u8], value: Vec<u8>) -> Result<bool, Error> {
         match self {
             MptNodeData::Null => {
-                *self = MptNodeData::Leaf(util::to_encoded_path(key_nibs, true), value);
+                *self = MptNodeData::Leaf(key_nibs.to_vec(), value);
             }
             MptNodeData::Branch(children) => {
                 if let Some((i, tail)) = key_nibs.split_first() {
@@ -114,51 +114,44 @@ impl<'a> MptNodeData<'a> {
                         }
                         // if the corresponding child is empty, insert a new leaf
                         None => {
-                            *child = Some(Box::new(
-                                MptNodeData::Leaf(util::to_encoded_path(tail, true), value).into(),
-                            ));
+                            *child = Some(Box::new(MptNodeData::Leaf(tail.to_vec(), value).into()));
                         }
                     }
                 } else {
                     return Err(Error::ValueInBranch);
                 }
             }
-            MptNodeData::Leaf(prefix, old_value) => {
-                let self_nibs = util::prefix_nibs(prefix);
-                let common_len = util::lcp(&self_nibs, key_nibs);
-                if common_len == self_nibs.len() && common_len == key_nibs.len() {
+            MptNodeData::Leaf(prefix_nibs, old_value) => {
+                let common_len = util::lcp(prefix_nibs, key_nibs);
+                if common_len == prefix_nibs.len() && common_len == key_nibs.len() {
                     // if self_nibs == key_nibs, update the value if it is different
                     if old_value == &value {
                         return Ok(false);
                     }
                     *old_value = value;
-                } else if common_len == self_nibs.len() || common_len == key_nibs.len() {
+                } else if common_len == prefix_nibs.len() || common_len == key_nibs.len() {
                     return Err(Error::ValueInBranch);
                 } else {
                     let split_point = common_len + 1;
                     // otherwise, create a branch with two children
                     let mut children: [Option<Box<MptNodePointer>>; 16] = Default::default();
 
-                    children[self_nibs[common_len] as usize] = Some(Box::new(
+                    children[prefix_nibs[common_len] as usize] = Some(Box::new(
                         MptNodeData::Leaf(
-                            util::to_encoded_path(&self_nibs[split_point..], true),
+                            prefix_nibs[split_point..].to_vec(),
                             mem::take(old_value),
                         )
                         .into(),
                     ));
                     children[key_nibs[common_len] as usize] = Some(Box::new(
-                        MptNodeData::Leaf(
-                            util::to_encoded_path(&key_nibs[split_point..], true),
-                            value,
-                        )
-                        .into(),
+                        MptNodeData::Leaf(key_nibs[split_point..].to_vec(), value).into(),
                     ));
 
                     let branch = MptNodeData::Branch(children);
                     if common_len > 0 {
                         // create parent extension for new branch
                         *self = MptNodeData::Extension(
-                            util::to_encoded_path(&self_nibs[..common_len], false),
+                            util::to_encoded_path(&prefix_nibs[..common_len], false),
                             Box::new(branch.into()),
                         );
                     } else {
@@ -193,11 +186,7 @@ impl<'a> MptNodeData<'a> {
                         Some(mem::take(existing_child))
                     };
                     children[key_nibs[common_len] as usize] = Some(Box::new(
-                        MptNodeData::Leaf(
-                            util::to_encoded_path(&key_nibs[split_point..], true),
-                            value,
-                        )
-                        .into(),
+                        MptNodeData::Leaf(key_nibs[split_point..].to_vec(), value).into(),
                     ));
 
                     let branch = MptNodeData::Branch(children);
@@ -241,8 +230,8 @@ impl<'a> MptNodeData<'a> {
 
                 self.maybe_collapse(None)?;
             }
-            MptNodeData::Leaf(prefix, _) => {
-                if util::prefix_nibs(prefix) != key_nibs {
+            MptNodeData::Leaf(prefix_nibs, _) => {
+                if prefix_nibs != key_nibs {
                     return Ok(false);
                 }
                 *self = MptNodeData::Null;
@@ -281,14 +270,11 @@ impl<'a> MptNodeData<'a> {
                         MptNodePointer::Ref(orphan_node) => {
                             match &orphan_node.data {
                                 // if the orphan is a leaf, prepend the corresponding nib to it
-                                ArchivedMptNodeData::Leaf(prefix, orphan_value) => {
+                                ArchivedMptNodeData::Leaf(prefix_nibs, orphan_value) => {
                                     let new_nibs: Vec<_> = iter::once(index as u8)
-                                        .chain(util::prefix_nibs(prefix.as_slice()))
+                                        .chain(prefix_nibs.iter().copied())
                                         .collect();
-                                    *self = MptNodeData::Leaf(
-                                        util::to_encoded_path(&new_nibs, true),
-                                        orphan_value.to_vec(),
-                                    );
+                                    *self = MptNodeData::Leaf(new_nibs, orphan_value.to_vec());
                                 }
                                 // if the orphan is an extension, prepend the corresponding nib to it
                                 ArchivedMptNodeData::Extension(prefix, orphan_child) => {
@@ -317,14 +303,11 @@ impl<'a> MptNodeData<'a> {
                         MptNodePointer::Own(orphan_node) => {
                             match &mut orphan_node.data {
                                 // if the orphan is a leaf, prepend the corresponding nib to it
-                                MptNodeData::Leaf(prefix, orphan_value) => {
+                                MptNodeData::Leaf(prefix_nibs, orphan_value) => {
                                     let new_nibs: Vec<_> = iter::once(index as u8)
-                                        .chain(util::prefix_nibs(prefix))
+                                        .chain(prefix_nibs.iter().copied())
                                         .collect();
-                                    *self = MptNodeData::Leaf(
-                                        util::to_encoded_path(&new_nibs, true),
-                                        mem::take(orphan_value),
-                                    );
+                                    *self = MptNodeData::Leaf(new_nibs, mem::take(orphan_value));
                                 }
                                 // if the orphan is an extension, prepend the corresponding nib to it
                                 MptNodeData::Extension(prefix, orphan_child) => {
@@ -364,12 +347,9 @@ impl<'a> MptNodeData<'a> {
                                 *self = MptNodeData::Null;
                             }
                             // for a leaf, replace the extension with the extended leaf
-                            ArchivedMptNodeData::Leaf(prefix, value) => {
-                                self_nibs.extend(util::prefix_nibs(prefix));
-                                *self = MptNodeData::Leaf(
-                                    util::to_encoded_path(&self_nibs, true),
-                                    value.to_vec(),
-                                );
+                            ArchivedMptNodeData::Leaf(prefix_nibs, value) => {
+                                self_nibs.extend(prefix_nibs.iter().copied());
+                                *self = MptNodeData::Leaf(self_nibs, value.to_vec());
                             }
                             // for an extension, replace the extension with the extended extension
                             ArchivedMptNodeData::Extension(prefix, node) => {
@@ -392,12 +372,9 @@ impl<'a> MptNodeData<'a> {
                                 *self = MptNodeData::Null;
                             }
                             // for a leaf, replace the extension with the extended leaf
-                            MptNodeData::Leaf(prefix, value) => {
-                                self_nibs.extend(util::prefix_nibs(prefix));
-                                *self = MptNodeData::Leaf(
-                                    util::to_encoded_path(&self_nibs, true),
-                                    mem::take(value),
-                                );
+                            MptNodeData::Leaf(prefix_nibs, value) => {
+                                self_nibs.extend(prefix_nibs.iter().copied());
+                                *self = MptNodeData::Leaf(self_nibs, mem::take(value));
                             }
                             // for an extension, replace the extension with the extended extension
                             MptNodeData::Extension(prefix, node) => {

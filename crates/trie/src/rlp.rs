@@ -14,6 +14,7 @@
 
 use crate::data::MptNodeData;
 use crate::node::MptNode;
+use crate::util;
 use alloy_primitives::bytes::Buf;
 use alloy_primitives::B256;
 use alloy_rlp::{Decodable, Encodable};
@@ -46,13 +47,15 @@ impl Encodable for MptNode<'_> {
                 // in the MPT reference, branches have values so always add empty value
                 out.put_u8(alloy_rlp::EMPTY_STRING_CODE);
             }
-            MptNodeData::Leaf(prefix, value) => {
+            MptNodeData::Leaf(prefix_nibs, value) => {
                 alloy_rlp::Header {
                     list: true,
                     payload_length: self.payload_length(),
                 }
                 .encode(out);
-                prefix.as_slice().encode(out);
+                util::to_encoded_path(prefix_nibs, true)
+                    .as_slice()
+                    .encode(out);
                 value.as_slice().encode(out);
             }
             MptNodeData::Extension(prefix, node) => {
@@ -109,7 +112,7 @@ impl Decodable for MptNode<'_> {
                     let header = alloy_rlp::Header::decode(buf)?;
                     let value = Vec::from(&buf[..header.payload_length]);
                     buf.advance(header.payload_length);
-                    Ok(MptNodeData::Leaf(path, value).into())
+                    Ok(MptNodeData::Leaf(util::prefix_nibs(&path), value).into())
                 }
             }
             (17, true) => {

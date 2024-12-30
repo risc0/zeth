@@ -27,6 +27,7 @@ mod tests {
     use crate::data::MptNodeData;
     use crate::keccak::keccak;
     use crate::node::MptNode;
+    use crate::util;
     use crate::util::{lcp, to_encoded_path};
     use alloy_consensus::EMPTY_ROOT_HASH;
     use alloy_primitives::hex;
@@ -42,8 +43,9 @@ mod tests {
             ("horse", "stallion"),
         ];
         for (k, v) in cases {
+            let k_bytes = k.as_bytes().to_vec();
             let node: MptNode =
-                MptNodeData::Leaf(k.as_bytes().to_vec(), v.as_bytes().to_vec()).into();
+                MptNodeData::Leaf(util::to_nibs(&k_bytes), v.as_bytes().to_vec()).into();
             assert_eq!(
                 node.reference().as_slice(),
                 alloy_rlp::encode(&node).as_slice()

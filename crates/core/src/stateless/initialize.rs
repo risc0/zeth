@@ -20,7 +20,7 @@ use alloy_consensus::constants::EMPTY_ROOT_HASH;
 use alloy_consensus::Account;
 use alloy_primitives::map::HashMap;
 use alloy_primitives::{Address, Bytes, B256, U256};
-use anyhow::{bail, ensure};
+use anyhow::bail;
 use core::mem::take;
 use reth_primitives::revm_primitives::Bytecode;
 use reth_revm::db::{AccountState, DbAccount};
@@ -65,6 +65,23 @@ impl<'a, Driver: CoreDriver> InitializationStrategy<'a, Driver, TrieDB<'a>>
             .into_iter()
             .map(|bytes| (keccak(&bytes).into(), Bytecode::new_raw(bytes)))
             .collect();
+
+        // Verify account data in db
+        for (address, StorageEntryPointer { storage_trie, .. }) in storage_tries.iter() {
+            // load the account from the state trie
+            let state_account = state_trie.get_rlp::<Account>(&keccak(address))?;
+
+            // check that the account storage root matches the storage trie root of the input
+            let storage_root = state_account.map_or(EMPTY_ROOT_HASH, |a| a.storage_root);
+            if storage_root != storage_trie.hash() {
+                bail!(
+                    "Invalid storage trie for {}: expected {}, got {}",
+                    address,
+                    storage_root,
+                    storage_trie.hash()
+                )
+            }
+        }
 
         // prepare block hash history
         let mut block_hashes: HashMap<u64, B256> =
@@ -151,13 +168,14 @@ impl<Driver: CoreDriver> InitializationStrategy<'_, Driver, MemoryDB>
 
             // check that the account storage root matches the storage trie root of the input
             let storage_root = state_account.map_or(EMPTY_ROOT_HASH, |a| a.storage_root);
-            ensure!(
-                storage_root == storage_trie.hash(),
-                "Invalid storage trie for {}: expected {}, got {}",
-                address,
-                storage_root,
-                storage_trie.hash()
-            );
+            if storage_root != storage_trie.hash() {
+                bail!(
+                    "Invalid storage trie for {}: expected {}, got {}",
+                    address,
+                    storage_root,
+                    storage_trie.hash()
+                )
+            }
 
             // load the account into memory
             let mem_account = match state_account {

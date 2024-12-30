@@ -13,13 +13,15 @@
 // limitations under the License.
 
 use crate::data::{ArchivedMptNodeData, MptNodeData};
+use crate::keccak::keccak;
 use crate::node::{ArchivedMptNode, MptNode};
 use crate::pointer::MptNodePointer;
 use crate::reference::{ArchivedMptNodeReference, MptNodeReference};
 use crate::util;
 use crate::util::Error;
+use alloy_consensus::EMPTY_ROOT_HASH;
 use alloy_primitives::bytes::BufMut;
-use alloy_primitives::{keccak256, B256};
+use alloy_primitives::B256;
 use alloy_rlp::{Decodable, Encodable};
 use anyhow::{bail, Context};
 use rkyv::option::ArchivedOption;
@@ -108,6 +110,14 @@ impl<'a> ArchivedMptNode<'a> {
         self.cached_reference.len()
     }
 
+    #[inline]
+    pub fn hash(&self) -> B256 {
+        match self.data {
+            ArchivedMptNodeData::Null => EMPTY_ROOT_HASH,
+            _ => self.cached_reference.to_digest(),
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         matches!(self.data, ArchivedMptNodeData::Null)
     }
@@ -130,10 +140,12 @@ impl<'a> ArchivedMptNode<'a> {
 
     pub fn verify_reference(&self) -> anyhow::Result<()> {
         match &self.data {
+            // Verify cases with known encodings
             ArchivedMptNodeData::Null => {
                 if self.cached_reference.as_slice() != [alloy_rlp::EMPTY_STRING_CODE] {
                     bail!("Invalid empty node reference");
                 }
+                return Ok(());
             }
             ArchivedMptNodeData::Digest(digest) => {
                 let Some(d) = self.cached_reference.as_digest() else {
@@ -142,32 +154,85 @@ impl<'a> ArchivedMptNode<'a> {
                 if digest != d {
                     bail!("Invalid digest node reference");
                 }
+                return Ok(());
             }
-            data => {
-                // Verify children recursively and abort early
-                match data {
-                    ArchivedMptNodeData::Branch(children) => {
-                        for c in children.iter().flatten() {
-                            c.verify_reference()
-                                .context("Invalid branch child reference")?;
-                        }
-                    }
-                    ArchivedMptNodeData::Extension(_, child) => {
-                        child
-                            .verify_reference()
-                            .context("Invalid extension node reference")?;
-                    }
-                    _ => {}
-                }
-                // Verify own encoding
-                if MptNodeReference::from(alloy_rlp::encode(self)).as_slice()
-                    != self.cached_reference.as_slice()
-                {
-                    bail!("Invalid node reference");
+            // Verify children recursively and abort early on failure
+            ArchivedMptNodeData::Branch(children) => {
+                for c in children.iter().flatten() {
+                    c.verify_reference()
+                        .context("Invalid branch child reference")?;
                 }
             }
+            ArchivedMptNodeData::Extension(_, child) => {
+                child
+                    .verify_reference()
+                    .context("Invalid extension node reference")?;
+            }
+            // No verification beyond own encoding
+            _ => {}
+        }
+        // Verify own encoding
+        if MptNodeReference::from(alloy_rlp::encode(self)).as_slice()
+            != self.cached_reference.as_slice()
+        {
+            bail!("Invalid node reference");
         }
         Ok(())
+    }
+}
+
+impl Encodable for ArchivedMptNode<'_> {
+    #[inline]
+    fn encode(&self, out: &mut dyn BufMut) {
+        match &self.data {
+            ArchivedMptNodeData::Null => {
+                out.put_u8(alloy_rlp::EMPTY_STRING_CODE);
+            }
+            ArchivedMptNodeData::Branch(nodes) => {
+                alloy_rlp::Header {
+                    list: true,
+                    payload_length: self.payload_length(),
+                }
+                .encode(out);
+                nodes.iter().for_each(|child| match child {
+                    ArchivedOption::Some(node) => node.reference_encode(out),
+                    ArchivedOption::None => out.put_u8(alloy_rlp::EMPTY_STRING_CODE),
+                });
+                // in the MPT reference, branches have values so always add empty value
+                out.put_u8(alloy_rlp::EMPTY_STRING_CODE);
+            }
+            ArchivedMptNodeData::Leaf(prefix_nibs, value) => {
+                alloy_rlp::Header {
+                    list: true,
+                    payload_length: self.payload_length(),
+                }
+                .encode(out);
+                util::to_encoded_path(prefix_nibs, true)
+                    .as_slice()
+                    .encode(out);
+                value.as_slice().encode(out);
+            }
+            ArchivedMptNodeData::Extension(prefix_nibs, node) => {
+                alloy_rlp::Header {
+                    list: true,
+                    payload_length: self.payload_length(),
+                }
+                .encode(out);
+                util::to_encoded_path(prefix_nibs, false)
+                    .as_slice()
+                    .encode(out);
+                node.reference_encode(out);
+            }
+            ArchivedMptNodeData::Digest(digest) => {
+                digest.0.encode(out);
+            }
+        }
+    }
+
+    #[inline]
+    fn length(&self) -> usize {
+        let payload_length = self.payload_length();
+        payload_length + alloy_rlp::length_of_length(payload_length)
     }
 }
 
@@ -393,61 +458,6 @@ impl Default for ArchivedMptNodeData<'_> {
     }
 }
 
-impl Encodable for ArchivedMptNode<'_> {
-    #[inline]
-    fn encode(&self, out: &mut dyn BufMut) {
-        match &self.data {
-            ArchivedMptNodeData::Null => {
-                out.put_u8(alloy_rlp::EMPTY_STRING_CODE);
-            }
-            ArchivedMptNodeData::Branch(nodes) => {
-                alloy_rlp::Header {
-                    list: true,
-                    payload_length: self.payload_length(),
-                }
-                .encode(out);
-                nodes.iter().for_each(|child| match child {
-                    ArchivedOption::Some(node) => node.reference_encode(out),
-                    ArchivedOption::None => out.put_u8(alloy_rlp::EMPTY_STRING_CODE),
-                });
-                // in the MPT reference, branches have values so always add empty value
-                out.put_u8(alloy_rlp::EMPTY_STRING_CODE);
-            }
-            ArchivedMptNodeData::Leaf(prefix_nibs, value) => {
-                alloy_rlp::Header {
-                    list: true,
-                    payload_length: self.payload_length(),
-                }
-                .encode(out);
-                util::to_encoded_path(prefix_nibs, true)
-                    .as_slice()
-                    .encode(out);
-                value.as_slice().encode(out);
-            }
-            ArchivedMptNodeData::Extension(prefix_nibs, node) => {
-                alloy_rlp::Header {
-                    list: true,
-                    payload_length: self.payload_length(),
-                }
-                .encode(out);
-                util::to_encoded_path(prefix_nibs, false)
-                    .as_slice()
-                    .encode(out);
-                node.reference_encode(out);
-            }
-            ArchivedMptNodeData::Digest(digest) => {
-                digest.0.encode(out);
-            }
-        }
-    }
-
-    #[inline]
-    fn length(&self) -> usize {
-        let payload_length = self.payload_length();
-        payload_length + alloy_rlp::length_of_length(payload_length)
-    }
-}
-
 impl ArchivedMptNodeReference {
     pub fn is_digest(&self) -> bool {
         matches!(self, Self::Digest(_))
@@ -455,7 +465,7 @@ impl ArchivedMptNodeReference {
 
     pub fn to_digest(&self) -> B256 {
         match self {
-            ArchivedMptNodeReference::Bytes(b) => keccak256(b),
+            ArchivedMptNodeReference::Bytes(b) => B256::from(keccak(b)),
             ArchivedMptNodeReference::Digest(d) => d.0.into(),
         }
     }

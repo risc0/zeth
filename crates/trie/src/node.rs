@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use crate::data::MptNodeData;
-use crate::keccak::keccak;
 use crate::reference::{CachedMptRef, MptNodeReference};
 use crate::util;
 use crate::util::Error;
@@ -178,14 +177,7 @@ impl<'a> MptNode<'a> {
         match &self.data {
             MptNodeData::Null => vec![alloy_rlp::EMPTY_STRING_CODE].into(),
             MptNodeData::Digest(digest) => MptNodeReference::from(*digest),
-            _ => {
-                let encoded = alloy_rlp::encode(self);
-                if encoded.len() < 32 {
-                    encoded.into()
-                } else {
-                    MptNodeReference::from(B256::from(keccak(encoded)))
-                }
-            }
+            _ => MptNodeReference::from(alloy_rlp::encode(self)),
         }
     }
 

@@ -185,7 +185,7 @@ impl<Driver: CoreDriver> FinalizationStrategy<'_, Driver, MemoryDB>
                 .unwrap_or_default();
             let new_storage_root = storage_trie.hash();
             if state_account.storage_root != new_storage_root {
-                state_account.storage_root = storage_trie.hash();
+                state_account.storage_root = new_storage_root;
                 state_trie
                     .insert_rlp(&state_trie_index, state_account)
                     .context("state_trie.insert_rlp (2)")?;

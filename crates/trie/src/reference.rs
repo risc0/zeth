@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use crate::keccak::keccak;
-use alloy_primitives::{keccak256, B256};
+use alloy_primitives::B256;
 use rkyv::with::{ArchiveWith, DeserializeWith, SerializeWith};
 use rkyv::{Archive, Place};
 use std::cell::RefCell;
@@ -71,7 +71,7 @@ impl MptNodeReference {
 
     pub fn to_digest(&self) -> B256 {
         match self {
-            MptNodeReference::Bytes(b) => keccak256(b),
+            MptNodeReference::Bytes(b) => B256::from(keccak(b)),
             MptNodeReference::Digest(d) => *d,
         }
     }
@@ -143,9 +143,6 @@ where
         _field: &rkyv::Archived<MptNodeReference>,
         _deserializer: &mut D,
     ) -> Result<CachedMptRef, D::Error> {
-        // let res = rkyv::Deserialize::deserialize(field, deserializer)?;
-        // Ok(RefCell::new(Some(res)))
-
         // Assuming the related node was not validated, this is the safe return value
         Ok(RefCell::new(None))
     }

@@ -35,8 +35,6 @@ where
         rkyv_slice: &[u8],
         pot_slice: &[u8],
     ) -> anyhow::Result<StatelessClientData<'a, Driver::Block, Driver::Header>> {
-        // let rkyv_access = rkyv::access::<crate::stateless::data::ArchivedCommonData, rkyv::rancor::Error>(rkyv_slice)?;
-        // let rkyv_data = rkyv::deserialize::<CommonData, rkyv::rancor::Error>(rkyv_access)?;
         let rkyv_data = rkyv::from_bytes::<CommonData<'a>, rkyv::rancor::Error>(rkyv_slice)?;
         let chain_data = pot::from_slice::<ChainData<Driver::Block, Driver::Header>>(pot_slice)?;
         Ok(

@@ -190,7 +190,7 @@ impl<'a> MptNodePointer<'a> {
     #[inline]
     pub fn hash(&self) -> B256 {
         match self {
-            MptNodePointer::Ref(node) => node.cached_reference.to_digest(),
+            MptNodePointer::Ref(node) => node.hash(),
             MptNodePointer::Own(node) => node.hash(),
         }
     }

@@ -260,7 +260,7 @@ where
                             .into_iter()
                             .flatten()
                     })
-                    .map(|n| (n.hash().0.into(), n))
+                    .map(|n| (n.hash().into(), n))
                     .collect();
                 resolve_nodes_in_place(&mut state_trie, &node_store);
                 // resolve storage orphans
@@ -276,7 +276,7 @@ where
                                         .into_iter()
                                         .flatten()
                                 })
-                                .map(|n| (n.hash().0.into(), n))
+                                .map(|n| (n.hash().into(), n))
                                 .collect();
                         for k in node_store.keys() {
                             let digest = match k.len() {

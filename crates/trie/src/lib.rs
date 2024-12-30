@@ -44,7 +44,10 @@ mod tests {
         for (k, v) in cases {
             let node: MptNode =
                 MptNodeData::Leaf(k.as_bytes().to_vec(), v.as_bytes().to_vec()).into();
-            assert_eq!(node.reference().to_vec(), alloy_rlp::encode(&node));
+            assert_eq!(
+                node.reference().as_slice(),
+                alloy_rlp::encode(&node).as_slice()
+            );
         }
     }
 
@@ -86,7 +89,7 @@ mod tests {
         let trie = MptNode::default();
 
         assert!(trie.is_empty());
-        assert_eq!(trie.reference().to_vec(), vec![EMPTY_STRING_CODE]);
+        assert_eq!(trie.reference().as_slice(), [EMPTY_STRING_CODE]);
         let expected = hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421");
         assert_eq!(expected, trie.hash().0);
 
@@ -129,7 +132,7 @@ mod tests {
 
         assert!(!trie.is_empty());
         let exp_rlp = hex!("d816d680c3208180c220018080808080808080808080808080");
-        assert_eq!(trie.reference().to_vec(), exp_rlp.to_vec());
+        assert_eq!(trie.reference().as_slice(), exp_rlp.as_slice());
         let exp_hash = hex!("6fbf23d6ec055dd143ff50d558559770005ff44ae1d41276f1bd83affab6dd3b");
         assert_eq!(trie.hash().0, exp_hash);
 

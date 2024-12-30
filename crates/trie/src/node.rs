@@ -20,7 +20,6 @@ use crate::util::Error;
 use alloy_consensus::EMPTY_ROOT_HASH;
 use alloy_primitives::B256;
 use alloy_rlp::{Decodable, Encodable};
-use arrayvec::ArrayVec;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::fmt::{Debug, Write};
@@ -151,60 +150,40 @@ impl<'a> MptNode<'a> {
     pub fn hash(&self) -> B256 {
         match self.data {
             MptNodeData::Null => EMPTY_ROOT_HASH,
-            _ => match self
+            _ => self
                 .cached_reference
                 .borrow_mut()
                 .get_or_insert_with(|| self.calc_reference())
-            {
-                reference if reference.is_full() => B256::from_slice(reference.as_slice()),
-                reference => keccak(reference.as_slice()).into(),
-            },
+                .to_digest(),
         }
     }
 
     /// Encodes the [MptNodeReference] of this node into the `out` buffer.
     pub fn reference_encode(&self, out: &mut dyn alloy_rlp::BufMut) {
-        match self
-            .cached_reference
+        self.cached_reference
             .borrow_mut()
             .get_or_insert_with(|| self.calc_reference())
-        {
-            // if the reference is a digest, RLP-encode it with its fixed known length
-            reference if reference.is_full() => {
-                out.put_u8(alloy_rlp::EMPTY_STRING_CODE + 32);
-                out.put_slice(reference.as_slice());
-            }
-            // if the reference is an RLP-encoded byte slice, copy it directly
-            reference => out.put_slice(reference),
-        }
+            .encode(out);
     }
 
     /// Returns the length of the encoded [MptNodeReference] of this node.
     pub fn reference_length(&self) -> usize {
-        match self
-            .cached_reference
+        self.cached_reference
             .borrow_mut()
             .get_or_insert_with(|| self.calc_reference())
-        {
-            reference if reference.is_full() => 33,
-            reference => reference.len(),
-        }
+            .len()
     }
 
     pub fn calc_reference(&self) -> MptNodeReference {
         match &self.data {
-            MptNodeData::Null => {
-                let mut encoded = ArrayVec::new();
-                encoded.push(alloy_rlp::EMPTY_STRING_CODE);
-                encoded
-            }
-            MptNodeData::Digest(digest) => digest.0.into(),
+            MptNodeData::Null => vec![alloy_rlp::EMPTY_STRING_CODE].into(),
+            MptNodeData::Digest(digest) => MptNodeReference::from(*digest),
             _ => {
                 let encoded = alloy_rlp::encode(self);
                 if encoded.len() < 32 {
-                    ArrayVec::from_iter(encoded)
+                    encoded.into()
                 } else {
-                    keccak(encoded).into()
+                    MptNodeReference::from(B256::from(keccak(encoded)))
                 }
             }
         }

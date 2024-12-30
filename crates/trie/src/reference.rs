@@ -12,13 +12,101 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::keccak::keccak;
 use alloy_consensus::EMPTY_ROOT_HASH;
-use arrayvec::ArrayVec;
+use alloy_primitives::{keccak256, B256};
 use rkyv::with::{ArchiveWith, DeserializeWith, SerializeWith};
 use rkyv::{Archive, Place};
 use std::cell::RefCell;
 
-pub type MptNodeReference = ArrayVec<u8, 32>;
+/// Represents the ways in which one node can reference another node inside the sparse
+/// Merkle Patricia Trie (MPT).
+///
+/// Nodes in the MPT can reference other nodes either directly through their byte
+/// representation or indirectly through a hash of their encoding. This enum provides a
+/// clear and type-safe way to represent these references.
+#[derive(
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    Ord,
+    PartialOrd,
+    serde::Serialize,
+    serde::Deserialize,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
+#[rkyv(derive(Debug, Eq, PartialEq))]
+pub enum MptNodeReference {
+    /// Represents a direct reference to another node using its byte encoding.
+    /// Used for short encodings that are less than 32 bytes in length.
+    Bytes(Vec<u8>),
+    /// Represents an indirect reference to another node using the Keccak hash of its encoding.
+    /// Used for encodings that are not less than 32 bytes in length.
+    Digest(#[rkyv(with = crate::util::B256Def)] B256),
+}
+
+impl From<B256> for MptNodeReference {
+    fn from(value: B256) -> Self {
+        Self::Digest(value)
+    }
+}
+
+impl From<Vec<u8>> for MptNodeReference {
+    fn from(value: Vec<u8>) -> Self {
+        if value.len() < 32 {
+            Self::Bytes(value)
+        } else {
+            MptNodeReference::from(B256::from(keccak(&value)))
+        }
+    }
+}
+
+impl MptNodeReference {
+    pub fn is_digest(&self) -> bool {
+        matches!(self, Self::Digest(_))
+    }
+
+    pub fn to_digest(&self) -> B256 {
+        match self {
+            MptNodeReference::Bytes(b) => keccak256(b),
+            MptNodeReference::Digest(d) => *d,
+        }
+    }
+
+    pub fn as_slice(&self) -> &[u8] {
+        match self {
+            MptNodeReference::Bytes(b) => b.as_slice(),
+            MptNodeReference::Digest(d) => d.as_slice(),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        match self {
+            MptNodeReference::Bytes(b) => b.len(),
+            MptNodeReference::Digest(_) => 33, // length prefix + 32 bytes of data
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        match self {
+            MptNodeReference::Bytes(b) => b.is_empty(),
+            MptNodeReference::Digest(_) => false,
+        }
+    }
+
+    pub fn encode(&self, out: &mut dyn alloy_rlp::BufMut) {
+        if self.is_digest() {
+            // if the reference is a digest, RLP-encode it with its fixed known length
+            out.put_u8(alloy_rlp::EMPTY_STRING_CODE + 32);
+        }
+        // if the reference is an RLP-encoded byte slice, copy it directly
+        out.put_slice(self.as_slice());
+    }
+}
 
 pub type CachedMptRef = RefCell<Option<MptNodeReference>>;
 
@@ -32,7 +120,7 @@ impl ArchiveWith<CachedMptRef> for RequireCachedRef {
         let digest = field
             .borrow()
             .clone()
-            .unwrap_or(MptNodeReference::from(EMPTY_ROOT_HASH.0));
+            .unwrap_or(MptNodeReference::from(EMPTY_ROOT_HASH));
         digest.resolve(resolver, out);
     }
 }
@@ -48,7 +136,7 @@ where
         let digest = field
             .borrow()
             .clone()
-            .unwrap_or(MptNodeReference::from(EMPTY_ROOT_HASH.0));
+            .unwrap_or(MptNodeReference::from(EMPTY_ROOT_HASH));
         rkyv::Serialize::serialize(&digest, serializer)
     }
 }

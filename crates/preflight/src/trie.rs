@@ -110,7 +110,7 @@ pub fn extend_proof_tries(
         resolve_nodes_in_place(&mut storage_entry.storage_trie, &storage_nodes);
         // validate storage orphans
         for (prefix, digest) in potential_storage_orphans {
-            let node_ref: MptNodeReference = digest.0.into();
+            let node_ref: MptNodeReference = digest.into();
             if let Some(node) = storage_nodes.get(&node_ref) {
                 if !node.is_digest() {
                     // this orphan node has been resolved
@@ -126,7 +126,7 @@ pub fn extend_proof_tries(
     let state_orphans = state_orphans
         .into_iter()
         .filter(|o| {
-            let node_ref: MptNodeReference = o.1 .0.into();
+            let node_ref: MptNodeReference = o.1.into();
             state_nodes
                 .get(&node_ref)
                 .map(|n| !n.is_digest())
@@ -246,7 +246,7 @@ pub fn add_orphaned_nodes(
             // extract inferrable orphans
             let node = proof_nodes.last().unwrap();
             shorten_node_path(node).into_iter().for_each(|node| {
-                nodes_by_reference.insert(node.hash().0.into(), node);
+                nodes_by_reference.insert(node.hash().into(), node);
             });
             if let MptNodeData::Extension(_, target) = node.as_data() {
                 return Ok(Some((

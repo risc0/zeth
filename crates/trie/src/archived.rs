@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use crate::data::{ArchivedMptNodeData, MptNodeData};
-use crate::keccak::keccak;
 use crate::node::{ArchivedMptNode, MptNode};
 use crate::pointer::MptNodePointer;
+use crate::reference::{ArchivedMptNodeReference, MptNodeReference};
 use crate::util;
 use crate::util::{prefix_nibs, Error};
 use alloy_primitives::bytes::BufMut;
-use alloy_primitives::B256;
+use alloy_primitives::{keccak256, B256};
 use alloy_rlp::{Decodable, Encodable};
 use anyhow::{bail, Context};
 use rkyv::option::ArchivedOption;
@@ -91,22 +91,11 @@ impl<'a> ArchivedMptNode<'a> {
     }
 
     pub fn reference_encode(&self, out: &mut dyn BufMut) {
-        match &self.cached_reference {
-            // if the reference is a digest, RLP-encode it with its fixed known length
-            reference if reference.len() == 32 => {
-                out.put_u8(alloy_rlp::EMPTY_STRING_CODE + 32);
-                out.put_slice(reference.as_slice());
-            }
-            // if the reference is an RLP-encoded byte slice, copy it directly
-            reference => out.put_slice(reference),
-        }
+        self.cached_reference.encode(out);
     }
 
     pub fn reference_length(&self) -> usize {
-        match &self.cached_reference {
-            reference if reference.len() == 32 => 33,
-            reference => reference.len(),
-        }
+        self.cached_reference.len()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -137,7 +126,10 @@ impl<'a> ArchivedMptNode<'a> {
                 }
             }
             ArchivedMptNodeData::Digest(digest) => {
-                if self.cached_reference.as_slice() != digest.0.as_slice() {
+                let Some(d) = self.cached_reference.as_digest() else {
+                    bail!("Invalid digest node reference type");
+                };
+                if digest != d {
                     bail!("Invalid digest node reference");
                 }
             }
@@ -158,13 +150,10 @@ impl<'a> ArchivedMptNode<'a> {
                     _ => {}
                 }
                 // Verify own encoding
-                let encoded = alloy_rlp::encode(self);
-                if encoded.len() < 32 {
-                    if self.cached_reference.as_slice() != encoded.as_slice() {
-                        bail!("Invalid encoded node reference");
-                    }
-                } else if self.cached_reference.as_slice() != keccak(encoded).as_slice() {
-                    bail!("Invalid digest reference");
+                if MptNodeReference::from(alloy_rlp::encode(self)).as_slice()
+                    != self.cached_reference.as_slice()
+                {
+                    bail!("Invalid node reference");
                 }
             }
         }
@@ -461,9 +450,60 @@ impl Encodable for ArchivedMptNode<'_> {
     }
 }
 
+impl ArchivedMptNodeReference {
+    pub fn is_digest(&self) -> bool {
+        matches!(self, Self::Digest(_))
+    }
+
+    pub fn to_digest(&self) -> B256 {
+        match self {
+            ArchivedMptNodeReference::Bytes(b) => keccak256(b),
+            ArchivedMptNodeReference::Digest(d) => d.0.into(),
+        }
+    }
+
+    pub fn as_digest(&self) -> Option<&crate::util::ArchivedB256> {
+        match self {
+            ArchivedMptNodeReference::Bytes(_) => None,
+            ArchivedMptNodeReference::Digest(d) => Some(d),
+        }
+    }
+
+    pub fn as_slice(&self) -> &[u8] {
+        match self {
+            ArchivedMptNodeReference::Bytes(b) => b.as_slice(),
+            ArchivedMptNodeReference::Digest(d) => d.0.as_slice(),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        match self {
+            ArchivedMptNodeReference::Bytes(b) => b.len(),
+            ArchivedMptNodeReference::Digest(_) => 33, // length prefix + 32 bytes of data
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        match self {
+            ArchivedMptNodeReference::Bytes(b) => b.is_empty(),
+            ArchivedMptNodeReference::Digest(_) => false,
+        }
+    }
+
+    pub fn encode(&self, out: &mut dyn alloy_rlp::BufMut) {
+        if self.is_digest() {
+            // if the reference is a digest, RLP-encode it with its fixed known length
+            out.put_u8(alloy_rlp::EMPTY_STRING_CODE + 32);
+        }
+        // if the reference is an RLP-encoded byte slice, copy it directly
+        out.put_slice(self.as_slice());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::keccak::keccak;
 
     #[test]
     pub fn test_read_write() {

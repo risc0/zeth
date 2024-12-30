@@ -16,7 +16,7 @@ use crate::db::memory::MemoryDB;
 use crate::db::trie::TrieDB;
 use crate::db::update::{into_plain_state, Update};
 use crate::driver::CoreDriver;
-use crate::stateless::data::entry::StorageEntry;
+use crate::stateless::data::entry::StorageEntryPointer;
 use alloy_consensus::Account;
 use alloy_primitives::map::HashMap;
 use alloy_primitives::{Address, U256};
@@ -30,7 +30,7 @@ pub trait FinalizationStrategy<'a, Driver: CoreDriver, Database> {
     fn finalize_state(
         block: &mut Driver::Block,
         state_trie: &mut MptNodePointer<'a>,
-        storage_tries: &mut HashMap<Address, StorageEntry<'a>>,
+        storage_tries: &mut HashMap<Address, StorageEntryPointer<'a>>,
         parent_header: &mut Driver::Header,
         db: Option<&mut Database>,
         bundle_state: BundleState,
@@ -46,7 +46,7 @@ impl<'a, Driver: CoreDriver> FinalizationStrategy<'a, Driver, TrieDB<'a>>
     fn finalize_state(
         block: &mut Driver::Block,
         _state_trie: &mut MptNodePointer<'a>,
-        _storage_tries: &mut HashMap<Address, StorageEntry<'a>>,
+        _storage_tries: &mut HashMap<Address, StorageEntryPointer<'a>>,
         parent_header: &mut Driver::Header,
         db: Option<&mut TrieDB<'a>>,
         bundle_state: BundleState,
@@ -93,7 +93,7 @@ impl<Driver: CoreDriver> FinalizationStrategy<'_, Driver, MemoryDB>
     fn finalize_state(
         block: &mut Driver::Block,
         state_trie: &mut MptNodePointer,
-        storage_tries: &mut HashMap<Address, StorageEntry>,
+        storage_tries: &mut HashMap<Address, StorageEntryPointer>,
         parent_header: &mut Driver::Header,
         db: Option<&mut MemoryDB>,
         bundle_state: BundleState,
@@ -118,7 +118,7 @@ impl<Driver: CoreDriver> FinalizationStrategy<'_, Driver, MemoryDB>
         for storage_change in storage {
             // getting a mutable reference is more efficient than calling remove
             // every account must have an entry, even newly created accounts
-            let StorageEntry { storage_trie, .. } =
+            let StorageEntryPointer { storage_trie, .. } =
                 storage_tries.get_mut(&storage_change.address).unwrap();
             // for cleared accounts always start from the empty trie
             if storage_change.wipe_storage {
@@ -152,7 +152,7 @@ impl<Driver: CoreDriver> FinalizationStrategy<'_, Driver, MemoryDB>
                 continue;
             }
             let storage_root = {
-                let StorageEntry { storage_trie, .. } = storage_tries.get(address).unwrap();
+                let StorageEntryPointer { storage_trie, .. } = storage_tries.get(address).unwrap();
                 storage_trie.hash()
             };
 
@@ -174,7 +174,7 @@ impl<Driver: CoreDriver> FinalizationStrategy<'_, Driver, MemoryDB>
                 .context("state_trie.delete")?;
         }
         // Apply account storage only changes
-        for (address, StorageEntry { storage_trie, .. }) in storage_tries {
+        for (address, StorageEntryPointer { storage_trie, .. }) in storage_tries {
             if storage_trie.is_reference_cached() {
                 continue;
             }

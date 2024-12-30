@@ -140,6 +140,18 @@ impl<'a> MptNodePointer<'a> {
         self.insert(key, alloy_rlp::encode(value))
     }
 
+    pub fn clear(&mut self) {
+        *self = Default::default();
+    }
+
+    #[inline]
+    pub fn is_reference_cached(&self) -> bool {
+        match self {
+            MptNodePointer::Ref(_) => true,
+            MptNodePointer::Own(o) => o.is_reference_cached(),
+        }
+    }
+
     pub fn invalidate_ref_cache(&mut self) {
         let MptNodePointer::Own(node) = self else {
             unreachable!()
@@ -178,7 +190,7 @@ impl<'a> MptNodePointer<'a> {
     #[inline]
     pub fn hash(&self) -> B256 {
         match self {
-            MptNodePointer::Ref(node) => B256::from_slice(node.cached_reference.as_slice()),
+            MptNodePointer::Ref(node) => node.cached_reference.to_digest(),
             MptNodePointer::Own(node) => node.hash(),
         }
     }

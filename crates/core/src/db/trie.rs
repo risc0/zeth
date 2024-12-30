@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use crate::rescue::Recoverable;
-use crate::stateless::data::entry::StorageEntry;
+use crate::stateless::data::entry::StorageEntryPointer;
 use alloy_consensus::Account;
 use alloy_primitives::map::HashMap;
 use alloy_primitives::{Address, B256, U256};
@@ -27,7 +27,7 @@ use zeth_trie::pointer::MptNodePointer;
 #[derive(Default)]
 pub struct TrieDB<'a> {
     pub accounts: MptNodePointer<'a>,
-    pub storage: HashMap<Address, StorageEntry<'a>>,
+    pub storage: HashMap<Address, StorageEntryPointer<'a>>,
     pub contracts: HashMap<B256, Bytecode>,
     pub block_hashes: HashMap<u64, B256>,
 }

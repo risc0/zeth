@@ -341,7 +341,10 @@ where
             blocks,
             signers,
             state_trie: state_trie.into(),
-            storage_tries,
+            storage_tries: storage_tries
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
             contracts,
             parent_header: P::derive_header(data.parent_header),
             ancestor_headers,

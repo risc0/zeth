@@ -214,8 +214,9 @@ impl<'a> MptNode<'a> {
     pub fn nibs(&self) -> Vec<u8> {
         match &self.data {
             MptNodeData::Null | MptNodeData::Branch(_) | MptNodeData::Digest(_) => vec![],
-            MptNodeData::Leaf(prefix_nibs, _) => prefix_nibs.clone(),
-            MptNodeData::Extension(prefix, _) => util::prefix_nibs(prefix),
+            MptNodeData::Extension(prefix_nibs, _) | MptNodeData::Leaf(prefix_nibs, _) => {
+                prefix_nibs.clone()
+            }
         }
     }
 
@@ -360,8 +361,13 @@ impl<'a> MptNode<'a> {
                     prefix_nibs[..packed].length() + value.as_slice().length()
                 }
             }
-            MptNodeData::Extension(prefix, node) => {
-                prefix.as_slice().length() + node.reference_length()
+            MptNodeData::Extension(prefix_nibs, node) => {
+                if prefix_nibs.is_empty() {
+                    [0u8].length() + node.reference_length()
+                } else {
+                    let packed = (prefix_nibs.len() / 2) + 1;
+                    prefix_nibs[..packed].length() + node.reference_length()
+                }
             }
             MptNodeData::Digest(_) => 32,
         }

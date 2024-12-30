@@ -108,3 +108,9 @@ impl From<B256Def> for B256 {
         B256::new(value.0)
     }
 }
+
+impl From<B256> for B256Def {
+    fn from(value: B256) -> Self {
+        Self(value.0)
+    }
+}

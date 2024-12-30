@@ -88,8 +88,13 @@ impl<'a> ArchivedMptNode<'a> {
                     prefix_nibs[..packed].length() + value.as_slice().length()
                 }
             }
-            ArchivedMptNodeData::Extension(prefix, node) => {
-                prefix.as_slice().length() + node.reference_length()
+            ArchivedMptNodeData::Extension(prefix_nibs, node) => {
+                if prefix_nibs.is_empty() {
+                    [0u8].length() + node.reference_length()
+                } else {
+                    let packed = (prefix_nibs.len() / 2) + 1;
+                    prefix_nibs[..packed].length() + node.reference_length()
+                }
             }
             ArchivedMptNodeData::Digest(_) => 32,
         }
@@ -187,8 +192,8 @@ impl<'a> ArchivedMptNodeData<'a> {
                     Ok(None)
                 }
             }
-            ArchivedMptNodeData::Extension(prefix, node) => {
-                if let Some(tail) = key_nibs.strip_prefix(util::prefix_nibs(prefix).as_slice()) {
+            ArchivedMptNodeData::Extension(prefix_nibs, node) => {
+                if let Some(tail) = key_nibs.strip_prefix(prefix_nibs.as_slice()) {
                     node.data.get(tail)
                 } else {
                     Ok(None)
@@ -256,7 +261,7 @@ impl<'a> ArchivedMptNodeData<'a> {
                     if common_len > 0 {
                         // create parent extension for new branch
                         Ok(Some(MptNodeData::Extension(
-                            util::to_encoded_path(&prefix_nibs[..common_len], false),
+                            prefix_nibs[..common_len].to_vec(),
                             Box::new(branch.into()),
                         )))
                     } else {
@@ -264,10 +269,9 @@ impl<'a> ArchivedMptNodeData<'a> {
                     }
                 }
             }
-            ArchivedMptNodeData::Extension(prefix, existing_child) => {
-                let self_nibs = util::prefix_nibs(prefix);
-                let common_len = util::lcp(&self_nibs, key_nibs);
-                if common_len == self_nibs.len() {
+            ArchivedMptNodeData::Extension(prefix_nibs, existing_child) => {
+                let common_len = util::lcp(prefix_nibs, key_nibs);
+                if common_len == prefix_nibs.len() {
                     // traverse down for update
                     let Some(new_child) =
                         existing_child.data.insert(&key_nibs[common_len..], value)?
@@ -275,7 +279,7 @@ impl<'a> ArchivedMptNodeData<'a> {
                         return Ok(None);
                     };
                     Ok(Some(MptNodeData::Extension(
-                        prefix.to_vec(),
+                        prefix_nibs.to_vec(),
                         Box::new(new_child.into()),
                     )))
                 } else if common_len == key_nibs.len() {
@@ -286,10 +290,11 @@ impl<'a> ArchivedMptNodeData<'a> {
                     let mut children: [Option<Box<MptNodePointer>>; 16] = Default::default();
 
                     let existing_child = Box::new(existing_child.as_ref().into());
-                    children[self_nibs[common_len] as usize] = if split_point < self_nibs.len() {
+                    children[prefix_nibs[common_len] as usize] = if split_point < prefix_nibs.len()
+                    {
                         Some(Box::new(
                             MptNodeData::Extension(
-                                util::to_encoded_path(&self_nibs[split_point..], false),
+                                prefix_nibs[split_point..].to_vec(),
                                 existing_child,
                             )
                             .into(),
@@ -305,7 +310,7 @@ impl<'a> ArchivedMptNodeData<'a> {
                     if common_len > 0 {
                         // Create parent extension for new branch
                         Ok(Some(MptNodeData::Extension(
-                            util::to_encoded_path(&self_nibs[..common_len], false),
+                            prefix_nibs[..common_len].to_vec(),
                             Box::new(branch.into()),
                         )))
                     } else {
@@ -345,7 +350,7 @@ impl<'a> ArchivedMptNodeData<'a> {
                 if let MptNodeData::Null = replacement {
                     new_children[*i as usize] = None;
                     let mut branch = MptNodeData::Branch(new_children);
-                    branch.maybe_collapse(None)?;
+                    branch.maybe_collapse()?;
                     Ok(Some(branch))
                 } else {
                     new_children[*i as usize] = Some(Box::new(replacement.into()));
@@ -359,9 +364,8 @@ impl<'a> ArchivedMptNodeData<'a> {
                     Ok(Some(MptNodeData::Null))
                 }
             }
-            ArchivedMptNodeData::Extension(prefix, child) => {
-                let self_nibs = util::prefix_nibs(prefix);
-                let Some(tail) = key_nibs.strip_prefix(self_nibs.as_slice()) else {
+            ArchivedMptNodeData::Extension(prefix_nibs, child) => {
+                let Some(tail) = key_nibs.strip_prefix(prefix_nibs.as_slice()) else {
                     return Ok(None);
                 };
 
@@ -370,11 +374,11 @@ impl<'a> ArchivedMptNodeData<'a> {
                 };
 
                 let mut new_extension =
-                    MptNodeData::Extension(prefix.to_vec(), Box::new(replacement.into()));
+                    MptNodeData::Extension(prefix_nibs.to_vec(), Box::new(replacement.into()));
 
                 // an extension can only point to a branch or a digest; since it's sub trie was
                 // modified, we need to make sure that this property still holds
-                new_extension.maybe_collapse(Some(self_nibs))?;
+                new_extension.maybe_collapse()?;
 
                 Ok(Some(new_extension))
             }
@@ -420,13 +424,15 @@ impl Encodable for ArchivedMptNode<'_> {
                     .encode(out);
                 value.as_slice().encode(out);
             }
-            ArchivedMptNodeData::Extension(prefix, node) => {
+            ArchivedMptNodeData::Extension(prefix_nibs, node) => {
                 alloy_rlp::Header {
                     list: true,
                     payload_length: self.payload_length(),
                 }
                 .encode(out);
-                prefix.as_slice().encode(out);
+                util::to_encoded_path(prefix_nibs, false)
+                    .as_slice()
+                    .encode(out);
                 node.reference_encode(out);
             }
             ArchivedMptNodeData::Digest(digest) => {

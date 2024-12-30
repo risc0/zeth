@@ -15,8 +15,8 @@
 use alloy_primitives::U256;
 use rkyv::with::{ArchiveWith, DeserializeWith, SerializeWith};
 use rkyv::{Archive, Place};
-use serde::{Deserialize, Serialize};
 use zeth_trie::node::MptNode;
+use zeth_trie::pointer::MptNodePointer;
 
 /// Represents the state of an account's storage.
 /// The storage trie together with the used storage slots allow us to reconstruct all the
@@ -27,8 +27,8 @@ use zeth_trie::node::MptNode;
     Default,
     Eq,
     PartialEq,
-    Deserialize,
-    Serialize,
+    serde::Deserialize,
+    serde::Serialize,
     rkyv::Archive,
     rkyv::Serialize,
     rkyv::Deserialize,
@@ -39,10 +39,29 @@ pub struct StorageEntry<'a> {
     pub slots: Vec<U256>,
 }
 
-// #[derive(Debug, Clone, Eq, PartialEq)]
-// pub enum StorageEntryPointer<'a> {
-//
-// }
+#[derive(Debug, Clone, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct StorageEntryPointer<'a> {
+    pub storage_trie: MptNodePointer<'a>,
+    pub slots: Vec<U256>,
+}
+
+impl<'a> From<StorageEntry<'a>> for StorageEntryPointer<'a> {
+    fn from(value: StorageEntry<'a>) -> Self {
+        Self {
+            storage_trie: value.storage_trie.into(),
+            slots: value.slots,
+        }
+    }
+}
+
+impl<'a> From<StorageEntryPointer<'a>> for StorageEntry<'a> {
+    fn from(value: StorageEntryPointer<'a>) -> Self {
+        Self {
+            storage_trie: value.storage_trie.to_rw(),
+            slots: value.slots,
+        }
+    }
+}
 
 impl<'a> ArchiveWith<StorageEntry<'a>> for StorageEntry<'a> {
     type Archived = ArchivedStorageEntry<'a>;

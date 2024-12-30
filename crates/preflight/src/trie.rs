@@ -27,7 +27,6 @@ use zeth_trie::resolve::{
     is_not_included, mpt_from_proof, parse_proof, resolve_nodes, resolve_nodes_in_place,
     shorten_node_path,
 };
-use zeth_trie::util::prefix_nibs;
 
 pub type TrieOrphan = (B256, B256);
 pub type OrphanPair = (Vec<TrieOrphan>, Vec<(Address, TrieOrphan)>);
@@ -274,11 +273,11 @@ pub fn proof_nodes_nibbles(proof_nodes: &[MptNode]) -> Vec<u8> {
                     }
                 }
             }
-            MptNodeData::Leaf(prefix, _) | MptNodeData::Extension(prefix, _) => {
-                prefix_nibs(prefix)
-                    .into_iter()
+            MptNodeData::Leaf(prefix_nibs, _) | MptNodeData::Extension(prefix_nibs, _) => {
+                prefix_nibs
+                    .iter()
                     .rev()
-                    .for_each(|n| nibbles.push_front(n));
+                    .for_each(|n| nibbles.push_front(*n));
             }
             MptNodeData::Null | MptNodeData::Digest(_) => unreachable!(),
         }

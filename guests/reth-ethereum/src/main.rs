@@ -33,8 +33,6 @@ fn main() {
     let common_data_rkyv = rkyv::access::<ArchivedCommonData, rkyv::rancor::Error>(&common_data_bytes).expect("Rkyv failed to access CommonData instance");
     let chain_data_pot = pot::from_slice::<ChainData<
         <RethCoreDriver as CoreDriver>::Block, <RethCoreDriver as CoreDriver>::Header>>(&chain_data_bytes).expect("pot failed to deserialize data");
-    env::log("Validating trie data");
-    common_data_rkyv.state_trie.verify_reference().expect("Failed to validate state trie.");
     env::log("Constructing client data");
     let stateless_client_data = StatelessClientData::<'_, <RethCoreDriver as CoreDriver>::Block, <RethCoreDriver as CoreDriver>::Header>::from_rkyv(
         common_data_rkyv,

@@ -15,15 +15,13 @@
 pub mod entry;
 pub mod rkyval;
 
-use crate::stateless::data::rkyval::{
-    AddressDef, EncodeBytes, EncodeNamedChain, EncodeVerifyingKey, U256Def,
-};
+use crate::stateless::data::entry::StorageEntryPointer;
+use crate::stateless::data::rkyval::{EncodeBytes, EncodeNamedChain, EncodeVerifyingKey, U256Def};
 use alloy_primitives::map::HashMap;
 use alloy_primitives::{Address, Bytes, U256};
 use entry::StorageEntry;
 use k256::ecdsa::VerifyingKey;
 use reth_chainspec::NamedChain;
-use rkyv::api::low::deserialize;
 use rkyv::de::Pool;
 use rkyv::rancor::{Failure, Strategy};
 use rkyv::with::DeserializeWith;
@@ -43,7 +41,7 @@ pub struct StatelessClientData<'a, Block, Header> {
     /// State trie of the parent block.
     pub state_trie: MptNodePointer<'a>,
     /// Maps each address with its storage trie and the used storage slots.
-    pub storage_tries: HashMap<Address, StorageEntry<'a>>,
+    pub storage_tries: HashMap<Address, StorageEntryPointer<'a>>,
     /// The code for each account
     pub contracts: Vec<Bytes>,
     /// Immediate parent header
@@ -61,7 +59,11 @@ impl<'a, Block, Header> StatelessClientData<'a, Block, Header> {
             blocks: chain.blocks,
             signers: common.signers,
             state_trie: common.state_trie.into(),
-            storage_tries: common.storage_tries,
+            storage_tries: common
+                .storage_tries
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
             contracts: common.contracts,
             parent_header: chain.parent_header,
             ancestor_headers: chain.ancestor_headers,
@@ -94,18 +96,30 @@ impl<'a, Block, Header> StatelessClientData<'a, Block, Header> {
                         .collect()
                 })
                 .collect(),
-            state_trie: (&common.state_trie).into(),
+            state_trie: {
+                common
+                    .state_trie
+                    .verify_reference()
+                    .expect("Failed to validate state trie.");
+                (&common.state_trie).into()
+            },
             storage_tries: common
                 .storage_tries
                 .iter()
                 .map(|(k, v)| {
+                    v.storage_trie
+                        .verify_reference()
+                        .expect("Failed to validate storage trie.");
                     (
-                        AddressDef::deserialize_with(
-                            k,
-                            Strategy::<_, Failure>::wrap(&mut Pool::new()),
-                        )
-                        .unwrap(),
-                        deserialize::<StorageEntry, rkyv::rancor::Error>(v).unwrap(),
+                        Address::from(k.0),
+                        StorageEntryPointer {
+                            storage_trie: MptNodePointer::Ref(&v.storage_trie),
+                            slots: rkyv::with::Map::<U256Def>::deserialize_with(
+                                &v.slots,
+                                Strategy::<_, Failure>::wrap(&mut Pool::new()),
+                            )
+                            .unwrap(),
+                        },
                     )
                 })
                 .collect(),
@@ -166,7 +180,11 @@ impl<'a, B, H> From<StatelessClientData<'a, B, H>> for CommonData<'a> {
             chain: value.chain,
             signers: value.signers,
             state_trie: value.state_trie.to_rw(),
-            storage_tries: value.storage_tries,
+            storage_tries: value
+                .storage_tries
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
             contracts: value.contracts,
             total_difficulty: value.total_difficulty,
         }

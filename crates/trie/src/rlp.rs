@@ -58,13 +58,15 @@ impl Encodable for MptNode<'_> {
                     .encode(out);
                 value.as_slice().encode(out);
             }
-            MptNodeData::Extension(prefix, node) => {
+            MptNodeData::Extension(prefix_nibs, node) => {
                 alloy_rlp::Header {
                     list: true,
                     payload_length: self.payload_length(),
                 }
                 .encode(out);
-                prefix.as_slice().encode(out);
+                util::to_encoded_path(prefix_nibs, false)
+                    .as_slice()
+                    .encode(out);
                 node.reference_encode(out);
             }
             MptNodeData::Digest(digest) => {
@@ -107,7 +109,10 @@ impl Decodable for MptNode<'_> {
                 let prefix = path[0];
                 if (prefix & (2 << 4)) == 0 {
                     let node = MptNode::decode(buf)?;
-                    Ok(MptNodeData::Extension(path, Box::new(node.into())).into())
+                    Ok(
+                        MptNodeData::Extension(util::prefix_nibs(&path), Box::new(node.into()))
+                            .into(),
+                    )
                 } else {
                     let header = alloy_rlp::Header::decode(buf)?;
                     let value = Vec::from(&buf[..header.payload_length]);

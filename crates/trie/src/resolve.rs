@@ -15,7 +15,6 @@
 use crate::data::MptNodeData;
 use crate::node::MptNode;
 use crate::reference::MptNodeReference;
-use crate::util;
 use alloy_primitives::map::HashMap;
 use alloy_rlp::Decodable;
 use anyhow::{bail, Context};
@@ -166,10 +165,7 @@ pub fn shorten_node_path<'a>(node: &MptNode<'a>) -> Vec<MptNode<'a>> {
         }
         MptNodeData::Extension(_, child) => {
             for i in 0..=nibs.len() {
-                res.push(
-                    MptNodeData::Extension(util::to_encoded_path(&nibs[i..], false), child.clone())
-                        .into(),
-                )
+                res.push(MptNodeData::Extension(nibs[i..].to_vec(), child.clone()).into())
             }
         }
         MptNodeData::Digest(_) => unreachable!(),

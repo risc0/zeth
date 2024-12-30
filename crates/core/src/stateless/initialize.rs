@@ -15,7 +15,7 @@
 use crate::db::memory::MemoryDB;
 use crate::db::trie::TrieDB;
 use crate::driver::CoreDriver;
-use crate::stateless::data::entry::StorageEntry;
+use crate::stateless::data::entry::StorageEntryPointer;
 use alloy_consensus::constants::EMPTY_ROOT_HASH;
 use alloy_consensus::Account;
 use alloy_primitives::map::HashMap;
@@ -32,7 +32,7 @@ use zeth_trie::pointer::MptNodePointer;
 pub trait InitializationStrategy<'a, Driver: CoreDriver, Database> {
     fn initialize_database(
         state_trie: &mut MptNodePointer<'a>,
-        storage_tries: &mut HashMap<Address, StorageEntry<'a>>,
+        storage_tries: &mut HashMap<Address, StorageEntryPointer<'a>>,
         contracts: &mut Vec<Bytes>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
@@ -46,7 +46,7 @@ impl<'a, Driver: CoreDriver> InitializationStrategy<'a, Driver, TrieDB<'a>>
 {
     fn initialize_database(
         state_trie: &mut MptNodePointer<'a>,
-        storage_tries: &mut HashMap<Address, StorageEntry<'a>>,
+        storage_tries: &mut HashMap<Address, StorageEntryPointer<'a>>,
         contracts: &mut Vec<Bytes>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
@@ -112,7 +112,7 @@ impl<Driver: CoreDriver> InitializationStrategy<'_, Driver, MemoryDB>
 {
     fn initialize_database(
         state_trie: &mut MptNodePointer,
-        storage_tries: &mut HashMap<Address, StorageEntry>,
+        storage_tries: &mut HashMap<Address, StorageEntryPointer>,
         contracts: &mut Vec<Bytes>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
@@ -137,7 +137,7 @@ impl<Driver: CoreDriver> InitializationStrategy<'_, Driver, MemoryDB>
             HashMap::with_capacity_and_hasher(storage_tries.len(), Default::default());
         for (
             address,
-            StorageEntry {
+            StorageEntryPointer {
                 storage_trie,
                 slots,
             },

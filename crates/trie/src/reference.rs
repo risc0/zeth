@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use crate::keccak::keccak;
-use alloy_consensus::EMPTY_ROOT_HASH;
 use alloy_primitives::{keccak256, B256};
 use rkyv::with::{ArchiveWith, DeserializeWith, SerializeWith};
 use rkyv::{Archive, Place};
@@ -117,11 +116,8 @@ impl ArchiveWith<CachedMptRef> for RequireCachedRef {
     type Resolver = rkyv::Resolver<MptNodeReference>;
 
     fn resolve_with(field: &CachedMptRef, resolver: Self::Resolver, out: Place<Self::Archived>) {
-        let digest = field
-            .borrow()
-            .clone()
-            .unwrap_or(MptNodeReference::from(EMPTY_ROOT_HASH));
-        digest.resolve(resolver, out);
+        let reference = field.borrow().clone().unwrap();
+        reference.resolve(resolver, out);
     }
 }
 
@@ -133,11 +129,8 @@ where
         field: &CachedMptRef,
         serializer: &mut S,
     ) -> Result<Self::Resolver, S::Error> {
-        let digest = field
-            .borrow()
-            .clone()
-            .unwrap_or(MptNodeReference::from(EMPTY_ROOT_HASH));
-        rkyv::Serialize::serialize(&digest, serializer)
+        let reference = field.borrow().clone().unwrap();
+        rkyv::Serialize::serialize(&reference, serializer)
     }
 }
 
@@ -152,6 +145,8 @@ where
     ) -> Result<CachedMptRef, D::Error> {
         // let res = rkyv::Deserialize::deserialize(field, deserializer)?;
         // Ok(RefCell::new(Some(res)))
+
+        // Assuming the related node was not validated, this is the safe return value
         Ok(RefCell::new(None))
     }
 }

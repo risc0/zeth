@@ -322,7 +322,7 @@ mod tests {
 
     #[test]
     pub fn round_trip() -> anyhow::Result<()> {
-        let trie = MptNode::from(MptNodeData::Leaf(vec![1, 2, 3], vec![4, 5, 6]));
+        let trie = MptNode::from(MptNodeData::Leaf(vec![1, 2, 3], vec![4, 5, 6].into()));
         let _ = trie.hash();
         let _ = MptNodePointer::Own(trie.clone());
         let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&trie)?;

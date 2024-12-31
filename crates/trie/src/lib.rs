@@ -21,6 +21,7 @@ pub mod reference;
 pub mod resolve;
 pub mod rlp;
 pub mod util;
+pub mod value;
 
 #[cfg(test)]
 mod tests {
@@ -45,7 +46,7 @@ mod tests {
         for (k, v) in cases {
             let k_bytes = k.as_bytes().to_vec();
             let node: MptNode =
-                MptNodeData::Leaf(util::to_nibs(&k_bytes), v.as_bytes().to_vec()).into();
+                MptNodeData::Leaf(util::to_nibs(&k_bytes), v.as_bytes().to_vec().into()).into();
             assert_eq!(
                 node.reference().as_slice(),
                 alloy_rlp::encode(&node).as_slice()

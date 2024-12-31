@@ -25,6 +25,7 @@ use alloy_primitives::B256;
 use alloy_rlp::{Decodable, Encodable};
 use anyhow::{bail, Context};
 use rkyv::option::ArchivedOption;
+use std::fmt::{Debug, Formatter};
 
 impl<'a> ArchivedMptNode<'a> {
     pub fn get(&self, key: &[u8]) -> Result<Option<&[u8]>, Error> {
@@ -270,7 +271,9 @@ impl<'a> ArchivedMptNodeData<'a> {
 
     pub fn insert(&'a self, key_nibs: &[u8], value: Vec<u8>) -> Result<Option<MptNodeData>, Error> {
         match self {
-            ArchivedMptNodeData::Null => Ok(Some(MptNodeData::Leaf(key_nibs.to_vec(), value))),
+            ArchivedMptNodeData::Null => {
+                Ok(Some(MptNodeData::Leaf(key_nibs.to_vec(), value.into())))
+            }
             ArchivedMptNodeData::Branch(children) => {
                 let Some((i, tail)) = key_nibs.split_first() else {
                     return Err(Error::ValueInBranch);
@@ -280,7 +283,7 @@ impl<'a> ArchivedMptNodeData<'a> {
                     Some(node) => node.data.insert(tail, value)?,
                     None => {
                         // if the corresponding child is empty, insert a new leaf
-                        Some(MptNodeData::Leaf(tail.to_vec(), value))
+                        Some(MptNodeData::Leaf(tail.to_vec(), value.into()))
                     }
                 };
 
@@ -305,7 +308,7 @@ impl<'a> ArchivedMptNodeData<'a> {
                     if old_value == &value {
                         Ok(None)
                     } else {
-                        Ok(Some(MptNodeData::Leaf(prefix_nibs.to_vec(), value)))
+                        Ok(Some(MptNodeData::Leaf(prefix_nibs.to_vec(), value.into())))
                     }
                 } else if common_len == prefix_nibs.len() || common_len == key_nibs.len() {
                     Err(Error::ValueInBranch)
@@ -315,11 +318,11 @@ impl<'a> ArchivedMptNodeData<'a> {
                     let mut children: [Option<Box<MptNodePointer>>; 16] = Default::default();
 
                     children[prefix_nibs[common_len] as usize] = Some(Box::new(
-                        MptNodeData::Leaf(prefix_nibs[split_point..].to_vec(), old_value.to_vec())
+                        MptNodeData::Leaf(prefix_nibs[split_point..].to_vec(), old_value.into())
                             .into(),
                     ));
                     children[key_nibs[common_len] as usize] = Some(Box::new(
-                        MptNodeData::Leaf(key_nibs[split_point..].to_vec(), value).into(),
+                        MptNodeData::Leaf(key_nibs[split_point..].to_vec(), value.into()).into(),
                     ));
 
                     let branch = MptNodeData::Branch(children);
@@ -368,7 +371,7 @@ impl<'a> ArchivedMptNodeData<'a> {
                         Some(existing_child)
                     };
                     children[key_nibs[common_len] as usize] = Some(Box::new(
-                        MptNodeData::Leaf(key_nibs[split_point..].to_vec(), value).into(),
+                        MptNodeData::Leaf(key_nibs[split_point..].to_vec(), value.into()).into(),
                     ));
 
                     let branch = MptNodeData::Branch(children);
@@ -457,6 +460,52 @@ impl Default for ArchivedMptNodeData<'_> {
         Self::Null
     }
 }
+
+impl Debug for ArchivedMptNodeData<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ArchivedMptNodeData::Null => f.write_str("Null"),
+            ArchivedMptNodeData::Branch(c) => c.fmt(f),
+            ArchivedMptNodeData::Leaf(p, v) => (p, v.to_vec()).fmt(f),
+            ArchivedMptNodeData::Extension(p, c) => (p, c).fmt(f),
+            ArchivedMptNodeData::Digest(d) => d.fmt(f),
+        }
+    }
+}
+
+impl PartialEq for ArchivedMptNodeData<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            ArchivedMptNodeData::Null => matches!(other, ArchivedMptNodeData::Null),
+            ArchivedMptNodeData::Branch(b1) => {
+                let ArchivedMptNodeData::Branch(b2) = other else {
+                    return false;
+                };
+                b1 == b2
+            }
+            ArchivedMptNodeData::Leaf(p1, v1) => {
+                let ArchivedMptNodeData::Leaf(p2, v2) = other else {
+                    return false;
+                };
+                p1 == p2 && v1 == v2
+            }
+            ArchivedMptNodeData::Extension(p1, c1) => {
+                let ArchivedMptNodeData::Extension(p2, c2) = other else {
+                    return false;
+                };
+                p1 == p2 && c1 == c2
+            }
+            ArchivedMptNodeData::Digest(d) => {
+                let ArchivedMptNodeData::Digest(d2) = other else {
+                    return false;
+                };
+                d == d2
+            }
+        }
+    }
+}
+
+impl Eq for ArchivedMptNodeData<'_> {}
 
 impl ArchivedMptNodeReference {
     pub fn is_digest(&self) -> bool {

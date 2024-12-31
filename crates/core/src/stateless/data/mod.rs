@@ -16,7 +16,7 @@ pub mod entry;
 pub mod rkyval;
 
 use crate::stateless::data::entry::StorageEntryPointer;
-use crate::stateless::data::rkyval::{EncodeBytes, EncodeNamedChain, EncodeVerifyingKey, U256Def};
+use crate::stateless::data::rkyval::{EncodeNamedChain, EncodeVerifyingKey, U256Def};
 use alloy_primitives::map::HashMap;
 use alloy_primitives::{Address, Bytes, U256};
 use entry::StorageEntry;
@@ -28,6 +28,7 @@ use rkyv::with::DeserializeWith;
 use serde::{Deserialize, Serialize};
 use zeth_trie::node::MptNode;
 use zeth_trie::pointer::MptNodePointer;
+use zeth_trie::value::ValuePointer;
 
 /// External block input.
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
@@ -43,7 +44,7 @@ pub struct StatelessClientData<'a, Block, Header> {
     /// Maps each address with its storage trie and the used storage slots.
     pub storage_tries: HashMap<Address, StorageEntryPointer<'a>>,
     /// The code for each account
-    pub contracts: Vec<Bytes>,
+    pub contracts: Vec<ValuePointer<'a, u8>>,
     /// Immediate parent header
     pub parent_header: Header,
     /// List of at most 256 previous block headers
@@ -64,7 +65,11 @@ impl<'a, Block, Header> StatelessClientData<'a, Block, Header> {
                 .into_iter()
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
-            contracts: common.contracts,
+            contracts: common
+                .contracts
+                .into_iter()
+                .map(|c| c.to_vec().into())
+                .collect(),
             parent_header: chain.parent_header,
             ancestor_headers: chain.ancestor_headers,
             total_difficulty: common.total_difficulty,
@@ -114,23 +119,12 @@ impl<'a, Block, Header> StatelessClientData<'a, Block, Header> {
                         Address::from(k.0),
                         StorageEntryPointer {
                             storage_trie: MptNodePointer::Ref(&v.storage_trie),
-                            slots: rkyv::with::Map::<U256Def>::deserialize_with(
-                                &v.slots,
-                                Strategy::<_, Failure>::wrap(&mut Pool::new()),
-                            )
-                            .unwrap(),
+                            slots: vec![],
                         },
                     )
                 })
                 .collect(),
-            contracts: common
-                .contracts
-                .iter()
-                .map(|c| {
-                    EncodeBytes::deserialize_with(c, Strategy::<_, Failure>::wrap(&mut Pool::new()))
-                        .unwrap()
-                })
-                .collect(),
+            contracts: common.contracts.iter().map(|c| c.into()).collect(),
             parent_header: chain.parent_header,
             ancestor_headers: chain.ancestor_headers,
             total_difficulty: U256Def::deserialize_with(
@@ -185,7 +179,11 @@ impl<'a, B, H> From<StatelessClientData<'a, B, H>> for CommonData<'a> {
                 .into_iter()
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
-            contracts: value.contracts,
+            contracts: value
+                .contracts
+                .into_iter()
+                .map(|c| c.to_vec().into())
+                .collect(),
             total_difficulty: value.total_difficulty,
         }
     }

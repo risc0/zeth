@@ -19,7 +19,7 @@ use crate::stateless::data::entry::StorageEntryPointer;
 use alloy_consensus::constants::EMPTY_ROOT_HASH;
 use alloy_consensus::Account;
 use alloy_primitives::map::HashMap;
-use alloy_primitives::{Address, Bytes, B256, U256};
+use alloy_primitives::{Address, B256, U256};
 use anyhow::bail;
 use core::mem::take;
 use reth_primitives::revm_primitives::Bytecode;
@@ -28,12 +28,13 @@ use reth_revm::primitives::AccountInfo;
 use std::default::Default;
 use zeth_trie::keccak::keccak;
 use zeth_trie::pointer::MptNodePointer;
+use zeth_trie::value::ValuePointer;
 
 pub trait InitializationStrategy<'a, Driver: CoreDriver, Database> {
     fn initialize_database(
         state_trie: &mut MptNodePointer<'a>,
         storage_tries: &mut HashMap<Address, StorageEntryPointer<'a>>,
-        contracts: &mut Vec<Bytes>,
+        contracts: &mut Vec<ValuePointer<'a, u8>>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
     ) -> anyhow::Result<Database>;
@@ -47,7 +48,7 @@ impl<'a, Driver: CoreDriver> InitializationStrategy<'a, Driver, TrieDB<'a>>
     fn initialize_database(
         state_trie: &mut MptNodePointer<'a>,
         storage_tries: &mut HashMap<Address, StorageEntryPointer<'a>>,
-        contracts: &mut Vec<Bytes>,
+        contracts: &mut Vec<ValuePointer<'a, u8>>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
     ) -> anyhow::Result<TrieDB<'a>> {
@@ -63,7 +64,7 @@ impl<'a, Driver: CoreDriver> InitializationStrategy<'a, Driver, TrieDB<'a>>
         // hash all the contract code
         let contracts = take(contracts)
             .into_iter()
-            .map(|bytes| (keccak(&bytes).into(), Bytecode::new_raw(bytes)))
+            .map(|bytes| (keccak(bytes.as_slice()).into(), bytes))
             .collect();
 
         // Verify account data in db
@@ -130,7 +131,7 @@ impl<Driver: CoreDriver> InitializationStrategy<'_, Driver, MemoryDB>
     fn initialize_database(
         state_trie: &mut MptNodePointer,
         storage_tries: &mut HashMap<Address, StorageEntryPointer>,
-        contracts: &mut Vec<Bytes>,
+        contracts: &mut Vec<ValuePointer<'_, u8>>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
     ) -> anyhow::Result<MemoryDB> {
@@ -146,7 +147,12 @@ impl<Driver: CoreDriver> InitializationStrategy<'_, Driver, MemoryDB>
         // hash all the contract code
         let contracts = take(contracts)
             .into_iter()
-            .map(|bytes| (keccak(&bytes).into(), Bytecode::new_raw(bytes)))
+            .map(|bytes| {
+                (
+                    keccak(bytes.as_slice()).into(),
+                    Bytecode::new_raw(bytes.to_vec().into()),
+                )
+            })
             .collect();
 
         // Load account data into db

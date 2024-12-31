@@ -14,7 +14,9 @@
 
 use risc0_zkvm::guest::env;
 use zeth_core::db::trie::TrieDB;
+use zeth_core::driver::CoreDriver;
 use zeth_core::stateless::client::StatelessClient;
+use zeth_core::stateless::data::{ArchivedCommonData, ChainData, StatelessClientData};
 use zeth_core_optimism::{OpRethCoreDriver, OpRethStatelessClient};
 
 #[no_mangle]
@@ -24,15 +26,28 @@ pub extern "C" fn __ctzsi2(x: u32) -> usize {
 
 fn main() {
     // todo: load up revm with hashbrown feat
-    let stateless_client_data_rkyv = env::read_frame();
-    let stateless_client_data_pot = env::read_frame();
+    let common_data_bytes = env::read_frame();
+    let chain_data_bytes = env::read_frame();
     env::log("Deserializing input data");
-    let stateless_client_data =
-        <OpRethStatelessClient as StatelessClient<OpRethCoreDriver, TrieDB>>::data_from_parts(
-            &stateless_client_data_rkyv,
-            &stateless_client_data_pot,
-        )
-        .expect("Failed to load client data from stdin");
+
+    let common_data_rkyv =
+        rkyv::access::<ArchivedCommonData, rkyv::rancor::Error>(&common_data_bytes)
+            .expect("Rkyv failed to access CommonData instance");
+    let chain_data_pot = pot::from_slice::<
+        ChainData<
+            <OpRethCoreDriver as CoreDriver>::Block,
+            <OpRethCoreDriver as CoreDriver>::Header,
+        >,
+    >(&chain_data_bytes)
+    .expect("pot failed to deserialize data");
+    env::log("Constructing client data");
+    let stateless_client_data = StatelessClientData::<
+        '_,
+        <OpRethCoreDriver as CoreDriver>::Block,
+        <OpRethCoreDriver as CoreDriver>::Header,
+    >::from_rkyv(common_data_rkyv, chain_data_pot)
+    .expect("StatelessClientData construction failed");
+
     let validation_depth = stateless_client_data.blocks.len() as u64;
     assert!(
         stateless_client_data.chain.is_optimism(),

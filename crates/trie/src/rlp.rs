@@ -117,7 +117,7 @@ impl Decodable for MptNode<'_> {
                     let header = alloy_rlp::Header::decode(buf)?;
                     let value = Vec::from(&buf[..header.payload_length]);
                     buf.advance(header.payload_length);
-                    Ok(MptNodeData::Leaf(util::prefix_nibs(&path), value).into())
+                    Ok(MptNodeData::Leaf(util::prefix_nibs(&path), value.into()).into())
                 }
             }
             (17, true) => {

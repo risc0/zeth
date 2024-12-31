@@ -20,7 +20,7 @@ use crate::provider::{new_provider, Provider};
 use crate::trie::extend_proof_tries;
 use alloy::network::Network;
 use alloy::primitives::map::HashMap;
-use alloy::primitives::{Bytes, B256};
+use alloy::primitives::B256;
 use anyhow::Context;
 use log::{debug, info, warn};
 use std::cell::RefCell;
@@ -39,6 +39,7 @@ use zeth_trie::keccak::keccak;
 use zeth_trie::node::MptNode;
 use zeth_trie::reference::MptNodeReference;
 use zeth_trie::resolve::{parse_proof, resolve_nodes_in_place, shorten_node_path};
+use zeth_trie::value::ValuePointer;
 
 pub trait PreflightClient<N: Network, R: CoreDriver, P: PreflightDriver<R, N>>
 where
@@ -171,7 +172,7 @@ where
         let core_parent_header = P::derive_header(data.parent_header.clone());
         let mut state_trie = MptNode::from(R::state_root(&core_parent_header));
         let mut storage_tries = Default::default();
-        let mut contracts: Vec<Bytes> = Default::default();
+        let mut contracts: Vec<ValuePointer<'_, u8>> = Default::default();
         let mut ancestor_headers: Vec<R::Header> = Default::default();
 
         for num_blocks in 1..=block_count {
@@ -225,7 +226,7 @@ where
             // collect the code of the used contracts
             let initial_db = preflight_db.inner.db.db.borrow();
             for code in initial_db.contracts.values() {
-                contracts.push(code.bytes().clone());
+                contracts.push(code.bytes().to_vec().into());
             }
             drop(initial_db);
             info!("Collected contracts: {}", contracts.len());

@@ -23,12 +23,13 @@ use reth_revm::DatabaseRef;
 use reth_storage_errors::provider::ProviderError;
 use zeth_trie::keccak::keccak;
 use zeth_trie::pointer::MptNodePointer;
+use zeth_trie::value::ValuePointer;
 
 #[derive(Default)]
 pub struct TrieDB<'a> {
     pub accounts: MptNodePointer<'a>,
     pub storage: HashMap<Address, StorageEntryPointer<'a>>,
-    pub contracts: HashMap<B256, Bytecode>,
+    pub contracts: HashMap<B256, ValuePointer<'a, u8>>,
     pub block_hashes: HashMap<u64, B256>,
 }
 
@@ -55,7 +56,9 @@ impl DatabaseRef for TrieDB<'_> {
     }
 
     fn code_by_hash_ref(&self, code_hash: B256) -> Result<Bytecode, Self::Error> {
-        Ok(self.contracts.get(&code_hash).unwrap().clone())
+        let raw_data = self.contracts.get(&code_hash).unwrap();
+        let result = Bytecode::new_raw(raw_data.to_vec().into());
+        Ok(result)
     }
 
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, Self::Error> {

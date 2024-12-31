@@ -15,6 +15,7 @@
 use crate::pointer::MptNodePointer;
 use crate::util;
 use crate::util::Error;
+use crate::value::ValuePointer;
 use alloy_primitives::B256;
 use serde::{Deserialize, Serialize};
 use std::{iter, mem};
@@ -49,7 +50,6 @@ use std::{iter, mem};
 #[rkyv(deserialize_bounds(
     __D::Error: rkyv::rancor::Source
 ))]
-#[rkyv(derive(Debug, Eq, PartialEq))]
 pub enum MptNodeData<'a> {
     /// Represents an empty trie node.
     #[default]
@@ -57,7 +57,12 @@ pub enum MptNodeData<'a> {
     /// A node that can have up to 16 children. Each child is an optional boxed [MptNode].
     Branch(#[rkyv(omit_bounds)] [Option<Box<MptNodePointer<'a>>>; 16]),
     /// A leaf node that contains a key and a value, both represented as byte vectors.
-    Leaf(Vec<u8>, Vec<u8>),
+    Leaf(
+        Vec<u8>,
+        #[rkyv(with = crate::value::EncodeVP)] ValuePointer<'a, u8>,
+    ),
+    // Leaf(Vec<u8>, #[rkyv(with = rkyv::Archived<Vec<u8>>)] ValuePointer<'a, u8>),
+    // Leaf(Vec<u8>, Vec<u8>),
     /// A node that has exactly one child and is used to represent a shared prefix of
     /// several keys.
     Extension(Vec<u8>, #[rkyv(omit_bounds)] Box<MptNodePointer<'a>>),
@@ -82,7 +87,7 @@ impl<'a> MptNodeData<'a> {
             }
             MptNodeData::Leaf(prefix_nibs, value) => {
                 if prefix_nibs == key_nibs {
-                    Ok(Some(value))
+                    Ok(Some(value.as_slice()))
                 } else {
                     Ok(None)
                 }
@@ -101,7 +106,7 @@ impl<'a> MptNodeData<'a> {
     pub fn insert(&mut self, key_nibs: &[u8], value: Vec<u8>) -> Result<bool, Error> {
         match self {
             MptNodeData::Null => {
-                *self = MptNodeData::Leaf(key_nibs.to_vec(), value);
+                *self = MptNodeData::Leaf(key_nibs.to_vec(), value.into());
             }
             MptNodeData::Branch(children) => {
                 if let Some((i, tail)) = key_nibs.split_first() {
@@ -114,7 +119,9 @@ impl<'a> MptNodeData<'a> {
                         }
                         // if the corresponding child is empty, insert a new leaf
                         None => {
-                            *child = Some(Box::new(MptNodeData::Leaf(tail.to_vec(), value).into()));
+                            *child = Some(Box::new(
+                                MptNodeData::Leaf(tail.to_vec(), value.into()).into(),
+                            ));
                         }
                     }
                 } else {
@@ -125,6 +132,7 @@ impl<'a> MptNodeData<'a> {
                 let common_len = util::lcp(prefix_nibs, key_nibs);
                 if common_len == prefix_nibs.len() && common_len == key_nibs.len() {
                     // if self_nibs == key_nibs, update the value if it is different
+                    let value = ValuePointer::from(value);
                     if old_value == &value {
                         return Ok(false);
                     }
@@ -144,7 +152,7 @@ impl<'a> MptNodeData<'a> {
                         .into(),
                     ));
                     children[key_nibs[common_len] as usize] = Some(Box::new(
-                        MptNodeData::Leaf(key_nibs[split_point..].to_vec(), value).into(),
+                        MptNodeData::Leaf(key_nibs[split_point..].to_vec(), value.into()).into(),
                     ));
 
                     let branch = MptNodeData::Branch(children);
@@ -186,7 +194,7 @@ impl<'a> MptNodeData<'a> {
                         Some(mem::take(existing_child))
                     };
                     children[key_nibs[common_len] as usize] = Some(Box::new(
-                        MptNodeData::Leaf(key_nibs[split_point..].to_vec(), value).into(),
+                        MptNodeData::Leaf(key_nibs[split_point..].to_vec(), value.into()).into(),
                     ));
 
                     let branch = MptNodeData::Branch(children);
@@ -272,7 +280,7 @@ impl<'a> MptNodeData<'a> {
                                     let new_nibs: Vec<_> = iter::once(index as u8)
                                         .chain(prefix_nibs.iter().copied())
                                         .collect();
-                                    *self = MptNodeData::Leaf(new_nibs, orphan_value.to_vec());
+                                    *self = MptNodeData::Leaf(new_nibs, orphan_value.into());
                                 }
                                 // if the orphan is an extension, prepend the corresponding nib to it
                                 ArchivedMptNodeData::Extension(prefix_nibs, orphan_child) => {
@@ -343,7 +351,7 @@ impl<'a> MptNodeData<'a> {
                                         .chain(child_prefix_nibs.iter())
                                         .copied()
                                         .collect(),
-                                    value.to_vec(),
+                                    value.into(),
                                 );
                             }
                             // for an extension, replace the extension with the extended extension

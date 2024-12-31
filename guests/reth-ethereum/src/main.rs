@@ -30,21 +30,20 @@ fn main() {
     let chain_data_bytes = env::read_frame();
     env::log("Deserializing input data");
 
-    let common_data_rkyv = rkyv::access::<ArchivedCommonData, rkyv::rancor::Error>(&common_data_bytes).expect("Rkyv failed to access CommonData instance");
-    let chain_data_pot = pot::from_slice::<ChainData<
-        <RethCoreDriver as CoreDriver>::Block, <RethCoreDriver as CoreDriver>::Header>>(&chain_data_bytes).expect("pot failed to deserialize data");
+    let common_data_rkyv =
+        rkyv::access::<ArchivedCommonData, rkyv::rancor::Error>(&common_data_bytes)
+            .expect("Rkyv failed to access CommonData instance");
+    let chain_data_pot = pot::from_slice::<
+        ChainData<<RethCoreDriver as CoreDriver>::Block, <RethCoreDriver as CoreDriver>::Header>,
+    >(&chain_data_bytes)
+    .expect("pot failed to deserialize data");
     env::log("Constructing client data");
-    let stateless_client_data = StatelessClientData::<'_, <RethCoreDriver as CoreDriver>::Block, <RethCoreDriver as CoreDriver>::Header>::from_rkyv(
-        common_data_rkyv,
-        chain_data_pot
-    ).expect("StatelessClientData construction failed");
-
-    // let stateless_client_data =
-    //     <RethStatelessClient as StatelessClient<RethCoreDriver, TrieDB>>::data_from_parts(
-    //         &common_data_bytes,
-    //         &chain_data_bytes,
-    //     )
-    //     .expect("Failed to load client data from stdin");
+    let stateless_client_data = StatelessClientData::<
+        '_,
+        <RethCoreDriver as CoreDriver>::Block,
+        <RethCoreDriver as CoreDriver>::Header,
+    >::from_rkyv(common_data_rkyv, chain_data_pot)
+    .expect("StatelessClientData construction failed");
 
     let validation_depth = stateless_client_data.blocks.len() as u64;
     assert!(

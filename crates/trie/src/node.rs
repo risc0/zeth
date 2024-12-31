@@ -323,7 +323,7 @@ impl<'a> MptNode<'a> {
                 vec![format!(
                     "{} -> {:?}",
                     nibs,
-                    T::decode(&mut &data[..]).unwrap()
+                    T::decode(&mut data.as_slice()).unwrap()
                 )]
             }
             MptNodeData::Extension(_, node) => node

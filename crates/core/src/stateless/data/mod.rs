@@ -120,7 +120,10 @@ impl<'a, Block, Header> StatelessClientData<'a, Block, Header> {
                         Address::from(k.0),
                         StorageEntryPointer {
                             storage_trie: MptNodePointer::Ref(&v.storage_trie),
-                            slots: vec![],
+                            slots: rkyv::with::Map::<U256Def>::deserialize_with(
+                                &v.slots,
+                                Strategy::<_, Failure>::wrap(&mut Pool::new())
+                            ).unwrap(),
                         },
                     )
                 })

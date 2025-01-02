@@ -15,7 +15,7 @@
 use crate::pointer::MptNodePointer;
 use crate::util;
 use crate::util::Error;
-use crate::value::ValuePointer;
+use crate::vec::VecPointer;
 use alloy_primitives::B256;
 use serde::{Deserialize, Serialize};
 use std::{iter, mem};
@@ -59,10 +59,8 @@ pub enum MptNodeData<'a> {
     /// A leaf node that contains a key and a value, both represented as byte vectors.
     Leaf(
         Vec<u8>,
-        #[rkyv(with = crate::value::EncodeVP)] ValuePointer<'a, u8>,
+        #[rkyv(with = crate::vec::EncodeVP)] VecPointer<'a, u8>,
     ),
-    // Leaf(Vec<u8>, #[rkyv(with = rkyv::Archived<Vec<u8>>)] ValuePointer<'a, u8>),
-    // Leaf(Vec<u8>, Vec<u8>),
     /// A node that has exactly one child and is used to represent a shared prefix of
     /// several keys.
     Extension(Vec<u8>, #[rkyv(omit_bounds)] Box<MptNodePointer<'a>>),
@@ -132,7 +130,7 @@ impl<'a> MptNodeData<'a> {
                 let common_len = util::lcp(prefix_nibs, key_nibs);
                 if common_len == prefix_nibs.len() && common_len == key_nibs.len() {
                     // if self_nibs == key_nibs, update the value if it is different
-                    let value = ValuePointer::from(value);
+                    let value = VecPointer::from(value);
                     if old_value == &value {
                         return Ok(false);
                     }

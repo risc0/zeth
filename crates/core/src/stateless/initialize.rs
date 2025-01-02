@@ -29,13 +29,13 @@ use reth_revm::primitives::AccountInfo;
 use std::default::Default;
 use zeth_trie::keccak::keccak;
 use zeth_trie::pointer::MptNodePointer;
-use zeth_trie::value::ValuePointer;
+use zeth_trie::vec::VecPointer;
 
 pub trait InitializationStrategy<'a, Driver: CoreDriver, Database> {
     fn initialize_database(
         state_trie: &mut MptNodePointer<'a>,
         storage_tries: &mut HashMap<Address, StorageEntryPointer<'a>, NoHasherBuilder>,
-        contracts: &mut Vec<ValuePointer<'a, u8>>,
+        contracts: &mut Vec<VecPointer<'a, u8>>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
     ) -> anyhow::Result<Database>;
@@ -49,7 +49,7 @@ impl<'a, Driver: CoreDriver> InitializationStrategy<'a, Driver, TrieDB<'a>>
     fn initialize_database(
         state_trie: &mut MptNodePointer<'a>,
         storage_tries: &mut HashMap<Address, StorageEntryPointer<'a>, NoHasherBuilder>,
-        contracts: &mut Vec<ValuePointer<'a, u8>>,
+        contracts: &mut Vec<VecPointer<'a, u8>>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
     ) -> anyhow::Result<TrieDB<'a>> {
@@ -132,7 +132,7 @@ impl<Driver: CoreDriver> InitializationStrategy<'_, Driver, MemoryDB>
     fn initialize_database(
         state_trie: &mut MptNodePointer,
         storage_tries: &mut HashMap<Address, StorageEntryPointer, NoHasherBuilder>,
-        contracts: &mut Vec<ValuePointer<'_, u8>>,
+        contracts: &mut Vec<VecPointer<'_, u8>>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
     ) -> anyhow::Result<MemoryDB> {

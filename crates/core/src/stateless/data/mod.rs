@@ -29,7 +29,7 @@ use serde::{Deserialize, Serialize};
 use std::hash::{BuildHasher, Hasher};
 use zeth_trie::node::MptNode;
 use zeth_trie::pointer::MptNodePointer;
-use zeth_trie::value::ValuePointer;
+use zeth_trie::vec::VecPointer;
 
 /// External block input.
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
@@ -45,7 +45,7 @@ pub struct StatelessClientData<'a, Block, Header> {
     /// Maps each address with its storage trie and the used storage slots.
     pub storage_tries: HashMap<Address, StorageEntryPointer<'a>, NoHasherBuilder>,
     /// The code for each account
-    pub contracts: Vec<ValuePointer<'a, u8>>,
+    pub contracts: Vec<VecPointer<'a, u8>>,
     /// Immediate parent header
     pub parent_header: Header,
     /// List of at most 256 previous block headers
@@ -122,8 +122,9 @@ impl<'a, Block, Header> StatelessClientData<'a, Block, Header> {
                             storage_trie: MptNodePointer::Ref(&v.storage_trie),
                             slots: rkyv::with::Map::<U256Def>::deserialize_with(
                                 &v.slots,
-                                Strategy::<_, Failure>::wrap(&mut Pool::new())
-                            ).unwrap(),
+                                Strategy::<_, Failure>::wrap(&mut Pool::new()),
+                            )
+                            .unwrap(),
                         },
                     )
                 })

@@ -24,13 +24,13 @@ use reth_revm::DatabaseRef;
 use reth_storage_errors::provider::ProviderError;
 use zeth_trie::keccak::keccak;
 use zeth_trie::pointer::MptNodePointer;
-use zeth_trie::value::ValuePointer;
+use zeth_trie::vec::VecPointer;
 
 #[derive(Default)]
 pub struct TrieDB<'a> {
     pub accounts: MptNodePointer<'a>,
     pub storage: HashMap<Address, StorageEntryPointer<'a>, NoHasherBuilder>,
-    pub contracts: HashMap<B256, ValuePointer<'a, u8>, NoHasherBuilder>,
+    pub contracts: HashMap<B256, VecPointer<'a, u8>, NoHasherBuilder>,
     pub block_hashes: HashMap<u64, B256, NoHasherBuilder>,
 }
 

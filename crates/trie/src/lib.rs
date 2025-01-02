@@ -21,7 +21,7 @@ pub mod reference;
 pub mod resolve;
 pub mod rlp;
 pub mod util;
-pub mod value;
+pub mod vec;
 
 #[cfg(test)]
 mod tests {

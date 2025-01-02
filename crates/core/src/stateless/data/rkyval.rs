@@ -102,7 +102,7 @@ impl From<AddressDef> for Address {
 #[derive(Clone, Debug, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 #[rkyv(remote = U256)]
 #[rkyv(archived = ArchivedU256)]
-#[rkyv(derive(Debug, Eq, PartialEq))]
+#[rkyv(derive(Debug, Clone, Default, Eq, PartialEq))]
 pub struct U256Def {
     #[rkyv(getter = U256::as_limbs)]
     limbs: [u64; 4],

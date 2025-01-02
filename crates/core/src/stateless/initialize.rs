@@ -16,6 +16,7 @@ use crate::db::memory::MemoryDB;
 use crate::db::trie::TrieDB;
 use crate::driver::CoreDriver;
 use crate::stateless::data::entry::StorageEntryPointer;
+use crate::stateless::data::NoHasherBuilder;
 use alloy_consensus::constants::EMPTY_ROOT_HASH;
 use alloy_consensus::Account;
 use alloy_primitives::map::HashMap;
@@ -33,7 +34,7 @@ use zeth_trie::value::ValuePointer;
 pub trait InitializationStrategy<'a, Driver: CoreDriver, Database> {
     fn initialize_database(
         state_trie: &mut MptNodePointer<'a>,
-        storage_tries: &mut HashMap<Address, StorageEntryPointer<'a>>,
+        storage_tries: &mut HashMap<Address, StorageEntryPointer<'a>, NoHasherBuilder>,
         contracts: &mut Vec<ValuePointer<'a, u8>>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
@@ -47,7 +48,7 @@ impl<'a, Driver: CoreDriver> InitializationStrategy<'a, Driver, TrieDB<'a>>
 {
     fn initialize_database(
         state_trie: &mut MptNodePointer<'a>,
-        storage_tries: &mut HashMap<Address, StorageEntryPointer<'a>>,
+        storage_tries: &mut HashMap<Address, StorageEntryPointer<'a>, NoHasherBuilder>,
         contracts: &mut Vec<ValuePointer<'a, u8>>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
@@ -85,7 +86,7 @@ impl<'a, Driver: CoreDriver> InitializationStrategy<'a, Driver, TrieDB<'a>>
         }
 
         // prepare block hash history
-        let mut block_hashes: HashMap<u64, B256> =
+        let mut block_hashes: HashMap<u64, B256, NoHasherBuilder> =
             HashMap::with_capacity_and_hasher(ancestor_headers.len() + 1, Default::default());
         block_hashes.insert(
             Driver::block_number(parent_header),
@@ -130,7 +131,7 @@ impl<Driver: CoreDriver> InitializationStrategy<'_, Driver, MemoryDB>
 {
     fn initialize_database(
         state_trie: &mut MptNodePointer,
-        storage_tries: &mut HashMap<Address, StorageEntryPointer>,
+        storage_tries: &mut HashMap<Address, StorageEntryPointer, NoHasherBuilder>,
         contracts: &mut Vec<ValuePointer<'_, u8>>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,

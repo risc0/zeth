@@ -14,6 +14,7 @@
 
 use crate::rescue::Recoverable;
 use crate::stateless::data::entry::StorageEntryPointer;
+use crate::stateless::data::NoHasherBuilder;
 use alloy_consensus::Account;
 use alloy_primitives::map::HashMap;
 use alloy_primitives::{Address, B256, U256};
@@ -28,9 +29,9 @@ use zeth_trie::value::ValuePointer;
 #[derive(Default)]
 pub struct TrieDB<'a> {
     pub accounts: MptNodePointer<'a>,
-    pub storage: HashMap<Address, StorageEntryPointer<'a>>,
-    pub contracts: HashMap<B256, ValuePointer<'a, u8>>,
-    pub block_hashes: HashMap<u64, B256>,
+    pub storage: HashMap<Address, StorageEntryPointer<'a>, NoHasherBuilder>,
+    pub contracts: HashMap<B256, ValuePointer<'a, u8>, NoHasherBuilder>,
+    pub block_hashes: HashMap<u64, B256, NoHasherBuilder>,
 }
 
 impl Recoverable for TrieDB<'_> {

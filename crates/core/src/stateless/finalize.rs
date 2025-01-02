@@ -17,6 +17,7 @@ use crate::db::trie::TrieDB;
 use crate::db::update::{into_plain_state, Update};
 use crate::driver::CoreDriver;
 use crate::stateless::data::entry::StorageEntryPointer;
+use crate::stateless::data::NoHasherBuilder;
 use alloy_consensus::Account;
 use alloy_primitives::map::HashMap;
 use alloy_primitives::{Address, U256};
@@ -30,7 +31,7 @@ pub trait FinalizationStrategy<'a, Driver: CoreDriver, Database> {
     fn finalize_state(
         block: &mut Driver::Block,
         state_trie: &mut MptNodePointer<'a>,
-        storage_tries: &mut HashMap<Address, StorageEntryPointer<'a>>,
+        storage_tries: &mut HashMap<Address, StorageEntryPointer<'a>, NoHasherBuilder>,
         parent_header: &mut Driver::Header,
         db: Option<&mut Database>,
         bundle_state: BundleState,
@@ -46,7 +47,7 @@ impl<'a, Driver: CoreDriver> FinalizationStrategy<'a, Driver, TrieDB<'a>>
     fn finalize_state(
         block: &mut Driver::Block,
         _state_trie: &mut MptNodePointer<'a>,
-        _storage_tries: &mut HashMap<Address, StorageEntryPointer<'a>>,
+        _storage_tries: &mut HashMap<Address, StorageEntryPointer<'a>, NoHasherBuilder>,
         parent_header: &mut Driver::Header,
         db: Option<&mut TrieDB<'a>>,
         bundle_state: BundleState,
@@ -93,7 +94,7 @@ impl<Driver: CoreDriver> FinalizationStrategy<'_, Driver, MemoryDB>
     fn finalize_state(
         block: &mut Driver::Block,
         state_trie: &mut MptNodePointer,
-        storage_tries: &mut HashMap<Address, StorageEntryPointer>,
+        storage_tries: &mut HashMap<Address, StorageEntryPointer, NoHasherBuilder>,
         parent_header: &mut Driver::Header,
         db: Option<&mut MemoryDB>,
         bundle_state: BundleState,

@@ -25,7 +25,6 @@ pub extern "C" fn __ctzsi2(x: u32) -> usize {
 }
 
 fn main() {
-    // todo: load up revm with hashbrown feat
     let common_data_bytes = env::read_frame();
     let chain_data_bytes = env::read_frame();
     env::log("Deserializing input data");

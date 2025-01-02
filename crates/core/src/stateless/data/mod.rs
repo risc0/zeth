@@ -26,6 +26,7 @@ use rkyv::de::Pool;
 use rkyv::rancor::{Failure, Strategy};
 use rkyv::with::DeserializeWith;
 use serde::{Deserialize, Serialize};
+use std::hash::{BuildHasher, Hasher};
 use zeth_trie::node::MptNode;
 use zeth_trie::pointer::MptNodePointer;
 use zeth_trie::value::ValuePointer;
@@ -42,7 +43,7 @@ pub struct StatelessClientData<'a, Block, Header> {
     /// State trie of the parent block.
     pub state_trie: MptNodePointer<'a>,
     /// Maps each address with its storage trie and the used storage slots.
-    pub storage_tries: HashMap<Address, StorageEntryPointer<'a>>,
+    pub storage_tries: HashMap<Address, StorageEntryPointer<'a>, NoHasherBuilder>,
     /// The code for each account
     pub contracts: Vec<ValuePointer<'a, u8>>,
     /// Immediate parent header
@@ -159,13 +160,38 @@ pub struct CommonData<'a> {
     pub state_trie: MptNode<'a>,
     /// Maps each address with its storage trie and the used storage slots.
     #[rkyv(with = rkyv::with::MapKV<rkyval::AddressDef, StorageEntry<'a>>)]
-    pub storage_tries: HashMap<Address, StorageEntry<'a>>,
+    pub storage_tries: HashMap<Address, StorageEntry<'a>, NoHasherBuilder>,
     /// The code for each account
     #[rkyv(with = rkyv::with::Map<rkyval::EncodeBytes>)]
     pub contracts: Vec<Bytes>,
     /// Total difficulty before executing block
     #[rkyv(with = rkyval::U256Def)]
     pub total_difficulty: U256,
+}
+
+#[derive(Clone, Default)]
+pub struct NoHasherBuilder;
+
+impl BuildHasher for NoHasherBuilder {
+    type Hasher = NoHasher;
+
+    fn build_hasher(&self) -> Self::Hasher {
+        NoHasher::default()
+    }
+}
+
+#[derive(Default)]
+pub struct NoHasher([u8; 8]);
+
+impl Hasher for NoHasher {
+    fn finish(&self) -> u64 {
+        u64::from_be_bytes(self.0)
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        let l = std::cmp::min(8, bytes.len());
+        self.0[..l].copy_from_slice(&bytes[..l]);
+    }
 }
 
 impl<'a, B, H> From<StatelessClientData<'a, B, H>> for CommonData<'a> {

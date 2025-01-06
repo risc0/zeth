@@ -24,8 +24,7 @@ pub mod finalize;
 pub mod initialize;
 pub mod validate;
 
-pub static SLOT_CACHE: LazyLock<Mutex<HashMap<U256, [u8; 32]>>> =
-    LazyLock::new(|| Default::default());
+pub static SLOT_CACHE: LazyLock<Mutex<HashMap<U256, [u8; 32]>>> = LazyLock::new(Default::default);
 
 pub static ADDRESS_CACHE: LazyLock<Mutex<HashMap<Address, [u8; 32]>>> =
-    LazyLock::new(|| Default::default());
+    LazyLock::new(Default::default);

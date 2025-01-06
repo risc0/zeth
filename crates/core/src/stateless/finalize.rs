@@ -18,6 +18,7 @@ use crate::db::update::{into_plain_state, Update};
 use crate::driver::CoreDriver;
 use crate::stateless::data::entry::StorageEntryPointer;
 use crate::stateless::data::NoHasherBuilder;
+use crate::stateless::{ADDRESS_CACHE, SLOT_CACHE};
 use alloy_consensus::Account;
 use alloy_primitives::map::HashMap;
 use alloy_primitives::{Address, U256};
@@ -116,6 +117,8 @@ impl<Driver: CoreDriver> FinalizationStrategy<'_, Driver, MemoryDB>
             accounts, storage, ..
         } = &state_changeset;
         // Apply storage trie changes
+        let mut slot_key_cache = SLOT_CACHE.lock().expect("Key cache ock poisoned");
+        let mut address_key_cache = ADDRESS_CACHE.lock().expect("Address cache lock poisoned");
         for storage_change in storage {
             // getting a mutable reference is more efficient than calling remove
             // every account must have an entry, even newly created accounts
@@ -127,13 +130,15 @@ impl<Driver: CoreDriver> FinalizationStrategy<'_, Driver, MemoryDB>
             }
             // apply all new storage entries for the current account (address)
             let mut deletions = Vec::with_capacity(storage_change.storage.len());
-            for (key, value) in &storage_change.storage {
-                let storage_trie_index = keccak(key.to_be_bytes::<32>());
+            for (slot, value) in &storage_change.storage {
+                let key = slot_key_cache
+                    .entry(*slot)
+                    .or_insert_with(|| keccak(slot.to_be_bytes::<32>()));
                 if value.is_zero() {
-                    deletions.push(storage_trie_index);
+                    deletions.push(*key);
                 } else {
                     storage_trie
-                        .insert_rlp(&storage_trie_index, value)
+                        .insert_rlp(key.as_slice(), value)
                         .context("storage_trie.insert_rlp")?;
                 }
             }
@@ -147,9 +152,12 @@ impl<Driver: CoreDriver> FinalizationStrategy<'_, Driver, MemoryDB>
         // Apply account info + storage changes
         let mut deletions = Vec::with_capacity(accounts.len());
         for (address, account_info) in accounts {
-            let state_trie_index = keccak(address);
+            let account_key = address_key_cache
+                .entry(*address)
+                .or_insert_with(|| keccak(address));
+
             if account_info.is_none() {
-                deletions.push(state_trie_index);
+                deletions.push(*account_key);
                 continue;
             }
             let storage_root = {
@@ -165,7 +173,7 @@ impl<Driver: CoreDriver> FinalizationStrategy<'_, Driver, MemoryDB>
                 code_hash: info.code_hash,
             };
             state_trie
-                .insert_rlp(&state_trie_index, state_account)
+                .insert_rlp(account_key.as_slice(), state_account)
                 .context("state_trie.insert_rlp")?;
         }
         // Apply deferred state trie deletions
@@ -179,16 +187,18 @@ impl<Driver: CoreDriver> FinalizationStrategy<'_, Driver, MemoryDB>
             if storage_trie.is_reference_cached() {
                 continue;
             }
-            let state_trie_index = keccak(address);
+            let account_key = address_key_cache
+                .entry(*address)
+                .or_insert_with(|| keccak(address));
             let mut state_account = state_trie
-                .get_rlp::<Account>(&state_trie_index)
+                .get_rlp::<Account>(account_key.as_slice())
                 .context("state_trie.get_rlp")?
                 .unwrap_or_default();
             let new_storage_root = storage_trie.hash();
             if state_account.storage_root != new_storage_root {
                 state_account.storage_root = new_storage_root;
                 state_trie
-                    .insert_rlp(&state_trie_index, state_account)
+                    .insert_rlp(account_key.as_slice(), state_account)
                     .context("state_trie.insert_rlp (2)")?;
             }
         }

@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloy_primitives::map::HashMap;
+use alloy_primitives::{Address, U256};
+use std::sync::{LazyLock, Mutex};
+
 pub mod client;
 pub mod data;
 pub mod engine;
@@ -19,3 +23,9 @@ pub mod execute;
 pub mod finalize;
 pub mod initialize;
 pub mod validate;
+
+pub static SLOT_CACHE: LazyLock<Mutex<HashMap<U256, [u8; 32]>>> =
+    LazyLock::new(|| Default::default());
+
+pub static ADDRESS_CACHE: LazyLock<Mutex<HashMap<Address, [u8; 32]>>> =
+    LazyLock::new(|| Default::default());

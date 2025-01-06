@@ -17,6 +17,7 @@ use crate::db::trie::TrieDB;
 use crate::driver::CoreDriver;
 use crate::stateless::data::entry::StorageEntryPointer;
 use crate::stateless::data::NoHasherBuilder;
+use crate::stateless::{ADDRESS_CACHE, SLOT_CACHE};
 use alloy_consensus::constants::EMPTY_ROOT_HASH;
 use alloy_consensus::Account;
 use alloy_primitives::map::HashMap;
@@ -159,6 +160,8 @@ impl<Driver: CoreDriver> InitializationStrategy<'_, Driver, MemoryDB>
         // Load account data into db
         let mut accounts =
             HashMap::with_capacity_and_hasher(storage_tries.len(), Default::default());
+        let mut slot_key_cache = SLOT_CACHE.lock().expect("Key cache lock poisoned");
+        let mut address_key_cache = ADDRESS_CACHE.lock().expect("Address cache lock poisoned");
         for (
             address,
             StorageEntryPointer {
@@ -171,7 +174,10 @@ impl<Driver: CoreDriver> InitializationStrategy<'_, Driver, MemoryDB>
             let slots = take(slots);
 
             // load the account from the state trie
-            let state_account = state_trie.get_rlp::<Account>(&keccak(address))?;
+            let account_key = address_key_cache
+                .entry(*address)
+                .or_insert_with(|| keccak(address));
+            let state_account = state_trie.get_rlp::<Account>(account_key.as_slice())?;
 
             // check that the account storage root matches the storage trie root of the input
             let storage_root = state_account.map_or(EMPTY_ROOT_HASH, |a| a.storage_root);
@@ -192,9 +198,10 @@ impl<Driver: CoreDriver> InitializationStrategy<'_, Driver, MemoryDB>
                     let mut storage =
                         HashMap::with_capacity_and_hasher(slots.len(), Default::default());
                     for slot in slots {
-                        let value: U256 = storage_trie
-                            .get_rlp(&keccak(slot.to_be_bytes::<32>()))?
-                            .unwrap_or_default();
+                        let key = slot_key_cache
+                            .entry(slot)
+                            .or_insert_with(|| keccak(slot.to_be_bytes::<32>()));
+                        let value: U256 = storage_trie.get_rlp(key.as_slice())?.unwrap_or_default();
                         storage.insert(slot, value);
                     }
 

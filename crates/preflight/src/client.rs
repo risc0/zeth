@@ -311,6 +311,7 @@ where
 
             // Advance engine manually
             engine.data.parent_header = R::block_to_header(engine.data.blocks.pop().unwrap());
+            engine.data.signers.pop();
             engine.data.total_difficulty =
                 R::accumulate_difficulty(engine.data.total_difficulty, &engine.data.parent_header);
 
@@ -331,7 +332,10 @@ where
             .iter()
             .map(|b| P::count_transactions(b) as u64)
             .sum();
-        info!("{transactions} total transactions.");
+        info!(
+            "{transactions} total transactions over {} blocks.",
+            data.blocks.len()
+        );
 
         let blocks: Vec<_> = zip(data.blocks, ommers)
             .map(|(block, ommers)| P::derive_block(block, ommers))

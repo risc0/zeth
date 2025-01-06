@@ -18,7 +18,7 @@ use crate::chain_spec::{DEV, HOLESKY, MAINNET, SEPOLIA};
 use anyhow::Context;
 use k256::ecdsa::signature::hazmat::PrehashVerifier;
 use k256::ecdsa::VerifyingKey;
-use reth_chainspec::{ChainSpec, NamedChain};
+use reth_chainspec::{ChainSpec, EthereumHardforks, NamedChain};
 use reth_consensus::Consensus;
 use reth_ethereum_consensus::EthBeaconConsensus;
 use reth_evm::execute::{
@@ -122,8 +122,15 @@ where
             let vk = &signers[i];
             let sig = tx.signature();
 
-            sig.to_k256()
-                .and_then(|sig| vk.verify_prehash(tx.signature_hash().as_slice(), &sig))
+            let sig = if !chain_spec.is_homestead_active_at_block(block.number) {
+                sig.normalize_s()
+                    .map(|s| s.to_k256())
+                    .unwrap_or_else(|| sig.to_k256())
+            } else {
+                sig.to_k256()
+            };
+
+            sig.and_then(|sig| vk.verify_prehash(tx.signature_hash().as_slice(), &sig))
                 .with_context(|| format!("invalid signature for tx {i}"))?;
 
             senders.push(Address::from_public_key(vk))

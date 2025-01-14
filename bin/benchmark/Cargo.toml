@@ -9,6 +9,9 @@ workspace = true
 [dependencies.zeth-core]
 workspace = true
 
+[dependencies.zeth-trie]
+workspace = true
+
 [dependencies]
 alloy.workspace = true
 alloy-chains.workspace = true

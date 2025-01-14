@@ -6,6 +6,9 @@ edition = "2021"
 [dependencies.zeth-core]
 workspace = true
 
+[dependencies.zeth-trie]
+workspace = true
+
 [dependencies]
 alloy.workspace = true
 anyhow.workspace = true

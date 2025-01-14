@@ -65,7 +65,7 @@ fn evm(
 
 fn run<R>(provider: Rc<RefCell<dyn Provider<Ethereum>>>, expected_hash: BlockHash)
 where
-    R: BlockBuilder<Ethereum, MemoryDB, TestCoreDriver, RethPreflightDriver>,
+    R: BlockBuilder<'static, Ethereum, MemoryDB, TestCoreDriver, RethPreflightDriver>,
 {
     let preflight_data = R::PreflightClient::preflight_with_provider(provider.clone(), 1, 1)
         .expect("Preflight failed");

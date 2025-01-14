@@ -24,6 +24,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "allocator-api2"
+version = "0.2.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
+
+[[package]]
 name = "alloy-chains"
 version = "0.1.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -142,7 +148,7 @@ dependencies = [
  "derive_more",
  "foldhash",
  "getrandom",
- "hashbrown 0.15.0",
+ "hashbrown 0.15.2",
  "hex-literal",
  "indexmap 2.6.0",
  "itoa",
@@ -567,6 +573,9 @@ name = "arrayvec"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "aurora-engine-modexp"
@@ -1389,11 +1398,14 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.15.0"
+version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e087f84d4f86bf4b218b927129862374b72199ae7d8657835f1e89000eea4fb"
+checksum = "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289"
 dependencies = [
+ "allocator-api2",
+ "equivalent",
  "foldhash",
+ "rayon",
  "serde",
 ]
 
@@ -1516,7 +1528,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "707907fe3c25f5424cce2cb7e1cbcafee6bdbe735ca90ef77c29e84591e5b9da"
 dependencies = [
  "equivalent",
- "hashbrown 0.15.0",
+ "hashbrown 0.15.2",
  "serde",
 ]
 
@@ -2771,8 +2783,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-binfmt"
-version = "1.3.0-alpha.1"
-source = "git+https://github.com/risc0/risc0?rev=8801e2e3cd030acea2f03f01bd91f37e47e79e23#8801e2e3cd030acea2f03f01bd91f37e47e79e23"
+version = "1.2.1-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "421b1d25e39b0a7c0bbb5bf662824bc102ef97b0ca1ddca7bfe142378e4e9127"
 dependencies = [
  "anyhow",
  "borsh",
@@ -2785,8 +2798,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-circuit-keccak"
-version = "1.3.0-alpha.1"
-source = "git+https://github.com/risc0/risc0?rev=8801e2e3cd030acea2f03f01bd91f37e47e79e23#8801e2e3cd030acea2f03f01bd91f37e47e79e23"
+version = "1.2.1-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3806bfd8212934741033e424b5eafa86c67c660c7ba98e9492e0762e57afc21e"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -2800,8 +2814,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-circuit-recursion"
-version = "1.3.0-alpha.1"
-source = "git+https://github.com/risc0/risc0?rev=8801e2e3cd030acea2f03f01bd91f37e47e79e23#8801e2e3cd030acea2f03f01bd91f37e47e79e23"
+version = "1.2.1-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ea982a66c4f3337366454afc9d3c80eb3333c95ae94570ddc4c6c0fe53cf9f4"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -2814,8 +2829,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-circuit-rv32im"
-version = "1.3.0-alpha.1"
-source = "git+https://github.com/risc0/risc0?rev=8801e2e3cd030acea2f03f01bd91f37e47e79e23#8801e2e3cd030acea2f03f01bd91f37e47e79e23"
+version = "1.2.1-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da32b112b4bc86b35b6706fb7959a0bcfb8954ac9d040ad7f7aa88c8a054af1f"
 dependencies = [
  "anyhow",
  "metal",
@@ -2829,8 +2845,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-core"
-version = "1.3.0-alpha.1"
-source = "git+https://github.com/risc0/risc0?rev=8801e2e3cd030acea2f03f01bd91f37e47e79e23#8801e2e3cd030acea2f03f01bd91f37e47e79e23"
+version = "1.2.1-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baa498c93c2ec128b410639df28796bd7e0a20cac95fadb39595fb6cb3147fc0"
 dependencies = [
  "bytemuck",
  "rand_core",
@@ -2838,8 +2855,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-groth16"
-version = "1.3.0-alpha.1"
-source = "git+https://github.com/risc0/risc0?rev=8801e2e3cd030acea2f03f01bd91f37e47e79e23#8801e2e3cd030acea2f03f01bd91f37e47e79e23"
+version = "1.2.1-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e194641f6f14397da30b4627889113c0033b3ff2a6dfb4a4ba1962d24033dbc"
 dependencies = [
  "anyhow",
  "ark-bn254",
@@ -2858,8 +2876,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-zkp"
-version = "1.3.0-alpha.1"
-source = "git+https://github.com/risc0/risc0?rev=8801e2e3cd030acea2f03f01bd91f37e47e79e23#8801e2e3cd030acea2f03f01bd91f37e47e79e23"
+version = "1.2.1-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f9973ed2591391c8d90bc5ff3102512879274102c6f12d63b0a20b1c132286a"
 dependencies = [
  "anyhow",
  "blake2",
@@ -2881,8 +2900,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-zkvm"
-version = "1.3.0-alpha.1"
-source = "git+https://github.com/risc0/risc0?rev=8801e2e3cd030acea2f03f01bd91f37e47e79e23#8801e2e3cd030acea2f03f01bd91f37e47e79e23"
+version = "1.2.1-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61d800cb93c9f711b9f78a9e3ea09b396d279134281529a5032dafbbc713ede6"
 dependencies = [
  "anyhow",
  "borsh",
@@ -2907,10 +2927,12 @@ dependencies = [
 
 [[package]]
 name = "risc0-zkvm-platform"
-version = "1.3.0-alpha.1"
-source = "git+https://github.com/risc0/risc0?rev=8801e2e3cd030acea2f03f01bd91f37e47e79e23#8801e2e3cd030acea2f03f01bd91f37e47e79e23"
+version = "1.2.1-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2127f726a7d6ecf76c53110d3b6070c08a40111c5ef7e8c0fb58c40c4618244"
 dependencies = [
  "bytemuck",
+ "cfg-if",
  "getrandom",
  "libm",
  "stability",
@@ -2922,9 +2944,10 @@ version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b11a153aec4a6ab60795f8ebe2923c597b16b05bb1504377451e705ef1a45323"
 dependencies = [
+ "arrayvec",
  "bytecheck",
  "bytes",
- "hashbrown 0.15.0",
+ "hashbrown 0.15.2",
  "indexmap 2.6.0",
  "munge",
  "ptr_meta",
@@ -3513,10 +3536,9 @@ dependencies = [
 [[package]]
 name = "tiny-keccak"
 version = "2.0.2"
-source = "git+https://github.com/risc0/tiny-keccak?rev=01e787dcb9b8a5d21857af37c4d51a4028a03fc4#01e787dcb9b8a5d21857af37c4d51a4028a03fc4"
+source = "git+https://github.com/risc0/tiny-keccak?tag=tiny-keccak/v2.0.2-risczero.0#8fcc866dc94dcec3e79c3b2bc8fbc51b22f2d5e1"
 dependencies = [
  "crunchy",
- "risc0-zkvm",
 ]
 
 [[package]]
@@ -3911,8 +3933,9 @@ version = "0.1.0"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
- "alloy-rlp",
  "anyhow",
+ "arrayvec",
+ "hashbrown 0.15.2",
  "k256",
  "pot",
  "reth-chainspec",
@@ -3921,8 +3944,7 @@ dependencies = [
  "reth-storage-errors",
  "rkyv",
  "serde",
- "thiserror",
- "tiny-keccak",
+ "zeth-trie",
 ]
 
 [[package]]
@@ -3949,10 +3971,27 @@ name = "zeth-guests-reth-ethereum"
 version = "0.1.0"
 dependencies = [
  "c-kzg",
+ "pot",
  "risc0-zkvm",
  "risc0-zkvm-platform",
+ "rkyv",
  "zeth-core",
  "zeth-core-ethereum",
+]
+
+[[package]]
+name = "zeth-trie"
+version = "0.1.0"
+dependencies = [
+ "alloy-consensus",
+ "alloy-primitives",
+ "alloy-rlp",
+ "anyhow",
+ "arrayvec",
+ "rkyv",
+ "serde",
+ "thiserror",
+ "tiny-keccak",
 ]
 
 [[package]]

@@ -118,7 +118,9 @@ impl CoreDriver for TestCoreDriver {
     }
 }
 
-impl BlockBuilder<Ethereum, MemoryDB, TestCoreDriver, RethPreflightDriver> for RethBlockBuilder {
+impl BlockBuilder<'_, Ethereum, MemoryDB, TestCoreDriver, RethPreflightDriver>
+    for RethBlockBuilder
+{
     type PreflightClient = RethPreflightClient;
     type StatelessClient = RethStatelessClient;
 }
@@ -128,7 +130,7 @@ impl PreflightClient<Ethereum, TestCoreDriver, RethPreflightDriver> for RethPref
     type Execution = RethExecutionStrategy;
 }
 
-impl StatelessClient<TestCoreDriver, MemoryDB> for RethStatelessClient {
+impl StatelessClient<'_, TestCoreDriver, MemoryDB> for RethStatelessClient {
     type Initialization = MemoryDbInitializationStrategy;
     type Validation = RethValidationStrategy;
     type Execution = RethExecutionStrategy;

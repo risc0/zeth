@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::keccak::keccak;
-use crate::mpt::MptNode;
 use crate::rescue::Recoverable;
-use crate::stateless::data::StorageEntry;
+use crate::stateless::data::entry::StorageEntryPointer;
+use crate::stateless::data::NoHasherBuilder;
 use alloy_consensus::Account;
 use alloy_primitives::map::HashMap;
 use alloy_primitives::{Address, B256, U256};
@@ -23,22 +22,25 @@ use reth_primitives::revm_primitives::db::Database;
 use reth_primitives::revm_primitives::{AccountInfo, Bytecode};
 use reth_revm::DatabaseRef;
 use reth_storage_errors::provider::ProviderError;
+use zeth_trie::keccak::keccak;
+use zeth_trie::pointer::MptNodePointer;
+use zeth_trie::vec::VecPointer;
 
 #[derive(Default)]
-pub struct TrieDB {
-    pub accounts: MptNode,
-    pub storage: HashMap<Address, StorageEntry>,
-    pub contracts: HashMap<B256, Bytecode>,
-    pub block_hashes: HashMap<u64, B256>,
+pub struct TrieDB<'a> {
+    pub accounts: MptNodePointer<'a>,
+    pub storage: HashMap<Address, StorageEntryPointer<'a>, NoHasherBuilder>,
+    pub contracts: HashMap<B256, VecPointer<'a, u8>, NoHasherBuilder>,
+    pub block_hashes: HashMap<u64, B256, NoHasherBuilder>,
 }
 
-impl Recoverable for TrieDB {
+impl Recoverable for TrieDB<'_> {
     fn rescue(&mut self) -> Option<Self> {
         Some(core::mem::take(self))
     }
 }
 
-impl DatabaseRef for TrieDB {
+impl DatabaseRef for TrieDB<'_> {
     type Error = ProviderError;
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
@@ -55,7 +57,9 @@ impl DatabaseRef for TrieDB {
     }
 
     fn code_by_hash_ref(&self, code_hash: B256) -> Result<Bytecode, Self::Error> {
-        Ok(self.contracts.get(&code_hash).unwrap().clone())
+        let raw_data = self.contracts.get(&code_hash).unwrap();
+        let result = Bytecode::new_raw(raw_data.to_vec().into());
+        Ok(result)
     }
 
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, Self::Error> {
@@ -72,7 +76,7 @@ impl DatabaseRef for TrieDB {
     }
 }
 
-impl Database for TrieDB {
+impl Database for TrieDB<'_> {
     type Error = ProviderError;
 
     fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {

@@ -18,7 +18,7 @@ use crate::chain_spec::{DEV, HOLESKY, MAINNET, SEPOLIA};
 use anyhow::Context;
 use k256::ecdsa::signature::hazmat::PrehashVerifier;
 use k256::ecdsa::VerifyingKey;
-use reth_chainspec::{ChainSpec, NamedChain};
+use reth_chainspec::{ChainSpec, EthereumHardforks, NamedChain};
 use reth_consensus::Consensus;
 use reth_ethereum_consensus::EthBeaconConsensus;
 use reth_evm::execute::{
@@ -46,14 +46,14 @@ use zeth_core::stateless::validate::ValidationStrategy;
 
 pub struct RethStatelessClient;
 
-impl StatelessClient<RethCoreDriver, MemoryDB> for RethStatelessClient {
+impl StatelessClient<'_, RethCoreDriver, MemoryDB> for RethStatelessClient {
     type Initialization = MemoryDbInitializationStrategy;
     type Validation = RethValidationStrategy;
     type Execution = RethExecutionStrategy;
     type Finalization = MemoryDbFinalizationStrategy;
 }
 
-impl StatelessClient<RethCoreDriver, TrieDB> for RethStatelessClient {
+impl<'a> StatelessClient<'a, RethCoreDriver, TrieDB<'a>> for RethStatelessClient {
     type Initialization = TrieDbInitializationStrategy;
     type Validation = RethValidationStrategy;
     type Execution = RethExecutionStrategy;
@@ -62,10 +62,7 @@ impl StatelessClient<RethCoreDriver, TrieDB> for RethStatelessClient {
 
 pub struct RethValidationStrategy;
 
-impl<Database> ValidationStrategy<RethCoreDriver, Database> for RethValidationStrategy
-where
-    Database: 'static,
-{
+impl<Database> ValidationStrategy<RethCoreDriver, Database> for RethValidationStrategy {
     fn validate_header(
         chain_spec: Arc<ChainSpec>,
         block: &mut Block,
@@ -107,7 +104,6 @@ pub struct RethExecutionStrategy;
 impl<Database: reth_revm::Database> ExecutionStrategy<RethCoreDriver, Database>
     for RethExecutionStrategy
 where
-    Database: 'static,
     <Database as reth_revm::Database>::Error: Into<ProviderError> + Display,
 {
     fn execute_transactions(
@@ -126,8 +122,15 @@ where
             let vk = &signers[i];
             let sig = tx.signature();
 
-            sig.to_k256()
-                .and_then(|sig| vk.verify_prehash(tx.signature_hash().as_slice(), &sig))
+            let sig = if !chain_spec.is_homestead_active_at_block(block.number) {
+                sig.normalize_s()
+                    .map(|s| s.to_k256())
+                    .unwrap_or_else(|| sig.to_k256())
+            } else {
+                sig.to_k256()
+            };
+
+            sig.and_then(|sig| vk.verify_prehash(tx.signature_hash().as_slice(), &sig))
                 .with_context(|| format!("invalid signature for tx {i}"))?;
 
             senders.push(Address::from_public_key(vk))

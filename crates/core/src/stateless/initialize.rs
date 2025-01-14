@@ -15,25 +15,28 @@
 use crate::db::memory::MemoryDB;
 use crate::db::trie::TrieDB;
 use crate::driver::CoreDriver;
-use crate::keccak::keccak;
-use crate::mpt::MptNode;
-use crate::stateless::data::StorageEntry;
+use crate::stateless::data::entry::StorageEntryPointer;
+use crate::stateless::data::NoHasherBuilder;
+use crate::stateless::{ADDRESS_CACHE, SLOT_CACHE};
 use alloy_consensus::constants::EMPTY_ROOT_HASH;
 use alloy_consensus::Account;
 use alloy_primitives::map::HashMap;
-use alloy_primitives::{Address, Bytes, B256, U256};
-use anyhow::{bail, ensure};
+use alloy_primitives::{Address, B256, U256};
+use anyhow::bail;
 use core::mem::take;
 use reth_primitives::revm_primitives::Bytecode;
 use reth_revm::db::{AccountState, DbAccount};
 use reth_revm::primitives::AccountInfo;
 use std::default::Default;
+use zeth_trie::keccak::keccak;
+use zeth_trie::pointer::MptNodePointer;
+use zeth_trie::vec::VecPointer;
 
-pub trait InitializationStrategy<Driver: CoreDriver, Database> {
+pub trait InitializationStrategy<'a, Driver: CoreDriver, Database> {
     fn initialize_database(
-        state_trie: &mut MptNode,
-        storage_tries: &mut HashMap<Address, StorageEntry>,
-        contracts: &mut Vec<Bytes>,
+        state_trie: &mut MptNodePointer<'a>,
+        storage_tries: &mut HashMap<Address, StorageEntryPointer<'a>, NoHasherBuilder>,
+        contracts: &mut Vec<VecPointer<'a, u8>>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
     ) -> anyhow::Result<Database>;
@@ -41,14 +44,16 @@ pub trait InitializationStrategy<Driver: CoreDriver, Database> {
 
 pub struct TrieDbInitializationStrategy;
 
-impl<Driver: CoreDriver> InitializationStrategy<Driver, TrieDB> for TrieDbInitializationStrategy {
+impl<'a, Driver: CoreDriver> InitializationStrategy<'a, Driver, TrieDB<'a>>
+    for TrieDbInitializationStrategy
+{
     fn initialize_database(
-        state_trie: &mut MptNode,
-        storage_tries: &mut HashMap<Address, StorageEntry>,
-        contracts: &mut Vec<Bytes>,
+        state_trie: &mut MptNodePointer<'a>,
+        storage_tries: &mut HashMap<Address, StorageEntryPointer<'a>, NoHasherBuilder>,
+        contracts: &mut Vec<VecPointer<'a, u8>>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
-    ) -> anyhow::Result<TrieDB> {
+    ) -> anyhow::Result<TrieDB<'a>> {
         // Verify starting state trie root
         if Driver::state_root(parent_header) != state_trie.hash() {
             bail!(
@@ -61,11 +66,28 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, TrieDB> for TrieDbInitia
         // hash all the contract code
         let contracts = take(contracts)
             .into_iter()
-            .map(|bytes| (keccak(&bytes).into(), Bytecode::new_raw(bytes)))
+            .map(|bytes| (keccak(bytes.as_slice()).into(), bytes))
             .collect();
 
+        // Verify account data in db
+        for (address, StorageEntryPointer { storage_trie, .. }) in storage_tries.iter() {
+            // load the account from the state trie
+            let state_account = state_trie.get_rlp::<Account>(&keccak(address))?;
+
+            // check that the account storage root matches the storage trie root of the input
+            let storage_root = state_account.map_or(EMPTY_ROOT_HASH, |a| a.storage_root);
+            if storage_root != storage_trie.hash() {
+                bail!(
+                    "Invalid storage trie for {}: expected {}, got {}",
+                    address,
+                    storage_root,
+                    storage_trie.hash()
+                )
+            }
+        }
+
         // prepare block hash history
-        let mut block_hashes: HashMap<u64, B256> =
+        let mut block_hashes: HashMap<u64, B256, NoHasherBuilder> =
             HashMap::with_capacity_and_hasher(ancestor_headers.len() + 1, Default::default());
         block_hashes.insert(
             Driver::block_number(parent_header),
@@ -105,13 +127,13 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, TrieDB> for TrieDbInitia
 
 pub struct MemoryDbInitializationStrategy;
 
-impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB>
+impl<Driver: CoreDriver> InitializationStrategy<'_, Driver, MemoryDB>
     for MemoryDbInitializationStrategy
 {
     fn initialize_database(
-        state_trie: &mut MptNode,
-        storage_tries: &mut HashMap<Address, StorageEntry>,
-        contracts: &mut Vec<Bytes>,
+        state_trie: &mut MptNodePointer,
+        storage_tries: &mut HashMap<Address, StorageEntryPointer, NoHasherBuilder>,
+        contracts: &mut Vec<VecPointer<'_, u8>>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
     ) -> anyhow::Result<MemoryDB> {
@@ -127,15 +149,22 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB>
         // hash all the contract code
         let contracts = take(contracts)
             .into_iter()
-            .map(|bytes| (keccak(&bytes).into(), Bytecode::new_raw(bytes)))
+            .map(|bytes| {
+                (
+                    keccak(bytes.as_slice()).into(),
+                    Bytecode::new_raw(bytes.to_vec().into()),
+                )
+            })
             .collect();
 
         // Load account data into db
         let mut accounts =
             HashMap::with_capacity_and_hasher(storage_tries.len(), Default::default());
+        let mut slot_key_cache = SLOT_CACHE.lock().expect("Key cache lock poisoned");
+        let mut address_key_cache = ADDRESS_CACHE.lock().expect("Address cache lock poisoned");
         for (
             address,
-            StorageEntry {
+            StorageEntryPointer {
                 storage_trie,
                 slots,
             },
@@ -145,17 +174,21 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB>
             let slots = take(slots);
 
             // load the account from the state trie
-            let state_account = state_trie.get_rlp::<Account>(&keccak(address))?;
+            let account_key = address_key_cache
+                .entry(*address)
+                .or_insert_with(|| keccak(address));
+            let state_account = state_trie.get_rlp::<Account>(account_key.as_slice())?;
 
             // check that the account storage root matches the storage trie root of the input
             let storage_root = state_account.map_or(EMPTY_ROOT_HASH, |a| a.storage_root);
-            ensure!(
-                storage_root == storage_trie.hash(),
-                "Invalid storage trie for {}: expected {}, got {}",
-                address,
-                storage_root,
-                storage_trie.hash()
-            );
+            if storage_root != storage_trie.hash() {
+                bail!(
+                    "Invalid storage trie for {}: expected {}, got {}",
+                    address,
+                    storage_root,
+                    storage_trie.hash()
+                )
+            }
 
             // load the account into memory
             let mem_account = match state_account {
@@ -165,9 +198,10 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB>
                     let mut storage =
                         HashMap::with_capacity_and_hasher(slots.len(), Default::default());
                     for slot in slots {
-                        let value: U256 = storage_trie
-                            .get_rlp(&keccak(slot.to_be_bytes::<32>()))?
-                            .unwrap_or_default();
+                        let key = slot_key_cache
+                            .entry(slot)
+                            .or_insert_with(|| keccak(slot.to_be_bytes::<32>()));
+                        let value: U256 = storage_trie.get_rlp(key.as_slice())?.unwrap_or_default();
                         storage.insert(slot, value);
                     }
 

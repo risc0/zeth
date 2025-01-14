@@ -16,21 +16,23 @@ use crate::db::memory::MemoryDB;
 use crate::db::trie::TrieDB;
 use crate::db::update::{into_plain_state, Update};
 use crate::driver::CoreDriver;
-use crate::keccak::keccak;
-use crate::mpt::MptNode;
-use crate::stateless::data::StorageEntry;
+use crate::stateless::data::entry::StorageEntryPointer;
+use crate::stateless::data::NoHasherBuilder;
+use crate::stateless::{ADDRESS_CACHE, SLOT_CACHE};
 use alloy_consensus::Account;
 use alloy_primitives::map::HashMap;
 use alloy_primitives::{Address, U256};
 use anyhow::{bail, Context};
 use reth_revm::db::states::StateChangeset;
 use reth_revm::db::BundleState;
+use zeth_trie::keccak::keccak;
+use zeth_trie::pointer::MptNodePointer;
 
-pub trait FinalizationStrategy<Driver: CoreDriver, Database> {
+pub trait FinalizationStrategy<'a, Driver: CoreDriver, Database> {
     fn finalize_state(
         block: &mut Driver::Block,
-        state_trie: &mut MptNode,
-        storage_tries: &mut HashMap<Address, StorageEntry>,
+        state_trie: &mut MptNodePointer<'a>,
+        storage_tries: &mut HashMap<Address, StorageEntryPointer<'a>, NoHasherBuilder>,
         parent_header: &mut Driver::Header,
         db: Option<&mut Database>,
         bundle_state: BundleState,
@@ -40,13 +42,15 @@ pub trait FinalizationStrategy<Driver: CoreDriver, Database> {
 
 pub struct TrieDbFinalizationStrategy;
 
-impl<Driver: CoreDriver> FinalizationStrategy<Driver, TrieDB> for TrieDbFinalizationStrategy {
+impl<'a, Driver: CoreDriver> FinalizationStrategy<'a, Driver, TrieDB<'a>>
+    for TrieDbFinalizationStrategy
+{
     fn finalize_state(
         block: &mut Driver::Block,
-        _state_trie: &mut MptNode,
-        _storage_tries: &mut HashMap<Address, StorageEntry>,
+        _state_trie: &mut MptNodePointer<'a>,
+        _storage_tries: &mut HashMap<Address, StorageEntryPointer<'a>, NoHasherBuilder>,
         parent_header: &mut Driver::Header,
-        db: Option<&mut TrieDB>,
+        db: Option<&mut TrieDB<'a>>,
         bundle_state: BundleState,
         with_further_updates: bool,
     ) -> anyhow::Result<()> {
@@ -85,11 +89,13 @@ impl<Driver: CoreDriver> FinalizationStrategy<Driver, TrieDB> for TrieDbFinaliza
 
 pub struct MemoryDbFinalizationStrategy;
 
-impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for MemoryDbFinalizationStrategy {
+impl<Driver: CoreDriver> FinalizationStrategy<'_, Driver, MemoryDB>
+    for MemoryDbFinalizationStrategy
+{
     fn finalize_state(
         block: &mut Driver::Block,
-        state_trie: &mut MptNode,
-        storage_tries: &mut HashMap<Address, StorageEntry>,
+        state_trie: &mut MptNodePointer,
+        storage_tries: &mut HashMap<Address, StorageEntryPointer, NoHasherBuilder>,
         parent_header: &mut Driver::Header,
         db: Option<&mut MemoryDB>,
         bundle_state: BundleState,
@@ -111,10 +117,12 @@ impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for MemoryDbFina
             accounts, storage, ..
         } = &state_changeset;
         // Apply storage trie changes
+        let mut slot_key_cache = SLOT_CACHE.lock().expect("Key cache ock poisoned");
+        let mut address_key_cache = ADDRESS_CACHE.lock().expect("Address cache lock poisoned");
         for storage_change in storage {
             // getting a mutable reference is more efficient than calling remove
             // every account must have an entry, even newly created accounts
-            let StorageEntry { storage_trie, .. } =
+            let StorageEntryPointer { storage_trie, .. } =
                 storage_tries.get_mut(&storage_change.address).unwrap();
             // for cleared accounts always start from the empty trie
             if storage_change.wipe_storage {
@@ -122,13 +130,15 @@ impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for MemoryDbFina
             }
             // apply all new storage entries for the current account (address)
             let mut deletions = Vec::with_capacity(storage_change.storage.len());
-            for (key, value) in &storage_change.storage {
-                let storage_trie_index = keccak(key.to_be_bytes::<32>());
+            for (slot, value) in &storage_change.storage {
+                let key = slot_key_cache
+                    .entry(*slot)
+                    .or_insert_with(|| keccak(slot.to_be_bytes::<32>()));
                 if value.is_zero() {
-                    deletions.push(storage_trie_index);
+                    deletions.push(*key);
                 } else {
                     storage_trie
-                        .insert_rlp(&storage_trie_index, value)
+                        .insert_rlp(key.as_slice(), value)
                         .context("storage_trie.insert_rlp")?;
                 }
             }
@@ -142,13 +152,16 @@ impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for MemoryDbFina
         // Apply account info + storage changes
         let mut deletions = Vec::with_capacity(accounts.len());
         for (address, account_info) in accounts {
-            let state_trie_index = keccak(address);
+            let account_key = address_key_cache
+                .entry(*address)
+                .or_insert_with(|| keccak(address));
+
             if account_info.is_none() {
-                deletions.push(state_trie_index);
+                deletions.push(*account_key);
                 continue;
             }
             let storage_root = {
-                let StorageEntry { storage_trie, .. } = storage_tries.get(address).unwrap();
+                let StorageEntryPointer { storage_trie, .. } = storage_tries.get(address).unwrap();
                 storage_trie.hash()
             };
 
@@ -160,7 +173,7 @@ impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for MemoryDbFina
                 code_hash: info.code_hash,
             };
             state_trie
-                .insert_rlp(&state_trie_index, state_account)
+                .insert_rlp(account_key.as_slice(), state_account)
                 .context("state_trie.insert_rlp")?;
         }
         // Apply deferred state trie deletions
@@ -170,20 +183,22 @@ impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for MemoryDbFina
                 .context("state_trie.delete")?;
         }
         // Apply account storage only changes
-        for (address, StorageEntry { storage_trie, .. }) in storage_tries {
+        for (address, StorageEntryPointer { storage_trie, .. }) in storage_tries {
             if storage_trie.is_reference_cached() {
                 continue;
             }
-            let state_trie_index = keccak(address);
+            let account_key = address_key_cache
+                .entry(*address)
+                .or_insert_with(|| keccak(address));
             let mut state_account = state_trie
-                .get_rlp::<Account>(&state_trie_index)
+                .get_rlp::<Account>(account_key.as_slice())
                 .context("state_trie.get_rlp")?
                 .unwrap_or_default();
             let new_storage_root = storage_trie.hash();
             if state_account.storage_root != new_storage_root {
-                state_account.storage_root = storage_trie.hash();
+                state_account.storage_root = new_storage_root;
                 state_trie
-                    .insert_rlp(&state_trie_index, state_account)
+                    .insert_rlp(account_key.as_slice(), state_account)
                     .context("state_trie.insert_rlp (2)")?;
             }
         }

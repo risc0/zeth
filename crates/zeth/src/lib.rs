@@ -25,16 +25,17 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use tokio::task::spawn_blocking;
 use zeth_core::driver::CoreDriver;
-use zeth_core::keccak::keccak;
 use zeth_core::rescue::Recoverable;
 use zeth_preflight::driver::PreflightDriver;
 use zeth_preflight::BlockBuilder;
+use zeth_trie::keccak::keccak;
 
 pub mod cli;
 pub mod executor;
 
 pub async fn run<
-    B: BlockBuilder<N, D, R, P> + Send + Sync + 'static,
+    'a,
+    B: BlockBuilder<'a, N, D, R, P> + Send + Sync + 'static,
     N: Network,
     D: Recoverable + 'static,
     R: CoreDriver + Clone + 'static,

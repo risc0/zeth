@@ -18,18 +18,21 @@ use alloy::rpc::types::EIP1186AccountProofResponse;
 use anyhow::Context;
 use std::collections::VecDeque;
 use std::iter;
-use zeth_core::keccak::keccak;
-use zeth_core::mpt::{
-    is_not_included, mpt_from_proof, parse_proof, prefix_nibs, resolve_nodes,
-    resolve_nodes_in_place, shorten_node_path, MptNode, MptNodeData, MptNodeReference,
+use zeth_core::stateless::data::entry::StorageEntry;
+use zeth_trie::data::MptNodeData;
+use zeth_trie::keccak::keccak;
+use zeth_trie::node::MptNode;
+use zeth_trie::reference::MptNodeReference;
+use zeth_trie::resolve::{
+    is_not_included, mpt_from_proof, parse_proof, resolve_nodes, resolve_nodes_in_place,
+    shorten_node_path,
 };
-use zeth_core::stateless::data::StorageEntry;
 
 pub type TrieOrphan = (B256, B256);
 pub type OrphanPair = (Vec<TrieOrphan>, Vec<(Address, TrieOrphan)>);
 pub fn extend_proof_tries(
-    state_trie: &mut MptNode,
-    storage_tries: &mut HashMap<Address, StorageEntry>,
+    state_trie: &mut MptNode<'static>,
+    storage_tries: &mut HashMap<Address, StorageEntry<'static>>,
     initialization_proofs: HashMap<Address, EIP1186AccountProofResponse>,
     finalization_proofs: HashMap<Address, EIP1186AccountProofResponse>,
 ) -> anyhow::Result<OrphanPair> {
@@ -106,7 +109,8 @@ pub fn extend_proof_tries(
         resolve_nodes_in_place(&mut storage_entry.storage_trie, &storage_nodes);
         // validate storage orphans
         for (prefix, digest) in potential_storage_orphans {
-            if let Some(node) = storage_nodes.get(&MptNodeReference::Digest(digest)) {
+            let node_ref: MptNodeReference = digest.into();
+            if let Some(node) = storage_nodes.get(&node_ref) {
                 if !node.is_digest() {
                     // this orphan node has been resolved
                     continue;
@@ -121,8 +125,9 @@ pub fn extend_proof_tries(
     let state_orphans = state_orphans
         .into_iter()
         .filter(|o| {
+            let node_ref: MptNodeReference = o.1.into();
             state_nodes
-                .get(&MptNodeReference::Digest(o.1))
+                .get(&node_ref)
                 .map(|n| !n.is_digest())
                 .unwrap_or_default()
         })
@@ -135,7 +140,7 @@ pub fn proofs_to_tries(
     state_root: B256,
     initialization_proofs: HashMap<Address, EIP1186AccountProofResponse>,
     finalization_proofs: HashMap<Address, EIP1186AccountProofResponse>,
-) -> anyhow::Result<(MptNode, HashMap<Address, StorageEntry>)> {
+) -> anyhow::Result<(MptNode<'static>, HashMap<Address, StorageEntry<'static>>)> {
     // if no addresses are provided, return the trie only consisting of the state root
     if initialization_proofs.is_empty() {
         return Ok((state_root.into(), HashMap::default()));
@@ -231,7 +236,7 @@ pub fn proofs_to_tries(
 pub fn add_orphaned_nodes(
     key: impl AsRef<[u8]>,
     proof: &[impl AsRef<[u8]>],
-    nodes_by_reference: &mut HashMap<MptNodeReference, MptNode>,
+    nodes_by_reference: &mut HashMap<MptNodeReference, MptNode<'static>>,
 ) -> anyhow::Result<Option<TrieOrphan>> {
     if !proof.is_empty() {
         let proof_nodes = parse_proof(proof).context("invalid proof encoding")?;
@@ -240,7 +245,7 @@ pub fn add_orphaned_nodes(
             // extract inferrable orphans
             let node = proof_nodes.last().unwrap();
             shorten_node_path(node).into_iter().for_each(|node| {
-                nodes_by_reference.insert(node.reference().as_digest(), node);
+                nodes_by_reference.insert(node.hash().into(), node);
             });
             if let MptNodeData::Extension(_, target) = node.as_data() {
                 return Ok(Some((
@@ -255,28 +260,28 @@ pub fn add_orphaned_nodes(
 
 pub fn proof_nodes_nibbles(proof_nodes: &[MptNode]) -> Vec<u8> {
     let mut nibbles = VecDeque::new();
-    let mut last_child = proof_nodes.last().unwrap().reference().as_digest();
+    let mut last_child = proof_nodes.last().unwrap().hash();
     for node in proof_nodes.iter().rev() {
         match node.as_data() {
             MptNodeData::Branch(children) => {
                 for (i, child) in children.iter().enumerate() {
                     if let Some(child) = child {
-                        if child.reference().as_digest() == last_child {
+                        if child.hash() == last_child {
                             nibbles.push_front(i as u8);
                             break;
                         }
                     }
                 }
             }
-            MptNodeData::Leaf(prefix, _) | MptNodeData::Extension(prefix, _) => {
-                prefix_nibs(prefix)
-                    .into_iter()
+            MptNodeData::Leaf(prefix_nibs, _) | MptNodeData::Extension(prefix_nibs, _) => {
+                prefix_nibs
+                    .iter()
                     .rev()
-                    .for_each(|n| nibbles.push_front(n));
+                    .for_each(|n| nibbles.push_front(*n));
             }
             MptNodeData::Null | MptNodeData::Digest(_) => unreachable!(),
         }
-        last_child = node.reference();
+        last_child = node.hash();
     }
     nibbles.into()
 }

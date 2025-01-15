@@ -64,6 +64,23 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, TrieDB> for TrieDbInitia
             .map(|bytes| (keccak(&bytes).into(), Bytecode::new_raw(bytes)))
             .collect();
 
+        // Verify account data in db
+        for (address, StorageEntry { storage_trie, .. }) in storage_tries.iter() {
+            // load the account from the state trie
+            let state_account = state_trie.get_rlp::<Account>(&keccak(address))?;
+
+            // check that the account storage root matches the storage trie root of the input
+            let storage_root = state_account.map_or(EMPTY_ROOT_HASH, |a| a.storage_root);
+            if storage_root != storage_trie.hash() {
+                bail!(
+                    "Invalid storage trie for {}: expected {}, got {}",
+                    address,
+                    storage_root,
+                    storage_trie.hash()
+                )
+            }
+        }
+
         // prepare block hash history
         let mut block_hashes: HashMap<u64, B256> =
             HashMap::with_capacity_and_hasher(ancestor_headers.len() + 1, Default::default());

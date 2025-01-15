@@ -17,6 +17,7 @@ use crate::db::trie::TrieDB;
 use crate::db::update::{into_plain_state, Update};
 use crate::driver::CoreDriver;
 use crate::keccak::keccak;
+use crate::map::NoMapHasher;
 use crate::mpt::MptNode;
 use crate::stateless::data::StorageEntry;
 use alloy_consensus::Account;
@@ -30,7 +31,7 @@ pub trait FinalizationStrategy<Driver: CoreDriver, Database> {
     fn finalize_state(
         block: &mut Driver::Block,
         state_trie: &mut MptNode,
-        storage_tries: &mut HashMap<Address, StorageEntry>,
+        storage_tries: &mut HashMap<Address, StorageEntry, NoMapHasher>,
         parent_header: &mut Driver::Header,
         db: Option<&mut Database>,
         bundle_state: BundleState,
@@ -44,7 +45,7 @@ impl<Driver: CoreDriver> FinalizationStrategy<Driver, TrieDB> for TrieDbFinaliza
     fn finalize_state(
         block: &mut Driver::Block,
         _state_trie: &mut MptNode,
-        _storage_tries: &mut HashMap<Address, StorageEntry>,
+        _storage_tries: &mut HashMap<Address, StorageEntry, NoMapHasher>,
         parent_header: &mut Driver::Header,
         db: Option<&mut TrieDB>,
         bundle_state: BundleState,
@@ -89,7 +90,7 @@ impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for MemoryDbFina
     fn finalize_state(
         block: &mut Driver::Block,
         state_trie: &mut MptNode,
-        storage_tries: &mut HashMap<Address, StorageEntry>,
+        storage_tries: &mut HashMap<Address, StorageEntry, NoMapHasher>,
         parent_header: &mut Driver::Header,
         db: Option<&mut MemoryDB>,
         bundle_state: BundleState,

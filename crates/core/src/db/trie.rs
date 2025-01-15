@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use crate::keccak::keccak;
+use crate::map::NoMapHasher;
 use crate::mpt::MptNode;
 use crate::rescue::Recoverable;
 use crate::stateless::data::StorageEntry;
@@ -27,9 +28,9 @@ use reth_storage_errors::provider::ProviderError;
 #[derive(Default)]
 pub struct TrieDB {
     pub accounts: MptNode,
-    pub storage: HashMap<Address, StorageEntry>,
-    pub contracts: HashMap<B256, Bytecode>,
-    pub block_hashes: HashMap<u64, B256>,
+    pub storage: HashMap<Address, StorageEntry, NoMapHasher>,
+    pub contracts: HashMap<B256, Bytecode, NoMapHasher>,
+    pub block_hashes: HashMap<u64, B256, NoMapHasher>,
 }
 
 impl Recoverable for TrieDB {

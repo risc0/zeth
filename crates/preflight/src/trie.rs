@@ -19,6 +19,7 @@ use anyhow::Context;
 use std::collections::VecDeque;
 use std::iter;
 use zeth_core::keccak::keccak;
+use zeth_core::map::NoMapHasher;
 use zeth_core::mpt::{
     is_not_included, mpt_from_proof, parse_proof, prefix_nibs, resolve_nodes,
     resolve_nodes_in_place, shorten_node_path, MptNode, MptNodeData, MptNodeReference,
@@ -29,7 +30,7 @@ pub type TrieOrphan = (B256, B256);
 pub type OrphanPair = (Vec<TrieOrphan>, Vec<(Address, TrieOrphan)>);
 pub fn extend_proof_tries(
     state_trie: &mut MptNode,
-    storage_tries: &mut HashMap<Address, StorageEntry>,
+    storage_tries: &mut HashMap<Address, StorageEntry, NoMapHasher>,
     initialization_proofs: HashMap<Address, EIP1186AccountProofResponse>,
     finalization_proofs: HashMap<Address, EIP1186AccountProofResponse>,
 ) -> anyhow::Result<OrphanPair> {

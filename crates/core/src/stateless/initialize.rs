@@ -16,6 +16,7 @@ use crate::db::memory::MemoryDB;
 use crate::db::trie::TrieDB;
 use crate::driver::CoreDriver;
 use crate::keccak::keccak;
+use crate::map::NoMapHasher;
 use crate::mpt::MptNode;
 use crate::stateless::data::StorageEntry;
 use alloy_consensus::constants::EMPTY_ROOT_HASH;
@@ -32,7 +33,7 @@ use std::default::Default;
 pub trait InitializationStrategy<Driver: CoreDriver, Database> {
     fn initialize_database(
         state_trie: &mut MptNode,
-        storage_tries: &mut HashMap<Address, StorageEntry>,
+        storage_tries: &mut HashMap<Address, StorageEntry, NoMapHasher>,
         contracts: &mut Vec<Bytes>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
@@ -44,7 +45,7 @@ pub struct TrieDbInitializationStrategy;
 impl<Driver: CoreDriver> InitializationStrategy<Driver, TrieDB> for TrieDbInitializationStrategy {
     fn initialize_database(
         state_trie: &mut MptNode,
-        storage_tries: &mut HashMap<Address, StorageEntry>,
+        storage_tries: &mut HashMap<Address, StorageEntry, NoMapHasher>,
         contracts: &mut Vec<Bytes>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
@@ -82,7 +83,7 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, TrieDB> for TrieDbInitia
         }
 
         // prepare block hash history
-        let mut block_hashes: HashMap<u64, B256> =
+        let mut block_hashes: HashMap<u64, B256, NoMapHasher> =
             HashMap::with_capacity_and_hasher(ancestor_headers.len() + 1, Default::default());
         block_hashes.insert(
             Driver::block_number(parent_header),
@@ -127,7 +128,7 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB>
 {
     fn initialize_database(
         state_trie: &mut MptNode,
-        storage_tries: &mut HashMap<Address, StorageEntry>,
+        storage_tries: &mut HashMap<Address, StorageEntry, NoMapHasher>,
         contracts: &mut Vec<Bytes>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,

@@ -191,7 +191,14 @@ impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for MemoryDbFina
 
         // Validate final state trie
         let header = Driver::block_header(block);
-        assert_eq!(Driver::state_root(header), state_trie.hash());
+        if Driver::state_root(header) != state_trie.hash() {
+            bail!(
+                "Invalid state root (expected {:?}, got {:?}) at block #{}",
+                state_trie.hash(),
+                Driver::state_root(header),
+                Driver::block_number(header)
+            );
+        }
 
         // Update the database if available
         if with_further_updates {

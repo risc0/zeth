@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use risc0_zkvm::guest::env;
-use zeth_core::db::trie::TrieDB;
+use zeth_core::db::memory::MemoryDB;
 use zeth_core::stateless::client::StatelessClient;
 use zeth_core_ethereum::{RethCoreDriver, RethStatelessClient};
 
@@ -28,7 +28,7 @@ fn main() {
     let stateless_client_data_pot = env::read_frame();
     env::log("Deserializing input data");
     let stateless_client_data =
-        <RethStatelessClient as StatelessClient<RethCoreDriver, TrieDB>>::data_from_parts(
+        <RethStatelessClient as StatelessClient<RethCoreDriver, MemoryDB>>::data_from_parts(
             &stateless_client_data_rkyv,
             &stateless_client_data_pot,
         )
@@ -41,7 +41,7 @@ fn main() {
     let chain_id = stateless_client_data.chain as u64;
     // Build the block
     env::log("Validating blocks");
-    let engine = <RethStatelessClient as StatelessClient<RethCoreDriver, TrieDB>>::validate(
+    let engine = <RethStatelessClient as StatelessClient<RethCoreDriver, MemoryDB>>::validate(
         stateless_client_data,
     )
     .expect("block validation failed");

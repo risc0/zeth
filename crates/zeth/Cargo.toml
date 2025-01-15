@@ -8,7 +8,7 @@ workspace = true
 
 [dependencies.risc0-zkvm]
 workspace = true
-features = ["std", "client", "unstable"]
+features = ["client"]
 
 [dependencies.zeth-guests]
 workspace = true

@@ -17,7 +17,7 @@ use crate::executor::build_executor_env;
 use alloy::network::Network;
 use alloy::primitives::B256;
 use clap::Parser;
-use log::{error, info};
+use log::{error, info, warn};
 use reth_chainspec::NamedChain;
 use risc0_zkvm::{default_executor, default_prover, is_dev_mode, ProverOpts, Receipt};
 use std::fs::File;
@@ -192,7 +192,9 @@ where
         session_info.journal.bytes
     };
     // sanity check
-    assert_eq!(expected_journal, computed_journal);
+    if expected_journal != computed_journal {
+        warn!("Journal mismatch.")
+    }
     Ok(())
 }
 

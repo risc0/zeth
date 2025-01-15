@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::map::NoMapHasher;
 use crate::mpt::MptNode;
-use alloy_primitives::map::HashMap;
+use alloy_primitives::map::AddressHashMap;
 use alloy_primitives::{Address, Bytes, U256};
 use k256::ecdsa::VerifyingKey;
 use k256::elliptic_curve::sec1::EncodedPoint;
@@ -93,7 +92,7 @@ pub struct _StatelessClientData<Block, Header> {
     /// State trie of the parent block.
     pub state_trie: MptNode,
     /// Maps each address with its storage trie and the used storage slots.
-    pub storage_tries: HashMap<Address, StorageEntry, NoMapHasher>,
+    pub storage_tries: AddressHashMap<StorageEntry>,
     /// The code for each account
     pub contracts: Vec<Bytes>,
     /// Immediate parent header
@@ -130,7 +129,7 @@ pub struct StatelessClientData<Block, Header> {
     pub state_trie: MptNode,
     /// Maps each address with its storage trie and the used storage slots.
     #[rkyv(with = rkyv::with::MapKV<AddressDef, StorageEntry>)]
-    pub storage_tries: HashMap<Address, StorageEntry, NoMapHasher>,
+    pub storage_tries: AddressHashMap<StorageEntry>,
     /// The code for each account
     #[rkyv(with = rkyv::with::Map<EncodeBytes>)]
     pub contracts: Vec<Bytes>,
@@ -167,7 +166,7 @@ pub struct RkyvStatelessClientData {
     pub state_trie: MptNode,
     /// Maps each address with its storage trie and the used storage slots.
     #[rkyv(with = rkyv::with::MapKV<AddressDef, StorageEntry>)]
-    pub storage_tries: HashMap<Address, StorageEntry, NoMapHasher>,
+    pub storage_tries: AddressHashMap<StorageEntry>,
     /// The code for each account
     #[rkyv(with = rkyv::with::Map<EncodeBytes>)]
     pub contracts: Vec<Bytes>,

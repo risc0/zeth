@@ -19,8 +19,8 @@ use crate::provider::query::{BlockQuery, UncleQuery};
 use crate::provider::{new_provider, Provider};
 use crate::trie::extend_proof_tries;
 use alloy::network::Network;
-use alloy::primitives::map::HashMap;
-use alloy::primitives::{Address, Bytes};
+use alloy::primitives::map::{AddressHashMap, HashMap};
+use alloy::primitives::Bytes;
 use anyhow::Context;
 use log::{debug, info, warn};
 use std::cell::RefCell;
@@ -29,7 +29,6 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use zeth_core::db::update::into_plain_state;
 use zeth_core::driver::CoreDriver;
-use zeth_core::map::NoMapHasher;
 use zeth_core::mpt::{
     parse_proof, resolve_nodes_in_place, shorten_node_path, MptNode, MptNodeReference,
 };
@@ -169,7 +168,7 @@ where
 
         let core_parent_header = P::derive_header(data.parent_header.clone());
         let mut state_trie = MptNode::from(R::state_root(&core_parent_header));
-        let mut storage_tries = HashMap::<Address, StorageEntry, NoMapHasher>::default();
+        let mut storage_tries = AddressHashMap::<StorageEntry>::default();
         let mut contracts: Vec<Bytes> = Default::default();
         let mut ancestor_headers: Vec<R::Header> = Default::default();
 

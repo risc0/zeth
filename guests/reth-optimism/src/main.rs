@@ -23,7 +23,6 @@ pub extern "C" fn __ctzsi2(x: u32) -> usize {
 }
 
 fn main() {
-    // todo: load up revm with hashbrown feat
     let stateless_client_data_rkyv = env::read_frame();
     let stateless_client_data_pot = env::read_frame();
     env::log("Deserializing input data");

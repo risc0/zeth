@@ -154,6 +154,7 @@ impl<Driver: CoreDriver, Database: Recoverable> StatelessClientEngine<Driver, Da
             data:
                 StatelessClientData {
                     blocks,
+                    signers,
                     state_trie,
                     storage_tries,
                     parent_header,
@@ -177,6 +178,7 @@ impl<Driver: CoreDriver, Database: Recoverable> StatelessClientEngine<Driver, Da
         .context("StatelessClientEngine::finalize")?;
         // Prepare for next block
         *parent_header = Driver::block_to_header(blocks.pop().unwrap());
+        signers.pop();
         *total_difficulty = Driver::accumulate_difficulty(*total_difficulty, &*parent_header);
 
         Ok(())

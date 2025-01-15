@@ -1,4 +1,4 @@
-// Copyright 2024 RISC Zero, Inc.
+// Copyright 2024, 2025 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ use crate::provider::new_provider;
 use alloy::network::Network;
 use alloy::primitives::B256;
 use anyhow::Context;
-use log::{info, warn};
+use log::{error, info, warn};
 use provider::query::BlockQuery;
 use reth_chainspec::NamedChain;
 use std::path::PathBuf;
@@ -166,7 +166,7 @@ where
         );
 
         if final_difficulty.is_zero() {
-            warn!("Expecting a proof with a final chain difficulty value of zero in the journal.")
+            error!("Expecting a proof with a final chain difficulty value of zero in the journal.")
         }
         let journal = [
             chain.to_be_bytes().as_slice(),

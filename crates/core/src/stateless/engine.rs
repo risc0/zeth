@@ -1,4 +1,4 @@
-// Copyright 2024 RISC Zero, Inc.
+// Copyright 2024, 2025 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -154,6 +154,7 @@ impl<Driver: CoreDriver, Database: Recoverable> StatelessClientEngine<Driver, Da
             data:
                 StatelessClientData {
                     blocks,
+                    signers,
                     state_trie,
                     storage_tries,
                     parent_header,
@@ -177,6 +178,7 @@ impl<Driver: CoreDriver, Database: Recoverable> StatelessClientEngine<Driver, Da
         .context("StatelessClientEngine::finalize")?;
         // Prepare for next block
         *parent_header = Driver::block_to_header(blocks.pop().unwrap());
+        signers.pop();
         *total_difficulty = Driver::accumulate_difficulty(*total_difficulty, &*parent_header);
 
         Ok(())

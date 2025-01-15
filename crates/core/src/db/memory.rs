@@ -1,4 +1,4 @@
-// Copyright 2024 RISC Zero, Inc.
+// Copyright 2024, 2025 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,9 +15,7 @@
 use crate::db::unreachable::UnreachableDB;
 use crate::db::update::Update;
 use crate::rescue::Recoverable;
-use alloy_primitives::map::HashSet;
 use alloy_primitives::{B256, U256};
-use reth_primitives::revm_primitives::AccountInfo;
 use reth_revm::db::states::{PlainStorageChangeset, StateChangeset};
 use reth_revm::db::{AccountState, CacheDB};
 
@@ -32,22 +30,12 @@ impl<DB: Default> Recoverable for CacheDB<DB> {
 impl<DB> Update for CacheDB<DB> {
     fn apply_changeset(&mut self, changeset: StateChangeset) -> anyhow::Result<()> {
         // Update accounts in state trie
-        let mut was_destroyed = HashSet::new();
         for (address, account_info) in changeset.accounts {
             let db_account = self.accounts.get_mut(&address).unwrap();
-            let Some(info) = account_info else {
-                db_account.storage.clear();
-                db_account.account_state = AccountState::NotExisting;
-                db_account.info = AccountInfo::default();
-                was_destroyed.insert(address);
-                continue;
-            };
-            if info.code_hash != db_account.info.code_hash {
-                db_account.info = info;
-            } else {
-                db_account.info.balance = info.balance;
-                db_account.info.nonce = info.nonce;
-            }
+            // Reset the account state
+            db_account.account_state = AccountState::None;
+            // Update account info
+            db_account.info = account_info.unwrap_or_default();
         }
         // Update account storages
         for PlainStorageChangeset {
@@ -56,13 +44,10 @@ impl<DB> Update for CacheDB<DB> {
             storage,
         } in changeset.storage
         {
-            if was_destroyed.contains(&address) {
-                continue;
-            }
             let db_account = self.accounts.get_mut(&address).unwrap();
+            db_account.account_state = AccountState::None;
             if wipe_storage {
                 db_account.storage.clear();
-                db_account.account_state = AccountState::StorageCleared;
             }
             for (key, val) in storage {
                 db_account.storage.insert(key, val);

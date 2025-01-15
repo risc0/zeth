@@ -1,4 +1,4 @@
-// Copyright 2024 RISC Zero, Inc.
+// Copyright 2024, 2025 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@ use crate::keccak::keccak;
 use crate::mpt::MptNode;
 use crate::stateless::data::StorageEntry;
 use alloy_consensus::Account;
-use alloy_primitives::map::HashMap;
-use alloy_primitives::{Address, U256};
+use alloy_primitives::map::AddressHashMap;
+use alloy_primitives::U256;
 use anyhow::{bail, Context};
 use reth_revm::db::states::StateChangeset;
 use reth_revm::db::BundleState;
@@ -30,7 +30,7 @@ pub trait FinalizationStrategy<Driver: CoreDriver, Database> {
     fn finalize_state(
         block: &mut Driver::Block,
         state_trie: &mut MptNode,
-        storage_tries: &mut HashMap<Address, StorageEntry>,
+        storage_tries: &mut AddressHashMap<StorageEntry>,
         parent_header: &mut Driver::Header,
         db: Option<&mut Database>,
         bundle_state: BundleState,
@@ -44,7 +44,7 @@ impl<Driver: CoreDriver> FinalizationStrategy<Driver, TrieDB> for TrieDbFinaliza
     fn finalize_state(
         block: &mut Driver::Block,
         _state_trie: &mut MptNode,
-        _storage_tries: &mut HashMap<Address, StorageEntry>,
+        _storage_tries: &mut AddressHashMap<StorageEntry>,
         parent_header: &mut Driver::Header,
         db: Option<&mut TrieDB>,
         bundle_state: BundleState,
@@ -89,7 +89,7 @@ impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for MemoryDbFina
     fn finalize_state(
         block: &mut Driver::Block,
         state_trie: &mut MptNode,
-        storage_tries: &mut HashMap<Address, StorageEntry>,
+        storage_tries: &mut AddressHashMap<StorageEntry>,
         parent_header: &mut Driver::Header,
         db: Option<&mut MemoryDB>,
         bundle_state: BundleState,
@@ -190,7 +190,14 @@ impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for MemoryDbFina
 
         // Validate final state trie
         let header = Driver::block_header(block);
-        assert_eq!(Driver::state_root(header), state_trie.hash());
+        if Driver::state_root(header) != state_trie.hash() {
+            bail!(
+                "Invalid state root (expected {:?}, got {:?}) at block #{}",
+                state_trie.hash(),
+                Driver::state_root(header),
+                Driver::block_number(header)
+            );
+        }
 
         // Update the database if available
         if with_further_updates {

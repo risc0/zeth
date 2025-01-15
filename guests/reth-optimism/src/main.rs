@@ -1,4 +1,4 @@
-// Copyright 2024 RISC Zero, Inc.
+// Copyright 2024, 2025 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use risc0_zkvm::guest::env;
-use zeth_core::db::trie::TrieDB;
+use zeth_core::db::memory::MemoryDB;
 use zeth_core::stateless::client::StatelessClient;
 use zeth_core_optimism::{OpRethCoreDriver, OpRethStatelessClient};
 
@@ -23,12 +23,11 @@ pub extern "C" fn __ctzsi2(x: u32) -> usize {
 }
 
 fn main() {
-    // todo: load up revm with hashbrown feat
     let stateless_client_data_rkyv = env::read_frame();
     let stateless_client_data_pot = env::read_frame();
     env::log("Deserializing input data");
     let stateless_client_data =
-        <OpRethStatelessClient as StatelessClient<OpRethCoreDriver, TrieDB>>::data_from_parts(
+        <OpRethStatelessClient as StatelessClient<OpRethCoreDriver, MemoryDB>>::data_from_parts(
             &stateless_client_data_rkyv,
             &stateless_client_data_pot,
         )
@@ -41,7 +40,7 @@ fn main() {
     let chain_id = stateless_client_data.chain as u64;
     // Build the block
     env::log("Validating blocks");
-    let engine = <OpRethStatelessClient as StatelessClient<OpRethCoreDriver, TrieDB>>::validate(
+    let engine = <OpRethStatelessClient as StatelessClient<OpRethCoreDriver, MemoryDB>>::validate(
         stateless_client_data,
     )
     .expect("block validation failed");

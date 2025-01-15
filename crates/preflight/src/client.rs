@@ -1,4 +1,4 @@
-// Copyright 2024 RISC Zero, Inc.
+// Copyright 2024, 2025 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ use crate::provider::query::{BlockQuery, UncleQuery};
 use crate::provider::{new_provider, Provider};
 use crate::trie::extend_proof_tries;
 use alloy::network::Network;
-use alloy::primitives::map::HashMap;
+use alloy::primitives::map::{AddressHashMap, HashMap};
 use alloy::primitives::Bytes;
 use anyhow::Context;
 use log::{debug, info, warn};
@@ -168,7 +168,7 @@ where
 
         let core_parent_header = P::derive_header(data.parent_header.clone());
         let mut state_trie = MptNode::from(R::state_root(&core_parent_header));
-        let mut storage_tries = Default::default();
+        let mut storage_tries = AddressHashMap::<StorageEntry>::default();
         let mut contracts: Vec<Bytes> = Default::default();
         let mut ancestor_headers: Vec<R::Header> = Default::default();
 
@@ -305,6 +305,7 @@ where
 
             // Advance engine manually
             engine.data.parent_header = R::block_to_header(engine.data.blocks.pop().unwrap());
+            engine.data.signers.pop();
             engine.data.total_difficulty =
                 R::accumulate_difficulty(engine.data.total_difficulty, &engine.data.parent_header);
 

@@ -15,14 +15,11 @@ codegen-units = 1
 opt-level = 3
 
 [dependencies.risc0-zkvm]
-git = "https://github.com/risc0/risc0"
-rev = "8801e2e3cd030acea2f03f01bd91f37e47e79e23"
-default-features = false
+version = "1.2.1-rc.1"
 features = ["std", "unstable"]
 
 [dependencies.risc0-zkvm-platform]
-git = "https://github.com/risc0/risc0"
-rev = "8801e2e3cd030acea2f03f01bd91f37e47e79e23"
+version = "1.2.1-rc.1"
 features = ["sys-getenv"]
 
 [dependencies.zeth-core]
@@ -40,5 +37,5 @@ c-kzg = { version = "=1.0.3", features = ["risc0-ffi"] }
 c-kzg = { git = "https://github.com/risc0/c-kzg-4844.git", branch = "p1.0.3" }
 crypto-bigint = { git = "https://github.com/risc0/RustCrypto-crypto-bigint", tag = "v0.5.5-risczero.0" }
 k256 = { git = "https://github.com/risc0/RustCrypto-elliptic-curves", tag = "k256/v0.13.3-risczero.1" }
-sha2 = { git = "https://github.com/risc0/RustCrypto-hashes", tag = "sha2-v0.10.6-risczero.0" }
-tiny-keccak = { git = "https://github.com/risc0/tiny-keccak", rev = "01e787dcb9b8a5d21857af37c4d51a4028a03fc4" }
+sha2 = { git = "https://github.com/risc0/RustCrypto-hashes", tag = "sha2-v0.10.8-risczero.0" }
+tiny-keccak = { git = "https://github.com/risc0/tiny-keccak", tag = "tiny-keccak/v2.0.2-risczero.0" }

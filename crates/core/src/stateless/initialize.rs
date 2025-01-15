@@ -1,4 +1,4 @@
-// Copyright 2024 RISC Zero, Inc.
+// Copyright 2024, 2025 RISC Zero, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,12 +16,13 @@ use crate::db::memory::MemoryDB;
 use crate::db::trie::TrieDB;
 use crate::driver::CoreDriver;
 use crate::keccak::keccak;
+use crate::map::NoMapHasher;
 use crate::mpt::MptNode;
 use crate::stateless::data::StorageEntry;
 use alloy_consensus::constants::EMPTY_ROOT_HASH;
 use alloy_consensus::Account;
-use alloy_primitives::map::HashMap;
-use alloy_primitives::{Address, Bytes, B256, U256};
+use alloy_primitives::map::{AddressHashMap, HashMap};
+use alloy_primitives::{Bytes, B256, U256};
 use anyhow::{bail, ensure};
 use core::mem::take;
 use reth_primitives::revm_primitives::Bytecode;
@@ -32,7 +33,7 @@ use std::default::Default;
 pub trait InitializationStrategy<Driver: CoreDriver, Database> {
     fn initialize_database(
         state_trie: &mut MptNode,
-        storage_tries: &mut HashMap<Address, StorageEntry>,
+        storage_tries: &mut AddressHashMap<StorageEntry>,
         contracts: &mut Vec<Bytes>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
@@ -44,7 +45,7 @@ pub struct TrieDbInitializationStrategy;
 impl<Driver: CoreDriver> InitializationStrategy<Driver, TrieDB> for TrieDbInitializationStrategy {
     fn initialize_database(
         state_trie: &mut MptNode,
-        storage_tries: &mut HashMap<Address, StorageEntry>,
+        storage_tries: &mut AddressHashMap<StorageEntry>,
         contracts: &mut Vec<Bytes>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
@@ -64,8 +65,25 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, TrieDB> for TrieDbInitia
             .map(|bytes| (keccak(&bytes).into(), Bytecode::new_raw(bytes)))
             .collect();
 
+        // Verify account data in db
+        for (address, StorageEntry { storage_trie, .. }) in storage_tries.iter() {
+            // load the account from the state trie
+            let state_account = state_trie.get_rlp::<Account>(&keccak(address))?;
+
+            // check that the account storage root matches the storage trie root of the input
+            let storage_root = state_account.map_or(EMPTY_ROOT_HASH, |a| a.storage_root);
+            if storage_root != storage_trie.hash() {
+                bail!(
+                    "Invalid storage trie for {}: expected {}, got {}",
+                    address,
+                    storage_root,
+                    storage_trie.hash()
+                )
+            }
+        }
+
         // prepare block hash history
-        let mut block_hashes: HashMap<u64, B256> =
+        let mut block_hashes: HashMap<u64, B256, NoMapHasher> =
             HashMap::with_capacity_and_hasher(ancestor_headers.len() + 1, Default::default());
         block_hashes.insert(
             Driver::block_number(parent_header),
@@ -110,7 +128,7 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB>
 {
     fn initialize_database(
         state_trie: &mut MptNode,
-        storage_tries: &mut HashMap<Address, StorageEntry>,
+        storage_tries: &mut AddressHashMap<StorageEntry>,
         contracts: &mut Vec<Bytes>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,

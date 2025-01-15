@@ -13,8 +13,7 @@ k256.workspace = true
 pot.workspace = true
 rkyv.workspace = true
 serde.workspace = true
-thiserror.workspace = true
-tiny-keccak.workspace = true
+steel-trie.workspace = true
 
 reth-chainspec.workspace = true
 reth-primitives.workspace = true

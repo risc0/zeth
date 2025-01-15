@@ -80,6 +80,7 @@ zeth-guests = { path = "guests" }
 zeth-preflight = { path = "crates/preflight" }
 zeth-preflight-ethereum = { path = "crates/preflight-ethereum" }
 zeth-preflight-optimism = { path = "crates/preflight-optimism" }
+steel-trie = { path = "../scratch/dev/wwelz/steel-trie", features = ["orphan", "rkyv", "rlp_serialize", "serde"] }
 
 # Others
 anyhow = "1.0.89"
@@ -89,6 +90,7 @@ bytemuck = "1.19.0"
 clap = { version = "4.0", features = ["derive"] }
 env_logger = "0.11.5"
 hashbrown = { version = "0.15.2", features = ["rayon"] }
+itertools = "0.14"
 k256 = { version = "0.13.3", features = ["serde", "pem"] }
 log = "0.4.22"
 flate2 = "1.0.34"
@@ -98,7 +100,5 @@ rkyv = {  version = "0.8.9", features = ["hashbrown-0_15"] }
 serde = { version = "1.0.210", features = ["derive"] }
 serde_json = { version = "1.0.128", features = ["alloc"] }
 serde_with = "3.11.0"
-thiserror = "1.0.64"
-tiny-keccak = "2.0.2"
 tokio = { version = "1.41.0", features = ["full"] }
 tracing = { version = "0.1.40", features = ["log"] }

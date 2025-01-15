@@ -16,11 +16,11 @@ use crate::db::memory::MemoryDB;
 use crate::db::trie::TrieDB;
 use crate::db::update::{into_plain_state, Update};
 use crate::driver::CoreDriver;
-use crate::keccak::keccak;
 use crate::map::NoMapHasher;
 use crate::mpt::MptNode;
 use crate::stateless::data::StorageEntry;
 use alloy_consensus::Account;
+use alloy_primitives::keccak256;
 use alloy_primitives::map::HashMap;
 use alloy_primitives::{Address, U256};
 use anyhow::{bail, Context};
@@ -30,7 +30,7 @@ use reth_revm::db::BundleState;
 pub trait FinalizationStrategy<Driver: CoreDriver, Database> {
     fn finalize_state(
         block: &mut Driver::Block,
-        state_trie: &mut MptNode,
+        state_trie: &mut MptNode<Account>,
         storage_tries: &mut HashMap<Address, StorageEntry, NoMapHasher>,
         parent_header: &mut Driver::Header,
         db: Option<&mut Database>,
@@ -44,7 +44,7 @@ pub struct TrieDbFinalizationStrategy;
 impl<Driver: CoreDriver> FinalizationStrategy<Driver, TrieDB> for TrieDbFinalizationStrategy {
     fn finalize_state(
         block: &mut Driver::Block,
-        _state_trie: &mut MptNode,
+        _state_trie: &mut MptNode<Account>,
         _storage_tries: &mut HashMap<Address, StorageEntry, NoMapHasher>,
         parent_header: &mut Driver::Header,
         db: Option<&mut TrieDB>,
@@ -89,7 +89,7 @@ pub struct MemoryDbFinalizationStrategy;
 impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for MemoryDbFinalizationStrategy {
     fn finalize_state(
         block: &mut Driver::Block,
-        state_trie: &mut MptNode,
+        state_trie: &mut MptNode<Account>,
         storage_tries: &mut HashMap<Address, StorageEntry, NoMapHasher>,
         parent_header: &mut Driver::Header,
         db: Option<&mut MemoryDB>,
@@ -124,32 +124,28 @@ impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for MemoryDbFina
             // apply all new storage entries for the current account (address)
             let mut deletions = Vec::with_capacity(storage_change.storage.len());
             for (key, value) in &storage_change.storage {
-                let storage_trie_index = keccak(key.to_be_bytes::<32>());
+                let storage_trie_index = keccak256(key.to_be_bytes::<32>());
                 if value.is_zero() {
                     deletions.push(storage_trie_index);
                 } else {
-                    storage_trie
-                        .insert_rlp(&storage_trie_index, value)
-                        .context("storage_trie.insert_rlp")?;
+                    storage_trie.insert_rlp(storage_trie_index, value);
                 }
             }
             // Apply deferred storage trie deletions
             for storage_trie_index in deletions {
-                storage_trie
-                    .delete(&storage_trie_index)
-                    .context("storage_trie.delete")?;
+                storage_trie.remove(storage_trie_index);
             }
         }
         // Apply account info + storage changes
         let mut deletions = Vec::with_capacity(accounts.len());
         for (address, account_info) in accounts {
-            let state_trie_index = keccak(address);
+            let state_trie_index = keccak256(address);
             if account_info.is_none() {
                 deletions.push(state_trie_index);
                 continue;
             }
             let storage_root = {
-                let StorageEntry { storage_trie, .. } = storage_tries.get(address).unwrap();
+                let StorageEntry { storage_trie, .. } = storage_tries.get_mut(address).unwrap();
                 storage_trie.hash()
             };
 
@@ -160,32 +156,26 @@ impl<Driver: CoreDriver> FinalizationStrategy<Driver, MemoryDB> for MemoryDbFina
                 storage_root,
                 code_hash: info.code_hash,
             };
-            state_trie
-                .insert_rlp(&state_trie_index, state_account)
-                .context("state_trie.insert_rlp")?;
+            state_trie.insert_rlp(state_trie_index, state_account);
         }
         // Apply deferred state trie deletions
         for state_trie_index in deletions {
-            state_trie
-                .delete(&state_trie_index)
-                .context("state_trie.delete")?;
+            state_trie.remove(state_trie_index);
         }
         // Apply account storage only changes
         for (address, StorageEntry { storage_trie, .. }) in storage_tries {
-            if storage_trie.is_reference_cached() {
+            if storage_trie.is_cached() {
                 continue;
             }
-            let state_trie_index = keccak(address);
+            let state_trie_index = keccak256(address);
             let mut state_account = state_trie
-                .get_rlp::<Account>(&state_trie_index)
+                .get_rlp(state_trie_index)
                 .context("state_trie.get_rlp")?
                 .unwrap_or_default();
             let new_storage_root = storage_trie.hash();
             if state_account.storage_root != new_storage_root {
                 state_account.storage_root = storage_trie.hash();
-                state_trie
-                    .insert_rlp(&state_trie_index, state_account)
-                    .context("state_trie.insert_rlp (2)")?;
+                state_trie.insert_rlp(state_trie_index, state_account);
             }
         }
 

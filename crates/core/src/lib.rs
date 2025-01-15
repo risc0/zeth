@@ -14,7 +14,6 @@
 
 pub mod db;
 pub mod driver;
-pub mod keccak;
 pub mod map;
 pub mod mpt;
 pub mod rescue;

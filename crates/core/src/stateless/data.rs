@@ -14,6 +14,7 @@
 
 use crate::map::NoMapHasher;
 use crate::mpt::MptNode;
+use alloy_consensus::Account;
 use alloy_primitives::map::HashMap;
 use alloy_primitives::{Address, Bytes, U256};
 use k256::ecdsa::VerifyingKey;
@@ -41,7 +42,7 @@ use serde::{Deserialize, Serialize};
     rkyv::Deserialize,
 )]
 pub struct StorageEntry {
-    pub storage_trie: MptNode,
+    pub storage_trie: MptNode<U256>,
     #[rkyv(with = rkyv::with::Map<U256Def>)]
     pub slots: Vec<U256>,
 }
@@ -91,7 +92,7 @@ pub struct _StatelessClientData<Block, Header> {
     /// List of public keys for transaction signatures
     pub signers: Vec<Vec<VerifyingKey>>,
     /// State trie of the parent block.
-    pub state_trie: MptNode,
+    pub state_trie: MptNode<Account>,
     /// Maps each address with its storage trie and the used storage slots.
     pub storage_tries: HashMap<Address, StorageEntry, NoMapHasher>,
     /// The code for each account
@@ -127,7 +128,7 @@ pub struct StatelessClientData<Block, Header> {
     #[rkyv(with = rkyv::with::Map<rkyv::with::Map<EncodeVerifyingKey>>)]
     pub signers: Vec<Vec<VerifyingKey>>,
     /// State trie of the parent block.
-    pub state_trie: MptNode,
+    pub state_trie: MptNode<Account>,
     /// Maps each address with its storage trie and the used storage slots.
     #[rkyv(with = rkyv::with::MapKV<AddressDef, StorageEntry>)]
     pub storage_tries: HashMap<Address, StorageEntry, NoMapHasher>,
@@ -164,7 +165,7 @@ pub struct RkyvStatelessClientData {
     #[rkyv(with = rkyv::with::Map<rkyv::with::Map<EncodeVerifyingKey>>)]
     pub signers: Vec<Vec<VerifyingKey>>,
     /// State trie of the parent block.
-    pub state_trie: MptNode,
+    pub state_trie: MptNode<Account>,
     /// Maps each address with its storage trie and the used storage slots.
     #[rkyv(with = rkyv::with::MapKV<AddressDef, StorageEntry>)]
     pub storage_tries: HashMap<Address, StorageEntry, NoMapHasher>,

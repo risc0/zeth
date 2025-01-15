@@ -16,17 +16,18 @@ use crate::driver::PreflightDriver;
 use crate::provider::db::ProviderDB;
 use crate::provider::get_proofs;
 use crate::provider::query::{AccountRangeQuery, BlockQuery, ProofQuery, StorageRangeQuery};
-use crate::trie::TrieOrphan;
 use alloy::network::Network;
 use alloy::primitives::map::HashMap;
 use alloy::primitives::{Address, B256, U256};
 use alloy::rpc::types::EIP1186AccountProofResponse;
-use log::{error, warn};
+use anyhow::Context;
+use log::error;
 use reth_primitives::revm_primitives::{Account, AccountInfo, Bytecode};
 use reth_revm::db::states::StateChangeset;
 use reth_revm::db::CacheDB;
 use reth_revm::{Database, DatabaseCommit, DatabaseRef};
 use std::cell::{Ref, RefCell};
+use std::collections::BTreeSet;
 use std::marker::PhantomData;
 use std::ops::DerefMut;
 use zeth_core::db::update::Update;
@@ -251,87 +252,66 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
         Ok(headers)
     }
 
-    pub fn resolve_orphans(
+    /// Fetches the EIP-1186 proof for the next account after a given key.
+    ///
+    /// This method retrieves an [EIP1186AccountProofResponse] for the account whose address, when
+    /// hashed, lexicographically follows the provided `start` key. The proof is generated for the
+    /// block `block_count` after the currently configured block in the provider.
+    pub fn get_next_account_proof(
         &mut self,
         block_count: u64,
-        state_orphans: &[TrieOrphan],
-        storage_orphans: &[(Address, TrieOrphan)],
-    ) -> Vec<EIP1186AccountProofResponse> {
-        let state_resolves = self.resolve_state_orphans(state_orphans, block_count);
-        let storage_resolves = self.resolve_storage_orphans(storage_orphans, block_count);
-        state_resolves.into_iter().chain(storage_resolves).collect()
-    }
-
-    pub fn resolve_state_orphans(
-        &mut self,
-        state_orphans: &[TrieOrphan],
-        block_count: u64,
-    ) -> Vec<EIP1186AccountProofResponse> {
+        start: B256,
+    ) -> anyhow::Result<EIP1186AccountProofResponse> {
         let initial_db = self.inner.db.db.borrow_mut();
         let provider_db = initial_db.db.borrow_db();
         let mut provider = provider_db.provider.borrow_mut();
-        let mut result = Vec::new();
         let block_no = initial_db.db.borrow_db().block_no + block_count - 1;
-        for (start, digest) in state_orphans {
-            if let Ok(next_account) = provider.get_next_account(&AccountRangeQuery {
+
+        let address = provider
+            .get_next_account(&AccountRangeQuery::new(block_no, start))
+            .context("debug_storageRangeAt call failed")?;
+
+        provider
+            .get_proof(&ProofQuery {
                 block_no,
-                start: *start,
-                max_results: 1,
-                no_code: true,
-                no_storage: true,
-                incompletes: false,
-            }) {
-                if let Ok(proof) = provider.get_proof(&ProofQuery {
-                    block_no,
-                    address: next_account,
-                    indices: Default::default(),
-                }) {
-                    result.push(proof);
-                    continue;
-                }
-                continue;
-            }
-            warn!("state orphan {digest} not found");
-        }
-        result
+                address,
+                indices: BTreeSet::default(),
+            })
+            .context("eth_getProof call failed")
     }
 
-    pub fn resolve_storage_orphans(
+    /// Fetches EIP-1186 proofs for the next storage slots of a given account.
+    ///
+    /// This method retrieves an [EIP1186AccountProofResponse] for multiple storage slots of a given
+    /// account. For each `B256` key provided in the `starts` iterator, the method finds the next
+    /// storage slot whose hashed index lexicographically follows the given key. The proofs are
+    /// generated for the block `block_count` after the currently configured block in the provider.
+    pub fn get_next_slot_proofs(
         &mut self,
-        storage_orphans: &[(Address, TrieOrphan)],
         block_count: u64,
-    ) -> Vec<EIP1186AccountProofResponse> {
+        address: Address,
+        starts: impl IntoIterator<Item = B256>,
+    ) -> anyhow::Result<EIP1186AccountProofResponse> {
         let initial_db = self.inner.db.db.borrow_mut();
         let provider_db = initial_db.db.borrow_db();
         let mut provider = provider_db.provider.borrow_mut();
-        let mut result = Vec::new();
         let block_no = initial_db.db.borrow_db().block_no + block_count - 1;
-        for (address, (start, digest)) in storage_orphans {
-            // if let Ok(val) = provider.get_preimage(&PreimageQuery { digest: *digest }) {
-            //     continue;
-            // }
-            if let Ok(next_slot) = provider.get_next_slot(&StorageRangeQuery {
-                block_no,
-                tx_index: 0,
-                address: *address,
-                start: *start,
-                max_results: 1,
-            }) {
-                if let Ok(proof) = provider.get_proof(&ProofQuery {
-                    block_no,
-                    address: *address,
-                    indices: vec![next_slot]
-                        .into_iter()
-                        .map(|x| x.to_be_bytes().into())
-                        .collect(),
-                }) {
-                    result.push(proof);
-                    continue;
-                }
-            }
-            warn!("storage orphan {address}/{digest} not found");
+
+        let mut indices = BTreeSet::new();
+        for start in starts {
+            let slot = provider
+                .get_next_slot(&StorageRangeQuery::new(block_no, address, start))
+                .context("debug_accountRange call failed")?;
+            indices.insert(B256::from(slot));
         }
-        result
+
+        provider
+            .get_proof(&ProofQuery {
+                block_no,
+                address,
+                indices,
+            })
+            .context("eth_getProof call failed")
     }
 }
 

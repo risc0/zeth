@@ -15,7 +15,7 @@
 use crate::cli::Cli;
 use crate::executor::build_executor_env;
 use alloy::network::Network;
-use alloy::primitives::B256;
+use alloy::primitives::{keccak256, B256};
 use clap::Parser;
 use log::{error, info, warn};
 use reth_chainspec::NamedChain;
@@ -25,7 +25,6 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use tokio::task::spawn_blocking;
 use zeth_core::driver::CoreDriver;
-use zeth_core::keccak::keccak;
 use zeth_core::rescue::Recoverable;
 use zeth_preflight::driver::PreflightDriver;
 use zeth_preflight::BlockBuilder;
@@ -214,7 +213,7 @@ pub fn proof_file_name(
         prover_opts.as_slice(),
     ]
     .concat();
-    let file_name = B256::from(keccak(data));
+    let file_name = keccak256(data);
     format!("risc0-{version}-{file_name}.{suffix}")
 }
 

@@ -15,14 +15,13 @@
 use crate::db::memory::MemoryDB;
 use crate::db::trie::TrieDB;
 use crate::driver::CoreDriver;
-use crate::keccak::keccak;
 use crate::map::NoMapHasher;
 use crate::mpt::MptNode;
 use crate::stateless::data::StorageEntry;
 use alloy_consensus::constants::EMPTY_ROOT_HASH;
 use alloy_consensus::Account;
 use alloy_primitives::map::HashMap;
-use alloy_primitives::{Address, Bytes, B256, U256};
+use alloy_primitives::{keccak256, Address, Bytes, B256, U256};
 use anyhow::{bail, ensure};
 use core::mem::take;
 use reth_primitives::revm_primitives::Bytecode;
@@ -32,7 +31,7 @@ use std::default::Default;
 
 pub trait InitializationStrategy<Driver: CoreDriver, Database> {
     fn initialize_database(
-        state_trie: &mut MptNode,
+        state_trie: &mut MptNode<Account>,
         storage_tries: &mut HashMap<Address, StorageEntry, NoMapHasher>,
         contracts: &mut Vec<Bytes>,
         parent_header: &mut Driver::Header,
@@ -44,7 +43,7 @@ pub struct TrieDbInitializationStrategy;
 
 impl<Driver: CoreDriver> InitializationStrategy<Driver, TrieDB> for TrieDbInitializationStrategy {
     fn initialize_database(
-        state_trie: &mut MptNode,
+        state_trie: &mut MptNode<Account>,
         storage_tries: &mut HashMap<Address, StorageEntry, NoMapHasher>,
         contracts: &mut Vec<Bytes>,
         parent_header: &mut Driver::Header,
@@ -62,13 +61,13 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, TrieDB> for TrieDbInitia
         // hash all the contract code
         let contracts = take(contracts)
             .into_iter()
-            .map(|bytes| (keccak(&bytes).into(), Bytecode::new_raw(bytes)))
+            .map(|bytes| (keccak256(&bytes), Bytecode::new_raw(bytes)))
             .collect();
 
         // Verify account data in db
-        for (address, StorageEntry { storage_trie, .. }) in storage_tries.iter() {
+        for (address, StorageEntry { storage_trie, .. }) in storage_tries.iter_mut() {
             // load the account from the state trie
-            let state_account = state_trie.get_rlp::<Account>(&keccak(address))?;
+            let state_account = state_trie.get_rlp(keccak256(address))?;
 
             // check that the account storage root matches the storage trie root of the input
             let storage_root = state_account.map_or(EMPTY_ROOT_HASH, |a| a.storage_root);
@@ -127,7 +126,7 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB>
     for MemoryDbInitializationStrategy
 {
     fn initialize_database(
-        state_trie: &mut MptNode,
+        state_trie: &mut MptNode<Account>,
         storage_tries: &mut HashMap<Address, StorageEntry, NoMapHasher>,
         contracts: &mut Vec<Bytes>,
         parent_header: &mut Driver::Header,
@@ -145,7 +144,7 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB>
         // hash all the contract code
         let contracts = take(contracts)
             .into_iter()
-            .map(|bytes| (keccak(&bytes).into(), Bytecode::new_raw(bytes)))
+            .map(|bytes| (keccak256(&bytes), Bytecode::new_raw(bytes)))
             .collect();
 
         // Load account data into db
@@ -163,7 +162,7 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB>
             let slots = take(slots);
 
             // load the account from the state trie
-            let state_account = state_trie.get_rlp::<Account>(&keccak(address))?;
+            let state_account = state_trie.get_rlp(keccak256(address))?;
 
             // check that the account storage root matches the storage trie root of the input
             let storage_root = state_account.map_or(EMPTY_ROOT_HASH, |a| a.storage_root);
@@ -184,7 +183,7 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB>
                         HashMap::with_capacity_and_hasher(slots.len(), Default::default());
                     for slot in slots {
                         let value: U256 = storage_trie
-                            .get_rlp(&keccak(slot.to_be_bytes::<32>()))?
+                            .get_rlp(keccak256(slot.to_be_bytes::<32>()))?
                             .unwrap_or_default();
                         storage.insert(slot, value);
                     }

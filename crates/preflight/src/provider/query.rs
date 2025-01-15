@@ -62,6 +62,19 @@ pub struct AccountRangeQuery {
     pub incompletes: bool,
 }
 
+impl AccountRangeQuery {
+    pub fn new(block_no: u64, start: B256) -> Self {
+        Self {
+            block_no,
+            start,
+            max_results: 1,
+            no_code: true,
+            no_storage: true,
+            incompletes: true,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountRangeQueryResponse {
@@ -89,6 +102,18 @@ pub struct StorageRangeQuery {
     pub address: Address,
     pub start: B256,
     pub max_results: u64,
+}
+
+impl StorageRangeQuery {
+    pub fn new(block_no: u64, address: Address, start: B256) -> Self {
+        Self {
+            block_no,
+            tx_index: 0,
+            address,
+            start,
+            max_results: 1,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

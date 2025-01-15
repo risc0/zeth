@@ -11,6 +11,7 @@ alloy.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 flate2.workspace = true
+itertools.workspace = true
 k256.workspace = true
 log.workspace = true
 pot.workspace = true

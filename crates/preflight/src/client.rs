@@ -17,11 +17,12 @@ use crate::driver::PreflightDriver;
 use crate::provider::db::ProviderDB;
 use crate::provider::query::{BlockQuery, UncleQuery};
 use crate::provider::{new_provider, Provider};
-use crate::trie::extend_proof_tries;
 use alloy::network::Network;
-use alloy::primitives::map::HashMap;
-use alloy::primitives::{Address, Bytes};
+use alloy::primitives::map::{B256Set, HashMap, HashSet};
+use alloy::primitives::{keccak256, Bytes, U256};
+use alloy::rpc::types::EIP1186StorageProof;
 use anyhow::Context;
+use itertools::Itertools;
 use log::{debug, info, warn};
 use std::cell::RefCell;
 use std::iter::zip;
@@ -29,10 +30,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use zeth_core::db::update::into_plain_state;
 use zeth_core::driver::CoreDriver;
-use zeth_core::map::NoMapHasher;
-use zeth_core::mpt::{
-    parse_proof, resolve_nodes_in_place, shorten_node_path, MptNode, MptNodeReference,
-};
+use zeth_core::mpt::MptNode;
 use zeth_core::rescue::Wrapper;
 use zeth_core::stateless::data::{StatelessClientData, StorageEntry};
 use zeth_core::stateless::engine::StatelessClientEngine;
@@ -165,12 +163,12 @@ where
             Some(preflight_db),
         );
 
-        let block_count = data.blocks.len();
+        let block_count = data.blocks.len() as u64;
 
         let core_parent_header = P::derive_header(data.parent_header.clone());
-        let mut state_trie = MptNode::from(R::state_root(&core_parent_header));
-        let mut storage_tries = HashMap::<Address, StorageEntry, NoMapHasher>::default();
-        let mut contracts: Vec<Bytes> = Default::default();
+        let mut state_trie = MptNode::from_digest(R::state_root(&core_parent_header));
+        let mut storage_tries = HashMap::default();
+        let mut contracts: HashSet<Bytes> = HashSet::default();
         let mut ancestor_headers: Vec<R::Header> = Default::default();
 
         for num_blocks in 1..=block_count {
@@ -190,10 +188,6 @@ where
             // Save the provider cache
             info!("Saving provider cache ...");
             preflight_db.save_provider()?;
-
-            // info!("Sanity check ...");
-            // preflight_db.sanity_check(state_changeset)?;
-            // preflight_db.save_provider()?;
 
             // Gather inclusion proofs for the initial and final state
             info!("Gathering initial proofs ...");
@@ -224,74 +218,101 @@ where
             // collect the code of the used contracts
             let initial_db = preflight_db.inner.db.db.borrow();
             for code in initial_db.contracts.values() {
-                contracts.push(code.bytes().clone());
+                contracts.insert(code.bytes().clone());
             }
             drop(initial_db);
             info!("Collected contracts: {}", contracts.len());
 
-            // construct the sparse MPTs from the inclusion proofs
-            info!(
-                "Extending tries from {} initialization and {} finalization proofs ...",
-                initial_proofs.len(),
-                latest_proofs.len()
-            );
-            let (state_orphans, storage_orphans) = extend_proof_tries(
-                &mut state_trie,
-                &mut storage_tries,
-                initial_proofs,
-                latest_proofs,
-            )
-            .context("failed to extend proof tries")?;
-            // resolve potential orphans
-            let orphan_resolves =
-                preflight_db.resolve_orphans(block_count as u64, &state_orphans, &storage_orphans);
-            info!(
-                "Using {} proofs to resolve {} state and {} storage orphans.",
-                orphan_resolves.len(),
-                state_orphans.len(),
-                storage_orphans.len()
-            );
-            for account_proof in orphan_resolves {
-                let node_store = parse_proof(&account_proof.account_proof)?
+            info!("Constructing tries from state proofs...");
+
+            // build the state trie from the initial account proofs
+            let account_proofs = initial_proofs
+                .values()
+                .flat_map(|proof| &proof.account_proof);
+            state_trie
+                .hydrate_from_rlp(account_proofs)
+                .context("invalid account proof")?;
+
+            // build the storage entries from the initial storage proofs
+            for (address, proof) in initial_proofs {
+                let mut storage_trie = MptNode::from_digest(proof.storage_hash);
+                storage_trie
+                    .hydrate_from_rlp(proof.storage_proof.iter().flat_map(|p| &p.proof))
+                    .with_context(|| format!("invalid storage proof for {}", address))?;
+                // collect all the unique storage slots
+                let slots = proof
+                    .storage_proof
                     .iter()
-                    .flat_map(|n| {
-                        vec![vec![n.clone()], shorten_node_path(n)]
-                            .into_iter()
-                            .flatten()
-                    })
-                    .map(|n| (n.reference().as_digest(), n))
-                    .collect();
-                resolve_nodes_in_place(&mut state_trie, &node_store);
-                // resolve storage orphans
-                if let Some(StorageEntry { storage_trie, .. }) =
-                    storage_tries.get_mut(&account_proof.address)
-                {
-                    for storage_proof in account_proof.storage_proof {
-                        let node_store: HashMap<MptNodeReference, MptNode> =
-                            parse_proof(&storage_proof.proof)?
-                                .iter()
-                                .flat_map(|n| {
-                                    vec![vec![n.clone()], shorten_node_path(n)]
-                                        .into_iter()
-                                        .flatten()
-                                })
-                                .map(|n| (n.reference().as_digest(), n))
-                                .collect();
-                        for k in node_store.keys() {
-                            let digest = k.digest();
-                            if storage_orphans
-                                .iter()
-                                .any(|(a, (_, d))| a == &account_proof.address && &digest == d)
-                            {
-                                info!(
-                                    "Resolved storage node {digest} for account {}",
-                                    account_proof.address
-                                );
-                            }
-                        }
-                        resolve_nodes_in_place(storage_trie, &node_store);
+                    .map(|p| p.key.0.into())
+                    .unique()
+                    .collect::<Vec<U256>>();
+
+                storage_tries.insert(
+                    address,
+                    StorageEntry {
+                        storage_trie,
+                        slots,
+                    },
+                );
+            }
+
+            info!("Extending tries from post-state proofs...");
+
+            let mut unresolvable_state_keys = B256Set::default();
+
+            for (address, account_proof) in latest_proofs {
+                let db_key = keccak256(address);
+
+                // if the key was inserted, extend with the inclusion proof
+                if state_trie.get(db_key).is_none() {
+                    state_trie
+                        .hydrate_from_rlp(account_proof.account_proof)
+                        .with_context(|| format!("invalid account proof for {}", address))?;
+                    continue;
+                }
+
+                // otherwise, prepare trie for the removal of that key
+                state_trie
+                    .resolve_orphan(
+                        db_key,
+                        account_proof.account_proof,
+                        &mut unresolvable_state_keys,
+                    )
+                    .with_context(|| format!("failed to resolve orphan for {}", address))?;
+
+                let mut unresolvable_storage_keys = B256Set::default();
+
+                let storage_trie = &mut storage_tries.get_mut(&address).unwrap().storage_trie;
+                for EIP1186StorageProof { key, proof, .. } in account_proof.storage_proof {
+                    let db_key = keccak256(key.0);
+                    // if the key was inserted, extend with the inclusion proof
+                    if storage_trie.get(db_key).is_none() {
+                        storage_trie.hydrate_from_rlp(proof)?;
+                    } else {
+                        // otherwise, prepare trie for the removal of that key
+                        storage_trie
+                            .resolve_orphan(db_key, proof, &mut unresolvable_storage_keys)
+                            .with_context(|| {
+                                format!("failed to resolve orphan for {}@{}", key.0, address)
+                            })?;
                     }
                 }
+
+                // if orphans could not be resolved, use a range query to get that missing info
+                if !unresolvable_storage_keys.is_empty() {
+                    let proof = preflight_db
+                        .get_next_slot_proofs(block_count, address, unresolvable_storage_keys)
+                        .with_context(|| format!("failed to get next slot for {}", address))?;
+                    storage_trie
+                        .hydrate_from_rlp(proof.storage_proof.iter().flat_map(|p| &p.proof))?;
+                }
+            }
+
+            for state_key in unresolvable_state_keys {
+                let proof = preflight_db.get_next_account_proof(block_count, state_key)?;
+                state_trie
+                    .hydrate_from_rlp(proof.account_proof)
+                    .context("failed to get next account")?
             }
 
             info!("Saving provider cache ...");
@@ -312,10 +333,10 @@ where
 
             // Report stats
             info!("State trie: {} nodes", state_trie.size());
-            let storage_nodes: u64 = storage_tries
+            let storage_nodes = storage_tries
                 .values()
-                .map(|e| e.storage_trie.size() as u64)
-                .sum();
+                .map(|e| e.storage_trie.size())
+                .sum::<usize>();
             info!(
                 "Storage tries: {storage_nodes} total nodes over {} accounts",
                 storage_tries.len()
@@ -339,7 +360,7 @@ where
             signers,
             state_trie,
             storage_tries,
-            contracts,
+            contracts: contracts.into_iter().collect(),
             parent_header: P::derive_header(data.parent_header),
             ancestor_headers,
             total_difficulty: data.total_difficulty,

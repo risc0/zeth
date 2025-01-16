@@ -1,11 +1,11 @@
 use alloy_primitives::map::B256Set;
 use alloy_primitives::{B256, U256};
 use alloy_rlp::{Decodable, Encodable};
+use risc0_ethereum_trie::{orphan, CachedTrie};
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
-use steel_trie::{orphan, CachedTrie};
 
 #[derive(
     Debug,
@@ -87,11 +87,9 @@ impl<T: Decodable + Encodable> MptNode<T> {
     }
 
     #[inline]
-    pub fn from_rlp_nodes<N: AsRef<[u8]>>(
-        nodes: impl IntoIterator<Item = N>,
-    ) -> alloy_rlp::Result<Self> {
+    pub fn from_rlp<N: AsRef<[u8]>>(nodes: impl IntoIterator<Item = N>) -> alloy_rlp::Result<Self> {
         Ok(Self {
-            inner: CachedTrie::from_rlp_nodes(nodes)?,
+            inner: CachedTrie::from_rlp(nodes)?,
             phantom_data: PhantomData,
         })
     }

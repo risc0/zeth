@@ -3405,6 +3405,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "risc0-ethereum-trie"
+version = "0.1.0"
+source = "git+https://github.com/risc0/risc0-ethereum?branch=feat/trie#c39c05720ebfccff520ae380ee906395d8858669"
+dependencies = [
+ "alloy-primitives",
+ "alloy-rlp",
+ "alloy-trie 0.7.8",
+ "arrayvec",
+ "bincode",
+ "itertools 0.14.0",
+ "rkyv",
+ "serde",
+ "thiserror 2.0.11",
+]
+
+[[package]]
 name = "risc0-groth16"
 version = "1.2.1-rc.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3971,21 +3987,6 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
-name = "steel-trie"
-version = "0.1.0"
-dependencies = [
- "alloy-primitives",
- "alloy-rlp",
- "alloy-trie 0.7.8",
- "arrayvec",
- "bincode",
- "itertools 0.14.0",
- "rkyv",
- "serde",
- "thiserror 2.0.11",
-]
 
 [[package]]
 name = "strsim"
@@ -4853,9 +4854,9 @@ dependencies = [
  "reth-primitives",
  "reth-revm",
  "reth-storage-errors",
+ "risc0-ethereum-trie",
  "rkyv",
  "serde",
- "steel-trie",
 ]
 
 [[package]]

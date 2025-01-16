@@ -29,6 +29,11 @@ features = ["unstable"]
 version = "1.2.1-rc.1"
 features = ["unstable"]
 
+[workspace.dependencies.risc0-ethereum-trie]
+git = "https://github.com/risc0/risc0-ethereum"
+branch = "feat/trie"
+features = ["orphan", "rkyv", "rlp_serialize", "serde"]
+
 # External
 [workspace.dependencies]
 # Alloy
@@ -80,7 +85,7 @@ zeth-guests = { path = "guests" }
 zeth-preflight = { path = "crates/preflight" }
 zeth-preflight-ethereum = { path = "crates/preflight-ethereum" }
 zeth-preflight-optimism = { path = "crates/preflight-optimism" }
-steel-trie = { path = "../scratch/dev/wwelz/steel-trie", features = ["orphan", "rkyv", "rlp_serialize", "serde"] }
+
 
 # Others
 anyhow = "1.0.89"

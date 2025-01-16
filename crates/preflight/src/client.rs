@@ -18,7 +18,7 @@ use crate::provider::db::ProviderDB;
 use crate::provider::query::{BlockQuery, UncleQuery};
 use crate::provider::{new_provider, Provider};
 use alloy::network::Network;
-use alloy::primitives::map::{B256Set, HashMap, HashSet};
+use alloy::primitives::map::{AddressHashMap, B256Set, HashSet};
 use alloy::primitives::{keccak256, Bytes, U256};
 use alloy::rpc::types::EIP1186StorageProof;
 use anyhow::Context;
@@ -167,7 +167,7 @@ where
 
         let core_parent_header = P::derive_header(data.parent_header.clone());
         let mut state_trie = MptNode::from_digest(R::state_root(&core_parent_header));
-        let mut storage_tries = HashMap::default();
+        let mut storage_tries = AddressHashMap::<StorageEntry>::default();
         let mut contracts: HashSet<Bytes> = HashSet::default();
         let mut ancestor_headers: Vec<R::Header> = Default::default();
 

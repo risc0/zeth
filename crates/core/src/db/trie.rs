@@ -17,7 +17,7 @@ use crate::mpt::MptNode;
 use crate::rescue::Recoverable;
 use crate::stateless::data::StorageEntry;
 use alloy_consensus::Account;
-use alloy_primitives::map::HashMap;
+use alloy_primitives::map::{AddressHashMap, B256HashMap, HashMap};
 use alloy_primitives::{keccak256, Address, B256, U256};
 use reth_primitives::revm_primitives::db::Database;
 use reth_primitives::revm_primitives::{AccountInfo, Bytecode};
@@ -27,8 +27,8 @@ use reth_storage_errors::provider::ProviderError;
 #[derive(Default)]
 pub struct TrieDB {
     pub accounts: MptNode<Account>,
-    pub storage: HashMap<Address, StorageEntry, NoMapHasher>,
-    pub contracts: HashMap<B256, Bytecode, NoMapHasher>,
+    pub storage: AddressHashMap<StorageEntry>,
+    pub contracts: B256HashMap<Bytecode>,
     pub block_hashes: HashMap<u64, B256, NoMapHasher>,
 }
 

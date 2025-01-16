@@ -20,8 +20,8 @@ use crate::mpt::MptNode;
 use crate::stateless::data::StorageEntry;
 use alloy_consensus::constants::EMPTY_ROOT_HASH;
 use alloy_consensus::Account;
-use alloy_primitives::map::HashMap;
-use alloy_primitives::{keccak256, Address, Bytes, B256, U256};
+use alloy_primitives::map::{AddressHashMap, HashMap};
+use alloy_primitives::{keccak256, Bytes, B256, U256};
 use anyhow::{bail, ensure};
 use core::mem::take;
 use reth_primitives::revm_primitives::Bytecode;
@@ -32,7 +32,7 @@ use std::default::Default;
 pub trait InitializationStrategy<Driver: CoreDriver, Database> {
     fn initialize_database(
         state_trie: &mut MptNode<Account>,
-        storage_tries: &mut HashMap<Address, StorageEntry, NoMapHasher>,
+        storage_tries: &mut AddressHashMap<StorageEntry>,
         contracts: &mut Vec<Bytes>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
@@ -44,7 +44,7 @@ pub struct TrieDbInitializationStrategy;
 impl<Driver: CoreDriver> InitializationStrategy<Driver, TrieDB> for TrieDbInitializationStrategy {
     fn initialize_database(
         state_trie: &mut MptNode<Account>,
-        storage_tries: &mut HashMap<Address, StorageEntry, NoMapHasher>,
+        storage_tries: &mut AddressHashMap<StorageEntry>,
         contracts: &mut Vec<Bytes>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,
@@ -127,7 +127,7 @@ impl<Driver: CoreDriver> InitializationStrategy<Driver, MemoryDB>
 {
     fn initialize_database(
         state_trie: &mut MptNode<Account>,
-        storage_tries: &mut HashMap<Address, StorageEntry, NoMapHasher>,
+        storage_tries: &mut AddressHashMap<StorageEntry>,
         contracts: &mut Vec<Bytes>,
         parent_header: &mut Driver::Header,
         ancestor_headers: &mut Vec<Driver::Header>,

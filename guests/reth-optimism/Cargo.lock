@@ -720,9 +720,9 @@ dependencies = [
 
 [[package]]
 name = "bonsai-sdk"
-version = "1.2.1-rc.1"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa98bac2c125e6f7d5f73fd5bc99d3cf1c633993b4c603a973731e0b358e3e9c"
+checksum = "1f7ecaa1f078d094627e8413f6d5623c3605b40327194f8e6857b6af7da24587"
 dependencies = [
  "duplicate",
  "maybe-async",
@@ -3314,9 +3314,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-binfmt"
-version = "1.2.1-rc.1"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "421b1d25e39b0a7c0bbb5bf662824bc102ef97b0ca1ddca7bfe142378e4e9127"
+checksum = "f2d38498a55589122b195aa5024d2c0b02231efdb01c090881b9d535660f97c9"
 dependencies = [
  "anyhow",
  "borsh",
@@ -3329,9 +3329,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-build"
-version = "1.2.1-rc.1"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21f1cd28e2ff0d478d7714d710efd739d9876cbf81dab145a57bc8582433b028"
+checksum = "2b178bec61b5a589feeddcc8f9987119dccfd32f17d98dfedf14921591b35bf4"
 dependencies = [
  "anyhow",
  "cargo_metadata",
@@ -3348,9 +3348,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-circuit-keccak"
-version = "1.2.1-rc.1"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3806bfd8212934741033e424b5eafa86c67c660c7ba98e9492e0762e57afc21e"
+checksum = "723af53138c76e5c167f52c0396071ebd735a79561732de974dabb545ba2d1be"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -3364,9 +3364,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-circuit-recursion"
-version = "1.2.1-rc.1"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ea982a66c4f3337366454afc9d3c80eb3333c95ae94570ddc4c6c0fe53cf9f4"
+checksum = "13c7665d06d6dd42bff80dd7690fddecc49b664621336ad0542505e139a470ad"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -3379,9 +3379,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-circuit-rv32im"
-version = "1.2.1-rc.1"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da32b112b4bc86b35b6706fb7959a0bcfb8954ac9d040ad7f7aa88c8a054af1f"
+checksum = "53c44a97bf5f90a90a51fcc3667b12592a407431f7bab34dc5e77f097675699d"
 dependencies = [
  "anyhow",
  "metal",
@@ -3395,9 +3395,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-core"
-version = "1.2.1-rc.1"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "baa498c93c2ec128b410639df28796bd7e0a20cac95fadb39595fb6cb3147fc0"
+checksum = "09f45bab0bb477240e7d45a25e618603ef4196421728a115b6d4b7a6036535a5"
 dependencies = [
  "bytemuck",
  "rand_core",
@@ -3405,9 +3405,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-groth16"
-version = "1.2.1-rc.1"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e194641f6f14397da30b4627889113c0033b3ff2a6dfb4a4ba1962d24033dbc"
+checksum = "a73e92874649e10cbdd6b3069c4f0f6a7daab1251d18ba8b190ef9f99b39975c"
 dependencies = [
  "anyhow",
  "ark-bn254",
@@ -3426,9 +3426,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-zkp"
-version = "1.2.1-rc.1"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f9973ed2591391c8d90bc5ff3102512879274102c6f12d63b0a20b1c132286a"
+checksum = "b6f1990995a8933cdd1812dc9d8d0e5f04032a045cc47ef00557996b566e2194"
 dependencies = [
  "anyhow",
  "blake2",
@@ -3450,9 +3450,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-zkvm"
-version = "1.2.1-rc.1"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61d800cb93c9f711b9f78a9e3ea09b396d279134281529a5032dafbbc713ede6"
+checksum = "b7dd5caa549aa61f00a69f2b625b0d4e42e40595f3d0b29773c80856baa244fd"
 dependencies = [
  "anyhow",
  "bincode",
@@ -3484,9 +3484,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-zkvm-platform"
-version = "1.2.1-rc.1"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2127f726a7d6ecf76c53110d3b6070c08a40111c5ef7e8c0fb58c40c4618244"
+checksum = "53b825852cf55c5f54f1f21d178055e6959fa5f4e839eab2ad56cfd377d2e7f8"
 dependencies = [
  "bytemuck",
  "cfg-if",

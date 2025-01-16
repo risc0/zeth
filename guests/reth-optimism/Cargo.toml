@@ -15,11 +15,11 @@ codegen-units = 1
 opt-level = 3
 
 [dependencies.risc0-zkvm]
-version = "1.2.1-rc.1"
+version = "1.2.1"
 features = ["std", "unstable"]
 
 [dependencies.risc0-zkvm-platform]
-version = "1.2.1-rc.1"
+version = "1.2.1"
 features = ["sys-getenv"]
 
 [dependencies.zeth-core]

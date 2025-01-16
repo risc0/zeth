@@ -18,15 +18,15 @@ opt-level = 3
 
 # RISC Zero
 [workspace.dependencies.bonsai-sdk]
-version = "1.2.1-rc.1"
+version = "1.2.1"
 features = ["non_blocking"]
 
 [workspace.dependencies.risc0-build]
-version = "1.2.1-rc.1"
+version = "1.2.1"
 features = ["unstable"]
 
 [workspace.dependencies.risc0-zkvm]
-version = "1.2.1-rc.1"
+version = "1.2.1"
 features = ["unstable"]
 
 # External

@@ -1,3 +1,13 @@
+[workspace.package]
+edition = "2021"
+license = "Apache-2.0"
+rust-version = "1.81"
+authors = ["hashcashier", "wollac", "intoverflow"]
+homepage = "https://github.com/risc0/zeth"
+repository = "https://github.com/risc0/zeth"
+keywords = ["stateless", "zk", "evm", "ethereum", "optimism"]
+categories = ["cryptography", "cryptography::cryptocurrencies"]
+
 [workspace]
 resolver = "2"
 members = ["bin/*", "crates/*", "guests", "testing/ef-tests"]

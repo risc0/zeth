@@ -4784,7 +4784,7 @@ dependencies = [
 
 [[package]]
 name = "zeth-core"
-version = "0.1.0"
+version = "0.3.2"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -4805,7 +4805,7 @@ dependencies = [
 
 [[package]]
 name = "zeth-core-ethereum"
-version = "0.1.0"
+version = "0.3.2"
 dependencies = [
  "alloy-genesis",
  "anyhow",
@@ -4824,7 +4824,7 @@ dependencies = [
 
 [[package]]
 name = "zeth-guests-reth-ethereum"
-version = "0.1.0"
+version = "0.3.2"
 dependencies = [
  "c-kzg",
  "risc0-zkvm",

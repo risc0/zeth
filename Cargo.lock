@@ -6530,7 +6530,7 @@ dependencies = [
 
 [[package]]
 name = "zeth"
-version = "0.1.0"
+version = "0.3.2"
 dependencies = [
  "alloy",
  "anyhow",
@@ -6550,7 +6550,7 @@ dependencies = [
 
 [[package]]
 name = "zeth-benchmark"
-version = "0.1.0"
+version = "0.3.2"
 dependencies = [
  "alloy",
  "alloy-chains",
@@ -6563,7 +6563,7 @@ dependencies = [
 
 [[package]]
 name = "zeth-core"
-version = "0.1.0"
+version = "0.3.2"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -6584,7 +6584,7 @@ dependencies = [
 
 [[package]]
 name = "zeth-core-ethereum"
-version = "0.1.0"
+version = "0.3.2"
 dependencies = [
  "alloy-genesis",
  "anyhow",
@@ -6603,7 +6603,7 @@ dependencies = [
 
 [[package]]
 name = "zeth-core-optimism"
-version = "0.1.0"
+version = "0.3.2"
 dependencies = [
  "alloy-genesis",
  "anyhow",
@@ -6625,7 +6625,7 @@ dependencies = [
 
 [[package]]
 name = "zeth-ethereum"
-version = "0.1.0"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "reth-chainspec",
@@ -6637,14 +6637,14 @@ dependencies = [
 
 [[package]]
 name = "zeth-guests"
-version = "0.1.0"
+version = "0.3.2"
 dependencies = [
  "risc0-build",
 ]
 
 [[package]]
 name = "zeth-optimism"
-version = "0.1.0"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "reth-chainspec",
@@ -6656,7 +6656,7 @@ dependencies = [
 
 [[package]]
 name = "zeth-preflight"
-version = "0.1.0"
+version = "0.3.2"
 dependencies = [
  "alloy",
  "anyhow",
@@ -6678,7 +6678,7 @@ dependencies = [
 
 [[package]]
 name = "zeth-preflight-ethereum"
-version = "0.1.0"
+version = "0.3.2"
 dependencies = [
  "alloy",
  "reth-chainspec",
@@ -6690,7 +6690,7 @@ dependencies = [
 
 [[package]]
 name = "zeth-preflight-optimism"
-version = "0.1.0"
+version = "0.3.2"
 dependencies = [
  "alloy",
  "op-alloy-consensus",
@@ -6713,7 +6713,7 @@ dependencies = [
 
 [[package]]
 name = "zeth-testeth"
-version = "0.1.0"
+version = "0.3.2"
 dependencies = [
  "alloy",
  "alloy-trie",

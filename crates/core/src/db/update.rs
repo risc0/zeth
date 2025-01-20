@@ -22,7 +22,7 @@ pub trait Update {
     fn insert_block_hash(&mut self, block_number: U256, block_hash: B256) -> anyhow::Result<()>;
 }
 
-/// This function is a modified version of [`BundleState::into_plane_state`] from the revm crate:
+/// This function is a modified version of [`BundleState::into_plain_state`] from the revm crate:
 /// https://github.com/bluealloy/revm/blob/4f093996c6059aad4db02b7eb03dca13e13be8a1/crates/revm/src/db/states/bundle_state.rs#L587
 /// It retains account code for reuse instead of the default revm behavior to drop it.
 pub fn into_plain_state(bundle: BundleState) -> StateChangeset {

@@ -269,7 +269,7 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
 
         let address = provider
             .get_next_account(&AccountRangeQuery::new(block_no, start))
-            .context("debug_storageRangeAt call failed")?;
+            .context("debug_accountRange call failed")?;
 
         provider
             .get_proof(&ProofQuery {
@@ -301,7 +301,7 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
         for start in starts {
             let slot = provider
                 .get_next_slot(&StorageRangeQuery::new(block_no, address, start))
-                .context("debug_accountRange call failed")?;
+                .context("debug_storageRangeAt call failed")?;
             indices.insert(B256::from(slot));
         }
 

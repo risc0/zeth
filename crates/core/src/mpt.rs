@@ -55,7 +55,7 @@ impl<T: Decodable + Encodable> MptNode<T> {
         &mut self,
         key: K,
         post_state_proof: impl IntoIterator<Item = N>,
-        unresolvable_keys: &mut B256Set,
+        unresolvable: &mut B256Set,
     ) -> alloy_rlp::Result<()>
     where
         K: AsRef<[u8]>,
@@ -63,10 +63,10 @@ impl<T: Decodable + Encodable> MptNode<T> {
     {
         match self.inner.resolve_orphan(key, post_state_proof) {
             Ok(_) => {}
-            Err(orphan::Error::Unresolvable(nibbles)) => {
-                // convert the unresolvable nibbles into B256 with zero padding
-                let unresolvable = B256::right_padding_from(&nibbles.pack());
-                unresolvable_keys.insert(unresolvable);
+            Err(orphan::Error::Unresolvable(prefix)) => {
+                // convert the unresolvable prefix nibbles into a B256 key with zero padding
+                let key = B256::right_padding_from(&prefix.pack());
+                unresolvable.insert(key);
             }
             Err(orphan::Error::RlpError(err)) => return Err(err),
         };

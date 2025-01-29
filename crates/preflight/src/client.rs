@@ -304,15 +304,18 @@ where
                         .get_next_slot_proofs(block_count, address, unresolvable_storage_keys)
                         .with_context(|| format!("failed to get next slot for {}", address))?;
                     storage_trie
-                        .hydrate_from_rlp(proof.storage_proof.iter().flat_map(|p| &p.proof))?;
+                        .hydrate_from_rlp(proof.storage_proof.iter().flat_map(|p| &p.proof))
+                        .with_context(|| format!("invalid storage proof for {}", address))?;
                 }
             }
 
             for state_key in unresolvable_state_keys {
-                let proof = preflight_db.get_next_account_proof(block_count, state_key)?;
+                let proof = preflight_db
+                    .get_next_account_proof(block_count, state_key)
+                    .context("failed to get next account")?;
                 state_trie
                     .hydrate_from_rlp(proof.account_proof)
-                    .context("failed to get next account")?
+                    .with_context(|| format!("invalid account proof for {}", proof.address))?;
             }
 
             info!("Saving provider cache ...");

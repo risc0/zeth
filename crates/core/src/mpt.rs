@@ -1,5 +1,5 @@
 use alloy_primitives::map::B256Set;
-use alloy_primitives::{B256, U256};
+use alloy_primitives::B256;
 use alloy_rlp::{Decodable, Encodable};
 use risc0_ethereum_trie::{orphan, CachedTrie};
 use serde::{Deserialize, Serialize};
@@ -55,7 +55,7 @@ impl<T: Decodable + Encodable> MptNode<T> {
         &mut self,
         key: K,
         post_state_proof: impl IntoIterator<Item = N>,
-        unresolvable: &mut B256Set,
+        unresolvable_keys: &mut B256Set,
     ) -> alloy_rlp::Result<()>
     where
         K: AsRef<[u8]>,
@@ -65,8 +65,8 @@ impl<T: Decodable + Encodable> MptNode<T> {
             Ok(_) => {}
             Err(orphan::Error::Unresolvable(nibbles)) => {
                 // convert the unresolvable nibbles into B256 with zero padding
-                let key = B256::from(U256::from_le_slice(&nibbles.pack()));
-                unresolvable.insert(key);
+                let unresolvable = B256::right_padding_from(&nibbles.pack());
+                unresolvable_keys.insert(unresolvable);
             }
             Err(orphan::Error::RlpError(err)) => return Err(err),
         };

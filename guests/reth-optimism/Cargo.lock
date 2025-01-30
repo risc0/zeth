@@ -3447,7 +3447,7 @@ dependencies = [
 [[package]]
 name = "risc0-ethereum-trie"
 version = "0.1.0"
-source = "git+https://github.com/risc0/risc0-ethereum?branch=feat/trie#7fa3505fef029200251e8110f87656c0e9ddbd39"
+source = "git+https://github.com/risc0/risc0-ethereum?branch=feat/trie#3d55234f24147b547b6aeab69ef79b14c7c93f20"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",

@@ -56,7 +56,7 @@ impl<T: Decodable + Encodable> MptNode<T> {
         key: K,
         post_state_proof: impl IntoIterator<Item = N>,
         unresolvable: &mut B256Set,
-    ) -> alloy_rlp::Result<()>
+    ) -> anyhow::Result<()>
     where
         K: AsRef<[u8]>,
         N: AsRef<[u8]>,
@@ -68,7 +68,7 @@ impl<T: Decodable + Encodable> MptNode<T> {
                 let key = B256::right_padding_from(&prefix.pack());
                 unresolvable.insert(key);
             }
-            Err(orphan::Error::RlpError(err)) => return Err(err),
+            Err(err) => return Err(err.into()),
         };
 
         Ok(())

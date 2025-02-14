@@ -34,7 +34,6 @@ pub mod client;
 pub mod db;
 pub mod driver;
 pub mod provider;
-pub mod trie;
 
 #[derive(Debug, Default, Clone)]
 pub struct Witness {
@@ -90,7 +89,7 @@ where
         block_number: u64,
         block_count: u64,
     ) -> anyhow::Result<Witness> {
-        // Fetch all of the initial data
+        // Fetch all the initial data
         let preflight_data: StatelessClientData<R::Block, R::Header> = spawn_blocking(move || {
             <Self::PreflightClient>::preflight(
                 chain_id,

@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::keccak::keccak;
 use crate::map::NoMapHasher;
 use crate::mpt::MptNode;
 use crate::rescue::Recoverable;
 use crate::stateless::data::StorageEntry;
 use alloy_consensus::Account;
 use alloy_primitives::map::{AddressHashMap, B256HashMap, HashMap};
-use alloy_primitives::{Address, B256, U256};
+use alloy_primitives::{keccak256, Address, B256, U256};
 use reth_primitives::revm_primitives::db::Database;
 use reth_primitives::revm_primitives::{AccountInfo, Bytecode};
 use reth_revm::DatabaseRef;
@@ -27,7 +26,7 @@ use reth_storage_errors::provider::ProviderError;
 
 #[derive(Default)]
 pub struct TrieDB {
-    pub accounts: MptNode,
+    pub accounts: MptNode<Account>,
     pub storage: AddressHashMap<StorageEntry>,
     pub contracts: B256HashMap<Bytecode>,
     pub block_hashes: HashMap<u64, B256, NoMapHasher>,
@@ -45,8 +44,7 @@ impl DatabaseRef for TrieDB {
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
         Ok(self
             .accounts
-            .get_rlp::<Account>(&keccak(address))
-            .unwrap()
+            .get_rlp(keccak256(address))?
             .map(|acc| AccountInfo {
                 balance: acc.balance,
                 nonce: acc.nonce,
@@ -63,8 +61,7 @@ impl DatabaseRef for TrieDB {
         let entry = self.storage.get(&address).unwrap();
         Ok(entry
             .storage_trie
-            .get_rlp(&keccak(index.to_be_bytes::<32>()))
-            .unwrap()
+            .get_rlp(keccak256(index.to_be_bytes::<32>()))?
             .unwrap_or_default())
     }
 

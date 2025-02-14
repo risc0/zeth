@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloy::primitives::U256;
+use alloy::primitives::{keccak256, U256};
 use alloy_chains::NamedChain;
 use clap::Parser;
 use std::process::Command;
 use tracing::{error, info};
 use zeth::cli::ProveArgs;
-use zeth_core::keccak::keccak;
 
 #[derive(clap::Parser, Debug, Clone)]
 #[command(name = "zeth-benchmark")]
@@ -57,7 +56,7 @@ fn main() {
     let build_args = &cli.prove_args.run_args.build_args;
     let chain_id = build_args.chain.or(cli.chain_id).unwrap();
     // generate sequence of starting block numbers to benchmark
-    let seed = keccak(
+    let seed = keccak256(
         [
             (chain_id as u64).to_be_bytes(),
             build_args.block_number.to_be_bytes(),
@@ -70,9 +69,9 @@ fn main() {
     let block_numbers = (0..cli.sample_count)
         .map(|i| {
             build_args.block_number
-                + U256::from_be_bytes(keccak(
-                    [seed.as_slice(), i.to_be_bytes().as_slice()].concat(),
-                ))
+                + U256::from_be_bytes(
+                    keccak256([seed.as_slice(), i.to_be_bytes().as_slice()].concat()).0,
+                )
                 .reduce_mod(U256::from(cli.sample_range))
                 .to::<u64>()
         })

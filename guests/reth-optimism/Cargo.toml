@@ -16,12 +16,12 @@ opt-level = 3
 
 [dependencies.risc0-zkvm]
 git = "https://github.com/risc0/risc0"
-rev = "8b34f1c4de7d0dd93f0ebd3808a806eb4adfdefc"
+rev = "7092766272763032dc3a64d1b2984b0161affaa0"
 features = ["std", "unstable"]
 
 [dependencies.risc0-zkvm-platform]
 git = "https://github.com/risc0/risc0"
-rev = "8b34f1c4de7d0dd93f0ebd3808a806eb4adfdefc"
+rev = "7092766272763032dc3a64d1b2984b0161affaa0"
 features = ["sys-getenv"]
 
 [dependencies.zeth-core]

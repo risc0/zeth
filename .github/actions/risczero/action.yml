@@ -1,22 +1,11 @@
 name: risczero toolchain install
 description: Install risczero toolchain
 
-inputs:
-  version:
-    description: 'Version of the RISC Zero to install'
-    required: true
-    type: string
-  toolchain-version:
-    description: 'Version of the RISC Zero toolchains to install'
-    required: false
-    default: ''
-    type: string
-
 runs:
   using: composite
   steps:
     - name: install rust
-      uses: risc0/risc0/.github/actions/rustup@release-${{ inputs.version }}
+      uses: risc0/risc0/.github/actions/rustup@release1.3
 
     - name: Install rzup
       env:
@@ -28,7 +17,7 @@ runs:
 
     - name: rzup install rust
       shell: bash
-      run: rzup install rust ${{ inputs.toolchain-version }}
+      run: rzup install rust r0.1.83.0
 
     - name: test risczero
       shell: bash

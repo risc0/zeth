@@ -17,7 +17,7 @@ runs:
 
     - name: rzup install rust
       shell: bash
-      run: rzup install rust r0.1.83.0
+      run: rzup install rust 1.81.0
 
     - name: test risczero
       shell: bash

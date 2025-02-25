@@ -1,32 +1,20 @@
 name: risczero toolchain install
 description: Install risczero toolchain
 
-inputs:
-  version:
-    description: 'Version of the RISC Zero to install'
-    required: true
-    type: string
-  toolchain-version:
-    description: 'Version of the RISC Zero toolchains to install'
-    required: false
-    default: ''
-    type: string
-
 runs:
   using: composite
   steps:
-    - uses: risc0/cargo-install@v3
-      with:
-        crate: cargo-binstall
-        version: '=1.6'
-        locked: true
+    - name: install rust
+      uses: risc0/risc0/.github/actions/rustup@release-1.3
 
-    - run: cargo binstall -y --force cargo-risczero@${{ inputs.version }}
+    - name: Install rzup
+      env:
+        ENV_PATH: test
       shell: bash
+      run: |
+        curl -L https://risczero.com/install | bash
+        echo "$HOME/.risc0/bin" >> $GITHUB_PATH
 
-    - run: cargo risczero install ${{ inputs.toolchain-version != '' && format('--version {0}', inputs.toolchain-version) || '' }}
+    - name: rzup install rust
       shell: bash
-
-    - name: test risczero
-      shell: bash
-      run: cargo risczero --version
+      run: rzup install

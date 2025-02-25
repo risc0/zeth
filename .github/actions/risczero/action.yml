@@ -1,10 +1,6 @@
 name: risczero toolchain install
 description: Install risczero toolchain
 
-inputs:
-  risc0_rust_ver:
-    default: "1.81.0"
-
 runs:
   using: composite
   steps:
@@ -21,4 +17,4 @@ runs:
 
     - name: rzup install rust
       shell: bash
-      run: rzup install rust ${{ inputs.risc0_rust_ver }}
+      run: rzup install

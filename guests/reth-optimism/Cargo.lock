@@ -733,9 +733,8 @@ dependencies = [
 
 [[package]]
 name = "blst"
-version = "0.3.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4378725facc195f1a538864863f6de233b500a8862747e7f165078a419d5e874"
+version = "0.3.14"
+source = "git+https://github.com/risc0/blst?branch=iddo%2Faccel#a3e77ceeec8ae7c0299fd9ac74c6821e3b34a203"
 dependencies = [
  "cc",
  "glob",
@@ -5100,6 +5099,7 @@ dependencies = [
 name = "zeth-guests-reth-optimism"
 version = "0.1.0"
 dependencies = [
+ "blst",
  "c-kzg",
  "risc0-zkvm",
  "risc0-zkvm-platform",

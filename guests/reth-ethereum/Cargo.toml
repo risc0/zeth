@@ -39,3 +39,4 @@ crypto-bigint = { git = "https://github.com/risc0/RustCrypto-crypto-bigint", tag
 k256 = { git = "https://github.com/risc0/RustCrypto-elliptic-curves", tag = "k256/v0.13.3-risczero.1" }
 sha2 = { git = "https://github.com/risc0/RustCrypto-hashes", tag = "sha2-v0.10.8-risczero.0" }
 tiny-keccak = { git = "https://github.com/risc0/tiny-keccak", tag = "tiny-keccak/v2.0.2-risczero.0" }
+blst = { git = "https://github.com/risc0/blst", branch = "iddo/accel" }

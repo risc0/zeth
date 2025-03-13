@@ -14,14 +14,17 @@
 
 use crate::provider::query::{AccountRangeQueryResponse, StorageRangeQueryResponse};
 use crate::provider::*;
-use alloy::network::{BlockResponse, HeaderResponse, Network};
+use alloy::eips::BlockId;
+use alloy::network::Network;
+use alloy::primitives::keccak256;
 use alloy::providers::{Provider as AlloyProvider, ProviderBuilder, RootProvider};
 use alloy::rpc::client::RpcClient;
 use alloy::transports::{
     http::{Client, Http},
     layers::{RetryBackoffLayer, RetryBackoffService},
+    TransportResult,
 };
-use anyhow::anyhow;
+use anyhow::{anyhow, ensure, Context};
 use log::{debug, error};
 use std::future::IntoFuture;
 
@@ -46,6 +49,48 @@ impl<N: Network> RpcProvider<N> {
             http_client,
             tokio_handle,
         })
+    }
+
+    async fn account_range(
+        &self,
+        block: impl Into<BlockId>,
+        start: B256,
+        max_results: u64,
+        no_code: bool,
+        no_storage: bool,
+        incomplete: bool,
+    ) -> TransportResult<AccountRangeQueryResponse> {
+        self.http_client
+            .client()
+            .request(
+                "debug_accountRange",
+                (
+                    block.into(),
+                    start,
+                    max_results,
+                    no_code,
+                    no_storage,
+                    incomplete,
+                ),
+            )
+            .await
+    }
+
+    async fn storage_range_at(
+        &self,
+        block: impl Into<BlockId>,
+        tx_index: u64,
+        address: Address,
+        key_start: B256,
+        max_result: u64,
+    ) -> TransportResult<StorageRangeQueryResponse> {
+        self.http_client
+            .client()
+            .request(
+                "debug_storageRangeAt",
+                (block.into(), tx_index, address, key_start, max_result),
+            )
+            .await
     }
 }
 
@@ -216,62 +261,36 @@ impl<N: Network> Provider<N> for RpcProvider<N> {
         }
     }
 
-    fn get_next_account(&mut self, query: &AccountRangeQuery) -> anyhow::Result<Address> {
-        let out: AccountRangeQueryResponse = match self.tokio_handle.block_on(
-            self.http_client
-                .client()
-                .request(
-                    "debug_accountRange",
-                    (
-                        format!("{:066x}", query.block_no),
-                        format!("{}", query.start),
-                        query.max_results,
-                        query.no_code,
-                        query.no_storage,
-                        query.incompletes,
-                    ),
-                )
+    fn get_next_account(&mut self, query: &NextAccountQuery) -> anyhow::Result<Address> {
+        let out = self.tokio_handle.block_on(
+            self.account_range(query.block_no, query.start, 1, true, true, false)
                 .into_future(),
-        ) {
-            Ok(out) => out,
-            Err(e) => {
-                error!("debug_accountRange: {e}");
-                anyhow::bail!(e)
-            }
-        };
+        )?;
+        let entry = out.accounts.values().next().context("no such account")?;
+        // Perform sanity checks, as this RPC is known to be wonky.
+        ensure!(
+            entry.key > query.start && entry.key == keccak256(entry.address),
+            "invalid response"
+        );
 
-        Ok(*out.accounts.keys().next().unwrap())
+        Ok(entry.address)
     }
 
-    fn get_next_slot(&mut self, query: &StorageRangeQuery) -> anyhow::Result<U256> {
-        let block = self.get_full_block(&BlockQuery {
-            block_no: query.block_no,
-        })?;
-        let hash = block.header().hash();
-
-        let out: StorageRangeQueryResponse = match self.tokio_handle.block_on(
-            self.http_client
-                .client()
-                .request(
-                    "debug_storageRangeAt",
-                    (
-                        // format!("{:#066x}", query.block_no),
-                        format!("{hash}"),
-                        query.tx_index,
-                        query.address,
-                        format!("{}", query.start),
-                        query.max_results,
-                    ),
-                )
+    fn get_next_slot(&mut self, query: &NextSlotQuery) -> anyhow::Result<U256> {
+        let out = self.tokio_handle.block_on(
+            // Query the state "after" the given block  (i.e. after all its transactions have
+            // been processed, meaning before the first transaction in the next block).
+            self.storage_range_at(query.block_no + 1, 0, query.address, query.start, 1)
                 .into_future(),
-        ) {
-            Ok(out) => out,
-            Err(e) => {
-                error!("debug_storageRangeAt: {e}");
-                anyhow::bail!(e)
-            }
-        };
+        )?;
 
-        Ok(out.storage.values().next().unwrap().key)
+        let (hash, entry) = out.storage.iter().next().context("no such slot")?;
+        // Perform sanity checks, as this RPC is known to be wonky.
+        ensure!(
+            *hash > query.start && out.next_key.map_or(true, |next| next > *hash),
+            "invalid response"
+        );
+
+        Ok(entry.key.0.into())
     }
 }

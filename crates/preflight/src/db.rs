@@ -15,7 +15,7 @@
 use crate::driver::PreflightDriver;
 use crate::provider::db::ProviderDB;
 use crate::provider::get_proofs;
-use crate::provider::query::{AccountRangeQuery, BlockQuery, ProofQuery, StorageRangeQuery};
+use crate::provider::query::{BlockQuery, NextAccountQuery, NextSlotQuery, ProofQuery};
 use alloy::network::Network;
 use alloy::primitives::map::HashMap;
 use alloy::primitives::{Address, B256, U256};
@@ -256,20 +256,22 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
     ///
     /// This method retrieves an [EIP1186AccountProofResponse] for the account whose address, when
     /// hashed, lexicographically follows the provided `start` key. The proof is generated for the
-    /// block `block_count` after the currently configured block in the provider.
+    /// currently configured block in the provider.
     pub fn get_next_account_proof(
         &mut self,
-        block_count: u64,
         start: B256,
     ) -> anyhow::Result<EIP1186AccountProofResponse> {
         let initial_db = self.inner.db.db.borrow_mut();
         let provider_db = initial_db.db.borrow_db();
         let mut provider = provider_db.provider.borrow_mut();
-        let block_no = initial_db.db.borrow_db().block_no + block_count - 1;
+        let block_no = initial_db.db.borrow_db().block_no;
 
-        debug!("getting next account: start={}", start);
+        debug!(
+            "getting next account: block_no={},start={}",
+            block_no, start
+        );
         let address = provider
-            .get_next_account(&AccountRangeQuery::new(block_no, start))
+            .get_next_account(&NextAccountQuery { block_no, start })
             .context("debug_accountRange call failed")?;
 
         provider
@@ -286,26 +288,29 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
     /// This method retrieves an [EIP1186AccountProofResponse] for multiple storage slots of a given
     /// account. For each `B256` key provided in the `starts` iterator, the method finds the next
     /// storage slot whose hashed index lexicographically follows the given key. The proofs are
-    /// generated for the block `block_count` after the currently configured block in the provider.
+    /// generated for the currently configured block in the provider.
     pub fn get_next_slot_proofs(
         &mut self,
-        block_count: u64,
         address: Address,
         starts: impl IntoIterator<Item = B256>,
     ) -> anyhow::Result<EIP1186AccountProofResponse> {
         let initial_db = self.inner.db.db.borrow_mut();
         let provider_db = initial_db.db.borrow_db();
         let mut provider = provider_db.provider.borrow_mut();
-        let block_no = initial_db.db.borrow_db().block_no + block_count - 1;
+        let block_no = initial_db.db.borrow_db().block_no;
 
         let mut indices = BTreeSet::new();
         for start in starts {
             debug!(
-                "getting next storage key: address={},start={}",
-                address, start
+                "getting next storage key: block_no={},address={},start={}",
+                block_no, address, start
             );
             let slot = provider
-                .get_next_slot(&StorageRangeQuery::new(block_no, address, start))
+                .get_next_slot(&NextSlotQuery {
+                    block_no,
+                    address,
+                    start,
+                })
                 .context("debug_storageRangeAt call failed")?;
             indices.insert(B256::from(slot));
         }

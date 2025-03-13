@@ -20,8 +20,8 @@ use std::{
 };
 use zeth_preflight::provider::{
     query::{
-        AccountQuery, AccountRangeQuery, BlockQuery, PreimageQuery, ProofQuery, StorageQuery,
-        StorageRangeQuery, UncleQuery,
+        AccountQuery, NextAccountQuery, BlockQuery, PreimageQuery, ProofQuery, StorageQuery,
+        NextSlotQuery, UncleQuery,
     },
     Provider,
 };
@@ -158,14 +158,14 @@ impl Provider<Ethereum> for TestProvider {
         unimplemented!("get_preimage")
     }
 
-    fn get_next_account(&mut self, query: &AccountRangeQuery) -> anyhow::Result<Address> {
+    fn get_next_account(&mut self, query: &NextAccountQuery) -> anyhow::Result<Address> {
         assert_eq!(query.block_no, 0);
         self.pre
             .get_next_account(query.start)
             .ok_or(anyhow!("no next account"))
     }
 
-    fn get_next_slot(&mut self, query: &StorageRangeQuery) -> anyhow::Result<U256> {
+    fn get_next_slot(&mut self, query: &NextSlotQuery) -> anyhow::Result<U256> {
         assert_eq!(query.block_no, 0);
         let next = self
             .pre

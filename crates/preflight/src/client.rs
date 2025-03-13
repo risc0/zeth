@@ -272,36 +272,45 @@ where
                 }
 
                 // otherwise, prepare trie for the removal of that key
-                state_trie
-                    .resolve_orphan(
-                        db_key,
-                        account_proof.account_proof,
-                        &mut unresolvable_state_keys,
-                    )
-                    .with_context(|| format!("failed to resolve orphan for {}", address))?;
+                if let Some(unresolvable_key) = state_trie
+                    .resolve_orphan(db_key, account_proof.account_proof)
+                    .with_context(|| format!("failed to resolve orphan for {}", address))?
+                {
+                    debug!(
+                        "unresolvable state key for {}: {}",
+                        address, unresolvable_key
+                    );
+                    unresolvable_state_keys.insert(unresolvable_key);
+                }
 
                 let mut unresolvable_storage_keys = B256Set::default();
 
                 let storage_trie = &mut storage_tries.get_mut(&address).unwrap().storage_trie;
                 for EIP1186StorageProof { key, proof, .. } in account_proof.storage_proof {
-                    let db_key = keccak256(key.0);
+                    let db_key = keccak256(&key.0);
                     // if the key was inserted, extend with the inclusion proof
                     if storage_trie.get(db_key).is_none() {
                         storage_trie.hydrate_from_rlp(proof)?;
                     } else {
                         // otherwise, prepare trie for the removal of that key
-                        storage_trie
-                            .resolve_orphan(db_key, proof, &mut unresolvable_storage_keys)
+                        if let Some(unresolvable_key) = storage_trie
+                            .resolve_orphan(db_key, proof)
                             .with_context(|| {
-                                format!("failed to resolve orphan for {}@{}", key.0, address)
-                            })?;
+                            format!("failed to resolve orphan for {}@{}", key.0, address)
+                        })? {
+                            debug!(
+                                "unresolvable storage key for {}@{}: {}",
+                                key.0, address, unresolvable_key
+                            );
+                            unresolvable_storage_keys.insert(unresolvable_key);
+                        }
                     }
                 }
 
                 // if orphans could not be resolved, use a range query to get that missing info
                 if !unresolvable_storage_keys.is_empty() {
                     let proof = preflight_db
-                        .get_next_slot_proofs(block_count, address, unresolvable_storage_keys)
+                        .get_next_slot_proofs(address, unresolvable_storage_keys)
                         .with_context(|| format!("failed to get next slot for {}", address))?;
                     storage_trie
                         .hydrate_from_rlp(proof.storage_proof.iter().flat_map(|p| &p.proof))
@@ -311,7 +320,7 @@ where
 
             for state_key in unresolvable_state_keys {
                 let proof = preflight_db
-                    .get_next_account_proof(block_count, state_key)
+                    .get_next_account_proof(state_key)
                     .context("failed to get next account")?;
                 state_trie
                     .hydrate_from_rlp(proof.account_proof)

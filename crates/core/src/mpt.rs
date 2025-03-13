@@ -1,4 +1,3 @@
-use alloy_primitives::map::B256Set;
 use alloy_primitives::B256;
 use alloy_rlp::{Decodable, Encodable};
 use risc0_ethereum_trie::{orphan, CachedTrie};
@@ -55,23 +54,20 @@ impl<T: Decodable + Encodable> MptNode<T> {
         &mut self,
         key: K,
         post_state_proof: impl IntoIterator<Item = N>,
-        unresolvable: &mut B256Set,
-    ) -> anyhow::Result<()>
+    ) -> anyhow::Result<Option<B256>>
     where
         K: AsRef<[u8]>,
         N: AsRef<[u8]>,
     {
-        match self.inner.resolve_orphan(key, post_state_proof) {
-            Ok(_) => {}
+        match self.inner.resolve_orphan(&key, post_state_proof) {
+            Ok(_) => Ok(None),
             Err(orphan::Error::Unresolvable(prefix)) => {
                 // convert the unresolvable prefix nibbles into a B256 key with zero padding
-                let key = B256::right_padding_from(&prefix.pack());
-                unresolvable.insert(key);
+                let unresolved_prefix = B256::right_padding_from(&prefix.pack());
+                Ok(Some(unresolved_prefix))
             }
-            Err(err) => return Err(err.into()),
-        };
-
-        Ok(())
+            Err(err) => Err(err.into()),
+        }
     }
 
     #[inline]

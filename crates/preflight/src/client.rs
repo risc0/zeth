@@ -258,8 +258,10 @@ where
 
             info!("Extending tries from post-state proofs...");
 
-            let mut unresolvable_state_keys = B256Set::default();
+            let mut resolved_state_keys = 0usize;
+            let mut resolved_storage_keys = 0usize;
 
+            let mut unresolved_state_keys = B256Set::default();
             for (address, account_proof) in latest_proofs {
                 let db_key = keccak256(address);
 
@@ -272,45 +274,44 @@ where
                 }
 
                 // otherwise, prepare trie for the removal of that key
-                if let Some(unresolvable_key) = state_trie
+                if let Some(unresolved_key) = state_trie
                     .resolve_orphan(db_key, account_proof.account_proof)
                     .with_context(|| format!("failed to resolve orphan for {}", address))?
                 {
-                    debug!(
-                        "unresolvable state key for {}: {}",
-                        address, unresolvable_key
-                    );
-                    unresolvable_state_keys.insert(unresolvable_key);
+                    debug!("unresolved state key for {}: {}", address, unresolved_key);
+                    unresolved_state_keys.insert(unresolved_key);
                 }
 
-                let mut unresolvable_storage_keys = B256Set::default();
+                let mut unresolved_storage_keys = B256Set::default();
 
                 let storage_trie = &mut storage_tries.get_mut(&address).unwrap().storage_trie;
                 for EIP1186StorageProof { key, proof, .. } in account_proof.storage_proof {
-                    let db_key = keccak256(&key.0);
+                    let db_key = keccak256(key.0);
                     // if the key was inserted, extend with the inclusion proof
                     if storage_trie.get(db_key).is_none() {
                         storage_trie.hydrate_from_rlp(proof)?;
                     } else {
                         // otherwise, prepare trie for the removal of that key
-                        if let Some(unresolvable_key) = storage_trie
+                        if let Some(unresolved_key) = storage_trie
                             .resolve_orphan(db_key, proof)
                             .with_context(|| {
-                            format!("failed to resolve orphan for {}@{}", key.0, address)
-                        })? {
+                                format!("failed to resolve orphan for {}@{}", key.0, address)
+                            })?
+                        {
                             debug!(
-                                "unresolvable storage key for {}@{}: {}",
-                                key.0, address, unresolvable_key
+                                "unresolved storage key for {}@{}: {}",
+                                key.0, address, unresolved_key
                             );
-                            unresolvable_storage_keys.insert(unresolvable_key);
+                            unresolved_storage_keys.insert(unresolved_key);
                         }
                     }
                 }
 
                 // if orphans could not be resolved, use a range query to get that missing info
-                if !unresolvable_storage_keys.is_empty() {
+                if !unresolved_storage_keys.is_empty() {
+                    resolved_storage_keys += unresolved_storage_keys.len();
                     let proof = preflight_db
-                        .get_next_slot_proofs(address, unresolvable_storage_keys)
+                        .get_next_slot_proofs(address, unresolved_storage_keys)
                         .with_context(|| format!("failed to get next slot for {}", address))?;
                     storage_trie
                         .hydrate_from_rlp(proof.storage_proof.iter().flat_map(|p| &p.proof))
@@ -318,7 +319,8 @@ where
                 }
             }
 
-            for state_key in unresolvable_state_keys {
+            resolved_state_keys += unresolved_state_keys.len();
+            for state_key in unresolved_state_keys {
                 let proof = preflight_db
                     .get_next_account_proof(state_key)
                     .context("failed to get next account")?;
@@ -327,7 +329,12 @@ where
                     .with_context(|| format!("invalid account proof for {}", proof.address))?;
             }
 
-            info!("Saving provider cache ...");
+            info!(
+                "Resolved {} addresses and {} storage keys",
+                resolved_state_keys, resolved_storage_keys
+            );
+
+            info!("Saving provider cache...");
             preflight_db.save_provider()?;
 
             // Increment block number counter

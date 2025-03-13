@@ -20,8 +20,8 @@ use std::{
 };
 use zeth_preflight::provider::{
     query::{
-        AccountQuery, NextAccountQuery, BlockQuery, PreimageQuery, ProofQuery, StorageQuery,
-        NextSlotQuery, UncleQuery,
+        AccountQuery, BlockQuery, NextAccountQuery, NextSlotQuery, PreimageQuery, ProofQuery,
+        StorageQuery, UncleQuery,
     },
     Provider,
 };

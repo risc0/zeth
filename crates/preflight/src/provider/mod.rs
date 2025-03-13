@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::provider::query::{NextAccountQuery, PreimageQuery, NextSlotQuery};
+use crate::provider::query::{NextAccountQuery, NextSlotQuery, PreimageQuery};
 use alloy::network::Network;
 use alloy::primitives::map::HashMap;
 use alloy::primitives::{Address, Bytes, B256, U256};

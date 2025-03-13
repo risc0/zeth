@@ -21,7 +21,7 @@ use alloy::primitives::map::HashMap;
 use alloy::primitives::{Address, B256, U256};
 use alloy::rpc::types::EIP1186AccountProofResponse;
 use anyhow::Context;
-use log::{debug, error};
+use log::error;
 use reth_primitives::revm_primitives::{Account, AccountInfo, Bytecode};
 use reth_revm::db::states::StateChangeset;
 use reth_revm::db::CacheDB;
@@ -266,13 +266,9 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
         let mut provider = provider_db.provider.borrow_mut();
         let block_no = initial_db.db.borrow_db().block_no;
 
-        debug!(
-            "getting next account: block_no={},start={}",
-            block_no, start
-        );
         let address = provider
             .get_next_account(&NextAccountQuery { block_no, start })
-            .context("debug_accountRange call failed")?;
+            .context("getting next account failed")?;
 
         provider
             .get_proof(&ProofQuery {
@@ -301,17 +297,13 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
 
         let mut indices = BTreeSet::new();
         for start in starts {
-            debug!(
-                "getting next storage key: block_no={},address={},start={}",
-                block_no, address, start
-            );
             let slot = provider
                 .get_next_slot(&NextSlotQuery {
                     block_no,
                     address,
                     start,
                 })
-                .context("debug_storageRangeAt call failed")?;
+                .context("getting next storage key failed")?;
             indices.insert(B256::from(slot));
         }
 

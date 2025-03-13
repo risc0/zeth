@@ -15,7 +15,7 @@
 use crate::provider::query::{AccountRangeQueryResponse, StorageRangeQueryResponse};
 use crate::provider::*;
 use alloy::eips::BlockId;
-use alloy::network::Network;
+use alloy::network::{BlockResponse, HeaderResponse, Network};
 use alloy::primitives::keccak256;
 use alloy::providers::{Provider as AlloyProvider, ProviderBuilder, RootProvider};
 use alloy::rpc::client::RpcClient;
@@ -55,7 +55,7 @@ impl<N: Network> RpcProvider<N> {
         &self,
         block: impl Into<BlockId>,
         start: B256,
-        max_results: u64,
+        limit: u64,
         no_code: bool,
         no_storage: bool,
         incomplete: bool,
@@ -64,31 +64,24 @@ impl<N: Network> RpcProvider<N> {
             .client()
             .request(
                 "debug_accountRange",
-                (
-                    block.into(),
-                    start,
-                    max_results,
-                    no_code,
-                    no_storage,
-                    incomplete,
-                ),
+                (block.into(), start, limit, no_code, no_storage, incomplete),
             )
             .await
     }
 
     async fn storage_range_at(
         &self,
-        block: impl Into<BlockId>,
+        block_hash: B256,
         tx_index: u64,
         address: Address,
         key_start: B256,
-        max_result: u64,
+        limit: u64,
     ) -> TransportResult<StorageRangeQueryResponse> {
         self.http_client
             .client()
             .request(
                 "debug_storageRangeAt",
-                (block.into(), tx_index, address, key_start, max_result),
+                (block_hash, tx_index, address, key_start, limit),
             )
             .await
     }
@@ -262,33 +255,54 @@ impl<N: Network> Provider<N> for RpcProvider<N> {
     }
 
     fn get_next_account(&mut self, query: &NextAccountQuery) -> anyhow::Result<Address> {
-        let out = self.tokio_handle.block_on(
-            self.account_range(query.block_no, query.start, 1, true, true, false)
-                .into_future(),
-        )?;
+        debug!("Querying RPC for next account: {:?}", query);
+
+        let out = self
+            .tokio_handle
+            .block_on(
+                self.account_range(query.block_no, query.start, 1, true, true, false)
+                    .into_future(),
+            )
+            .context("debug_accountRange failed")?;
         let entry = out.accounts.values().next().context("no such account")?;
-        // Perform sanity checks, as this RPC is known to be wonky.
+        // Perform simple sanity checks, as this RPC is known to be wonky.
         ensure!(
             entry.key > query.start && entry.key == keccak256(entry.address),
-            "invalid response"
+            "invalid debug_accountRange response"
         );
 
         Ok(entry.address)
     }
 
     fn get_next_slot(&mut self, query: &NextSlotQuery) -> anyhow::Result<U256> {
-        let out = self.tokio_handle.block_on(
-            // Query the state "after" the given block  (i.e. after all its transactions have
-            // been processed, meaning before the first transaction in the next block).
-            self.storage_range_at(query.block_no + 1, 0, query.address, query.start, 1)
-                .into_future(),
-        )?;
+        debug!("Querying RPC for next storage key: {:?}", query);
+
+        // debug_storageRangeAt returns the storage at the given block height and transaction index.
+        // For this to be consistent with eth_getProof, we need to query the state after all
+        // transactions have been processed, i.e. at transaction index 0 of the next block.
+        let block_no = query.block_no + 1;
+
+        // debug_storageRangeAt only accepts the block hash, not the number, so we need to query it.
+        let block = self
+            .tokio_handle
+            .block_on(self.http_client.get_block_by_number(block_no.into(), false))
+            .context("eth_getBlockByNumber failed")?
+            .context("no such block")?;
+        let block_hash = block.header().hash();
+
+        let out = self
+            .tokio_handle
+            .block_on(
+                self.storage_range_at(block_hash, 0, query.address, query.start, 1)
+                    .into_future(),
+            )
+            .context("debug_storageRangeAt failed")?;
 
         let (hash, entry) = out.storage.iter().next().context("no such slot")?;
-        // Perform sanity checks, as this RPC is known to be wonky.
+        // Perform simple sanity checks, as this RPC is known to be wonky.
         ensure!(
             *hash > query.start && out.next_key.map_or(true, |next| next > *hash),
-            "invalid response"
+            "invalid debug_storageRangeAt response"
         );
 
         Ok(entry.key.0.into())

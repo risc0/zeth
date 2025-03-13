@@ -14,8 +14,8 @@
 
 use super::{ordered_map, MutProvider, Provider};
 use crate::provider::query::{
-    AccountQuery, NextAccountQuery, BlockQuery, PreimageQuery, ProofQuery, StorageQuery,
-    NextSlotQuery, UncleQuery,
+    AccountQuery, BlockQuery, NextAccountQuery, NextSlotQuery, PreimageQuery, ProofQuery,
+    StorageQuery, UncleQuery,
 };
 use alloy::network::Network;
 use alloy::primitives::{Address, Bytes, U256};

@@ -61,8 +61,7 @@ pub struct NextAccountQuery {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountRangeQueryResponse {
-    pub root: B256,
-    pub accounts: HashMap<Address, AccountRangeQueryResponseEntry>,
+    pub accounts: HashMap<String, AccountRangeQueryResponseEntry>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub next: Option<String>,
 }
@@ -70,13 +69,13 @@ pub struct AccountRangeQueryResponse {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountRangeQueryResponseEntry {
-    pub address: Address,
     pub balance: U256,
-    pub code_hash: B256,
-    pub root: B256,
-    pub key: B256,
     #[serde(with = "alloy::serde::quantity")]
     pub nonce: u64,
+    pub root: B256,
+    pub code_hash: B256,
+    pub address: Option<Address>,
+    pub key: B256,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
@@ -97,6 +96,6 @@ pub struct StorageRangeQueryResponse {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StorageRangeQueryResponseEntry {
-    pub key: alloy::serde::JsonStorageKey,
+    pub key: Option<alloy::serde::JsonStorageKey>,
     pub value: U256,
 }

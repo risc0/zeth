@@ -232,7 +232,7 @@ impl ProviderState {
     }
 
     fn get_next_account(&self, start: B256) -> Option<Address> {
-        let next = self.0.range((Excluded(start), Unbounded)).next();
+        let next = self.0.range(start..).next();
         next.map(|(_, v)| v.address)
     }
 
@@ -240,7 +240,7 @@ impl ProviderState {
         let Some(account) = self.0.get(&keccak256(address)) else {
             return None;
         };
-        let next = account.storage.range((Excluded(start), Unbounded)).next();
+        let next = account.storage.range(start..).next();
         next.map(|(_, v)| v.0)
     }
 }

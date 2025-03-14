@@ -7491,6 +7491,7 @@ dependencies = [
  "reth-primitives",
  "reth-revm",
  "reth-storage-errors",
+ "risc0-ethereum-trie",
  "rkyv",
  "serde",
  "serde_json",

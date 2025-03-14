@@ -23,8 +23,9 @@ use alloy::transports::{
     layers::{RetryBackoffLayer, RetryBackoffService},
     TransportResult,
 };
-use anyhow::{anyhow, ensure, Context};
+use anyhow::{anyhow, bail, ensure, Context};
 use log::{debug, error};
+use risc0_ethereum_trie::Nibbles;
 use std::future::IntoFuture;
 
 #[derive(Clone, Debug)]
@@ -287,23 +288,46 @@ impl<N: Network> Provider<N> for RpcProvider<N> {
             .context("no such block")?;
         let block_hash = block.header().hash();
 
-        let out = self
-            .tokio_handle
-            .block_on(
-                self.storage_range_at(block_hash, 0, query.address, query.start, 1)
-                    .into_future(),
-            )
-            .context("debug_storageRangeAt failed")?;
-
-        let (hash, entry) = out.storage.iter().next().context("no such storage slot")?;
-        // Perform simple sanity checks, as this RPC is known to be wonky.
-        ensure!(
-            *hash >= query.start && out.next_key.map_or(true, |next| next > *hash),
-            "invalid debug_storageRangeAt response"
+        // try to reconstruct prefix from start
+        let mut prefix = Nibbles::unpack(query.start);
+        while prefix.last().map_or(false, |n| n == 0) {
+            prefix.pop();
+        }
+        debug!(
+            "Calling 'debug_storageRangeAt' to find storage key with prefix 0x{}",
+            alloy::hex::encode(prefix.pack())
         );
-        let key = entry.key.context("preimage storage key is missing")?;
 
-        Ok(key.0.into())
+        let mut start = B256::ZERO;
+        const PAGE_SIZE: u64 = 100_000;
+
+        loop {
+            let out = self
+                .tokio_handle
+                .block_on(
+                    self.storage_range_at(block_hash, 0, query.address, start, PAGE_SIZE)
+                        .into_future(),
+                )
+                .context("debug_storageRangeAt failed")?;
+            debug!(
+                "'debug_storageRangeAt' with {:#} returned {} storage slots",
+                start,
+                out.storage.len()
+            );
+
+            for (hash, entry) in out.storage {
+                if let Some(key) = entry.key {
+                    if Nibbles::unpack(hash).starts_with(&prefix) {
+                        return Ok(key.0.into());
+                    }
+                }
+            }
+
+            match out.next_key {
+                Some(next_key) => start = next_key,
+                None => bail!("no such storage key"),
+            }
+        }
     }
 }
 
@@ -324,7 +348,7 @@ mod tests {
         let latest = provider.http_client.get_block_number().await?;
         spawn_blocking(move || {
             provider.get_next_slot(&NextSlotQuery {
-                block_no: latest - 1,
+                block_no: latest - 150,
                 address: address!("0xdAC17F958D2ee523a2206206994597C13D831ec7"),
                 start: B256::ZERO,
             })

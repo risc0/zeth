@@ -16,7 +16,6 @@ use crate::provider::query::{AccountRangeQueryResponse, StorageRangeQueryRespons
 use crate::provider::*;
 use alloy::eips::BlockId;
 use alloy::network::{BlockResponse, HeaderResponse, Network};
-use alloy::primitives::keccak256;
 use alloy::providers::{Provider as AlloyProvider, ProviderBuilder, RootProvider};
 use alloy::rpc::client::RpcClient;
 use alloy::transports::{
@@ -56,15 +55,13 @@ impl<N: Network> RpcProvider<N> {
         block: impl Into<BlockId>,
         start: B256,
         limit: u64,
-        no_code: bool,
-        no_storage: bool,
         incomplete: bool,
     ) -> TransportResult<AccountRangeQueryResponse> {
         self.http_client
             .client()
             .request(
                 "debug_accountRange",
-                (block.into(), start, limit, no_code, no_storage, incomplete),
+                (block.into(), start, limit, true, true, incomplete),
             )
             .await
     }
@@ -260,18 +257,18 @@ impl<N: Network> Provider<N> for RpcProvider<N> {
         let out = self
             .tokio_handle
             .block_on(
-                self.account_range(query.block_no, query.start, 1, true, true, false)
+                self.account_range(query.block_no, query.start, 1, true)
                     .into_future(),
             )
             .context("debug_accountRange failed")?;
         let entry = out.accounts.values().next().context("no such account")?;
         // Perform simple sanity checks, as this RPC is known to be wonky.
         ensure!(
-            entry.key > query.start && entry.key == keccak256(entry.address),
+            entry.key >= query.start,
             "invalid debug_accountRange response"
         );
 
-        Ok(entry.address)
+        entry.address.context("preimage address is missing")
     }
 
     fn get_next_slot(&mut self, query: &NextSlotQuery) -> anyhow::Result<U256> {
@@ -298,13 +295,61 @@ impl<N: Network> Provider<N> for RpcProvider<N> {
             )
             .context("debug_storageRangeAt failed")?;
 
-        let (hash, entry) = out.storage.iter().next().context("no such slot")?;
+        let (hash, entry) = out.storage.iter().next().context("no such storage slot")?;
         // Perform simple sanity checks, as this RPC is known to be wonky.
         ensure!(
-            *hash > query.start && out.next_key.map_or(true, |next| next > *hash),
+            *hash >= query.start && out.next_key.map_or(true, |next| next > *hash),
             "invalid debug_storageRangeAt response"
         );
+        let key = entry.key.context("preimage storage key is missing")?;
 
-        Ok(entry.key.0.into())
+        Ok(key.0.into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloy::network::Ethereum;
+    use alloy::primitives::address;
+    use tokio::task::spawn_blocking;
+
+    #[tokio::test]
+    #[ignore = "Requires RPC node and credentials"]
+    async fn get_next_slot() -> anyhow::Result<()> {
+        let rpc_url = std::env::var("ETH_RPC_URL").expect("ETH_RPC_URL not set");
+
+        let mut provider = RpcProvider::<Ethereum>::new(rpc_url)?;
+
+        let latest = provider.http_client.get_block_number().await?;
+        spawn_blocking(move || {
+            provider.get_next_slot(&NextSlotQuery {
+                block_no: latest - 1,
+                address: address!("0xdAC17F958D2ee523a2206206994597C13D831ec7"),
+                start: B256::ZERO,
+            })
+        })
+        .await??;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[ignore = "Requires RPC node and credentials"]
+    async fn get_next_account() -> anyhow::Result<()> {
+        let rpc_url = std::env::var("ETH_RPC_URL").expect("ETH_RPC_URL not set");
+
+        let mut provider = RpcProvider::<Ethereum>::new(rpc_url)?;
+
+        let latest = provider.http_client.get_block_number().await?;
+        spawn_blocking(move || {
+            provider.get_next_account(&NextAccountQuery {
+                block_no: latest,
+                start: B256::ZERO,
+            })
+        })
+        .await??;
+
+        Ok(())
     }
 }

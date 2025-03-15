@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use clap::ValueEnum;
+use clap::{Parser, Args, ValueEnum, Command};
 use reth_chainspec::NamedChain;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 
-#[derive(clap::Parser, Debug, Clone)]
+#[derive(Parser, Debug, Clone)]
 #[command(name = "zeth")]
 #[command(bin_name = "zeth")]
 #[command(author, version, about, long_about = None)]
@@ -110,7 +110,7 @@ pub struct BuildArgs {
     pub chain: Option<NamedChain>,
 }
 
-#[derive(Debug, Clone, clap::ValueEnum, Hash, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Debug, Clone, ValueEnum, Hash, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Chain {
     /// Mainnet
     Mainnet,
@@ -130,7 +130,7 @@ impl Display for Chain {
     }
 }
 
-#[derive(clap::Args, Debug, Clone)]
+#[derive(Args, Debug, Clone)]
 pub struct RunArgs {
     #[arg(flatten)]
     pub build_args: BuildArgs,
@@ -144,7 +144,7 @@ pub struct RunArgs {
     pub profile: bool,
 }
 
-#[derive(clap::Args, Debug, Clone)]
+#[derive(Args, Debug, Clone)]
 pub struct ProveArgs {
     #[arg(flatten)]
     pub run_args: RunArgs,
@@ -154,7 +154,7 @@ pub struct ProveArgs {
     pub snark: bool,
 }
 
-#[derive(clap::Args, Debug, Clone)]
+#[derive(Args, Debug, Clone)]
 pub struct VerifyArgs {
     #[arg(flatten)]
     pub build_args: BuildArgs,

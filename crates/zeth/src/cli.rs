@@ -85,27 +85,27 @@ impl Cli {
     }
 }
 
-#[derive(clap::Args, Debug, Clone)]
+#[derive(Debug, Clone, Args)]
 pub struct BuildArgs {
-    #[clap(short = 'u', long, require_equals = true)]
+    #[arg(short = 'u', long, require_equals = true)]
     /// URL of the execution-layer RPC node
     pub rpc: Option<String>,
 
-    #[clap(short = 'd', long, require_equals = true, num_args = 0..=1, default_missing_value = "cache_rpc")]
+    #[arg(short = 'd', long, require_equals = true, num_args = 0..=1, default_missing_value = "cache_rpc")]
     /// Directory for caching RPC data; the value specifies the cache directory
     ///
     /// [default when the flag is present: cache_rpc]
     pub cache: Option<PathBuf>,
 
-    #[clap(short = 'b', long, require_equals = true)]
+    #[arg(short = 'b', long, require_equals = true)]
     /// Starting block number
     pub block_number: u64,
 
-    #[clap(short = 'n', long, require_equals = true, default_value_t = 1)]
+    #[arg(short = 'n', long, require_equals = true, default_value_t = 1)]
     /// Number of blocks to build in a single proof
     pub block_count: u64,
 
-    #[clap(short = 'c', long, require_equals = true, value_enum)]
+    #[arg(short = 'c', long, require_equals = true, value_enum)]
     /// Which chain spec to use.
     pub chain: Option<NamedChain>,
 }
@@ -132,34 +132,34 @@ impl Display for Chain {
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct RunArgs {
-    #[clap(flatten)]
+    #[arg(flatten)]
     pub build_args: BuildArgs,
 
-    #[clap(short = 'e', long, require_equals = true, default_value_t = 20)]
+    #[arg(short = 'e', long, require_equals = true, default_value_t = 20)]
     /// The maximum cycle count of a segment as a power of 2
     pub execution_po2: u32,
 
-    #[clap(short = 'p', long, default_value_t = false)]
-    /// Save the profile of the execution in the current working directly
+    #[arg(short = 'p', long, default_value_t = false)]
+    /// Save the profile of the execution in the current working directory
     pub profile: bool,
 }
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct ProveArgs {
-    #[clap(flatten)]
+    #[arg(flatten)]
     pub run_args: RunArgs,
 
-    #[clap(short = 's', long, default_value_t = false)]
+    #[arg(short = 's', long, default_value_t = false)]
     /// Convert the resulting STARK receipt into a Groth-16 SNARK
     pub snark: bool,
 }
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct VerifyArgs {
-    #[clap(flatten)]
+    #[arg(flatten)]
     pub build_args: BuildArgs,
 
-    #[clap(short = 'f', long, require_equals = true)]
+    #[arg(short = 'f', long, require_equals = true)]
     /// Receipt file path
     pub file: PathBuf,
 }

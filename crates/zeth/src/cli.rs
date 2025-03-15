@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use clap::{Parser, Args, ValueEnum, Command};
+use clap::{Args, Command, Parser, ValueEnum};
 use reth_chainspec::NamedChain;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
@@ -132,7 +132,7 @@ impl Display for Chain {
 
 #[derive(Args, Debug, Clone)]
 pub struct RunArgs {
-    #[arg(flatten)]
+    #[command(flatten)]
     pub build_args: BuildArgs,
 
     #[arg(short = 'e', long, require_equals = true, default_value_t = 20)]
@@ -146,7 +146,7 @@ pub struct RunArgs {
 
 #[derive(Args, Debug, Clone)]
 pub struct ProveArgs {
-    #[arg(flatten)]
+    #[command(flatten)]
     pub run_args: RunArgs,
 
     #[arg(short = 's', long, default_value_t = false)]
@@ -156,7 +156,7 @@ pub struct ProveArgs {
 
 #[derive(Args, Debug, Clone)]
 pub struct VerifyArgs {
-    #[arg(flatten)]
+    #[command(flatten)]
     pub build_args: BuildArgs,
 
     #[arg(short = 'f', long, require_equals = true)]

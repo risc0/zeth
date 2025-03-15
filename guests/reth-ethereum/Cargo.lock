@@ -4155,7 +4155,8 @@ dependencies = [
 [[package]]
 name = "tiny-keccak"
 version = "2.0.2"
-source = "git+https://github.com/risc0/tiny-keccak?tag=tiny-keccak/v2.0.2-risczero.0#8fcc866dc94dcec3e79c3b2bc8fbc51b22f2d5e1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c9d3793400a45f954c52e73d068316d76b6f4e36977e3fcebb13a2721e80237"
 dependencies = [
  "crunchy",
 ]
@@ -4829,6 +4830,7 @@ dependencies = [
  "c-kzg",
  "risc0-zkvm",
  "risc0-zkvm-platform",
+ "tiny-keccak",
  "zeth-core",
  "zeth-core-ethereum",
 ]

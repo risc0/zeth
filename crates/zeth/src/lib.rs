@@ -186,9 +186,29 @@ where
         info!("Executing ...");
         // run executor only
         let exec_env = build_executor_env(&cli, &build_result, image_id, network_name)?;
-        let executor = default_executor();
-        let session_info = executor.execute(exec_env, elf)?;
-        info!("{} user cycles executed.", session_info.cycles());
+        // let executor = default_executor();
+        // let session_info = executor.execute(exec_env, elf)?;
+        // info!("{} user cycles executed.", session_info.cycles());
+        use risc0_zkvm::{ApiClient, Asset, AssetRequest};
+        let segment_callback = |_segment_info, _asset| -> anyhow::Result<()> {
+            Ok(())
+        };
+        let r0_client = ApiClient::from_env()?;
+        let session_info = r0_client.execute(
+            &exec_env,
+            Asset::Inline(elf.to_owned().into()),
+            AssetRequest::Path(String::from("segs/blobs").into()),
+            segment_callback,
+        )?;        
+        let _ = std::fs::write(
+            "segs/elf",
+            &elf
+        )?;        
+        info!(
+            "cycles: {}, total segs: {}",
+            session_info.cycles(),
+            session_info.segments.len()
+        );
         session_info.journal.bytes
     };
     // sanity check

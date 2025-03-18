@@ -979,9 +979,10 @@ dependencies = [
 [[package]]
 name = "c-kzg"
 version = "1.0.3"
-source = "git+https://github.com/risc0/c-kzg-4844.git?branch=p1.0.3#6d0a1e2f6968814b12fff78f2198d585250cd806"
+source = "git+https://github.com/Wollac/c-kzg-4844?branch=fix%2Falignment#d1855b62524197793136115ab92c147e3a045615"
 dependencies = [
  "blst",
+ "bytemuck",
  "cc",
  "glob",
  "hex",

@@ -18,15 +18,15 @@ opt-level = 3
 
 # RISC Zero
 [workspace.dependencies.bonsai-sdk]
-version = "1.4.0-rc.1"
+version = "1.4.0-rc.2"
 features = ["non_blocking"]
 
 [workspace.dependencies.risc0-build]
-version = "3.0.0-rc.1"
+version = "2.0.1-rc.2"
 features = ["unstable"]
 
 [workspace.dependencies.risc0-zkvm]
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 features = ["unstable"]
 
 [workspace.dependencies.risc0-ethereum-trie]
@@ -91,6 +91,8 @@ anyhow = "1.0.89"
 async-trait = "0.1.83"
 bincode = "1.3.3"
 bytemuck = "1.19.0"
+# Enforce bytemuck_derive version manually until rust 1.85 is supported.
+bytemuck_derive = ">=1.8.1, <1.9.0"
 clap = { version = "4.0", features = ["derive"] }
 env_logger = "0.11.5"
 hashbrown = { version = "0.15.2", features = ["rayon"] }

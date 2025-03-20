@@ -19,15 +19,15 @@ use std::process::Command;
 use tracing::{error, info};
 use zeth::cli::ProveArgs;
 
-#[derive(clap::Parser, Debug, Clone)]
+#[derive(Parser, Debug, Clone)]
 #[command(name = "zeth-benchmark")]
 #[command(bin_name = "zeth-benchmark")]
 #[command(author, version, about, long_about = None)]
 pub struct Cli {
-    #[clap(flatten)]
+    #[command(flatten)]
     pub prove_args: ProveArgs,
 
-    #[clap(
+    #[arg(
         long,
         require_equals = true,
         value_enum,
@@ -37,16 +37,16 @@ pub struct Cli {
     /// Which chain spec to use.
     pub chain_id: Option<NamedChain>,
 
-    #[clap(long, require_equals = true)]
+    #[arg(long, require_equals = true)]
     /// The range of blocks after the starting block number to sample from
     pub sample_range: u64,
 
-    #[clap(long, require_equals = true)]
+    #[arg(long, require_equals = true)]
     /// The number of samples to benchmark
     pub sample_count: u64,
 
     /// Path to the zeth program used for proving
-    #[clap(long, require_equals = true)]
+    #[arg(long, require_equals = true)]
     pub zeth: Option<String>,
 }
 

@@ -108,6 +108,10 @@ pub struct BuildArgs {
     #[clap(short = 'c', long, require_equals = true, value_enum)]
     /// Which chain spec to use.
     pub chain: Option<NamedChain>,
+
+    #[clap(long, require_equals = true, default_value_t = 1)]
+    /// id of execution shard
+    pub shard_id: u64,
 }
 
 #[derive(Debug, Clone, clap::ValueEnum, Hash, Ord, PartialOrd, Eq, PartialEq)]

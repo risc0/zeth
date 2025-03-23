@@ -21,7 +21,7 @@ async fn main() -> anyhow::Result<()> {
     zeth::run::<RethBlockBuilder, _, _, _, _>(
         ZETH_GUESTS_RETH_ETHEREUM_ELF,
         ZETH_GUESTS_RETH_ETHEREUM_ID,
-        NamedChain::Mainnet,
+        NamedChain::Dev,
         "ethereum",
     )
     .await

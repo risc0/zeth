@@ -54,8 +54,15 @@ where
     // Fill default chain id if no way to infer it
     let chain_id = match (&build_args.rpc, build_args.chain) {
         (None, None) => Some(default_chain as u64),
+        (_, None) => Some(default_chain as u64),
         (_, chain) => chain.map(|c| c as u64),
     };
+    info!("shard_id {} ", build_args.shard_id);
+    if let Some(v) = chain_id {
+        info!("chain_id {}", v);
+    } else {
+        info!("chain id not defined");
+    }
 
     // Prepare the cache directory
     let cache_dir = build_args
@@ -70,6 +77,7 @@ where
         build_args.rpc.clone(),
         build_args.block_number,
         build_args.block_count,
+        build_args.shard_id,
     )
     .await?;
     info!("Journal prepared.");

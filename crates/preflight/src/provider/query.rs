@@ -25,6 +25,7 @@ pub struct AccountQuery {
 #[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
 pub struct BlockQuery {
     pub block_no: u64,
+    pub shard_id: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Deserialize, Serialize)]

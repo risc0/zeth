@@ -29,6 +29,7 @@ pub mod cache_provider;
 pub mod db;
 pub mod file_provider;
 pub mod query;
+pub mod types;
 pub mod rpc_provider;
 
 pub fn new_file_provider<N: Network>(

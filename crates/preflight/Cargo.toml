@@ -8,6 +8,7 @@ workspace = true
 
 [dependencies]
 alloy.workspace = true
+alloy-primitives.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 flate2.workspace = true
@@ -24,3 +25,5 @@ reth-chainspec.workspace = true
 reth-revm.workspace = true
 reth-primitives.workspace = true
 reth-storage-errors.workspace = true
+
+url.workspace = true

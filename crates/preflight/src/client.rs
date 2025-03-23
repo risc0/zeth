@@ -67,6 +67,7 @@ where
         // Fetch the parent block
         let parent_block = provider_mut.get_full_block(&BlockQuery {
             block_no: block_no - 1,
+            shard_id: 1,//TODO set value
         })?;
         let parent_header = P::derive_header_response(parent_block);
         let core_parent_header = P::derive_header(parent_header.clone());
@@ -80,8 +81,9 @@ where
         info!("Grabbing blocks and their uncles ...");
         let mut blocks = Vec::new();
         let mut ommers = Vec::new();
+        let shard_id:u64 = 1; // TODO set value
         for block_no in block_no..block_no + block_count {
-            let block = provider_mut.get_full_block(&BlockQuery { block_no })?;
+            let block = provider_mut.get_full_block(&BlockQuery { block_no, shard_id })?;
             let uncle_headers: Vec<_> = P::uncles(&block)
                 .iter()
                 .enumerate()

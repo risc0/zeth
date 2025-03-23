@@ -30,13 +30,14 @@ use zeth_core_ethereum::{RethCoreDriver, RethExecutionStrategy};
 use zeth_preflight::client::PreflightClient;
 use zeth_preflight::driver::PreflightDriver;
 use zeth_preflight::BlockBuilder;
+use zeth_preflight::provider::types::NilNetwork;
 
 #[derive(Clone)]
 pub struct RethBlockBuilder {
     pub chain_spec: Arc<ChainSpec>,
 }
 
-impl BlockBuilder<Ethereum, MemoryDB, RethCoreDriver, RethPreflightDriver> for RethBlockBuilder {
+impl BlockBuilder<NilNetwork, MemoryDB, RethCoreDriver, RethPreflightDriver> for RethBlockBuilder {
     type PreflightClient = RethPreflightClient;
     type StatelessClient = RethStatelessClient;
 }
@@ -44,7 +45,7 @@ impl BlockBuilder<Ethereum, MemoryDB, RethCoreDriver, RethPreflightDriver> for R
 #[derive(Clone)]
 pub struct RethPreflightClient;
 
-impl PreflightClient<Ethereum, RethCoreDriver, RethPreflightDriver> for RethPreflightClient {
+impl PreflightClient<NilNetwork, RethCoreDriver, RethPreflightDriver> for RethPreflightClient {
     type Validation = RethValidationStrategy;
     type Execution = RethExecutionStrategy;
 }
@@ -52,28 +53,28 @@ impl PreflightClient<Ethereum, RethCoreDriver, RethPreflightDriver> for RethPref
 #[derive(Clone)]
 pub struct RethPreflightDriver;
 
-impl PreflightDriver<RethCoreDriver, Ethereum> for RethPreflightDriver {
-    fn total_difficulty(header: &<Ethereum as Network>::HeaderResponse) -> Option<U256> {
-        header.total_difficulty
+impl PreflightDriver<RethCoreDriver, NilNetwork> for RethPreflightDriver {
+    fn total_difficulty(header: &<NilNetwork as Network>::HeaderResponse) -> Option<U256> {
+        None//header.total_difficulty
     }
 
-    fn count_transactions(block: &<Ethereum as Network>::BlockResponse) -> usize {
+    fn count_transactions(block: &<NilNetwork as Network>::BlockResponse) -> usize {
         block.transactions.len()
     }
 
     fn derive_transaction(
-        transaction: <Ethereum as Network>::TransactionResponse,
+        transaction: <NilNetwork as Network>::TransactionResponse,
     ) -> <RethCoreDriver as CoreDriver>::Transaction {
-        TransactionSigned::try_from(WithOtherFields::new(transaction)).unwrap()
+        todo!()//TransactionSigned::try_from(WithOtherFields::new(transaction)).unwrap()
     }
 
-    fn derive_header(header: <Ethereum as Network>::HeaderResponse) -> Header {
-        Header::try_from(header).unwrap()
+    fn derive_header(header: <NilNetwork as Network>::HeaderResponse) -> Header {
+        todo!()//Header::try_from(header).unwrap()
     }
 
     fn derive_block(
-        block: <Ethereum as Network>::BlockResponse,
-        ommers: Vec<<Ethereum as Network>::HeaderResponse>,
+        block: <NilNetwork as Network>::BlockResponse,
+        ommers: Vec<<NilNetwork as Network>::HeaderResponse>,
     ) -> Block {
         Block {
             header: Self::derive_header(block.header),
@@ -84,30 +85,30 @@ impl PreflightDriver<RethCoreDriver, Ethereum> for RethPreflightDriver {
                     .map(Self::derive_transaction)
                     .collect(),
                 ommers: ommers.into_iter().map(Self::derive_header).collect(),
-                withdrawals: block.withdrawals.map(Withdrawals::new),
+                withdrawals: None,//block.withdrawals.map(Withdrawals::new),
                 requests: None,
             },
         }
     }
 
     fn derive_header_response(
-        block: <Ethereum as Network>::BlockResponse,
-    ) -> <Ethereum as Network>::HeaderResponse {
+        block: <NilNetwork as Network>::BlockResponse,
+    ) -> <NilNetwork as Network>::HeaderResponse {
         block.header
     }
 
     fn header_response(
-        block: &<Ethereum as Network>::BlockResponse,
-    ) -> &<Ethereum as Network>::HeaderResponse {
+        block: &<NilNetwork as Network>::BlockResponse,
+    ) -> &<NilNetwork as Network>::HeaderResponse {
         &block.header
     }
 
-    fn uncles(block: &<Ethereum as Network>::BlockResponse) -> &Vec<B256> {
-        &block.uncles
+    fn uncles(block: &<NilNetwork as Network>::BlockResponse) -> &Vec<B256> {
+        todo!()//&block.uncles
     }
 
     fn derive_receipt(
-        receipt: <Ethereum as Network>::ReceiptResponse,
+        receipt: <NilNetwork as Network>::ReceiptResponse,
     ) -> <RethCoreDriver as CoreDriver>::Receipt {
         let inner = receipt.inner.as_receipt().unwrap();
         let logs = inner
@@ -128,10 +129,10 @@ impl PreflightDriver<RethCoreDriver, Ethereum> for RethPreflightDriver {
 
     fn derive_data(
         data: StatelessClientData<
-            <Ethereum as Network>::BlockResponse,
-            <Ethereum as Network>::HeaderResponse,
+            <NilNetwork as Network>::BlockResponse,
+            <NilNetwork as Network>::HeaderResponse,
         >,
-        ommers: Vec<Vec<<Ethereum as Network>::HeaderResponse>>,
+        ommers: Vec<Vec<<NilNetwork as Network>::HeaderResponse>>,
     ) -> StatelessClientData<Block, Header> {
         let blocks: Vec<_> = zip(data.blocks, ommers)
             .map(|(block, ommers)| Self::derive_block(block, ommers))

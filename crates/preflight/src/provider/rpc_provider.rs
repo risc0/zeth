@@ -13,21 +13,30 @@
 // limitations under the License.
 
 use crate::provider::query::{AccountRangeQueryResponse, StorageRangeQueryResponse};
+use crate::provider::types::NilBlock;
 use crate::provider::*;
-use alloy::network::{BlockResponse, HeaderResponse, Network};
+use alloy::network::{Ethereum, Network};
+use alloy::network::primitives::{
+    BlockResponse, BlockTransactions, HeaderResponse, TransactionResponse,
+};
+use alloy::eips::{eip2930::AccessList, eip7702::SignedAuthorization};
+use alloy::consensus::Transaction;
 use alloy::providers::{Provider as AlloyProvider, ProviderBuilder, RootProvider};
-use alloy::rpc::client::RpcClient;
+use alloy_primitives::{Address, BlockHash, TxHash, PrimitiveSignature as Signature, TxKind, ChainId, Bloom, Bytes, Sealable, B256, B64, U256};
+use alloy::rpc::client::{RpcClient, ReqwestClient, ClientBuilder};
+use alloy::rpc::types::{Block, Header};
 use alloy::transports::{
     http::{Client, Http},
     layers::{RetryBackoffLayer, RetryBackoffService},
 };
 use anyhow::anyhow;
-use log::{debug, error};
+use log::{debug, error, info};
 use std::future::IntoFuture;
 
 #[derive(Clone, Debug)]
 pub struct RpcProvider<N: Network> {
     http_client: RootProvider<RetryBackoffService<Http<Client>>, N>,
+    rpc_client: ReqwestClient,
     tokio_handle: tokio::runtime::Handle,
 }
 
@@ -42,8 +51,11 @@ impl<N: Network> RpcProvider<N> {
 
         let tokio_handle = tokio::runtime::Handle::current();
 
+        let rpc_client = ClientBuilder::default().http(rpc_url.parse()?);
+
         Ok(RpcProvider {
             http_client,
+            rpc_client,
             tokio_handle,
         })
     }
@@ -82,16 +94,31 @@ impl<N: Network> Provider<N> for RpcProvider<N> {
 
     fn get_full_block(&mut self, query: &BlockQuery) -> anyhow::Result<N::BlockResponse> {
         debug!("Querying RPC for full block: {:?}", query);
+        info!("Querying RPC for full block: {:?}", query);
+        println!("{}", std::any::type_name::<Block>());
+
+        let block_no_str = format!("{:#x}", query.block_no);
+        info!("block no = {}", block_no_str);
 
         let response = self.tokio_handle.block_on(
-            self.http_client
-                .get_block_by_number(query.block_no.into(), true),
+            //self.http_client
+            //    .get_block_by_number(query.block_no.into(), true),
+            self.rpc_client.request("eth_getBlockByNumber", (query.shard_id, block_no_str, false)),
         )?;
 
         match response {
             Some(out) => Ok(out),
             None => Err(anyhow!("No data for {:?}", query)),
         }
+
+        /*let header: Header = Default::default();
+        Ok(Block {
+            header: header,
+            uncles: vec![],
+            transactions: BlockTransactions::Full(vec![]),
+            size: None,
+            withdrawals: None,
+        })*/
     }
 
     fn get_uncle_block(&mut self, query: &UncleQuery) -> anyhow::Result<N::BlockResponse> {
@@ -246,6 +273,7 @@ impl<N: Network> Provider<N> for RpcProvider<N> {
     fn get_next_slot(&mut self, query: &StorageRangeQuery) -> anyhow::Result<U256> {
         let block = self.get_full_block(&BlockQuery {
             block_no: query.block_no,
+            shard_id: 1,// TODO set value
         })?;
         let hash = block.header().hash();
 

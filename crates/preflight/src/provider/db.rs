@@ -134,10 +134,11 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> Database for ProviderD
     }
 
     fn block_hash(&mut self, block_no: u64) -> Result<B256, Self::Error> {
+        let shard_id:u64 = 1;  // TODO set value
         let header = P::derive_header(P::derive_header_response(
             self.provider
                 .borrow_mut()
-                .get_full_block(&BlockQuery { block_no })
+                .get_full_block(&BlockQuery { block_no, shard_id })
                 .map_err(db_error)?,
         ));
         Ok(R::header_hash(&header))

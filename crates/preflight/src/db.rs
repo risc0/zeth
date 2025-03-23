@@ -228,6 +228,7 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
     }
 
     pub fn get_ancestor_headers(&mut self) -> anyhow::Result<Vec<N::HeaderResponse>> {
+        let shard_id:u64 = 1;  // TODO set value
         let initial_db = self.inner.db.db.borrow_mut();
         let db_block_number = initial_db.db.borrow_db().block_no;
         let earliest_block = initial_db
@@ -244,7 +245,7 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
             .map(|block_no| {
                 P::derive_header_response(
                     provider
-                        .get_full_block(&BlockQuery { block_no })
+                        .get_full_block(&BlockQuery { block_no, shard_id })
                         .expect("Failed to retrieve ancestor block"),
                 )
             })

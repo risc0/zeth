@@ -126,8 +126,17 @@ where
         rpc_url: Option<String>,
         block_number: u64,
         block_count: u64,
+        shard_id: u64,
     ) -> anyhow::Result<Vec<u8>> {
+        info!("block_number = {}, block_count = {}", block_number, block_count);
+        if let Some(ch) = &chain_id {
+            info!("chain_id = {}", *ch);
+        }
+        if let Some(rpc) = &rpc_url {
+            info!("rpc_url = {}", *rpc);
+        }
         let validation_tip_block_no = block_number + block_count - 1;
+        info!("validation_tip_block_no = {}", validation_tip_block_no);
         // Fetch the block
         let (validation_tip_block, chain, client_version) = spawn_blocking(move || {
             let provider = new_provider::<N>(cache_dir, block_number, rpc_url, chain_id).unwrap();
@@ -136,6 +145,7 @@ where
             let validation_tip = provider_mut
                 .get_full_block(&BlockQuery {
                     block_no: validation_tip_block_no,
+                    shard_id: shard_id,
                 })
                 .unwrap();
 

@@ -15,6 +15,6 @@ runs:
         curl -L https://risczero.com/install | bash
         echo "$HOME/.risc0/bin" >> $GITHUB_PATH
 
-    - name: rzup install rust
+    - name: Install RISC Zero toolchain
       shell: bash
       run: rzup install

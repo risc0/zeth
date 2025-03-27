@@ -11,13 +11,7 @@ use alloy_trie::proof::ProofRetainer;
 use anyhow::anyhow;
 use nybbles::Nibbles;
 use reth_chainspec::NamedChain;
-use std::{
-    collections::{
-        BTreeMap,
-        Bound::{Excluded, Unbounded},
-    },
-    iter, vec,
-};
+use std::{collections::BTreeMap, iter, vec};
 use zeth_preflight::provider::{
     query::{
         AccountQuery, BlockQuery, NextAccountQuery, NextSlotQuery, PreimageQuery, ProofQuery,

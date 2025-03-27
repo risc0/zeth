@@ -53,7 +53,7 @@ test-cache-eth +ARGS="": (build ARGS)
     RUST_LOG=info ./target/debug/zeth-ethereum build --cache=bin/ethereum/data -b=9069000
     RUST_LOG=info ./target/debug/zeth-ethereum build --cache=bin/ethereum/data -b=9200000
     RUST_LOG=info ./target/debug/zeth-ethereum build --cache=bin/ethereum/data -b=12244000
-    # RUST_LOG=info ./target/debug/zeth-ethereum build --cache=bin/ethereum/data -b=12965000
+    RUST_LOG=info ./target/debug/zeth-ethereum build --cache=bin/ethereum/data -b=12965000
     RUST_LOG=info ./target/debug/zeth-ethereum build --cache=bin/ethereum/data -b=13773000
     RUST_LOG=info ./target/debug/zeth-ethereum build --cache=bin/ethereum/data -b=15050000
     RUST_LOG=info ./target/debug/zeth-ethereum build --cache=bin/ethereum/data -b=15537394

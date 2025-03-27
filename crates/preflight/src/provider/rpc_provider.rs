@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::provider::query::{AccountRangeQueryResponse, StorageRangeQueryResponse};
 use crate::provider::*;
 use alloy::eips::BlockId;
 use alloy::network::{BlockResponse, HeaderResponse, Network};
@@ -56,7 +55,7 @@ impl<N: Network> RpcProvider<N> {
         start: B256,
         limit: u64,
         incomplete: bool,
-    ) -> TransportResult<AccountRangeQueryResponse> {
+    ) -> TransportResult<query::AccountRangeQueryResponse> {
         self.http_client
             .client()
             .request(
@@ -73,7 +72,7 @@ impl<N: Network> RpcProvider<N> {
         address: Address,
         key_start: B256,
         limit: u64,
-    ) -> TransportResult<StorageRangeQueryResponse> {
+    ) -> TransportResult<query::StorageRangeQueryResponse> {
         self.http_client
             .client()
             .request(
@@ -81,6 +80,93 @@ impl<N: Network> RpcProvider<N> {
                 (block_hash, tx_index, address, key_start, limit),
             )
             .await
+    }
+
+    #[cfg(not(feature = "erigon-range-queries"))]
+    fn get_next_storage_key(
+        &self,
+        block: B256,
+        address: Address,
+        key_start: B256,
+    ) -> anyhow::Result<U256> {
+        let out = self
+            .tokio_handle
+            .block_on(
+                self.storage_range_at(block, 0, address, key_start, 1)
+                    .into_future(),
+            )
+            .context("debug_storageRangeAt failed")?;
+
+        let (hash, entry) = out.storage.iter().next().context("no such storage slot")?;
+        // Perform simple sanity checks, as this RPC is known to be wonky.
+        ensure!(
+            *hash >= key_start && out.next_key.map_or(true, |next| next > *hash),
+            "invalid debug_storageRangeAt response"
+        );
+        let key = entry.key.context("preimage storage key is missing")?;
+
+        Ok(key.0.into())
+    }
+
+    #[cfg(feature = "erigon-range-queries")]
+    fn get_next_storage_key(
+        &self,
+        block: B256,
+        address: Address,
+        key_start: B256,
+    ) -> anyhow::Result<U256> {
+        let mut min_found: Option<(B256, B256)> = None; // (hash, key)
+
+        let mut paging_start = B256::ZERO;
+        const PAGE_SIZE: u64 = 125_000; // will result in responses < 25 MB
+        let mut page_count = 1;
+
+        log::info!(
+            "Querying all storage for address {} to find the next slot...(This might take a while)",
+            address,
+        );
+        loop {
+            let out = self
+                .tokio_handle
+                .block_on(
+                    self.storage_range_at(block, 0, address, paging_start, PAGE_SIZE)
+                        .into_future(),
+                )
+                .context("debug_storageRangeAt failed")?;
+
+            for (hash, entry) in out.storage {
+                let Some(alloy::serde::JsonStorageKey(key)) = entry.key else {
+                    anyhow::bail!("preimage storage key is missing");
+                };
+
+                if hash >= key_start {
+                    match min_found {
+                        None => min_found = Some((hash, key)),
+                        Some((min_hash, _)) => {
+                            if hash < min_hash {
+                                min_found = Some((hash, key));
+                            }
+                        }
+                    }
+                }
+            }
+
+            match out.next_key {
+                Some(next_key) => {
+                    let next_key_u256: U256 = next_key.into();
+                    debug!(
+                        "Finished querying storage range {} / {}",
+                        page_count,
+                        U256::MAX.div_ceil(next_key_u256 / U256::from(page_count))
+                    );
+                    paging_start = next_key;
+                    page_count += 1;
+                }
+                None => break,
+            }
+        }
+
+        Ok(min_found.context("no such storage key")?.1.into())
     }
 }
 
@@ -284,26 +370,10 @@ impl<N: Network> Provider<N> for RpcProvider<N> {
             .tokio_handle
             .block_on(self.http_client.get_block_by_number(block_no.into(), false))
             .context("eth_getBlockByNumber failed")?
-            .context("no such block")?;
+            .with_context(|| format!("block {} not found", block_no))?;
         let block_hash = block.header().hash();
 
-        let out = self
-            .tokio_handle
-            .block_on(
-                self.storage_range_at(block_hash, 0, query.address, query.start, 1)
-                    .into_future(),
-            )
-            .context("debug_storageRangeAt failed")?;
-
-        let (hash, entry) = out.storage.iter().next().context("no such storage slot")?;
-        // Perform simple sanity checks, as this RPC is known to be wonky.
-        ensure!(
-            *hash >= query.start && out.next_key.map_or(true, |next| next > *hash),
-            "invalid debug_storageRangeAt response"
-        );
-        let key = entry.key.context("preimage storage key is missing")?;
-
-        Ok(key.0.into())
+        self.get_next_storage_key(block_hash, query.address, query.start)
     }
 }
 

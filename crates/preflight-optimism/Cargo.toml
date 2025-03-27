@@ -30,3 +30,6 @@ reth-revm = { workspace = true, features = ["optimism"] }
 reth-storage-errors.workspace = true
 
 serde_json.workspace = true
+
+[features]
+erigon-range-queries = ["zeth-preflight/erigon-range-queries"]

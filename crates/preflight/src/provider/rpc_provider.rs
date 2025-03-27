@@ -121,7 +121,7 @@ impl<N: Network> RpcProvider<N> {
         const PAGE_SIZE: u64 = 125_000; // will result in responses < 25 MB
         let mut page_count = 1;
 
-        log::info!(
+        log::warn!(
             "Querying all storage for address {} to find the next slot...(This might take a while)",
             address,
         );

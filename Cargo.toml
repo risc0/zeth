@@ -31,7 +31,6 @@ features = ["unstable"]
 
 [workspace.dependencies.risc0-ethereum-trie]
 git = "https://github.com/risc0/risc0-ethereum"
-branch = "wollac/fix/digest-only-orphans"
 features = ["orphan", "rkyv", "rlp_serialize", "serde"]
 
 # External

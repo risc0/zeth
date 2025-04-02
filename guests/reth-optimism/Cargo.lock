@@ -3970,7 +3970,7 @@ dependencies = [
 [[package]]
 name = "risc0-ethereum-trie"
 version = "0.1.0"
-source = "git+https://github.com/risc0/risc0-ethereum?branch=wollac%2Ffix%2Fdigest-only-orphans#92abe33163130e67a4b0d988a92036da54e10e21"
+source = "git+https://github.com/risc0/risc0-ethereum#742df0a3cce4cf06b53c5fa91aca4e5ed8311de6"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",

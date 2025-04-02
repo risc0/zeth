@@ -16,3 +16,6 @@ workspace = true
 alloy.workspace = true
 reth-chainspec.workspace = true
 reth-primitives.workspace = true
+
+[features]
+erigon-range-queries = ["zeth-preflight/erigon-range-queries"]

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::provider::query::{AccountRangeQuery, PreimageQuery, StorageRangeQuery};
+use crate::provider::query::{NextAccountQuery, NextSlotQuery, PreimageQuery};
 use alloy::network::Network;
 use alloy::primitives::map::HashMap;
 use alloy::primitives::{Address, Bytes, B256, U256};
@@ -96,8 +96,8 @@ pub trait Provider<N: Network>: Send {
     fn get_code(&mut self, query: &AccountQuery) -> anyhow::Result<Bytes>;
     fn get_storage(&mut self, query: &StorageQuery) -> anyhow::Result<U256>;
     fn get_preimage(&mut self, query: &PreimageQuery) -> anyhow::Result<Bytes>;
-    fn get_next_account(&mut self, query: &AccountRangeQuery) -> anyhow::Result<Address>;
-    fn get_next_slot(&mut self, query: &StorageRangeQuery) -> anyhow::Result<U256>;
+    fn get_next_account(&mut self, query: &NextAccountQuery) -> anyhow::Result<Address>;
+    fn get_next_slot(&mut self, query: &NextSlotQuery) -> anyhow::Result<U256>;
 }
 
 pub trait MutProvider<N: Network>: Provider<N> {
@@ -112,8 +112,8 @@ pub trait MutProvider<N: Network>: Provider<N> {
     fn insert_code(&mut self, query: AccountQuery, val: Bytes);
     fn insert_storage(&mut self, query: StorageQuery, val: U256);
     fn insert_preimage(&mut self, query: PreimageQuery, val: Bytes);
-    fn insert_next_account(&mut self, query: AccountRangeQuery, val: Address);
-    fn insert_next_slot(&mut self, query: StorageRangeQuery, val: U256);
+    fn insert_next_account(&mut self, query: NextAccountQuery, val: Address);
+    fn insert_next_slot(&mut self, query: NextSlotQuery, val: U256);
 }
 
 pub fn get_proofs<N: Network>(

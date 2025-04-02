@@ -24,7 +24,6 @@ alloy.workspace = true
 anyhow.workspace = true
 bincode.workspace = true
 bytemuck.workspace = true
-bytemuck_derive.workspace = true
 clap.workspace = true
 env_logger.workspace = true
 log.workspace = true

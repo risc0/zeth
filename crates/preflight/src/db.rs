@@ -15,17 +15,18 @@
 use crate::driver::PreflightDriver;
 use crate::provider::db::ProviderDB;
 use crate::provider::get_proofs;
-use crate::provider::query::{AccountRangeQuery, BlockQuery, ProofQuery, StorageRangeQuery};
+use crate::provider::query::{BlockQuery, NextAccountQuery, NextSlotQuery, ProofQuery};
 use alloy::network::Network;
 use alloy::primitives::map::HashMap;
-use alloy::primitives::{Address, B256, U256};
+use alloy::primitives::{keccak256, Address, B256, U256};
 use alloy::rpc::types::EIP1186AccountProofResponse;
-use anyhow::Context;
-use log::{debug, error};
+use anyhow::{ensure, Context};
+use log::error;
 use reth_primitives::revm_primitives::{Account, AccountInfo, Bytecode};
 use reth_revm::db::states::StateChangeset;
 use reth_revm::db::CacheDB;
 use reth_revm::{Database, DatabaseCommit, DatabaseRef};
+use risc0_ethereum_trie::Nibbles;
 use std::cell::{Ref, RefCell};
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
@@ -252,25 +253,30 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
         Ok(headers)
     }
 
-    /// Fetches the EIP-1186 proof for the next account after a given key.
+    /// Retrieves an EIP-1186 account proof for an account whose hashed address starts with the
+    /// specified prefix.
     ///
-    /// This method retrieves an [EIP1186AccountProofResponse] for the account whose address, when
-    /// hashed, lexicographically follows the provided `start` key. The proof is generated for the
-    /// block `block_count` after the currently configured block in the provider.
-    pub fn get_next_account_proof(
+    /// The method finds the first account whose address when hashed with keccak256 starts with the
+    /// given prefix. Then, it retrieves and returns an [EIP1186AccountProofResponse] of that
+    /// account.
+    pub fn get_account_proof_with_prefix(
         &mut self,
-        block_count: u64,
-        start: B256,
+        prefix: Nibbles,
     ) -> anyhow::Result<EIP1186AccountProofResponse> {
         let initial_db = self.inner.db.db.borrow_mut();
         let provider_db = initial_db.db.borrow_db();
         let mut provider = provider_db.provider.borrow_mut();
-        let block_no = initial_db.db.borrow_db().block_no + block_count - 1;
+        let block_no = initial_db.db.borrow_db().block_no;
+        // convert the prefix nibbles into a B256 key with zero padding
+        let start = B256::right_padding_from(&prefix.pack());
 
-        debug!("getting next account: start={}", start);
         let address = provider
-            .get_next_account(&AccountRangeQuery::new(block_no, start))
-            .context("debug_accountRange call failed")?;
+            .get_next_account(&NextAccountQuery { block_no, start })
+            .context("getting next account failed")?;
+        ensure!(
+            Nibbles::unpack(keccak256(address)).starts_with(&prefix),
+            "invalid provider response: address doesn't match prefix"
+        );
 
         provider
             .get_proof(&ProofQuery {
@@ -281,33 +287,40 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
             .context("eth_getProof call failed")
     }
 
-    /// Fetches EIP-1186 proofs for the next storage slots of a given account.
+    /// Retrieves an EIP-1186 account proof for storage slots whose key hashes match the given
+    /// prefixes.
     ///
-    /// This method retrieves an [EIP1186AccountProofResponse] for multiple storage slots of a given
-    /// account. For each `B256` key provided in the `starts` iterator, the method finds the next
-    /// storage slot whose hashed index lexicographically follows the given key. The proofs are
-    /// generated for the block `block_count` after the currently configured block in the provider.
-    pub fn get_next_slot_proofs(
+    /// For each prefix provided, the method finds the first storage slot whose key, when hashed
+    /// with keccak256, starts with the prefix. Then, it retrieves and returns an
+    /// [EIP1186AccountProofResponse] of all those storage slots in the given account.
+    pub fn get_storage_proofs_with_prefix(
         &mut self,
-        block_count: u64,
         address: Address,
-        starts: impl IntoIterator<Item = B256>,
+        prefixes: impl IntoIterator<Item = Nibbles>,
     ) -> anyhow::Result<EIP1186AccountProofResponse> {
         let initial_db = self.inner.db.db.borrow_mut();
         let provider_db = initial_db.db.borrow_db();
         let mut provider = provider_db.provider.borrow_mut();
-        let block_no = initial_db.db.borrow_db().block_no + block_count - 1;
+        let block_no = initial_db.db.borrow_db().block_no;
 
         let mut indices = BTreeSet::new();
-        for start in starts {
-            debug!(
-                "getting next storage key: address={},start={}",
-                address, start
+        for prefix in prefixes {
+            // convert the prefix nibbles into a B256 key with zero padding
+            let start = B256::right_padding_from(&prefix.pack());
+            let key: B256 = provider
+                .get_next_slot(&NextSlotQuery {
+                    block_no,
+                    address,
+                    start,
+                })
+                .context("getting next storage key failed")?
+                .into();
+            ensure!(
+                Nibbles::unpack(keccak256(key)).starts_with(&prefix),
+                "invalid provider response: storage key doesn't match prefix"
             );
-            let slot = provider
-                .get_next_slot(&StorageRangeQuery::new(block_no, address, start))
-                .context("debug_storageRangeAt call failed")?;
-            indices.insert(B256::from(slot));
+
+            indices.insert(B256::from(key));
         }
 
         provider

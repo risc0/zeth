@@ -11,17 +11,11 @@ use alloy_trie::proof::ProofRetainer;
 use anyhow::anyhow;
 use nybbles::Nibbles;
 use reth_chainspec::NamedChain;
-use std::{
-    collections::{
-        BTreeMap,
-        Bound::{Excluded, Unbounded},
-    },
-    iter, vec,
-};
+use std::{collections::BTreeMap, iter, vec};
 use zeth_preflight::provider::{
     query::{
-        AccountQuery, AccountRangeQuery, BlockQuery, PreimageQuery, ProofQuery, StorageQuery,
-        StorageRangeQuery, UncleQuery,
+        AccountQuery, BlockQuery, NextAccountQuery, NextSlotQuery, PreimageQuery, ProofQuery,
+        StorageQuery, UncleQuery,
     },
     Provider,
 };
@@ -158,14 +152,14 @@ impl Provider<Ethereum> for TestProvider {
         unimplemented!("get_preimage")
     }
 
-    fn get_next_account(&mut self, query: &AccountRangeQuery) -> anyhow::Result<Address> {
+    fn get_next_account(&mut self, query: &NextAccountQuery) -> anyhow::Result<Address> {
         assert_eq!(query.block_no, 0);
         self.pre
             .get_next_account(query.start)
             .ok_or(anyhow!("no next account"))
     }
 
-    fn get_next_slot(&mut self, query: &StorageRangeQuery) -> anyhow::Result<U256> {
+    fn get_next_slot(&mut self, query: &NextSlotQuery) -> anyhow::Result<U256> {
         assert_eq!(query.block_no, 0);
         let next = self
             .pre
@@ -232,7 +226,7 @@ impl ProviderState {
     }
 
     fn get_next_account(&self, start: B256) -> Option<Address> {
-        let next = self.0.range((Excluded(start), Unbounded)).next();
+        let next = self.0.range(start..).next();
         next.map(|(_, v)| v.address)
     }
 
@@ -240,7 +234,7 @@ impl ProviderState {
         let Some(account) = self.0.get(&keccak256(address)) else {
             return None;
         };
-        let next = account.storage.range((Excluded(start), Unbounded)).next();
+        let next = account.storage.range(start..).next();
         next.map(|(_, v)| v.0)
     }
 }

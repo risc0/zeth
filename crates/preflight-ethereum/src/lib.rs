@@ -123,6 +123,8 @@ impl PreflightDriver<RethCoreDriver, Ethereum> for RethPreflightDriver {
             success: receipt.status(),
             cumulative_gas_used: receipt.cumulative_gas_used() as u64,
             logs,
+            deposit_nonce: None,
+            deposit_receipt_version: None,
         }
     }
 

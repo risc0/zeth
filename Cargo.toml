@@ -22,11 +22,11 @@ version = "1.4.0"
 features = ["non_blocking"]
 
 [workspace.dependencies.risc0-build]
-version = "2.0.1"
+version = "2.1"
 features = ["unstable"]
 
 [workspace.dependencies.risc0-zkvm]
-version = "2.0.0"
+version = "2.0"
 features = ["unstable"]
 
 [workspace.dependencies.risc0-ethereum-trie]
@@ -85,14 +85,11 @@ zeth-preflight = { path = "crates/preflight" }
 zeth-preflight-ethereum = { path = "crates/preflight-ethereum" }
 zeth-preflight-optimism = { path = "crates/preflight-optimism" }
 
-
 # Others
 anyhow = "1.0.89"
 async-trait = "0.1.83"
 bincode = "1.3.3"
 bytemuck = "1.19.0"
-# Enforce bytemuck_derive version manually until rust 1.85 is supported.
-bytemuck_derive = ">=1.8.1, <1.9.0"
 clap = { version = "4.0", features = ["derive"] }
 env_logger = "0.11.5"
 hashbrown = { version = "0.15.2", features = ["rayon"] }
@@ -102,7 +99,7 @@ log = "0.4.22"
 flate2 = "1.0.34"
 once_cell = "1.20.2"
 pot = "3.0.1"
-rkyv = {  version = "0.8.9", features = ["hashbrown-0_15"] }
+rkyv = { version = "0.8.9", features = ["hashbrown-0_15"] }
 serde = { version = "1.0.210", features = ["derive"] }
 serde_json = { version = "1.0.128", features = ["alloc"] }
 serde_with = "3.11.0"

@@ -18,15 +18,15 @@ opt-level = 3
 
 # RISC Zero
 [workspace.dependencies.bonsai-sdk]
-version = "1.4.0"
+version = "1.4.1-rc.1"
 features = ["non_blocking"]
 
 [workspace.dependencies.risc0-build]
-version = "2.1"
+version = "3.0.1-rc.1"
 features = ["unstable"]
 
 [workspace.dependencies.risc0-zkvm]
-version = "2.0"
+version = "3.0.0-rc.1"
 features = ["unstable"]
 
 [workspace.dependencies.risc0-ethereum-trie]
@@ -40,7 +40,10 @@ alloy = { version = "0.4.2", features = ["full"] }
 alloy-chains = "0.1.38"
 alloy-consensus = "0.4.2"
 alloy-genesis = "0.4.2"
-alloy-primitives = { version = "0.8.18", default-features = false, features = ["k256", "map-hashbrown"] }
+alloy-primitives = { version = "0.8.18", default-features = false, features = [
+    "k256",
+    "map-hashbrown",
+] }
 alloy-rlp = "0.3.8"
 op-alloy-consensus = "0.4.0"
 op-alloy-network = "0.4.0"

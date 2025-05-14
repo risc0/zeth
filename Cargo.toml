@@ -36,7 +36,7 @@ features = ["orphan", "rkyv", "rlp_serialize", "serde"]
 # External
 [workspace.dependencies]
 # Alloy
-alloy = { version = "0.4.2", features = ["full"] }
+alloy = { version = "0.4.2", features = ["full", "serde"] }
 alloy-chains = "0.1.38"
 alloy-consensus = "0.4.2"
 alloy-genesis = "0.4.2"

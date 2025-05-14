@@ -1,7 +1,6 @@
-use alloy_primitives::map::B256Set;
 use alloy_primitives::B256;
 use alloy_rlp::{Decodable, Encodable};
-use risc0_ethereum_trie::{orphan, CachedTrie};
+use risc0_ethereum_trie::{orphan, CachedTrie, Nibbles};
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::marker::PhantomData;
@@ -49,29 +48,18 @@ impl<T: Decodable + Encodable> MptNode<T> {
     }
 
     /// Tries to resolve the potential removal orphan corresponding to `key` from the given
-    /// post-removal proof. If the orphan cannot be resolved from the proof alone, the `key`
-    /// corresponding to the unresolved path is added to `unresolvable`.
-    pub fn resolve_orphan<K, N>(
+    /// post-removal proof. If the orphan cannot be resolved from the proof alone, the
+    /// prefix of the missing MPT key is returned.
+    pub fn resolve_orphan<K: AsRef<[u8]>, N: AsRef<[u8]>>(
         &mut self,
         key: K,
         post_state_proof: impl IntoIterator<Item = N>,
-        unresolvable: &mut B256Set,
-    ) -> anyhow::Result<()>
-    where
-        K: AsRef<[u8]>,
-        N: AsRef<[u8]>,
-    {
-        match self.inner.resolve_orphan(key, post_state_proof) {
-            Ok(_) => {}
-            Err(orphan::Error::Unresolvable(prefix)) => {
-                // convert the unresolvable prefix nibbles into a B256 key with zero padding
-                let key = B256::right_padding_from(&prefix.pack());
-                unresolvable.insert(key);
-            }
-            Err(err) => return Err(err.into()),
-        };
-
-        Ok(())
+    ) -> anyhow::Result<Option<Nibbles>> {
+        match self.inner.resolve_orphan(&key, post_state_proof) {
+            Ok(_) => Ok(None),
+            Err(orphan::Error::Unresolvable(prefix)) => Ok(Some(prefix)),
+            Err(err) => Err(err.into()),
+        }
     }
 
     #[inline]

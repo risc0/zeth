@@ -17,13 +17,15 @@ use crate::driver::PreflightDriver;
 use crate::provider::db::ProviderDB;
 use crate::provider::query::{BlockQuery, UncleQuery};
 use crate::provider::{new_provider, Provider};
+use alloy::hex;
 use alloy::network::Network;
-use alloy::primitives::map::{AddressHashMap, B256Set, HashSet};
+use alloy::primitives::map::{AddressHashMap, HashSet};
 use alloy::primitives::{keccak256, Bytes, U256};
 use alloy::rpc::types::EIP1186StorageProof;
 use anyhow::Context;
 use itertools::Itertools;
 use log::{debug, info, warn};
+use risc0_ethereum_trie::Nibbles;
 use std::cell::RefCell;
 use std::iter::zip;
 use std::path::PathBuf;
@@ -258,8 +260,10 @@ where
 
             info!("Extending tries from post-state proofs...");
 
-            let mut unresolvable_state_keys = B256Set::default();
+            let mut resolved_state_keys = 0usize;
+            let mut resolved_storage_keys = 0usize;
 
+            let mut unresolved_state_keys: HashSet<Nibbles> = HashSet::default();
             for (address, account_proof) in latest_proofs {
                 let db_key = keccak256(address);
 
@@ -272,15 +276,18 @@ where
                 }
 
                 // otherwise, prepare trie for the removal of that key
-                state_trie
-                    .resolve_orphan(
-                        db_key,
-                        account_proof.account_proof,
-                        &mut unresolvable_state_keys,
-                    )
-                    .with_context(|| format!("failed to resolve orphan for {}", address))?;
+                if let Some(unresolved_prefix) = state_trie
+                    .resolve_orphan(db_key, account_proof.account_proof)
+                    .with_context(|| format!("failed to resolve orphan for {}", address))?
+                {
+                    debug!(
+                        "unresolved key in state trie: {}",
+                        hex::encode(unresolved_prefix.pack())
+                    );
+                    unresolved_state_keys.insert(unresolved_prefix);
+                }
 
-                let mut unresolvable_storage_keys = B256Set::default();
+                let mut unresolved_storage_keys: HashSet<Nibbles> = HashSet::default();
 
                 let storage_trie = &mut storage_tries.get_mut(&address).unwrap().storage_trie;
                 for EIP1186StorageProof { key, proof, .. } in account_proof.storage_proof {
@@ -290,35 +297,52 @@ where
                         storage_trie.hydrate_from_rlp(proof)?;
                     } else {
                         // otherwise, prepare trie for the removal of that key
-                        storage_trie
-                            .resolve_orphan(db_key, proof, &mut unresolvable_storage_keys)
+                        if let Some(unresolved_prefix) = storage_trie
+                            .resolve_orphan(db_key, proof)
                             .with_context(|| {
                                 format!("failed to resolve orphan for {}@{}", key.0, address)
-                            })?;
+                            })?
+                        {
+                            debug!(
+                                "unresolved key in storage trie for {}: {}",
+                                address,
+                                hex::encode(unresolved_prefix.pack())
+                            );
+                            unresolved_storage_keys.insert(unresolved_prefix);
+                        }
                     }
                 }
 
                 // if orphans could not be resolved, use a range query to get that missing info
-                if !unresolvable_storage_keys.is_empty() {
+                if !unresolved_storage_keys.is_empty() {
+                    resolved_storage_keys += unresolved_storage_keys.len();
                     let proof = preflight_db
-                        .get_next_slot_proofs(block_count, address, unresolvable_storage_keys)
-                        .with_context(|| format!("failed to get next slot for {}", address))?;
+                        .get_storage_proofs_with_prefix(address, unresolved_storage_keys)
+                        .with_context(|| {
+                            format!("failed to get proof for unresolved slots for {}", address)
+                        })?;
                     storage_trie
                         .hydrate_from_rlp(proof.storage_proof.iter().flat_map(|p| &p.proof))
                         .with_context(|| format!("invalid storage proof for {}", address))?;
                 }
             }
 
-            for state_key in unresolvable_state_keys {
+            resolved_state_keys += unresolved_state_keys.len();
+            for prefix in unresolved_state_keys {
                 let proof = preflight_db
-                    .get_next_account_proof(block_count, state_key)
-                    .context("failed to get next account")?;
+                    .get_account_proof_with_prefix(prefix)
+                    .context("failed to get proof for unresolved account")?;
                 state_trie
                     .hydrate_from_rlp(proof.account_proof)
                     .with_context(|| format!("invalid account proof for {}", proof.address))?;
             }
 
-            info!("Saving provider cache ...");
+            info!(
+                "Resolved {} addresses and {} storage keys",
+                resolved_state_keys, resolved_storage_keys
+            );
+
+            info!("Saving provider cache...");
             preflight_db.save_provider()?;
 
             // Increment block number counter

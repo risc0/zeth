@@ -12,16 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::provider::query::{AccountRangeQueryResponse, StorageRangeQueryResponse};
 use crate::provider::*;
+use alloy::eips::BlockId;
 use alloy::network::{BlockResponse, HeaderResponse, Network};
 use alloy::providers::{Provider as AlloyProvider, ProviderBuilder, RootProvider};
 use alloy::rpc::client::RpcClient;
 use alloy::transports::{
     http::{Client, Http},
     layers::{RetryBackoffLayer, RetryBackoffService},
+    TransportResult,
 };
-use anyhow::anyhow;
+use anyhow::{anyhow, ensure, Context};
 use log::{debug, error};
 use std::future::IntoFuture;
 
@@ -46,6 +47,126 @@ impl<N: Network> RpcProvider<N> {
             http_client,
             tokio_handle,
         })
+    }
+
+    async fn account_range(
+        &self,
+        block: impl Into<BlockId>,
+        start: B256,
+        limit: u64,
+        incomplete: bool,
+    ) -> TransportResult<query::AccountRangeQueryResponse> {
+        self.http_client
+            .client()
+            .request(
+                "debug_accountRange",
+                (block.into(), start, limit, true, true, incomplete),
+            )
+            .await
+    }
+
+    async fn storage_range_at(
+        &self,
+        block_hash: B256,
+        tx_index: u64,
+        address: Address,
+        key_start: B256,
+        limit: u64,
+    ) -> TransportResult<query::StorageRangeQueryResponse> {
+        self.http_client
+            .client()
+            .request(
+                "debug_storageRangeAt",
+                (block_hash, tx_index, address, key_start, limit),
+            )
+            .await
+    }
+
+    #[cfg(not(feature = "erigon-range-queries"))]
+    fn get_next_storage_key(
+        &self,
+        block: B256,
+        address: Address,
+        key_start: B256,
+    ) -> anyhow::Result<U256> {
+        let out = self
+            .tokio_handle
+            .block_on(
+                self.storage_range_at(block, 0, address, key_start, 1)
+                    .into_future(),
+            )
+            .context("debug_storageRangeAt failed")?;
+
+        let (hash, entry) = out.storage.iter().next().context("no such storage slot")?;
+        // Perform simple sanity checks, as this RPC is known to be wonky.
+        ensure!(
+            *hash >= key_start && out.next_key.map_or(true, |next| next > *hash),
+            "invalid debug_storageRangeAt response"
+        );
+        let key = entry.key.context("preimage storage key is missing")?;
+
+        Ok(key.0.into())
+    }
+
+    #[cfg(feature = "erigon-range-queries")]
+    fn get_next_storage_key(
+        &self,
+        block: B256,
+        address: Address,
+        key_start: B256,
+    ) -> anyhow::Result<U256> {
+        let mut min_found: Option<(B256, B256)> = None; // (hash, key)
+
+        let mut paging_start = B256::ZERO;
+        const PAGE_SIZE: u64 = 125_000; // will result in responses < 25 MB
+        let mut page_count = 1;
+
+        log::warn!(
+            "Querying all storage for address {} to find the next slot...(This might take a while)",
+            address,
+        );
+        loop {
+            let out = self
+                .tokio_handle
+                .block_on(
+                    self.storage_range_at(block, 0, address, paging_start, PAGE_SIZE)
+                        .into_future(),
+                )
+                .context("debug_storageRangeAt failed")?;
+
+            for (hash, entry) in out.storage {
+                let Some(alloy::serde::JsonStorageKey(key)) = entry.key else {
+                    anyhow::bail!("preimage storage key is missing");
+                };
+
+                if hash >= key_start {
+                    match min_found {
+                        None => min_found = Some((hash, key)),
+                        Some((min_hash, _)) => {
+                            if hash < min_hash {
+                                min_found = Some((hash, key));
+                            }
+                        }
+                    }
+                }
+            }
+
+            match out.next_key {
+                Some(next_key) => {
+                    let next_key_u256: U256 = next_key.into();
+                    debug!(
+                        "Finished querying storage range {} / {}",
+                        page_count,
+                        U256::MAX.div_ceil(next_key_u256 / U256::from(page_count))
+                    );
+                    paging_start = next_key;
+                    page_count += 1;
+                }
+                None => break,
+            }
+        }
+
+        Ok(min_found.context("no such storage key")?.1.into())
     }
 }
 
@@ -216,62 +337,89 @@ impl<N: Network> Provider<N> for RpcProvider<N> {
         }
     }
 
-    fn get_next_account(&mut self, query: &AccountRangeQuery) -> anyhow::Result<Address> {
-        let out: AccountRangeQueryResponse = match self.tokio_handle.block_on(
-            self.http_client
-                .client()
-                .request(
-                    "debug_accountRange",
-                    (
-                        format!("{:066x}", query.block_no),
-                        format!("{}", query.start),
-                        query.max_results,
-                        query.no_code,
-                        query.no_storage,
-                        query.incompletes,
-                    ),
-                )
-                .into_future(),
-        ) {
-            Ok(out) => out,
-            Err(e) => {
-                error!("debug_accountRange: {e}");
-                anyhow::bail!(e)
-            }
-        };
+    fn get_next_account(&mut self, query: &NextAccountQuery) -> anyhow::Result<Address> {
+        debug!("Querying RPC for next account: {:?}", query);
 
-        Ok(*out.accounts.keys().next().unwrap())
+        let out = self
+            .tokio_handle
+            .block_on(
+                self.account_range(query.block_no, query.start, 1, true)
+                    .into_future(),
+            )
+            .context("debug_accountRange failed")?;
+        let entry = out.accounts.values().next().context("no such account")?;
+        // Perform simple sanity checks, as this RPC is known to be wonky.
+        ensure!(
+            entry.key >= query.start,
+            "invalid debug_accountRange response"
+        );
+
+        entry.address.context("preimage address is missing")
     }
 
-    fn get_next_slot(&mut self, query: &StorageRangeQuery) -> anyhow::Result<U256> {
-        let block = self.get_full_block(&BlockQuery {
-            block_no: query.block_no,
-        })?;
-        let hash = block.header().hash();
+    fn get_next_slot(&mut self, query: &NextSlotQuery) -> anyhow::Result<U256> {
+        debug!("Querying RPC for next storage key: {:?}", query);
 
-        let out: StorageRangeQueryResponse = match self.tokio_handle.block_on(
-            self.http_client
-                .client()
-                .request(
-                    "debug_storageRangeAt",
-                    (
-                        // format!("{:#066x}", query.block_no),
-                        format!("{hash}"),
-                        query.tx_index,
-                        query.address,
-                        format!("{}", query.start),
-                        query.max_results,
-                    ),
-                )
-                .into_future(),
-        ) {
-            Ok(out) => out,
-            Err(e) => {
-                error!("debug_storageRangeAt: {e}");
-                anyhow::bail!(e)
-            }
-        };
+        // debug_storageRangeAt returns the storage at the given block height and transaction index.
+        // For this to be consistent with eth_getProof, we need to query the state after all
+        // transactions have been processed, i.e. at transaction index 0 of the next block.
+        let block_no = query.block_no + 1;
 
-        Ok(out.storage.values().next().unwrap().key)
+        // debug_storageRangeAt only accepts the block hash, not the number, so we need to query it.
+        let block = self
+            .tokio_handle
+            .block_on(self.http_client.get_block_by_number(block_no.into(), false))
+            .context("eth_getBlockByNumber failed")?
+            .with_context(|| format!("block {} not found", block_no))?;
+        let block_hash = block.header().hash();
+
+        self.get_next_storage_key(block_hash, query.address, query.start)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloy::network::Ethereum;
+    use alloy::primitives::address;
+    use tokio::task::spawn_blocking;
+
+    #[tokio::test]
+    #[ignore = "Requires RPC node and credentials"]
+    async fn get_next_slot() -> anyhow::Result<()> {
+        let rpc_url = std::env::var("ETH_RPC_URL").expect("ETH_RPC_URL not set");
+
+        let mut provider = RpcProvider::<Ethereum>::new(rpc_url)?;
+
+        let latest = provider.http_client.get_block_number().await?;
+        spawn_blocking(move || {
+            provider.get_next_slot(&NextSlotQuery {
+                block_no: latest - 1,
+                address: address!("0xdAC17F958D2ee523a2206206994597C13D831ec7"),
+                start: B256::ZERO,
+            })
+        })
+        .await??;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[ignore = "Requires RPC node and credentials"]
+    async fn get_next_account() -> anyhow::Result<()> {
+        let rpc_url = std::env::var("ETH_RPC_URL").expect("ETH_RPC_URL not set");
+
+        let mut provider = RpcProvider::<Ethereum>::new(rpc_url)?;
+
+        let latest = provider.http_client.get_block_number().await?;
+        spawn_blocking(move || {
+            provider.get_next_account(&NextAccountQuery {
+                block_no: latest,
+                start: B256::ZERO,
+            })
+        })
+        .await??;
+
+        Ok(())
     }
 }

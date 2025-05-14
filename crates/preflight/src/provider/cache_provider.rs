@@ -189,7 +189,7 @@ impl<N: Network> Provider<N> for CachedRpcProvider<N> {
         Ok(out)
     }
 
-    fn get_next_account(&mut self, query: &AccountRangeQuery) -> anyhow::Result<Address> {
+    fn get_next_account(&mut self, query: &NextAccountQuery) -> anyhow::Result<Address> {
         let cache_out = self.cache.get_next_account(query);
         if cache_out.is_ok() {
             return cache_out;
@@ -201,7 +201,7 @@ impl<N: Network> Provider<N> for CachedRpcProvider<N> {
         Ok(out)
     }
 
-    fn get_next_slot(&mut self, query: &StorageRangeQuery) -> anyhow::Result<U256> {
+    fn get_next_slot(&mut self, query: &NextSlotQuery) -> anyhow::Result<U256> {
         let cache_out = self.cache.get_next_slot(query);
         if cache_out.is_ok() {
             return cache_out;

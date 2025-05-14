@@ -14,8 +14,8 @@
 
 use super::{ordered_map, MutProvider, Provider};
 use crate::provider::query::{
-    AccountQuery, AccountRangeQuery, BlockQuery, PreimageQuery, ProofQuery, StorageQuery,
-    StorageRangeQuery, UncleQuery,
+    AccountQuery, BlockQuery, NextAccountQuery, NextSlotQuery, PreimageQuery, ProofQuery,
+    StorageQuery, UncleQuery,
 };
 use alloy::network::Network;
 use alloy::primitives::{Address, Bytes, U256};
@@ -64,9 +64,9 @@ pub struct FileProvider<N: Network> {
     #[serde(with = "ordered_map", default)]
     preimages: HashMap<PreimageQuery, Bytes>,
     #[serde(with = "ordered_map", default)]
-    next_accounts: HashMap<AccountRangeQuery, Address>,
+    next_accounts: HashMap<NextAccountQuery, Address>,
     #[serde(with = "ordered_map", default)]
-    next_slots: HashMap<StorageRangeQuery, U256>,
+    next_slots: HashMap<NextSlotQuery, U256>,
 }
 
 impl<N: Network> FileProvider<N> {
@@ -244,14 +244,14 @@ impl<N: Network> Provider<N> for FileProvider<N> {
         }
     }
 
-    fn get_next_account(&mut self, query: &AccountRangeQuery) -> anyhow::Result<Address> {
+    fn get_next_account(&mut self, query: &NextAccountQuery) -> anyhow::Result<Address> {
         match self.next_accounts.get(query) {
             Some(val) => Ok(*val),
             None => Err(anyhow!("No data for {:?}", query)),
         }
     }
 
-    fn get_next_slot(&mut self, query: &StorageRangeQuery) -> anyhow::Result<U256> {
+    fn get_next_slot(&mut self, query: &NextSlotQuery) -> anyhow::Result<U256> {
         match self.next_slots.get(query) {
             Some(val) => Ok(*val),
             None => Err(anyhow!("No data for {:?}", query)),
@@ -314,12 +314,12 @@ impl<N: Network> MutProvider<N> for FileProvider<N> {
         self.dirty = true
     }
 
-    fn insert_next_account(&mut self, query: AccountRangeQuery, val: Address) {
+    fn insert_next_account(&mut self, query: NextAccountQuery, val: Address) {
         self.next_accounts.insert(query, val);
         self.dirty = true;
     }
 
-    fn insert_next_slot(&mut self, query: StorageRangeQuery, val: U256) {
+    fn insert_next_slot(&mut self, query: NextSlotQuery, val: U256) {
         self.next_slots.insert(query, val);
         self.dirty = true;
     }

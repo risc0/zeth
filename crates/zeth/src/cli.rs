@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use clap::{Args, Command, Parser, ValueEnum};
+use clap::{Args, Parser, ValueEnum};
 use reth_chainspec::NamedChain;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;

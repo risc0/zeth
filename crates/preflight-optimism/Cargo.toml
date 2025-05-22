@@ -19,14 +19,14 @@ op-alloy-network.workspace = true
 op-alloy-rpc-types.workspace = true
 
 
-reth-chainspec = { workspace = true, features = ["optimism"] }
+reth-chainspec = { workspace = true }
 reth-consensus.workspace = true
 reth-evm.workspace = true
 reth-optimism-chainspec.workspace = true
-reth-optimism-evm = { workspace = true, features = ["optimism"] }
-reth-optimism-consensus = { workspace = true, features = ["optimism"] }
-reth-primitives = { workspace = true, features = ["optimism"] }
-reth-revm = { workspace = true, features = ["optimism"] }
+reth-optimism-evm = { workspace = true }
+reth-optimism-consensus = { workspace = true }
+reth-primitives = { workspace = true }
+reth-revm = { workspace = true }
 reth-storage-errors.workspace = true
 
 serde_json.workspace = true

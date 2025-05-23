@@ -52,6 +52,7 @@ op-alloy-rpc-types = "0.16.0"
 
 # Reth
 reth-chainspec = { git = "https://github.com/risc0/reth", branch = "p1.4.3" }
+reth-codecs = { git = "https://github.com/risc0/reth", branch = "p1.4.3", default-features = false }
 reth-consensus = { git = "https://github.com/risc0/reth", branch = "p1.4.3" }
 reth-ethereum-consensus = { git = "https://github.com/risc0/reth", branch = "p1.4.3" }
 reth-evm = { git = "https://github.com/risc0/reth", branch = "p1.4.3" }
@@ -60,6 +61,7 @@ reth-optimism-chainspec = { git = "https://github.com/risc0/reth", branch = "p1.
 reth-optimism-consensus = { git = "https://github.com/risc0/reth", branch = "p1.4.3" }
 reth-optimism-evm = { git = "https://github.com/risc0/reth", branch = "p1.4.3", default-features = false }
 reth-optimism-forks = { git = "https://github.com/risc0/reth", branch = "p1.4.3", default-features = false }
+reth-optimism-primitives = { git = "https://github.com/risc0/reth", branch = "p1.4.3", default-features = false }
 reth-primitives = { git = "https://github.com/risc0/reth", branch = "p1.4.3", default-features = false, features = [
     "std",
     "alloy-compat",

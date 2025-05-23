@@ -153,7 +153,7 @@ where
 
         // Return block
         *block = block_with_senders.into_block();
-
+        // Return bundle state
         Ok(executor.into_state().bundle_state)
     }
 }

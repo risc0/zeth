@@ -19,9 +19,10 @@ use crate::stateless::data::StorageEntry;
 use alloy_consensus::Account;
 use alloy_primitives::map::{AddressHashMap, B256HashMap, HashMap};
 use alloy_primitives::{keccak256, Address, B256, U256};
-use reth_primitives::revm_primitives::db::Database;
-use reth_primitives::revm_primitives::{AccountInfo, Bytecode};
+use reth_revm::bytecode::Bytecode;
+use reth_revm::db::Database;
 use reth_revm::DatabaseRef;
+use reth_revm::state::AccountInfo;
 use reth_storage_errors::provider::ProviderError;
 
 #[derive(Default)]

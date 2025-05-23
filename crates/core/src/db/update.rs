@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use alloy_primitives::{B256, U256};
-use reth_primitives::KECCAK_EMPTY;
 use reth_revm::db::states::{PlainStorageChangeset, StateChangeset};
 use reth_revm::db::BundleState;
+use reth_revm::primitives::KECCAK_EMPTY;
 
 pub trait Update {
     fn apply_changeset(&mut self, changeset: StateChangeset) -> anyhow::Result<()>;

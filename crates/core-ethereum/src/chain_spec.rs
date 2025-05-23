@@ -14,16 +14,8 @@
 
 use alloy_genesis::Genesis;
 use once_cell::sync::Lazy;
-use reth_chainspec::{
-    once_cell_set, BaseFeeParams, BaseFeeParamsKind, Chain, ChainSpec, DepositContract,
-    EthereumHardfork, DEV_HARDFORKS,
-};
-use reth_primitives::constants::ETHEREUM_BLOCK_GAS_LIMIT;
-use reth_primitives::revm_primitives::{address, b256, U256};
-use reth_primitives::{
-    DEV_GENESIS_HASH, HOLESKY_GENESIS_HASH, MAINNET_GENESIS_HASH, SEPOLIA_GENESIS_HASH,
-};
-use reth_revm::primitives::bytes;
+use reth_chainspec::{BaseFeeParams, BaseFeeParamsKind, Chain, ChainSpec, DepositContract, EthereumHardfork, DEV_HARDFORKS, MAINNET_PRUNE_DELETE_LIMIT};
+use reth_revm::primitives::{address, b256, bytes, U256};
 use std::sync::Arc;
 
 /// The Ethereum mainnet spec
@@ -41,7 +33,6 @@ pub static MAINNET: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
             genesis.config.dao_fork_support = true;
             genesis
         },
-        genesis_hash: once_cell_set(MAINNET_GENESIS_HASH),
         genesis_header: Default::default(),
         // <https://etherscan.io/block/15537394>
         paris_block_and_final_difficulty: Some((
@@ -56,8 +47,8 @@ pub static MAINNET: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
             b256!("649bbc62d0e31342afea4e5cd82d4049e7e1ee912fc0889aa790803be39038c5"),
         )),
         base_fee_params: BaseFeeParamsKind::Constant(BaseFeeParams::ethereum()),
-        max_gas_limit: ETHEREUM_BLOCK_GAS_LIMIT,
-        prune_delete_limit: 20000,
+        prune_delete_limit: MAINNET_PRUNE_DELETE_LIMIT,
+        blob_params: Default::default(),
     }
     .into()
 });
@@ -77,7 +68,6 @@ pub static SEPOLIA: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
             genesis.config.dao_fork_support = true;
             genesis
         },
-        genesis_hash: once_cell_set(SEPOLIA_GENESIS_HASH),
         genesis_header: Default::default(),
         // <https://sepolia.etherscan.io/block/1450409>
         paris_block_and_final_difficulty: Some((1450409, U256::from(17_000_018_015_853_232u128))),
@@ -89,8 +79,8 @@ pub static SEPOLIA: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
             b256!("649bbc62d0e31342afea4e5cd82d4049e7e1ee912fc0889aa790803be39038c5"),
         )),
         base_fee_params: BaseFeeParamsKind::Constant(BaseFeeParams::ethereum()),
-        max_gas_limit: ETHEREUM_BLOCK_GAS_LIMIT,
         prune_delete_limit: 10000,
+        blob_params: Default::default(),
     }
     .into()
 });
@@ -108,7 +98,6 @@ pub static HOLESKY: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
             genesis.config.dao_fork_support = true;
             genesis
         },
-        genesis_hash: once_cell_set(HOLESKY_GENESIS_HASH),
         genesis_header: Default::default(),
         paris_block_and_final_difficulty: Some((0, U256::from(1))),
         hardforks: EthereumHardfork::holesky().into(),
@@ -118,8 +107,8 @@ pub static HOLESKY: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
             b256!("649bbc62d0e31342afea4e5cd82d4049e7e1ee912fc0889aa790803be39038c5"),
         )),
         base_fee_params: BaseFeeParamsKind::Constant(BaseFeeParams::ethereum()),
-        max_gas_limit: ETHEREUM_BLOCK_GAS_LIMIT,
         prune_delete_limit: 10000,
+        blob_params: Default::default(),
     }
     .into()
 });
@@ -132,7 +121,6 @@ pub static DEV: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
     ChainSpec {
         chain: Chain::dev(),
         genesis: Genesis::default(),
-        genesis_hash: once_cell_set(DEV_GENESIS_HASH),
         paris_block_and_final_difficulty: Some((0, U256::from(0))),
         hardforks: DEV_HARDFORKS.clone(),
         base_fee_params: BaseFeeParamsKind::Constant(BaseFeeParams::ethereum()),

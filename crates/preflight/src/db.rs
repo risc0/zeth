@@ -22,7 +22,6 @@ use alloy::primitives::{Address, B256, U256};
 use alloy::rpc::types::EIP1186AccountProofResponse;
 use anyhow::Context;
 use log::{debug, error};
-use reth_primitives::revm_primitives::{Account, AccountInfo, Bytecode};
 use reth_revm::db::states::StateChangeset;
 use reth_revm::db::CacheDB;
 use reth_revm::{Database, DatabaseCommit, DatabaseRef};
@@ -30,6 +29,8 @@ use std::cell::{Ref, RefCell};
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
 use std::ops::DerefMut;
+use reth_revm::bytecode::Bytecode;
+use reth_revm::state::{Account, AccountInfo};
 use zeth_core::db::update::Update;
 use zeth_core::driver::CoreDriver;
 use zeth_core::rescue::{Recoverable, Rescued};
@@ -151,7 +152,7 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
         let initial_db = &self.inner.db;
         let mut provider_db = initial_db.db.borrow().db.db.borrow().clone();
         provider_db.block_no += 1;
-        for (address, db_account) in &self.inner.accounts {
+        for (address, db_account) in &self.inner.cache.accounts {
             use reth_revm::Database;
             let provider_info = provider_db.basic(*address)?.unwrap_or_default();
             if db_account.info != provider_info {
@@ -231,6 +232,7 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
         let initial_db = self.inner.db.db.borrow_mut();
         let db_block_number = initial_db.db.borrow_db().block_no;
         let earliest_block = initial_db
+            .cache
             .block_hashes
             .keys()
             .min()
@@ -321,7 +323,8 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> PreflightDB<N, R, P> {
 }
 
 pub fn enumerate_storage_keys<T>(db: &CacheDB<T>) -> HashMap<Address, Vec<U256>> {
-    db.accounts
+    db.cache
+        .accounts
         .iter()
         .map(|(address, account)| (*address, account.storage.keys().cloned().collect()))
         .collect()

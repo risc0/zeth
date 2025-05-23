@@ -31,7 +31,7 @@ impl<DB> Update for CacheDB<DB> {
     fn apply_changeset(&mut self, changeset: StateChangeset) -> anyhow::Result<()> {
         // Update accounts in state trie
         for (address, account_info) in changeset.accounts {
-            let db_account = self.accounts.get_mut(&address).unwrap();
+            let db_account = self.cache.accounts.get_mut(&address).unwrap();
             // Reset the account state
             db_account.account_state = AccountState::None;
             // Update account info
@@ -44,7 +44,7 @@ impl<DB> Update for CacheDB<DB> {
             storage,
         } in changeset.storage
         {
-            let db_account = self.accounts.get_mut(&address).unwrap();
+            let db_account = self.cache.accounts.get_mut(&address).unwrap();
             db_account.account_state = AccountState::None;
             if wipe_storage {
                 db_account.storage.clear();
@@ -56,7 +56,7 @@ impl<DB> Update for CacheDB<DB> {
         Ok(())
     }
     fn insert_block_hash(&mut self, block_number: U256, block_hash: B256) -> anyhow::Result<()> {
-        self.block_hashes.insert(block_number, block_hash);
+        self.cache.block_hashes.insert(block_number, block_hash);
         Ok(())
     }
 }

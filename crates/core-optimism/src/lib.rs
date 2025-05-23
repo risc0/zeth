@@ -19,21 +19,21 @@ use op_alloy_consensus::TxDeposit;
 use reth_chainspec::NamedChain;
 use reth_consensus::Consensus;
 use reth_evm::execute::{
-    BatchExecutor, BlockExecutionInput, BlockExecutorProvider, ExecutionOutcome,
+    ExecutionOutcome,
 };
 use reth_optimism_chainspec::{
     OpChainSpec, BASE_MAINNET, BASE_SEPOLIA, OP_DEV, OP_MAINNET, OP_SEPOLIA,
 };
-use reth_optimism_consensus::OptimismBeaconConsensus;
 use reth_optimism_evm::OpExecutorProvider;
-use reth_primitives::revm_primitives::alloy_primitives::{BlockNumber, Sealable};
-use reth_primitives::revm_primitives::{Address, B256, U256};
 use reth_primitives::{Block, Header, Receipt, SealedHeader, Transaction, TransactionSigned};
 use reth_revm::db::BundleState;
 use reth_storage_errors::provider::ProviderError;
 use std::fmt::Display;
 use std::mem::take;
 use std::sync::Arc;
+use reth_evm::ConfigureEvm;
+use reth_revm::primitives::{Address, B256, U256};
+use reth_revm::primitives::alloy_primitives::BlockNumber;
 use zeth_core::db::memory::MemoryDB;
 use zeth_core::db::trie::TrieDB;
 use zeth_core::driver::CoreDriver;
@@ -81,7 +81,7 @@ impl<Database: 'static> ValidationStrategy<OpRethCoreDriver, Database>
         // Validate header (todo: seal beforehand to save rehashing costs)
         let sealed_block = take(block).seal_slow();
         consensus
-            .validate_header(&sealed_block.header)
+            .validate_header(sealed_block.sealed_header())
             .context("validate_header")?;
         // Validate header w.r.t. parent
         let sealed_parent_header = {
@@ -89,7 +89,7 @@ impl<Database: 'static> ValidationStrategy<OpRethCoreDriver, Database>
             SealedHeader::new(parent_header, parent_header_seal)
         };
         consensus
-            .validate_header_against_parent(&sealed_block.header, &sealed_parent_header)
+            .validate_header_against_parent(sealed_block.sealed_header(), &sealed_parent_header)
             .context("validate_header_against_parent")?;
         // Check pre-execution block conditions
         consensus

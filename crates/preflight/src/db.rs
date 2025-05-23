@@ -22,15 +22,15 @@ use alloy::primitives::{Address, B256, U256};
 use alloy::rpc::types::EIP1186AccountProofResponse;
 use anyhow::Context;
 use log::{debug, error};
+use reth_revm::bytecode::Bytecode;
 use reth_revm::db::states::StateChangeset;
-use reth_revm::db::CacheDB;
+use reth_revm::db::{CacheDB, DBErrorMarker};
+use reth_revm::state::{Account, AccountInfo};
 use reth_revm::{Database, DatabaseCommit, DatabaseRef};
 use std::cell::{Ref, RefCell};
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
 use std::ops::DerefMut;
-use reth_revm::bytecode::Bytecode;
-use reth_revm::state::{Account, AccountInfo};
 use zeth_core::db::update::Update;
 use zeth_core::driver::CoreDriver;
 use zeth_core::rescue::{Recoverable, Rescued};
@@ -330,7 +330,10 @@ pub fn enumerate_storage_keys<T>(db: &CacheDB<T>) -> HashMap<Address, Vec<U256>>
         .collect()
 }
 
-impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> Database for PreflightDB<N, R, P> {
+impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> Database for PreflightDB<N, R, P>
+where
+    <PrePostDB<N, R, P> as Database>::Error: DBErrorMarker,
+{
     type Error = <PrePostDB<N, R, P> as Database>::Error;
 
     fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
@@ -350,7 +353,10 @@ impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> Database for Preflight
     }
 }
 
-impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> DatabaseRef for PreflightDB<N, R, P> {
+impl<N: Network, R: CoreDriver, P: PreflightDriver<R, N>> DatabaseRef for PreflightDB<N, R, P>
+where
+    <PrePostDB<N, R, P> as DatabaseRef>::Error: DBErrorMarker,
+{
     type Error = <PrePostDB<N, R, P> as DatabaseRef>::Error;
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {

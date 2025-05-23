@@ -14,7 +14,10 @@
 
 use alloy_genesis::Genesis;
 use once_cell::sync::Lazy;
-use reth_chainspec::{BaseFeeParams, BaseFeeParamsKind, Chain, ChainSpec, DepositContract, EthereumHardfork, DEV_HARDFORKS, MAINNET_PRUNE_DELETE_LIMIT};
+use reth_chainspec::{
+    BaseFeeParams, BaseFeeParamsKind, Chain, ChainSpec, DepositContract, EthereumHardfork,
+    DEV_HARDFORKS, MAINNET_PRUNE_DELETE_LIMIT,
+};
 use reth_revm::primitives::{address, b256, bytes, U256};
 use std::sync::Arc;
 

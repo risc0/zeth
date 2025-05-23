@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::convert::Infallible;
 use alloy_primitives::{Address, B256, U256};
 use reth_revm::bytecode::Bytecode;
 use reth_revm::db::DatabaseRef;
 use reth_revm::state::AccountInfo;
+use std::convert::Infallible;
 
 #[derive(Clone, Copy, Default)]
 pub struct UnreachableDB;

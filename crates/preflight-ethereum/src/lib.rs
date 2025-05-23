@@ -15,10 +15,9 @@
 use alloy::network::ReceiptResponse;
 use alloy::network::{Ethereum, Network};
 use alloy::primitives::{B256, U256};
-use alloy::rpc::types::serde_helpers::WithOtherFields;
 use alloy::signers::k256::ecdsa::VerifyingKey;
 use reth_chainspec::ChainSpec;
-use reth_primitives::{Block, BlockBody, Header, Log, Receipt, TransactionSigned, Withdrawals};
+use reth_primitives::{Block, BlockBody, Header, Log, Receipt};
 use std::iter::zip;
 use std::sync::Arc;
 use zeth_core::db::memory::MemoryDB;
@@ -64,7 +63,7 @@ impl PreflightDriver<RethCoreDriver, Ethereum> for RethPreflightDriver {
     fn derive_transaction(
         transaction: <Ethereum as Network>::TransactionResponse,
     ) -> <RethCoreDriver as CoreDriver>::Transaction {
-        TransactionSigned::try_from(WithOtherFields::new(transaction)).unwrap()
+        transaction.into_signed().into()
     }
 
     fn derive_header(header: <Ethereum as Network>::HeaderResponse) -> Header {
@@ -84,8 +83,7 @@ impl PreflightDriver<RethCoreDriver, Ethereum> for RethPreflightDriver {
                     .map(Self::derive_transaction)
                     .collect(),
                 ommers: ommers.into_iter().map(Self::derive_header).collect(),
-                withdrawals: block.withdrawals.map(Withdrawals::new),
-                requests: None,
+                withdrawals: block.withdrawals,
             },
         }
     }

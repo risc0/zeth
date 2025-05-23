@@ -21,19 +21,19 @@ use k256::ecdsa::VerifyingKey;
 use reth_chainspec::{ChainSpec, EthChainSpec, EthereumHardforks, NamedChain};
 use reth_consensus::{Consensus, HeaderValidator};
 use reth_ethereum_consensus::EthBeaconConsensus;
-use reth_evm::execute::{
-    ExecutionOutcome,
-};
+use reth_evm::execute::Executor;
+use reth_evm::ConfigureEvm;
 use reth_evm_ethereum::execute::EthExecutorProvider;
-use reth_primitives::{Block, Header, Receipt, SealedHeader, TransactionSigned};
+use reth_primitives::{
+    Block, Header, Receipt, RecoveredBlock, SealedBlock, SealedHeader, TransactionSigned,
+};
 use reth_revm::db::BundleState;
+use reth_revm::primitives::alloy_primitives::{BlockNumber, Sealable};
+use reth_revm::primitives::{Address, B256, U256};
 use reth_storage_errors::provider::ProviderError;
 use std::fmt::Display;
 use std::mem::take;
 use std::sync::Arc;
-use reth_evm::ConfigureEvm;
-use reth_revm::primitives::{Address, B256, U256};
-use reth_revm::primitives::alloy_primitives::BlockNumber;
 use zeth_core::db::memory::MemoryDB;
 use zeth_core::db::trie::TrieDB;
 use zeth_core::driver::CoreDriver;
@@ -73,14 +73,17 @@ where
         parent_header: &mut Header,
         total_difficulty: &mut U256,
     ) -> anyhow::Result<()> {
+        // Validate total difficulty
+        if !chain_spec.is_paris_active_at_block(block.number) {
+            // Total difficulty must not have reached Paris threshold prior to its activation
+            if let Some(paris_difficulty) = chain_spec.final_paris_total_difficulty() {
+                assert!(paris_difficulty > *total_difficulty);
+            }
+        }
         // Instantiate consensus engine
         let consensus = EthBeaconConsensus::new(chain_spec);
-        // Validate total difficulty
-        consensus
-            .validate_header_with_total_difficulty(&block.header, *total_difficulty)
-            .context("validate_header_with_total_difficulty")?;
         // Validate header (todo: seal beforehand to save rehashing costs)
-        let sealed_block = take(block).seal_slow();
+        let sealed_block = SealedBlock::seal_slow(take(block));
         consensus
             .validate_header(sealed_block.sealed_header())
             .context("validate_header")?;
@@ -105,7 +108,7 @@ where
 
 pub struct RethExecutionStrategy;
 
-impl<Database: reth_revm::Database> ExecutionStrategy<RethCoreDriver, Database>
+impl<Database: reth_evm::Database> ExecutionStrategy<RethCoreDriver, Database>
     for RethExecutionStrategy
 where
     Database: 'static,
@@ -115,12 +118,12 @@ where
         chain_spec: Arc<ChainSpec>,
         block: &mut Block,
         signers: &[VerifyingKey],
-        total_difficulty: &mut U256,
+        _total_difficulty: &mut U256,
         db: &mut Option<Database>,
     ) -> anyhow::Result<BundleState> {
         // Instantiate execution engine using database
-        let mut executor = EthExecutorProvider::ethereum(chain_spec.clone())
-            .batch_executor(db.take().expect("Missing database."));
+        let evm_config = EthExecutorProvider::ethereum(chain_spec.clone());
+        let mut executor = evm_config.batch_executor(db.take().expect("Missing database."));
         // Verify the transaction signatures and compute senders
         let mut senders = Vec::with_capacity(block.body.transactions.len());
         for (i, tx) in block.body.transactions().enumerate() {
@@ -142,19 +145,16 @@ where
         }
 
         // Execute transactions
-        let block_with_senders = take(block).with_senders_unchecked(senders);
+        let block_hash = block.hash_slow();
+        let block_with_senders = RecoveredBlock::new(take(block), senders, block_hash);
         executor
-            .execute_and_verify_one(BlockExecutionInput {
-                block: &block_with_senders,
-                total_difficulty: *total_difficulty,
-            })
+            .execute_one(&block_with_senders)
             .context("execution failed")?;
 
         // Return block
-        *block = block_with_senders.block;
-        // Return bundle state
-        let ExecutionOutcome { bundle, .. } = executor.finalize();
-        Ok(bundle)
+        *block = block_with_senders.into_block();
+
+        Ok(executor.into_state().bundle_state)
     }
 }
 
@@ -211,8 +211,12 @@ impl CoreDriver for RethCoreDriver {
         total_difficulty: U256,
         chain_spec: &Self::ChainSpec,
     ) -> U256 {
-        chain_spec
-            .final_paris_total_difficulty(block)
-            .unwrap_or(total_difficulty)
+        if chain_spec.is_paris_active_at_block(block) {
+            chain_spec
+                .final_paris_total_difficulty()
+                .unwrap_or(total_difficulty)
+        } else {
+            total_difficulty
+        }
     }
 }

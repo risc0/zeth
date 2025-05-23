@@ -18,22 +18,20 @@ use k256::ecdsa::VerifyingKey;
 use op_alloy_consensus::TxDeposit;
 use reth_chainspec::NamedChain;
 use reth_consensus::Consensus;
-use reth_evm::execute::{
-    ExecutionOutcome,
-};
+use reth_evm::execute::ExecutionOutcome;
+use reth_evm::ConfigureEvm;
 use reth_optimism_chainspec::{
     OpChainSpec, BASE_MAINNET, BASE_SEPOLIA, OP_DEV, OP_MAINNET, OP_SEPOLIA,
 };
 use reth_optimism_evm::OpExecutorProvider;
 use reth_primitives::{Block, Header, Receipt, SealedHeader, Transaction, TransactionSigned};
 use reth_revm::db::BundleState;
+use reth_revm::primitives::alloy_primitives::BlockNumber;
+use reth_revm::primitives::{Address, B256, U256};
 use reth_storage_errors::provider::ProviderError;
 use std::fmt::Display;
 use std::mem::take;
 use std::sync::Arc;
-use reth_evm::ConfigureEvm;
-use reth_revm::primitives::{Address, B256, U256};
-use reth_revm::primitives::alloy_primitives::BlockNumber;
 use zeth_core::db::memory::MemoryDB;
 use zeth_core::db::trie::TrieDB;
 use zeth_core::driver::CoreDriver;

@@ -24,10 +24,10 @@ use alloy_primitives::map::{AddressHashMap, HashMap};
 use alloy_primitives::{keccak256, Bytes, B256, U256};
 use anyhow::{bail, ensure};
 use core::mem::take;
-use reth_revm::db::{AccountState, Cache, DbAccount};
-use std::default::Default;
 use reth_revm::bytecode::Bytecode;
+use reth_revm::db::{AccountState, Cache, DbAccount};
 use reth_revm::state::AccountInfo;
+use std::default::Default;
 
 pub trait InitializationStrategy<Driver: CoreDriver, Database> {
     fn initialize_database(

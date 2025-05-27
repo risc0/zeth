@@ -44,7 +44,7 @@ pub fn new_file_provider<N: Network>(
 pub fn new_rpc_provider<N: Network>(
     rpc_url: String,
 ) -> anyhow::Result<Rc<RefCell<dyn Provider<N>>>> {
-    Ok(Rc::new(RefCell::new(rpc_provider::RpcProvider::new(
+    Ok(Rc::new(RefCell::new(rpc_provider::RpcProvider::<N>::new(
         rpc_url,
     )?)))
 }

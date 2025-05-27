@@ -217,7 +217,7 @@ where
 
             // collect the code of the used contracts
             let initial_db = preflight_db.inner.db.db.borrow();
-            for code in initial_db.contracts.values() {
+            for code in initial_db.cache.contracts.values() {
                 contracts.insert(code.bytes().clone());
             }
             drop(initial_db);
@@ -243,7 +243,7 @@ where
                 let slots = proof
                     .storage_proof
                     .iter()
-                    .map(|p| p.key.0.into())
+                    .map(|p| U256::from_be_bytes(p.key.as_b256().0))
                     .unique()
                     .collect::<Vec<U256>>();
 
@@ -284,7 +284,7 @@ where
 
                 let storage_trie = &mut storage_tries.get_mut(&address).unwrap().storage_trie;
                 for EIP1186StorageProof { key, proof, .. } in account_proof.storage_proof {
-                    let db_key = keccak256(key.0);
+                    let db_key = keccak256(key.as_b256());
                     // if the key was inserted, extend with the inclusion proof
                     if storage_trie.get(db_key).is_none() {
                         storage_trie.hydrate_from_rlp(proof)?;
@@ -293,7 +293,11 @@ where
                         storage_trie
                             .resolve_orphan(db_key, proof, &mut unresolvable_storage_keys)
                             .with_context(|| {
-                                format!("failed to resolve orphan for {}@{}", key.0, address)
+                                format!(
+                                    "failed to resolve orphan for {}@{}",
+                                    key.as_b256(),
+                                    address
+                                )
                             })?;
                     }
                 }

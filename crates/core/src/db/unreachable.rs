@@ -13,15 +13,16 @@
 // limitations under the License.
 
 use alloy_primitives::{Address, B256, U256};
-use reth_primitives::revm_primitives::db::DatabaseRef;
-use reth_primitives::revm_primitives::{AccountInfo, Bytecode};
-use reth_storage_errors::db::DatabaseError;
+use reth_revm::bytecode::Bytecode;
+use reth_revm::db::DatabaseRef;
+use reth_revm::state::AccountInfo;
+use std::convert::Infallible;
 
 #[derive(Clone, Copy, Default)]
 pub struct UnreachableDB;
 
 impl DatabaseRef for UnreachableDB {
-    type Error = DatabaseError;
+    type Error = Infallible;
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
         unreachable!("basic_ref {address}")

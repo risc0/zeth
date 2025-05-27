@@ -15,8 +15,9 @@
 use crate::rescue::{Recoverable, Wrapper};
 use alloy_primitives::map::HashMap;
 use alloy_primitives::{Address, B256, U256};
-use reth_primitives::revm_primitives::db::{Database, DatabaseCommit, DatabaseRef};
-use reth_primitives::revm_primitives::{Account, AccountInfo, Bytecode};
+use reth_revm::bytecode::Bytecode;
+use reth_revm::db::{Database, DatabaseCommit, DatabaseRef};
+use reth_revm::state::{Account, AccountInfo};
 
 impl<DB: Database + Recoverable> Database for Wrapper<DB> {
     type Error = <DB as Database>::Error;

@@ -14,20 +14,18 @@
 
 use crate::provider::query::{AccountRangeQueryResponse, StorageRangeQueryResponse};
 use crate::provider::*;
-use alloy::network::{BlockResponse, HeaderResponse, Network};
+use alloy::network::Network;
 use alloy::providers::{Provider as AlloyProvider, ProviderBuilder, RootProvider};
 use alloy::rpc::client::RpcClient;
-use alloy::transports::{
-    http::{Client, Http},
-    layers::{RetryBackoffLayer, RetryBackoffService},
-};
+use alloy::transports::layers::RetryBackoffLayer;
+use alloy_network_primitives::{BlockResponse, HeaderResponse};
 use anyhow::anyhow;
 use log::{debug, error};
 use std::future::IntoFuture;
 
 #[derive(Clone, Debug)]
 pub struct RpcProvider<N: Network> {
-    http_client: RootProvider<RetryBackoffService<Http<Client>>, N>,
+    http_client: RootProvider<N>,
     tokio_handle: tokio::runtime::Handle,
 }
 
@@ -38,7 +36,10 @@ impl<N: Network> RpcProvider<N> {
         let client = RpcClient::builder()
             .layer(retry_layer)
             .http(rpc_url.parse()?);
-        let http_client = ProviderBuilder::new().network().on_client(client);
+        let http_client = ProviderBuilder::new()
+            .disable_recommended_fillers()
+            .network()
+            .connect_client(client);
 
         let tokio_handle = tokio::runtime::Handle::current();
 
@@ -85,7 +86,8 @@ impl<N: Network> Provider<N> for RpcProvider<N> {
 
         let response = self.tokio_handle.block_on(
             self.http_client
-                .get_block_by_number(query.block_no.into(), true),
+                .get_block_by_number(query.block_no.into())
+                .into_future(),
         )?;
 
         match response {
@@ -211,7 +213,7 @@ impl<N: Network> Provider<N> for RpcProvider<N> {
             Ok(out) => Ok(out),
             Err(e) => {
                 error!("debug_dbGet: {e}");
-                anyhow::bail!(e);
+                anyhow::bail!(anyhow!(e));
             }
         }
     }
@@ -236,7 +238,7 @@ impl<N: Network> Provider<N> for RpcProvider<N> {
             Ok(out) => out,
             Err(e) => {
                 error!("debug_accountRange: {e}");
-                anyhow::bail!(e)
+                anyhow::bail!(anyhow!(e));
             }
         };
 
@@ -268,7 +270,7 @@ impl<N: Network> Provider<N> for RpcProvider<N> {
             Ok(out) => out,
             Err(e) => {
                 error!("debug_storageRangeAt: {e}");
-                anyhow::bail!(e)
+                anyhow::bail!(anyhow!(e));
             }
         };
 

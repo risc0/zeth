@@ -153,7 +153,7 @@ where
             let network_name = String::from(network_name);
             let elf = elf.to_owned();
             let prove_info = spawn_blocking(move || {
-                let prover = default_prover();
+                let prover = default_prover().unwrap();
                 let exec_env = build_executor_env(&cli, &build_result, image_id, &network_name)
                     .expect("Failed to build executor environment");
                 prover.prove_with_opts(exec_env, &elf, &prover_opts)

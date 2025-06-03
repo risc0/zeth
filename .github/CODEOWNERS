@@ -1,0 +1,6 @@
+# CODEOWNERS
+
+# Note: Order is important; the last matching pattern takes the most
+# precedence.
+
+*                                      @risc0/web3

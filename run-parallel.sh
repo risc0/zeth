@@ -40,7 +40,7 @@ process_file() {
 
   # Run your command and capture both stdout and stderr
   output=$(
-    RISC0_INFO=true RUST_LOG=info RISC0_DEV_MODE=true ./target/release/host --eth-rpc-url "$ETH_RPC_URL" --block "$hash" prove 2>&1
+    RISC0_INFO=true RUST_LOG=info RISC0_DEV_MODE=true ./target/release/cli --eth-rpc-url "$ETH_RPC_URL" --block "$hash" prove 2>&1
   )
 
   # echo command output to stderr for debugging purposes

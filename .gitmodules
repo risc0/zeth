@@ -1,3 +1,0 @@
-[submodule "testing/ef-tests/testdata"]
-	path = testing/ef-tests/testdata
-	url = https://github.com/ethereum/tests.git

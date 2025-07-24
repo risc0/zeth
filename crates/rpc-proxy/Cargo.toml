@@ -1,0 +1,30 @@
+[package]
+name = "zeth-rpc-proxy"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+
+[dependencies]
+actix-web = "4"
+alloy = { workspace = true }
+alloy-chains = { workspace = true }
+alloy-primitives = { workspace = true }
+alloy-trie = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+clap = { workspace = true, features = ["derive", "env"] }
+reqwest = { version = "0.12.20", features = ["json"] }
+reth-chainspec = { workspace = true }
+reth-evm = { workspace = true }
+reth-evm-ethereum = { workspace = true }
+reth-primitives-traits = { workspace = true }
+reth-stateless = { workspace = true }
+revm = { workspace = true, features = ["c-kzg"] }
+risc0-ethereum-trie = { workspace = true, features = ["orphan"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-actix-web = "0.7"
+tracing-subscriber = { workspace = true }

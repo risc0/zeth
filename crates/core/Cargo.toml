@@ -1,21 +1,20 @@
 [package]
 name = "zeth-core"
-version = "0.1.0"
-edition = "2021"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
 
 [dependencies]
-anyhow.workspace = true
-alloy-consensus.workspace = true
-alloy-primitives.workspace = true
-alloy-rlp.workspace = true
-hashbrown.workspace = true
-k256.workspace = true
-pot.workspace = true
-rkyv.workspace = true
-serde.workspace = true
-risc0-ethereum-trie.workspace = true
-
-reth-chainspec.workspace = true
-reth-primitives.workspace = true
-reth-revm.workspace = true
-reth-storage-errors.workspace = true
+alloy-consensus = { workspace = true }
+alloy-primitives = { workspace = true, features = ["map"] }
+alloy-rlp = { workspace = true }
+alloy-trie = { workspace = true }
+reth-chainspec = { workspace = true }
+reth-errors = { workspace = true }
+reth-ethereum-primitives = { workspace = true }
+reth-evm = { workspace = true }
+reth-evm-ethereum = { workspace = true }
+reth-stateless = { workspace = true }
+reth-trie-common = { workspace = true }
+revm-bytecode = { workspace = true }
+risc0-ethereum-trie = { workspace = true }

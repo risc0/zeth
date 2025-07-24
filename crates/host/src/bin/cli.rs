@@ -67,6 +67,7 @@ async fn main() -> anyhow::Result<()> {
     // set up the provider and processor
     let provider = ProviderBuilder::new().connect(&cli.eth_rpc_url).await?;
     let processor = BlockProcessor::new(Arc::new(provider)).await?;
+    println!("Current chain: {}", processor.chain());
 
     let input = get_cached_input(&processor, cli.block, &cli.cache_dir).await?;
     let block_hash = input.block.hash_slow();

@@ -30,5 +30,5 @@ pub fn entry(evm_config: EthEvmConfig<ChainSpec>) {
     let block_hash = validate_block(input.block, input.witness, evm_config).unwrap();
     env::log("cycle-tracker-report-end: validation");
 
-    env::commit(&block_hash);
+    env::commit_slice(block_hash.as_slice());
 }

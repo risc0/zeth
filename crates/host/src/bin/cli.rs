@@ -115,7 +115,7 @@ async fn get_cached_input<P: Provider>(
         serde_json::from_reader(BufReader::new(f)).context("failed to read file")?
     } else {
         println!("Cache miss for block {}. Fetching from RPC.", header.hash);
-        let input = processor.create_input(header.hash).await?;
+        let (input, _) = processor.create_input(header.hash).await?;
 
         // Save the newly fetched input to the cache.
         println!("Writing new input to cache: {:?}", &cache_file);

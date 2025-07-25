@@ -20,7 +20,6 @@ use alloy::{
 };
 use alloy_chains::NamedChain;
 use anyhow::{Context, Result, bail};
-use futures::{Stream, StreamExt};
 use guests::{HOLESKY_ELF, MAINNET_ELF, SEPOLIA_ELF};
 use reth_chainspec::{ChainSpec, EthChainSpec};
 use reth_stateless::StatelessInput;
@@ -85,7 +84,7 @@ impl<P: Provider + DebugApi> BlockProcessor<P> {
     }
 
     /// Fetches the necessary data from the RPC endpoint to create the StatelessInput.
-    pub async fn create_input(&self, block: impl Into<BlockId>) -> Result<StatelessInput> {
+    pub async fn create_input(&self, block: impl Into<BlockId>) -> Result<(StatelessInput, B256)> {
         let block_id = block.into();
         let rpc_block = self
             .provider
@@ -94,52 +93,20 @@ impl<P: Provider + DebugApi> BlockProcessor<P> {
             .await?
             .with_context(|| format!("block {block_id} not found"))?;
         let witness = self.provider.debug_execution_witness(rpc_block.number().into()).await?;
+        let block_hash = rpc_block.header.hash_slow();
 
-        Ok(StatelessInput {
-            block: rpc_block.into(),
-            witness: ExecutionWitness {
-                state: witness.state,
-                codes: witness.codes,
-                keys: vec![], // keys are not used
-                headers: witness.headers,
+        Ok((
+            StatelessInput {
+                block: rpc_block.into(),
+                witness: ExecutionWitness {
+                    state: witness.state,
+                    codes: witness.codes,
+                    keys: vec![], // keys are not used
+                    headers: witness.headers,
+                },
             },
-        })
-    }
-
-    /// Returns a stream that yields a `StatelessInput` for each new block.
-    ///
-    /// This method subscribes to new blocks from the provider and, for each block, asynchronously
-    /// creates the corresponding `StatelessInput`.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// # use alloy::providers::ProviderBuilder;
-    /// use futures::TryStreamExt;
-    /// # use zeth_host::BlockProcessor;
-    /// # let  _ = async {
-    /// # let provider = ProviderBuilder::new().connect("").await.unwrap();
-    /// # let processor = BlockProcessor::new(provider).await.unwrap();
-    /// let mut input_stream = processor.stream_inputs().await?;
-    /// input_stream
-    ///     .try_for_each(|input| async move {
-    ///         println!("Processing new block: {}", input.block.number);
-    ///         // further processing...
-    ///         Ok(())
-    ///     })
-    ///     .await?;
-    /// # anyhow::Ok(())
-    /// # };
-    /// ```
-    pub async fn stream_inputs(&self) -> Result<impl Stream<Item = Result<StatelessInput>> + '_> {
-        let sub = self.provider.subscribe_blocks().await?;
-
-        let input_stream = sub.into_stream().then(move |header| {
-            let processor = self.clone();
-            async move { processor.create_input(header.hash).await }
-        });
-
-        Ok(input_stream)
+            block_hash,
+        ))
     }
 
     /// Validates the block execution on the host machine.

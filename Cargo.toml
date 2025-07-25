@@ -48,14 +48,15 @@ alloy-eips = { version = "1.0.23" }
 alloy-genesis = { version = "1.0.23", default-features = false }
 
 # misc
+anyhow = "1.0"
+async-trait = "0.1"
 bytemuck = "1.23"
-async-trait = { version = "0.1.88" }
-futures = "0.3"
-serde = { version = "1.0", default-features = false }
-thiserror = "2"
-serde_json = "1.0"
-tokio = { version = "1.44.2", features = ["full"] }
-anyhow = { version = "1.0" }
 clap = "4.5"
+futures = "0.3"
+itertools = "0.14"
+serde = "1.0"
+serde_json = "1.0"
+thiserror = "2"
+tokio = { version = "1.46", features = ['full'] }
 tracing = "0.1"
 tracing-subscriber = "0.3"

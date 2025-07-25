@@ -29,6 +29,7 @@ use alloy_primitives::{
 };
 use alloy_trie::{EMPTY_ROOT_HASH, TrieAccount as StateAccount};
 use anyhow::{Context, Result, ensure};
+use itertools::Itertools;
 use revm::{
     Database as RevmDatabase,
     context::DBErrorMarker,
@@ -48,9 +49,12 @@ pub struct PreflightDb<D> {
     block_hash_numbers: HashSet<BlockNumber>,
 
     code_addresses: B256Map<Address>,
-    proofs: AddressHashMap<AccountProof>,
+    proofs: AccountProofs,
     inner: D,
 }
+
+#[derive(Clone, Default)]
+struct AccountProofs(AddressHashMap<AccountProof>);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct AccountProof {
@@ -96,16 +100,6 @@ impl<D> PreflightDb<D> {
         }
     }
 
-    /// Adds a new response for EIP-1186 account proof `eth_getProof`.
-    ///
-    /// The proof data will be used for lookups of the referenced storage keys.
-    pub(crate) fn add_proof(
-        &mut self,
-        proof: EIP1186AccountProofResponse,
-    ) -> Result<Option<StateAccount>> {
-        add_proof(&mut self.proofs, proof)
-    }
-
     /// Returns the referenced contracts
     pub(crate) fn contracts(&self) -> &B256HashMap<Bytes> {
         &self.contracts
@@ -116,14 +110,10 @@ impl<N: Network, P: Provider<N>> PreflightDb<ProviderDb<N, P>> {
     /// Fetches all the EIP-1186 storage proofs from the `access_list` and stores them in the DB.
     pub(crate) async fn add_access_list(&mut self, access_list: &AccessList) -> Result<()> {
         for AccessListItem { address, storage_keys } in &access_list.0 {
-            let storage_keys: Vec<_> = storage_keys
-                .iter()
-                .filter(filter_existing_keys(self.proofs.get(address)))
-                .copied()
-                .collect();
-
-            let proof = self.get_proof(*address, storage_keys).await?;
-            self.add_proof(proof).context("invalid eth_getProof response")?;
+            if let Some(keys) = self.proofs.missing_proof(address, storage_keys) {
+                let proof = self.inner.get_proof(*address, keys).await?;
+                self.proofs.add(proof).context("invalid eth_getProof response")?;
+            }
         }
 
         Ok(())
@@ -189,18 +179,9 @@ impl<N: Network, P: Provider<N>> PreflightDb<ProviderDb<N, P>> {
 
         let proofs = &mut self.proofs;
         for (address, storage_keys) in &self.accounts {
-            let account_proof = proofs.get(address);
-            let missing_keys: Vec<_> =
-                storage_keys.iter().filter(filter_existing_keys(account_proof)).copied().collect();
-
-            if account_proof.is_none() || !missing_keys.is_empty() {
-                let proof = self
-                    .inner
-                    .get_proof(*address, missing_keys)
-                    .await
-                    .context("eth_getProof failed")?;
-                ensure!(&proof.address == address, "eth_getProof response does not match request");
-                add_proof(proofs, proof).context("invalid eth_getProof response")?;
+            if let Some(keys) = proofs.missing_proof(address, storage_keys) {
+                let proof = self.inner.get_proof(*address, keys).await?;
+                proofs.add(proof).context("invalid eth_getProof response")?;
             }
         }
 
@@ -213,42 +194,30 @@ impl<N: Network, P: Provider<N>> PreflightDb<ProviderDb<N, P>> {
 
         let mut storage_tries: AddressMap<MerkleTrie> = AddressMap::default();
         for (address, storage_keys) in &self.accounts {
-            if storage_keys.is_empty() {
-                storage_tries.insert(*address, MerkleTrie::default());
-                continue;
-            }
-
             // safe unwrap: added a proof for each account in the previous loop
             let proof = proofs.get(address).unwrap();
 
-            let storage_nodes = storage_keys
-                .iter()
-                .filter_map(|key| proof.storage_proofs.get(key))
-                .flat_map(|proof| proof.proof.iter());
-            let storage_root = proof.account.map(|a| a.storage_root).unwrap_or(EMPTY_ROOT_HASH);
-
             // create a new trie for this root
-            let storage_trie = MerkleTrie::from_rlp(storage_nodes)
-                .with_context(|| format!("invalid storage proof for address {address}"))?;
-            ensure!(storage_trie.hash_slow() == storage_root, "storage root mismatch");
+            let storage_root = proof.account.map(|a| a.storage_root).unwrap_or(EMPTY_ROOT_HASH);
+            let mut storage_trie = MerkleTrie::from_digest(storage_root);
 
+            // hydrate the trie if storage slots were accessed
+            if !storage_keys.is_empty() {
+                let storage_nodes = storage_keys
+                    .iter()
+                    .filter_map(|key| proof.storage_proofs.get(key))
+                    .flat_map(|proof| proof.proof.iter());
+
+                storage_trie
+                    .hydrate_from_rlp(storage_nodes)
+                    .with_context(|| format!("invalid storage proof for address {address}"))?;
+            }
+
+            ensure!(storage_trie.hash_slow() == storage_root, "storage root mismatch");
             storage_tries.insert(*address, storage_trie);
         }
 
         Ok((state_trie, storage_tries))
-    }
-
-    /// Get the EIP-1186 account and storage merkle proofs.
-    pub(crate) async fn get_proof(
-        &self,
-        address: Address,
-        storage_keys: Vec<StorageKey>,
-    ) -> Result<EIP1186AccountProofResponse> {
-        let proof =
-            self.inner.get_proof(address, storage_keys).await.context("eth_getProof failed")?;
-        ensure!(proof.address == address, "eth_getProof response does not match request");
-
-        Ok(proof)
     }
 }
 
@@ -272,7 +241,7 @@ impl<N: Network, P: Provider<N>> RevmDatabase for PreflightDb<ProviderDb<N, P>> 
             Some(proof) => proof.account,
             None => {
                 let proof = self.inner.get_proof_blocking(address, vec![])?;
-                self.add_proof(proof).context("invalid proof response")?
+                self.proofs.add(proof).context("invalid proof response")?
             }
         };
         let code_hash = account.map(|acc| acc.code_hash).unwrap_or(KECCAK256_EMPTY);
@@ -316,6 +285,71 @@ impl<N: Network, P: Provider<N>> RevmDatabase for PreflightDb<ProviderDb<N, P>> 
     }
 }
 
+impl AccountProofs {
+    fn get(&self, address: &Address) -> Option<&AccountProof> {
+        self.0.get(address)
+    }
+
+    fn add(&mut self, proof_response: EIP1186AccountProofResponse) -> Result<Option<StateAccount>> {
+        // extract the actual state account from the proof
+        let account = decode_account(&proof_response).context("invalid account proof")?;
+
+        // convert the response into a StorageProof
+        let storage_proofs = proof_response
+            .storage_proof
+            .into_iter()
+            .map(|proof| {
+                (proof.key.as_b256(), StorageProof { value: proof.value, proof: proof.proof })
+            })
+            .collect();
+
+        match self.0.entry(proof_response.address) {
+            hash_map::Entry::Occupied(mut entry) => {
+                let account_proof = entry.get_mut();
+                ensure!(
+                    account_proof.account == account
+                        && account_proof.account_proof == proof_response.account_proof,
+                    "inconsistent account proof"
+                );
+                account_proof.storage_proofs = merge_checked_maps(
+                    std::mem::take(&mut account_proof.storage_proofs),
+                    storage_proofs,
+                );
+            }
+            hash_map::Entry::Vacant(entry) => {
+                entry.insert(AccountProof {
+                    account,
+                    account_proof: proof_response.account_proof,
+                    storage_proofs,
+                });
+            }
+        }
+
+        Ok(account)
+    }
+
+    fn missing_proof<'a>(
+        &self,
+        address: &Address,
+        keys: impl IntoIterator<Item = &'a StorageKey>,
+    ) -> Option<Vec<StorageKey>> {
+        let Some(proof) = self.get(address) else {
+            return Some(keys.into_iter().cloned().unique().collect());
+        };
+
+        let storage_root = proof.account.map_or(EMPTY_ROOT_HASH, |a| a.storage_root);
+        if storage_root == EMPTY_ROOT_HASH {
+            return None;
+        }
+
+        let new_key = |k: &&StorageKey| !proof.storage_proofs.contains_key(*k);
+        let missing_keys: Vec<_> = keys.into_iter().filter(new_key).cloned().unique().collect();
+
+        // we only need to request additional proofs if some keys are missing
+        if missing_keys.is_empty() { None } else { Some(missing_keys) }
+    }
+}
+
 /// Merges two HashMaps, checking for consistency on overlapping keys.
 /// Panics if values for the same key are different. Consumes both maps.
 fn merge_checked_maps<K, V, S, T>(mut map: HashMap<K, V, S>, iter: T) -> HashMap<K, V, S>
@@ -349,51 +383,6 @@ where
     }
 
     map
-}
-
-fn filter_existing_keys(
-    account_proof: Option<&AccountProof>,
-) -> impl Fn(&&StorageKey) -> bool + '_ {
-    move |&key| !account_proof.map(|p| p.storage_proofs.contains_key(key)).unwrap_or_default()
-}
-
-fn add_proof(
-    proofs: &mut AddressHashMap<AccountProof>,
-    proof_response: EIP1186AccountProofResponse,
-) -> Result<Option<StateAccount>> {
-    // extract the actual state account from the proof
-    let account = decode_account(&proof_response).context("invalid account proof")?;
-
-    // convert the response into a StorageProof
-    let storage_proofs = proof_response
-        .storage_proof
-        .into_iter()
-        .map(|proof| (proof.key.as_b256(), StorageProof { value: proof.value, proof: proof.proof }))
-        .collect();
-
-    match proofs.entry(proof_response.address) {
-        hash_map::Entry::Occupied(mut entry) => {
-            let account_proof = entry.get_mut();
-            ensure!(
-                account_proof.account == account
-                    && account_proof.account_proof == proof_response.account_proof,
-                "inconsistent account proof"
-            );
-            account_proof.storage_proofs = merge_checked_maps(
-                std::mem::take(&mut account_proof.storage_proofs),
-                storage_proofs,
-            );
-        }
-        hash_map::Entry::Vacant(entry) => {
-            entry.insert(AccountProof {
-                account,
-                account_proof: proof_response.account_proof,
-                storage_proofs,
-            });
-        }
-    }
-
-    Ok(account)
 }
 
 fn decode_account(proof_response: &EIP1186AccountProofResponse) -> Result<Option<StateAccount>> {

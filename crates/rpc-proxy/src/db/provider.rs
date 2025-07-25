@@ -143,6 +143,10 @@ impl<N: Network, P: Provider<N>> ProviderDb<N, P> {
             .hash(block)
             .await
             .map_err(|err| Error::Rpc("eth_getProof", err))?;
+        if account_proof.address != address {
+            return Err(Error::InconsistentResponse("response does not match request"));
+        }
+
         for keys in iter {
             let proof = self
                 .provider()

@@ -13,6 +13,7 @@ alloy-trie = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
+itertools = { workspace = true }
 reqwest = { version = "0.12.20", features = ["json"] }
 reth-chainspec = { workspace = true }
 reth-evm = { workspace = true }

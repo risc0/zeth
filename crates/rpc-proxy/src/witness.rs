@@ -61,6 +61,8 @@ where
 
     let mut db =
         PreflightDb::new(ProviderDb::new(provider.clone(), ProviderConfig::default(), parent_hash));
+
+    debug!(%block_hash, "Preprocessing transactions with access lists");
     for tx in recovered_block.body().transactions() {
         if let Some(access_list) = tx.access_list() {
             db.add_access_list(access_list).await?;

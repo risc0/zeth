@@ -23,6 +23,7 @@ use async_trait::async_trait;
 use risc0_ethereum_trie::Nibbles;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use tracing::trace;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -63,6 +64,8 @@ where
         address: Address,
         prefix: Nibbles,
     ) -> anyhow::Result<B256> {
+        trace!(%address, ?prefix, "debug_storageRangeAt");
+
         let start_key = B256::right_padding_from(&prefix.pack());
         let params = (block_hash, 0, address, start_key, 1);
 

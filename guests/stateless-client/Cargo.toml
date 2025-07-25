@@ -14,8 +14,16 @@ blst = { version = "=0.3.15" }
 c-kzg = { version = "=2.1.1" }
 zeth-chainspec = { path = "../../crates/chainspec" }
 zeth-core = { path = "../../crates/core" }
-revm = { version = "27.1", default-features = false, features = ["std", "c-kzg", "portable", "blst", "bn"] }
-risc0-zkvm = { version = "2.3", features = ["unstable"] }
+revm = { version = "27.1", default-features = false, features = [
+    "std",
+    "c-kzg",
+    "portable",
+    "blst",
+    "bn",
+] }
+risc0-zkvm = { git = "https://github.com/risc0/risc0.git", branch = "flaub/default-prover", features = [
+    "unstable",
+] }
 sha2 = { version = "=0.10.9" }
 substrate-bn = { version = "=0.6.0" }
 tiny-keccak = { version = "=2.0.2" }

@@ -1,16 +1,11 @@
 [package]
-name = "zeth-guests"
-version = "0.1.0"
-edition = "2021"
+name = "guests"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
 
 [build-dependencies]
 risc0-build = { workspace = true }
 
 [package.metadata.risc0]
-methods = ["reth-ethereum", "reth-optimism"]
-
-[features]
-debug-guest-build = []
-default = [
-    "risc0-build/docker"
-]
+methods = ["stateless-client"]

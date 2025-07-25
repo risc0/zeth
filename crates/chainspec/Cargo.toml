@@ -1,0 +1,14 @@
+[package]
+name = "zeth-chainspec"
+version = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+alloy-consensus = { workspace = true }
+alloy-eips = { workspace = true }
+alloy-evm = { workspace = true }
+alloy-genesis = { workspace = true }
+alloy-hardforks = { workspace = true }
+alloy-primitives = { workspace = true }
+reth-chainspec = { workspace = true }
+reth-network-peers = { workspace = true }

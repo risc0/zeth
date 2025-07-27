@@ -50,8 +50,8 @@ jobs:
 
       - name: run tests
         env:
-            RISC0_DEV_MODE: true
-        run: cargo test 
+          RISC0_DEV_MODE: true
+        run: cargo test
 
       - name: Show sccache stats
         run: sccache --show-stats
@@ -86,7 +86,7 @@ jobs:
         run: cargo clippy --workspace -- -D warnings
 
       - name: check guest code formatting
-        working-directory: guest/stateless-client
+        working-directory: guests/stateless-client
         run: cargo fmt --all --check
 
       - name: Show sccache stats

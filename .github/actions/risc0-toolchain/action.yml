@@ -4,13 +4,13 @@ description: Install risczero toolchain
 inputs:
   version:
     description: "RISC Zero zkVM version"
+    default: ""
     required: false
-    type: string
 
   rust-version:
     description: "RISC Zero Rust toolchain version"
+    default: ""
     required: false
-    type: string
 
 runs:
   using: composite

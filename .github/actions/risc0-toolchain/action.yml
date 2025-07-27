@@ -23,8 +23,8 @@ runs:
 
     - name: install rzup components
       run: |
-        rzup install --verbose cargo-risczero ${{ inputs.risczero-version }}
-        rzup install --verbose r0vm ${{ inputs.risczero-version }}
+        rzup install --verbose cargo-risczero ${{ inputs.version }}
+        rzup install --verbose r0vm ${{ inputs.version }}
         rzup install --verbose rust ${{ inputs.rust-version }}
         rzup install --verbose cpp
       shell: bash

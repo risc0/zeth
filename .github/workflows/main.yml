@@ -1,0 +1,101 @@
+name: main
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+# this is needed to gain access via OIDC to the S3 bucket for caching
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  RUST_BACKTRACE: "1"
+  RISC0_RUST_VERSION: 1.88.0
+  RISC0_VERSION: 2.3.1
+
+jobs:
+  test:
+    runs-on: [ self-hosted, prod, "${{ matrix.os }}", "${{ matrix.arch }}", "${{ matrix.device }}" ]
+    strategy:
+      matrix:
+        include:
+          - os: Linux
+            arch: X64
+            feature: default
+            device: cpu
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v4
+
+      - name: install rust
+        uses: risc0/risc0/.github/actions/rustup@fbe1d0bb75c21fe36cefd87bae25f424b711b291
+
+      - name: install sccache
+        uses: risc0/risc0/.github/actions/sccache@fbe1d0bb75c21fe36cefd87bae25f424b711b291
+        with:
+          key: ${{ matrix.os }}-${{ matrix.feature }}
+
+      - name: install risc0
+        uses: ./.github/actions/risc0-toolchain
+        with:
+          version: ${{ env.RISC0_VERSION }}
+          rust-version: ${{ env.RISC0_RUST_VERSION }}
+
+      - name: run tests
+        env:
+          RISC0_DEV_MODE: true
+        run: cargo test
+
+      - name: Show sccache stats
+        run: sccache --show-stats
+
+  lint:
+    runs-on: [ self-hosted, prod, "${{ matrix.os }}", "${{ matrix.arch }}", "${{ matrix.device }}" ]
+    strategy:
+      matrix:
+        include:
+          - os: Linux
+            arch: X64
+            feature: default
+            device: cpu
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v4
+
+      - name: install python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: license check
+        run: python license-check.py
+
+      - name: install rust
+        uses: risc0/risc0/.github/actions/rustup@fbe1d0bb75c21fe36cefd87bae25f424b711b291
+
+      - name: install sccache
+        uses: risc0/risc0/.github/actions/sccache@fbe1d0bb75c21fe36cefd87bae25f424b711b291
+        with:
+          key: ${{ matrix.os }}-${{ matrix.feature }}
+
+      - name: check formatting
+        run: cargo fmt --all --check
+
+      - name: run clippy
+        env:
+          RISC0_SKIP_BUILD: 1
+        run: cargo clippy --workspace -- -D warnings
+
+      - name: check guest code formatting
+        working-directory: guests/stateless-client
+        run: cargo fmt --all --check
+
+      - name: Show sccache stats
+        run: sccache --show-stats

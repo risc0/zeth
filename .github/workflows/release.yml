@@ -69,6 +69,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install Rust
+        uses: risc0/risc0/.github/actions/rustup@fbe1d0bb75c21fe36cefd87bae25f424b711b291
+
       - name: Install risc0
         uses: ./.github/actions/risc0-toolchain
         with:

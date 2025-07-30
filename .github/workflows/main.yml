@@ -51,7 +51,7 @@ jobs:
       - name: run tests
         env:
           RISC0_DEV_MODE: true
-        run: cargo test
+        run: cargo test --locked
 
       - name: Show sccache stats
         run: sccache --show-stats
@@ -91,7 +91,7 @@ jobs:
       - name: run clippy
         env:
           RISC0_SKIP_BUILD: 1
-        run: cargo clippy --workspace -- -D warnings
+        run: cargo clippy --workspace --locked -- -D warnings
 
       - name: check guest code formatting
         working-directory: guests/stateless-client

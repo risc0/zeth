@@ -20,6 +20,23 @@ You'll need the following installed to run Zeth:
 1. [Rust](https://www.rust-lang.org/tools/install) (see rust-toolchain.toml for the exact version).
 2. The [RISC Zero toolchain](https://dev.risczero.com/api/zkvm/install).
 
+## Building the Project
+
+To build the host CLI and guest programs, run:
+```bash
+cargo build --release
+```
+
+### Deterministic Guest Builds with Docker
+
+For ZK proofs, it is critical that the guest binary is built deterministically. This ensures that every developer builds the exact same guest program, resulting in the same Image ID, which is essential for verification.
+
+This project is configured to use Docker to achieve reproducible builds. If you have Docker installed, you can enable this feature by setting an environment variable:
+```bash
+RISC0_USE_DOCKER=1 cargo build --release
+```
+This will build the guest programs inside a controlled Docker environment, guaranteeing a deterministic output. The project's release workflow uses this method to build the official guest binaries.
+
 ## Usage
 
 Zeth requires an archival Ethereum RPC provider to fetch block and state data. You can provide this using the `ETH_RPC_URL` environment variable or the `--eth-rpc-url` command-line argument.

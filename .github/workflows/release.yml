@@ -92,11 +92,12 @@ jobs:
           echo "IMAGE_ID=${IMAGE_ID}" >> $GITHUB_OUTPUT
         shell: bash
 
-#      - name: Upload guest binary to release
-#        uses: svenstaro/upload-release-action@v2
-#        with:
-#          repo_token: ${{ secrets.GITHUB_TOKEN }}
-#          file: /tmp/guest-binaries/${{ matrix.guest }}.bin
-#          asset_name: ${{ matrix.guest }}_${{ steps.compute_image_id.outputs.IMAGE_ID }}.bin
-#          tag: ${{ github.ref }}
-#          overwrite: true
+      - name: Upload guest binary to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: /tmp/guest-binaries/${{ matrix.guest }}.bin
+          asset_name: ${{ matrix.guest }}_${{ steps.compute_image_id.outputs.IMAGE_ID }}.bin
+          tag: "v0.0.0-test-pr"
+          # tag: ${{ github.ref }}
+          overwrite: true

@@ -20,7 +20,8 @@ env:
   RISC0_RUST_VERSION: 1.88.0
   RISC0_VERSION: 2.3.1
   GUEST_ARTIFACT_NAME: guest-binaries
-  GUEST_BUILD_PATH: target/riscv-guest/guests/stateless-client/riscv32im-risc0-zkvm-elf/docker
+  #GUEST_BUILD_PATH: target/riscv-guest/guests/stateless-client/riscv32im-risc0-zkvm-elf/docker
+  GUEST_BUILD_PATH: target/riscv-guest/guests/stateless-client/riscv32im-risc0-zkvm-elf/release
 
 jobs:
   build-guests:

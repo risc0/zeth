@@ -13,10 +13,11 @@ guests = { path = "guests" }
 zeth-core = { path = "crates/core" }
 zeht-chainspec = { path = "crates/chainspec" }
 
-#risc0
+# risc0
 risc0-build = { version = "2.3", features = ["unstable"] }
 risc0-zkvm = { version = "2.3", features = ["unstable"] }
-risc0-ethereum-trie = { git = "https://github.com/risc0/risc0-ethereum.git", branch = "wollac/stateless-trie" }
+# We require Trie::from_prehashed_nodes() which is not yet present in latest v2.2.2
+risc0-ethereum-trie = { git = "https://github.com/risc0/risc0-ethereum.git", rev = "4a5efe13b3655258b89e7082c57743e445133dc8" }
 
 # reth
 reth-primitives-traits = { git = "https://github.com/paradigmxyz/reth.git", tag = "v1.6.0" }

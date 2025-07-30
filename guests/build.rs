@@ -15,6 +15,8 @@
 use risc0_build::{DockerOptionsBuilder, GuestOptionsBuilder};
 use std::{collections::HashMap, env, path::PathBuf};
 
+const RISC0_RUST_VERSION: &str = "1.88.0";
+
 fn main() {
     // This build script is responsible for building the guest code and embedding the resulting
     // ELF binaries into the host crate.
@@ -30,9 +32,7 @@ fn main() {
 
     // Use Docker for deterministic builds if RISC0_USE_DOCKER is set.
     if env::var("RISC0_USE_DOCKER").is_ok() {
-        // Get the active rustc version to create a version-specific Docker tag.
-        let rust_version = rustc_version::version().expect("failed to get rustc version");
-        let docker_tag = format!("r0.{}.{}.0", rust_version.major, rust_version.minor);
+        let docker_tag = format!("r0.{}", RISC0_RUST_VERSION);
         println!("cargo:warning=Using Docker build with tag: {}", &docker_tag);
 
         let docker_opts = DockerOptionsBuilder::default()

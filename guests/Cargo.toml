@@ -6,7 +6,6 @@ rust-version = { workspace = true }
 
 [build-dependencies]
 risc0-build = { workspace = true }
-rustc_version = { workspace = true }
 
 [package.metadata.risc0]
 methods = ["stateless-client"]

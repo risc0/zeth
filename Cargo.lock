@@ -2784,7 +2784,6 @@ name = "guests"
 version = "0.1.0"
 dependencies = [
  "risc0-build",
- "rustc_version 0.4.1",
 ]
 
 [[package]]

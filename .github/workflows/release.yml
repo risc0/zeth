@@ -4,13 +4,7 @@ on:
   push:
     tags:
       - "v*"
-  # Add workflow_dispatch to allow manual runs for testing purposes.
-  workflow_dispatch:
-    # Add an input for the tag name, which is required for manual test runs.
-    inputs:
-      tag:
-        description: 'The git tag of the draft release to upload assets to (e.g., v0.0.0-test)'
-        required: true
+  pull_request: # Temporarily change this for testing
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -91,11 +85,11 @@ jobs:
           echo "IMAGE_ID=${IMAGE_ID}" >> $GITHUB_OUTPUT
         shell: bash
 
-      - name: Upload guest binary to release
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: /tmp/guest-binaries/${{ matrix.guest }}.bin
-          asset_name: ${{ matrix.guest }}_${{ steps.compute_image_id.outputs.IMAGE_ID }}.bin
-          tag: ${{ github.ref }}
-          overwrite: true
+#      - name: Upload guest binary to release
+#        uses: svenstaro/upload-release-action@v2
+#        with:
+#          repo_token: ${{ secrets.GITHUB_TOKEN }}
+#          file: /tmp/guest-binaries/${{ matrix.guest }}.bin
+#          asset_name: ${{ matrix.guest }}_${{ steps.compute_image_id.outputs.IMAGE_ID }}.bin
+#          tag: ${{ github.ref }}
+#          overwrite: true

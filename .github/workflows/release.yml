@@ -66,6 +66,9 @@ jobs:
         guest: [ "mainnet", "sepolia", "holesky" ]
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Install risc0
         uses: ./.github/actions/risc0-toolchain
         with:

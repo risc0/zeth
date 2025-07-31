@@ -1,0 +1,100 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Grant permissions for OIDC (if needed for sccache) and for writing to releases.
+permissions:
+  id-token: write
+  contents: write
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  RISC0_RUST_VERSION: 1.88.0
+  RISC0_VERSION: 2.3.1
+  GUEST_ARTIFACT_NAME: guest-binaries
+  GUEST_BUILD_PATH: target/riscv-guest/guests/stateless-client/riscv32im-risc0-zkvm-elf/docker
+
+jobs:
+  build-guests:
+    runs-on: [ self-hosted, prod, Linux, X64, cpu ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: risc0/risc0/.github/actions/rustup@fbe1d0bb75c21fe36cefd87bae25f424b711b291
+
+      - name: Install sccache
+        uses: risc0/risc0/.github/actions/sccache@fbe1d0bb75c21fe36cefd87bae25f424b711b291
+        with:
+          key: Linux-default
+
+      - name: Install risc0
+        uses: ./.github/actions/risc0-toolchain
+        with:
+          version: ${{ env.RISC0_VERSION }}
+          rust-version: ${{ env.RISC0_RUST_VERSION }}
+
+      - name: Build guest binaries with Docker
+        env:
+          RISC0_USE_DOCKER: 1
+        run: cargo build --release --package guests
+
+      - name: Upload guest binaries as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.GUEST_ARTIFACT_NAME }}
+          path: ${{ env.GUEST_BUILD_PATH }}/*.bin
+
+  upload-release-assets:
+    name: Upload ${{ matrix.guest }} to release
+    needs: build-guests
+    runs-on: [ self-hosted, prod, Linux, X64, cpu ]
+
+    strategy:
+      matrix:
+        guest: [ "mainnet", "sepolia", "holesky" ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: risc0/risc0/.github/actions/rustup@fbe1d0bb75c21fe36cefd87bae25f424b711b291
+
+      - name: Install risc0
+        uses: ./.github/actions/risc0-toolchain
+        with:
+          version: ${{ env.RISC0_VERSION }}
+          rust-version: ${{ env.RISC0_RUST_VERSION }}
+
+      - name: Download guest binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.GUEST_ARTIFACT_NAME }}
+          path: /tmp/guest-binaries
+
+      - name: Compute image ID
+        id: compute_image_id
+        run: |
+          ELF_PATH="/tmp/guest-binaries/${{ matrix.guest }}.bin"
+          IMAGE_ID=$(r0vm --elf "${ELF_PATH}" --id)
+          echo "IMAGE_ID=${IMAGE_ID}" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Upload guest binary to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: /tmp/guest-binaries/${{ matrix.guest }}.bin
+          asset_name: ${{ matrix.guest }}_${{ steps.compute_image_id.outputs.IMAGE_ID }}.bin
+          tag: ${{ github.ref }}
+          overwrite: true

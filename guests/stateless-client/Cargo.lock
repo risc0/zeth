@@ -4775,7 +4775,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "stateless-client"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "blst",
  "c-kzg",
@@ -5898,7 +5898,7 @@ dependencies = [
 
 [[package]]
 name = "zeth-chainspec"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -5912,7 +5912,7 @@ dependencies = [
 
 [[package]]
 name = "zeth-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",

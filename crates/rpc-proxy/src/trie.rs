@@ -20,12 +20,10 @@ use alloy::{
 };
 use alloy_primitives::U256;
 use anyhow::{Context, Result, bail};
-use revm::{
-    bytecode::bitvec::macros::internal::funty::Integral, database::StorageWithOriginalValues,
-};
+use revm::database::StorageWithOriginalValues;
 use risc0_ethereum_trie::{Nibbles, Trie, orphan};
 use std::collections::HashSet;
-use tracing::{debug, trace, warn};
+use tracing::{debug, trace};
 
 static LOOKUP: PreimageLookup = PreimageLookup::new();
 
@@ -178,7 +176,7 @@ impl PreimageLookup {
 
         // Calculate the little-endian index from the input nibbles.
         // E.g., for [A, B, C], the index will be 0x...CBA.
-        let idx = nibbles.to_vec().rfold(0, |a, n| (a << 4) | n);
+        let idx = nibbles.to_vec().iter().rfold(0, |a, n| (a << 4) | *n as usize);
 
         // Read the 8-byte nonce from the table at the calculated index.
         let start = idx * 8;

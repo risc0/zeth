@@ -61,7 +61,6 @@ itertools = "0.14"
 serde = "1.0"
 serde_json = "1.0"
 thiserror = "2"
-tiny-keccak = "2.0.2"
 tokio = { version = "1.46", features = ['full'] }
 tracing = "0.1"
 tracing-subscriber = "0.3"

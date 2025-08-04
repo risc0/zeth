@@ -4,6 +4,10 @@ version = { workspace = true }
 edition = { workspace = true }
 rust-version = { workspace = true }
 
+[build-dependencies]
+alloy-primitives = { workspace = true }
+alloy-trie = { workspace = true }
+
 [dependencies]
 actix-web = "4"
 alloy = { workspace = true }

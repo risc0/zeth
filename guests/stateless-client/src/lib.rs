@@ -16,18 +16,18 @@
 
 use risc0_zkvm::guest::env;
 use zeth_chainspec::ChainSpec;
-use zeth_core::{EthEvmConfig, StatelessInput, validate_block};
+use zeth_core::{EthEvmConfig, Input, validate_block};
 
 pub fn entry(evm_config: EthEvmConfig<ChainSpec>) {
     let chain_spec = evm_config.chain_spec();
     env::log(&format!("EVM config: {chain_spec}"));
 
     env::log("cycle-tracker-report-start: read_input");
-    let input: StatelessInput = env::read();
+    let input: Input = env::read();
     env::log("cycle-tracker-report-end: read_input");
 
     env::log("cycle-tracker-report-start: validation");
-    let block_hash = validate_block(input.block, input.witness, evm_config).unwrap();
+    let block_hash = validate_block(input, evm_config).unwrap();
     env::log("cycle-tracker-report-end: validation");
 
     env::commit_slice(block_hash.as_slice());

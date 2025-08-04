@@ -9,12 +9,16 @@ alloy-consensus = { workspace = true }
 alloy-primitives = { workspace = true, features = ["map"] }
 alloy-rlp = { workspace = true }
 alloy-trie = { workspace = true }
+k256 = { workspace = true, features = ["serde", "pem"] }
 reth-chainspec = { workspace = true }
 reth-errors = { workspace = true }
 reth-ethereum-primitives = { workspace = true }
 reth-evm = { workspace = true }
 reth-evm-ethereum = { workspace = true }
+reth-primitives-traits = { workspace = true }
 reth-stateless = { workspace = true }
 reth-trie-common = { workspace = true }
 revm-bytecode = { workspace = true }
 risc0-ethereum-trie = { workspace = true }
+serde = { workspace = true }
+serde_with = { workspace = true }

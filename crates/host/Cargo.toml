@@ -10,9 +10,10 @@ alloy-chains = { workspace = true }
 anyhow = { workspace = true }
 bytemuck = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
-futures = { workspace = true }
 guests = { workspace = true }
+k256 = { workspace = true }
 reth-chainspec = { workspace = true }
+reth-ethereum-primitives = { workspace = true }
 reth-stateless = { workspace = true }
 risc0-zkvm = { workspace = true }
 serde_json = { workspace = true }

@@ -12,39 +12,83 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloy_consensus::Header;
+use alloy_consensus::{Header, private::serde};
 use alloy_primitives::{Address, B256, Bytes, KECCAK256_EMPTY, U256, keccak256, map::B256Map};
 use alloy_trie::{EMPTY_ROOT_HASH, TrieAccount};
+use k256::ecdsa::{VerifyingKey, signature::hazmat::PrehashVerifier};
 use reth_chainspec::{EthChainSpec, Hardforks};
 use reth_errors::ProviderError;
-use reth_ethereum_primitives::Block;
+use reth_ethereum_primitives::{Block, TransactionSigned};
 use reth_evm::{EthEvmFactory, eth::spec::EthExecutorSpec};
+use reth_primitives_traits::RecoveredBlock;
 use reth_stateless::validation::StatelessValidationError;
 use reth_trie_common::HashedPostState;
 use revm_bytecode::Bytecode;
 use risc0_ethereum_trie::CachedTrie;
 use std::{cell::RefCell, collections::hash_map::Entry, fmt::Debug, marker::PhantomData};
 
-pub use reth_stateless::{ExecutionWitness, StatelessInput, StatelessTrie};
+pub use reth_stateless::{ExecutionWitness, StatelessTrie};
 
 pub type EthEvmConfig<C> = reth_evm_ethereum::EthEvmConfig<C, EthEvmFactory>;
+
+/// `StatelessInput` is a convenience structure for serializing the input needed
+/// for the stateless validation function.
+#[serde_with::serde_as]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct Input {
+    /// The block being executed in the stateless validation function
+    #[serde_as(
+        as = "reth_primitives_traits::serde_bincode_compat::Block<reth_ethereum_primitives::TransactionSigned, alloy_consensus::Header>"
+    )]
+    pub block: Block,
+    /// List of signing public keys for each transaction in the block.
+    pub signers: Vec<VerifyingKey>,
+    /// `ExecutionWitness` for the stateless validation function
+    pub witness: ExecutionWitness,
+}
 
 /// Performs stateless validation of a block using the provided witness data.
 #[inline]
 pub fn validate_block<C>(
-    block: Block,
-    witness: ExecutionWitness,
+    Input { block, signers, witness }: Input,
     config: EthEvmConfig<C>,
 ) -> Result<B256, StatelessValidationError>
 where
     C: EthExecutorSpec + EthChainSpec<Header = Header> + Hardforks + 'static,
 {
-    reth_stateless::stateless_validation_with_trie::<SparseState, _, _>(
-        block,
-        witness,
-        config.chain_spec().clone(),
-        config,
+    let chain_spec = config.chain_spec().clone();
+    let is_homestead = chain_spec.is_homestead_active_at_block(block.number);
+
+    // verify the transaction signatures and compute senders
+    let senders = signers
+        .iter()
+        .zip(block.body.transactions())
+        .map(|(vk, tx)| recover_sender(vk, tx, is_homestead))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| StatelessValidationError::SignerRecovery)?;
+
+    // create a RecoveredBlock from the senders
+    let block_hash = block.hash_slow();
+    let block = RecoveredBlock::new(block, senders, block_hash);
+
+    reth_stateless::stateless_validation_with_trie::<SparseState, _, _, _>(
+        block, witness, chain_spec, config,
     )
+}
+
+/// Recovers the sending address from the given public key.
+fn recover_sender(
+    vk: &VerifyingKey,
+    tx: &TransactionSigned,
+    is_homestead: bool,
+) -> Result<Address, k256::ecdsa::Error> {
+    let sig = tx.signature();
+
+    // non-normalized signatures are only valid pre-homestead
+    let sig = if is_homestead { sig.normalized_s().to_k256() } else { sig.to_k256() };
+    sig.and_then(|sig| vk.verify_prehash(tx.signature_hash().as_slice(), &sig))?;
+
+    Ok(Address::from_public_key(vk))
 }
 
 /// Zero-overhead helper for tries that only contain RLP encoded data.

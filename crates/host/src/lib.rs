@@ -17,14 +17,17 @@ use alloy::{
     primitives::B256,
     providers::{Provider, ext::DebugApi},
     rpc::types::debug::ExecutionWitness,
+    signers::k256,
 };
 use alloy_chains::NamedChain;
 use anyhow::{Context, Result, bail};
 use guests::{HOLESKY_ELF, MAINNET_ELF, SEPOLIA_ELF};
+use k256::ecdsa::VerifyingKey;
 use reth_chainspec::{ChainSpec, EthChainSpec};
-use reth_stateless::StatelessInput;
+use reth_ethereum_primitives::TransactionSigned;
 use risc0_zkvm::{Digest, ExecutorEnvBuilder, Receipt, compute_image_id, default_prover};
 use std::sync::Arc;
+use zeth_core::Input;
 
 /// Processes Ethereum blocks, including creating inputs, validating, and proving.
 pub struct BlockProcessor<P> {
@@ -83,8 +86,8 @@ impl<P: Provider + DebugApi> BlockProcessor<P> {
         Ok((elf, image_id))
     }
 
-    /// Fetches the necessary data from the RPC endpoint to create the StatelessInput.
-    pub async fn create_input(&self, block: impl Into<BlockId>) -> Result<(StatelessInput, B256)> {
+    /// Fetches the necessary data from the RPC endpoint to create the input.
+    pub async fn create_input(&self, block: impl Into<BlockId>) -> Result<(Input, B256)> {
         let block_id = block.into();
         let rpc_block = self
             .provider
@@ -94,10 +97,13 @@ impl<P: Provider + DebugApi> BlockProcessor<P> {
             .with_context(|| format!("block {block_id} not found"))?;
         let witness = self.provider.debug_execution_witness(rpc_block.number().into()).await?;
         let block_hash = rpc_block.header.hash_slow();
+        let block = reth_ethereum_primitives::Block::from(rpc_block);
+        let signers = recover_signers(block.body.transactions())?;
 
         Ok((
-            StatelessInput {
-                block: rpc_block.into(),
+            Input {
+                block,
+                signers,
                 witness: ExecutionWitness {
                     state: witness.state,
                     codes: witness.codes,
@@ -110,9 +116,9 @@ impl<P: Provider + DebugApi> BlockProcessor<P> {
     }
 
     /// Validates the block execution on the host machine.
-    pub fn validate(&self, input: StatelessInput) -> Result<B256> {
+    pub fn validate(&self, input: Input) -> Result<B256> {
         let config = zeth_core::EthEvmConfig::new(self.chain_spec.clone());
-        let hash = zeth_core::validate_block(input.block, input.witness, config)?;
+        let hash = zeth_core::validate_block(input, config)?;
 
         Ok(hash)
     }
@@ -120,7 +126,7 @@ impl<P: Provider + DebugApi> BlockProcessor<P> {
     /// Generates a RISC Zero proof of block execution.
     ///
     /// This method is computationally intensive and is run on a blocking thread.
-    pub async fn prove(&self, input: StatelessInput) -> Result<(Receipt, Digest)> {
+    pub async fn prove(&self, input: Input) -> Result<(Receipt, Digest)> {
         let (elf, image_id) = self.elf()?;
 
         // prove in a blocking thread using the default prover
@@ -135,12 +141,27 @@ impl<P: Provider + DebugApi> BlockProcessor<P> {
     }
 }
 
-/// Serializes the StatelessInput into a byte slice suitable for the RISC Zero ZKVM.
+/// Serializes the input into a byte slice suitable for the RISC Zero ZKVM.
 ///
 /// The ZKVM guest expects aligned words, and this function handles the conversion
 /// from a struct to a raw byte vector.
-pub fn to_zkvm_input_bytes(input: &StatelessInput) -> Result<Vec<u8>> {
+pub fn to_zkvm_input_bytes(input: &Input) -> Result<Vec<u8>> {
     let words = risc0_zkvm::serde::to_vec(input)?;
     let bytes = bytemuck::cast_slice(words.as_slice());
     Ok(bytes.to_vec())
+}
+
+/// Recovers the signing [`VerifyingKey`] from each transaction's signature.
+pub fn recover_signers<'a, I>(txs: I) -> Result<Vec<VerifyingKey>>
+where
+    I: IntoIterator<Item = &'a TransactionSigned>,
+{
+    txs.into_iter()
+        .enumerate()
+        .map(|(i, tx)| {
+            tx.signature()
+                .recover_from_prehash(&tx.signature_hash())
+                .with_context(|| format!("failed to recover signature for tx #{i}"))
+        })
+        .collect::<Result<Vec<_>, _>>()
 }

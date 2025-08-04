@@ -18,3 +18,6 @@ reth-stateless = { workspace = true }
 reth-trie-common = { workspace = true }
 revm-bytecode = { workspace = true }
 risc0-ethereum-trie = { workspace = true }
+
+[features]
+unsafe-pre-merge = []

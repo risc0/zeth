@@ -13,19 +13,20 @@
 // limitations under the License.
 
 use alloy_consensus::Header;
-use alloy_primitives::{Address, B256, Bytes, KECCAK256_EMPTY, U256, keccak256, map::B256Map};
+use alloy_primitives::{
+    Address, B256, Bytes, U256, keccak256,
+    map::{AddressMap, B256Map},
+};
 use alloy_trie::{EMPTY_ROOT_HASH, TrieAccount};
 use reth_chainspec::{EthChainSpec, Hardforks};
 use reth_errors::ProviderError;
 use reth_ethereum_primitives::Block;
-use reth_evm::{EthEvmFactory, eth::spec::EthExecutorSpec};
+use reth_evm::{EthEvmFactory, eth::spec::EthExecutorSpec, revm::database::BundleAccount};
 use reth_stateless::validation::StatelessValidationError;
-use reth_trie_common::HashedPostState;
+pub use reth_stateless::{ExecutionWitness, StatelessInput, StatelessTrie};
 use revm_bytecode::Bytecode;
 use risc0_ethereum_trie::CachedTrie;
 use std::{cell::RefCell, collections::hash_map::Entry, fmt::Debug, marker::PhantomData};
-
-pub use reth_stateless::{ExecutionWitness, StatelessInput, StatelessTrie};
 
 pub type EthEvmConfig<C> = reth_evm_ethereum::EthEvmConfig<C, EthEvmFactory>;
 
@@ -90,8 +91,8 @@ impl<T: alloy_rlp::Decodable + alloy_rlp::Encodable> RlpTrie<T> {
 struct SparseState {
     /// state MPT containing all used accounts
     state: RlpTrie<TrieAccount>,
-    /// storage MPTs sorted by the hashed address of their account
-    storages: RefCell<B256Map<RlpTrie<U256>>>,
+    /// storage MPTs sorted by their account's address
+    storages: RefCell<AddressMap<RlpTrie<U256>>>,
 
     /// all relevant MPT nodes by their Keccak hash
     rlp_by_digest: B256Map<Bytes>,
@@ -99,19 +100,23 @@ struct SparseState {
 
 impl SparseState {
     /// Removes an account from the state.
-    fn remove_account(&mut self, hashed_address: &B256) {
-        self.state.remove(hashed_address);
-        self.storages.get_mut().remove(hashed_address);
+    fn remove_account(&mut self, address: &Address) {
+        self.state.remove(keccak256(address));
+        self.storages.get_mut().remove(address);
     }
 
     /// Clears the storage of an account.
-    fn clear_storage(&mut self, hashed_address: B256) -> &mut RlpTrie<U256> {
-        self.storages.get_mut().entry(hashed_address).insert_entry(RlpTrie::default()).into_mut()
+    fn clear_storage(&mut self, address: Address) -> &mut RlpTrie<U256> {
+        self.storages.get_mut().entry(address).insert_entry(RlpTrie::default()).into_mut()
     }
 
     /// Returns a mutable version of the storage trie of the given account.
-    fn storage_trie_mut(&mut self, hashed_address: B256) -> alloy_rlp::Result<&mut RlpTrie<U256>> {
-        let trie = match self.storages.get_mut().entry(hashed_address) {
+    fn storage_trie_mut(
+        &mut self,
+        address: Address,
+        hashed_address: &B256,
+    ) -> alloy_rlp::Result<&mut RlpTrie<U256>> {
+        let trie = match self.storages.get_mut().entry(address) {
             Entry::Occupied(entry) => entry.into_mut(),
             Entry::Vacant(entry) => {
                 // build the storage trie matching the storage root of the account
@@ -146,7 +151,7 @@ impl StatelessTrie for SparseState {
             .map(|code| (keccak256(code), Bytecode::new_raw(code.clone())))
             .collect();
 
-        Ok((Self { state, storages: RefCell::new(B256Map::default()), rlp_by_digest }, bytecode))
+        Ok((Self { state, storages: RefCell::new(AddressMap::default()), rlp_by_digest }, bytecode))
     }
 
     /// Returns the `TrieAccount` that corresponds to the `Address`.
@@ -157,7 +162,7 @@ impl StatelessTrie for SparseState {
             Some(account) => {
                 // each time an account is accessed, check whether its storage trie already exists
                 // otherwise construct it from the witness data and the account's storage root
-                match self.storages.borrow_mut().entry(hashed_address) {
+                match self.storages.borrow_mut().entry(address) {
                     Entry::Vacant(entry) => {
                         entry.insert(RlpTrie::from_prehashed(
                             account.storage_root,
@@ -176,60 +181,59 @@ impl StatelessTrie for SparseState {
     fn storage(&self, address: Address, slot: U256) -> Result<U256, ProviderError> {
         let storages = self.storages.borrow();
         // storage() is always be called after account(), so the storage trie must already exist
-        let storage_trie = storages.get(&keccak256(address)).unwrap();
+        let storage_trie = storages.get(&address).unwrap();
         Ok(storage_trie.get(keccak256(B256::from(slot)))?.unwrap_or(U256::ZERO))
     }
 
     /// Computes the new state root from the HashedPostState.
-    fn calculate_state_root(
+    fn calculate_state_root<'a>(
         &mut self,
-        state: HashedPostState,
+        state: impl IntoIterator<Item = (&'a Address, &'a BundleAccount)>,
     ) -> Result<B256, StatelessValidationError> {
         let mut removed_accounts = Vec::new();
-        for (hashed_address, account) in state.accounts {
+        for (address, account) in state {
             // nonexisting accounts must be removed from the state
-            let Some(account) = account else {
-                removed_accounts.push(hashed_address);
+            let Some(account_info) = &account.info else {
+                removed_accounts.push(address);
                 continue;
             };
 
+            let hashed_address = keccak256(address);
+
             // apply storage changes before computing the storage root
-            let storage_root = match state.storages.get(&hashed_address) {
-                None => self.storage_trie_mut(hashed_address).unwrap().hash(),
-                Some(storage) => {
-                    let storage_trie = if storage.wiped {
-                        self.clear_storage(hashed_address)
-                    } else {
-                        self.storage_trie_mut(hashed_address).unwrap()
-                    };
+            let storage_root = {
+                let storage_trie = if account.status.was_destroyed() {
+                    self.clear_storage(*address)
+                } else {
+                    self.storage_trie_mut(*address, &hashed_address).unwrap()
+                };
 
-                    // apply all state modifications
-                    for (hashed_key, value) in &storage.storage {
-                        if !value.is_zero() {
-                            storage_trie.insert(hashed_key, *value);
-                        }
+                // apply all state modifications
+                for (key, value) in &account.storage {
+                    if value.is_changed() && !value.present_value.is_zero() {
+                        storage_trie.insert(keccak256(B256::from(*key)), value.present_value);
                     }
-                    // removals must happen last, otherwise unresolved orphans might still exist
-                    for (hashed_key, value) in &storage.storage {
-                        if value.is_zero() {
-                            storage_trie.remove(hashed_key);
-                        }
-                    }
-
-                    storage_trie.hash()
                 }
+                // removals must happen last, otherwise unresolved orphans might still exist
+                for (key, value) in &account.storage {
+                    if value.is_changed() && value.present_value.is_zero() {
+                        storage_trie.remove(keccak256(B256::from(*key)));
+                    }
+                }
+
+                storage_trie.hash()
             };
 
             // update/insert the account after all changes have been processed
             let account = TrieAccount {
-                nonce: account.nonce,
-                balance: account.balance,
+                nonce: account_info.nonce,
+                balance: account_info.balance,
                 storage_root,
-                code_hash: account.bytecode_hash.unwrap_or(KECCAK256_EMPTY),
+                code_hash: account_info.code_hash,
             };
             self.state.insert(hashed_address, account);
         }
-        removed_accounts.iter().for_each(|hashed_address| self.remove_account(hashed_address));
+        removed_accounts.iter().for_each(|address| self.remove_account(address));
 
         Ok(self.state.hash())
     }

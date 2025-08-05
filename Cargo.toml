@@ -20,15 +20,15 @@ risc0-zkvm = { version = "2.3", features = ["unstable"] }
 risc0-ethereum-trie = { git = "https://github.com/risc0/risc0-ethereum.git", rev = "4a5efe13b3655258b89e7082c57743e445133dc8" }
 
 # reth
-reth-primitives-traits = { git = "https://github.com/paradigmxyz/reth.git", tag = "v1.6.0" }
-reth-ethereum-primitives = { git = "https://github.com/paradigmxyz/reth.git", tag = "v1.6.0" }
-reth-stateless = { git = "https://github.com/paradigmxyz/reth.git", tag = "v1.6.0" }
-reth-chainspec = { git = "https://github.com/paradigmxyz/reth.git", tag = "v1.6.0" }
-reth-errors = { git = "https://github.com/paradigmxyz/reth.git", tag = "v1.6.0" }
-reth-evm = { git = "https://github.com/paradigmxyz/reth.git", tag = "v1.6.0" }
-reth-evm-ethereum = { git = "https://github.com/paradigmxyz/reth.git", tag = "v1.6.0" }
-reth-network-peers = { git = "https://github.com/paradigmxyz/reth.git", tag = "v1.6.0" }
-reth-trie-common = { git = "https://github.com/paradigmxyz/reth.git", tag = "v1.6.0" }
+reth-primitives-traits = { git = "https://github.com/risc0/reth.git", branch = "wollac/non-hashed-state" }
+reth-ethereum-primitives = { git = "https://github.com/risc0/reth.git", branch = "wollac/non-hashed-state" }
+reth-stateless = { git = "https://github.com/risc0/reth.git", branch = "wollac/non-hashed-state" }
+reth-chainspec = { git = "https://github.com/risc0/reth.git", branch = "wollac/non-hashed-state" }
+reth-errors = { git = "https://github.com/risc0/reth.git", branch = "wollac/non-hashed-state" }
+reth-evm = { git = "https://github.com/risc0/reth.git", branch = "wollac/non-hashed-state" }
+reth-evm-ethereum = { git = "https://github.com/risc0/reth.git", branch = "wollac/non-hashed-state" }
+reth-network-peers = { git = "https://github.com/risc0/reth.git", branch = "wollac/non-hashed-state" }
+reth-trie-common = { git = "https://github.com/risc0/reth.git", branch = "wollac/non-hashed-state" }
 
 # revm
 revm = { version = "27.1", default-features = false }

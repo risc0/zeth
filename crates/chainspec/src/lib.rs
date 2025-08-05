@@ -42,6 +42,7 @@ pub static MAINNET: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
         chain: NamedChain::Mainnet.into(),
         forks: EthereumHardfork::mainnet().into(),
         deposit_contract_address: Some(MAINNET_DEPOSIT_CONTRACT_ADDRESS),
+        base_fee_params: BaseFeeParams::ethereum(),
         blob_params: BlobScheduleBlobParams::mainnet(),
     };
     spec.into()
@@ -52,6 +53,7 @@ pub static SEPOLIA: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
         chain: NamedChain::Sepolia.into(),
         forks: EthereumHardfork::sepolia().into(),
         deposit_contract_address: Some(SEPOLIA_DEPOSIT_CONTRACT_ADDRESS),
+        base_fee_params: BaseFeeParams::ethereum(),
         blob_params: BlobScheduleBlobParams::mainnet(),
     };
     spec.into()
@@ -62,6 +64,7 @@ pub static HOLESKY: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
         chain: NamedChain::Holesky.into(),
         forks: EthereumHardfork::holesky().into(),
         deposit_contract_address: Some(HOLESKY_DEPOSIT_CONTRACT_ADDRESS),
+        base_fee_params: BaseFeeParams::ethereum(),
         blob_params: BlobScheduleBlobParams::mainnet(),
     };
     spec.into()
@@ -72,6 +75,7 @@ pub struct ChainSpec {
     chain: Chain,
     forks: BTreeMap<EthereumHardfork, ForkCondition>,
     deposit_contract_address: Option<Address>,
+    base_fee_params: BaseFeeParams,
     blob_params: BlobScheduleBlobParams,
 }
 
@@ -127,11 +131,11 @@ impl EthChainSpec for ChainSpec {
     }
 
     fn base_fee_params_at_block(&self, _: u64) -> BaseFeeParams {
-        unimplemented!()
+        self.base_fee_params
     }
 
     fn base_fee_params_at_timestamp(&self, _: u64) -> BaseFeeParams {
-        unimplemented!()
+        self.base_fee_params
     }
 
     fn blob_params_at_timestamp(&self, timestamp: u64) -> Option<alloy_eips::eip7840::BlobParams> {

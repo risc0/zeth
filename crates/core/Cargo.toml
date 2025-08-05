@@ -18,3 +18,8 @@ reth-stateless = { workspace = true }
 reth-trie-common = { workspace = true }
 revm-bytecode = { workspace = true }
 risc0-ethereum-trie = { workspace = true }
+
+[features]
+# Allow proving of pre-merge (Proof-of-Work) blocks.
+# This is considered unsafe because reth does not correctly validate all difficulty constraints.
+unsafe-pre-merge = []

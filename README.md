@@ -108,6 +108,17 @@ ETH_RPC_URL="<YOUR_RPC_URL>" cargo run --release --bin cli -- prove
 RISC0_DEV_MODE=1 ETH_RPC_URL="<YOUR_RPC_URL>" cargo run --release --bin cli -- prove 19000000
 ```
 
+#### Proving Pre-Merge (Proof-of-Work) Blocks
+
+By default, Zeth only supports proving post-merge (Proof-of-Stake) blocks. This is because the underlying `reth-stateless` library does not fully validate the total difficulty, making proofs of pre-merge blocks underconstrained.
+
+For development and research purposes, you can enable the proving of historical blocks by using the `unsafe-pre-merge` feature flag:
+```bash
+ETH_RPC_URL="<YOUR_RPC_URL>" cargo run --release --bin cli --features "unsafe-pre-merge" -- prove --block 1
+```
+
+**Warning**: Proofs generated with this flag are not fully sound and should not be used in production.
+
 ## Additional Resources
 
 * [RISC Zero Developer Portal](https://dev.risczero.com/)

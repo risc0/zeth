@@ -2781,7 +2781,7 @@ dependencies = [
 
 [[package]]
 name = "guests"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "risc0-build",
 ]
@@ -7385,7 +7385,7 @@ dependencies = [
 
 [[package]]
 name = "zeth-chainspec"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7399,7 +7399,7 @@ dependencies = [
 
 [[package]]
 name = "zeth-core"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -7418,7 +7418,7 @@ dependencies = [
 
 [[package]]
 name = "zeth-host"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "alloy",
  "alloy-chains",
@@ -7437,7 +7437,7 @@ dependencies = [
 
 [[package]]
 name = "zeth-rpc-proxy"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "actix-web",
  "alloy",

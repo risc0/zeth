@@ -3389,7 +3389,7 @@ dependencies = [
 [[package]]
 name = "reth-chainspec"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "alloy-chains",
  "alloy-consensus",
@@ -3409,7 +3409,7 @@ dependencies = [
 [[package]]
 name = "reth-codecs"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -3427,7 +3427,7 @@ dependencies = [
 [[package]]
 name = "reth-codecs-derive"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "convert_case",
  "proc-macro2",
@@ -3438,7 +3438,7 @@ dependencies = [
 [[package]]
 name = "reth-consensus"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -3451,7 +3451,7 @@ dependencies = [
 [[package]]
 name = "reth-consensus-common"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -3463,7 +3463,7 @@ dependencies = [
 [[package]]
 name = "reth-db-models"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -3475,7 +3475,7 @@ dependencies = [
 [[package]]
 name = "reth-errors"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "reth-consensus",
  "reth-execution-errors",
@@ -3486,7 +3486,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-consensus"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -3502,7 +3502,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-forks"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "alloy-eip2124",
  "alloy-hardforks",
@@ -3515,7 +3515,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-primitives"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -3531,7 +3531,7 @@ dependencies = [
 [[package]]
 name = "reth-evm"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -3552,7 +3552,7 @@ dependencies = [
 [[package]]
 name = "reth-evm-ethereum"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -3571,7 +3571,7 @@ dependencies = [
 [[package]]
 name = "reth-execution-errors"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "alloy-evm",
  "alloy-primitives",
@@ -3584,7 +3584,7 @@ dependencies = [
 [[package]]
 name = "reth-execution-types"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -3602,7 +3602,7 @@ dependencies = [
 [[package]]
 name = "reth-network-peers"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -3615,7 +3615,7 @@ dependencies = [
 [[package]]
 name = "reth-primitives-traits"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -3642,7 +3642,7 @@ dependencies = [
 [[package]]
 name = "reth-prune-types"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "alloy-primitives",
  "derive_more",
@@ -3653,7 +3653,7 @@ dependencies = [
 [[package]]
 name = "reth-revm"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "alloy-primitives",
  "reth-primitives-traits",
@@ -3665,7 +3665,7 @@ dependencies = [
 [[package]]
 name = "reth-stages-types"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "alloy-primitives",
  "bytes",
@@ -3676,7 +3676,7 @@ dependencies = [
 [[package]]
 name = "reth-stateless"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -3702,7 +3702,7 @@ dependencies = [
 [[package]]
 name = "reth-static-file-types"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "alloy-primitives",
  "derive_more",
@@ -3713,7 +3713,7 @@ dependencies = [
 [[package]]
 name = "reth-storage-api"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -3735,7 +3735,7 @@ dependencies = [
 [[package]]
 name = "reth-storage-errors"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -3751,7 +3751,7 @@ dependencies = [
 [[package]]
 name = "reth-trie-common"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -3772,7 +3772,7 @@ dependencies = [
 [[package]]
 name = "reth-trie-sparse"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -3788,7 +3788,7 @@ dependencies = [
 [[package]]
 name = "reth-zstd-compressors"
 version = "1.6.0"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.6.0#d8451e54e7267f9f1634118d6d279b2216f7e2bb"
+source = "git+https://github.com/risc0/reth.git?branch=wollac%2Fvalidate-against-parent#8386a554e21bdb00b75677a83f2bd1d0711534e4"
 dependencies = [
  "zstd",
 ]

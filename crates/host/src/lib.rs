@@ -120,12 +120,20 @@ impl<P: Provider + DebugApi> BlockProcessor<P> {
     /// Generates a RISC Zero proof of block execution.
     ///
     /// This method is computationally intensive and is run on a blocking thread.
-    pub async fn prove(&self, input: StatelessInput) -> Result<(Receipt, Digest)> {
+    pub async fn prove(
+        &self,
+        input: StatelessInput,
+        po2: Option<u32>,
+    ) -> Result<(Receipt, Digest)> {
         let (elf, image_id) = self.elf()?;
 
         // prove in a blocking thread using the default prover
         let info = tokio::task::spawn_blocking(move || {
-            let env = ExecutorEnvBuilder::default().write(&input)?.build()?;
+            let mut env_builder = ExecutorEnvBuilder::default();
+            if let Some(po2) = po2 {
+                env_builder.segment_limit_po2(po2);
+            }
+            let env = env_builder.write(&input)?.build()?;
             default_prover().prove(env, elf)
         })
         .await

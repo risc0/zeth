@@ -2182,6 +2182,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7c1832837b905bbfb5101e07cc24c8deddf52f93225eee6ead5f4d63d53ddcb"
 dependencies = [
  "const-oid",
+ "pem-rfc7468",
  "zeroize",
 ]
 
@@ -2780,7 +2781,7 @@ dependencies = [
 
 [[package]]
 name = "guests"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "risc0-build",
 ]
@@ -3704,6 +3705,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-bigint-dig"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc84195820f291c7697304f3cbdadd1cb7199c0efc917ff5eafd71225c136151"
+dependencies = [
+ "byteorder",
+ "lazy_static",
+ "libm",
+ "num-integer",
+ "num-iter",
+ "num-traits",
+ "rand 0.8.5",
+ "smallvec",
+ "zeroize",
+]
+
+[[package]]
 name = "num-complex"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4013,6 +4031,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
+name = "pem-rfc7468"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88b39c9bfcfc231068454382784bb460aae594343fb030d46e9f50a645418412"
+dependencies = [
+ "base64ct",
+]
+
+[[package]]
 name = "percent-encoding"
 version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4113,6 +4140,17 @@ name = "pin-utils"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
+
+[[package]]
+name = "pkcs1"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c8ffb9f10fa047879315e6625af03c164b16962a5368d724ed16323b68ace47f"
+dependencies = [
+ "der",
+ "pkcs8",
+ "spki",
+]
 
 [[package]]
 name = "pkcs8"
@@ -5205,12 +5243,15 @@ version = "3.0.0"
 dependencies = [
  "anyhow",
  "borsh",
+ "bytemuck",
  "derive_more",
  "elf",
  "lazy_static",
  "postcard",
+ "rand 0.9.2",
  "risc0-zkp",
  "risc0-zkvm-platform",
+ "ruint",
  "semver 1.0.26",
  "serde",
  "tracing",
@@ -5286,7 +5327,6 @@ name = "risc0-core"
 version = "2.0.1"
 dependencies = [
  "bytemuck",
- "bytemuck_derive",
  "rand_core 0.9.3",
 ]
 
@@ -5310,6 +5350,7 @@ dependencies = [
  "anyhow",
  "ark-bn254",
  "ark-ec",
+ "ark-ff 0.5.0",
  "ark-groth16",
  "ark-serialize 0.5.0",
  "bytemuck",
@@ -5319,7 +5360,6 @@ dependencies = [
  "risc0-binfmt",
  "risc0-zkp",
  "serde",
- "stability",
 ]
 
 [[package]]
@@ -5420,6 +5460,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "rsa"
+version = "0.9.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78928ac1ed176a5ca1d17e578a1825f3d81ca54cf41053a592584b020cfd691b"
+dependencies = [
+ "const-oid",
+ "digest 0.10.7",
+ "num-bigint-dig",
+ "num-integer",
+ "num-traits",
+ "pkcs1",
+ "pkcs8",
+ "rand_core 0.6.4",
+ "signature",
+ "spki",
+ "subtle",
+ "zeroize",
+]
+
+[[package]]
 name = "rug"
 version = "1.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5440,6 +5500,7 @@ dependencies = [
  "alloy-rlp",
  "ark-ff 0.3.0",
  "ark-ff 0.4.2",
+ "borsh",
  "bytes",
  "fastrlp 0.3.1",
  "fastrlp 0.4.0",
@@ -5576,8 +5637,12 @@ checksum = "28d3b2b1366ec20994f1fd18c3c594f05c5dd4bc44d8bb0c1c632c8d6829481f"
 name = "rzup"
 version = "0.5.0"
 dependencies = [
+ "hex",
+ "rsa",
  "semver 1.0.26",
  "serde",
+ "serde_with",
+ "sha2 0.10.9",
  "strum",
  "tempfile",
  "thiserror",
@@ -7237,7 +7302,7 @@ dependencies = [
 
 [[package]]
 name = "zeth-chainspec"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7251,7 +7316,7 @@ dependencies = [
 
 [[package]]
 name = "zeth-core"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -7270,7 +7335,7 @@ dependencies = [
 
 [[package]]
 name = "zeth-host"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "alloy",
  "alloy-chains",
@@ -7290,7 +7355,7 @@ dependencies = [
 
 [[package]]
 name = "zeth-rpc-proxy"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "actix-web",
  "alloy",

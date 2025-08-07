@@ -100,7 +100,8 @@ async fn main() -> anyhow::Result<()> {
             processor.prove(input, segment_po2).await.context("proving failed")?;
         receipt.verify(image_id).context("proof verification failed")?;
 
-        let proven_hash: B256 = receipt.journal.decode().context("failed to decode journal")?;
+        let proven_hash =
+            B256::try_from(receipt.journal.as_ref()).context("failed to decode journal")?;
         ensure!(proven_hash == block_hash, "journal output mismatch");
     }
 

@@ -1714,7 +1714,9 @@ dependencies = [
 
 [[package]]
 name = "bonsai-sdk"
-version = "1.4.1"
+version = "1.4.1-rc.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1a3180999804a8f173b11a4870c8acafe38ee668d1068536de3e91e2f97e016"
 dependencies = [
  "duplicate",
  "maybe-async",
@@ -5239,7 +5241,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-binfmt"
-version = "3.0.0"
+version = "3.0.0-rc.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "125c9ea293ef57088e68a05812d3816211df4c962c2194726a2eef7e244dbea8"
 dependencies = [
  "anyhow",
  "borsh",
@@ -5259,7 +5263,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-build"
-version = "3.0.0"
+version = "3.0.0-rc.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "039d02f27e7855c797aa9d9db63c70fdc2d6d4ebb6a18b5b07356d8cbcf12e2e"
 dependencies = [
  "anyhow",
  "cargo_metadata",
@@ -5281,7 +5287,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-circuit-keccak"
-version = "4.0.0"
+version = "4.0.0-rc.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b43af0a87883d9687eec6fe8ee4120702e2dcba648a4b52d0802538a686aad41"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -5295,7 +5303,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-circuit-recursion"
-version = "4.0.0"
+version = "4.0.0-rc.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b515b1ca4853f2dcfc855789c7f7d20f52b871f0d99030d42c73cd09538a6637"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -5308,7 +5318,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-circuit-rv32im"
-version = "4.0.0"
+version = "4.0.0-rc.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f38e402b9c472a668cf41fe854ac015053c59d326bc042580f1dc24a6f08032"
 dependencies = [
  "anyhow",
  "bit-vec",
@@ -5324,7 +5336,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-core"
-version = "2.0.1"
+version = "2.0.1-rc.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f44b214fc379afdeb165d7a370b34bb91d8ab9983fda12cc39c5c250840d8668"
 dependencies = [
  "bytemuck",
  "rand_core 0.9.3",
@@ -5345,7 +5359,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-groth16"
-version = "3.0.0"
+version = "3.0.0-rc.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed55c6ef8ec8c63dc551ce4bc599a5c85c7d6cbc43bffacf0ac632d4e28047ee"
 dependencies = [
  "anyhow",
  "ark-bn254",
@@ -5364,7 +5380,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-zkos-v1compat"
-version = "2.0.2"
+version = "2.0.2-rc.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9644187578c9f6d482fc66daae753cd91b3e2d334b1a0920a37ea87b1c07d23c"
 dependencies = [
  "include_bytes_aligned",
  "no_std_strings",
@@ -5372,7 +5390,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-zkp"
-version = "3.0.0"
+version = "3.0.0-rc.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "931bc78155343ad7cbf8469416093db94e58591abc960c1818eb56f91cc20b70"
 dependencies = [
  "anyhow",
  "blake2",
@@ -5395,7 +5415,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-zkvm"
-version = "3.0.0"
+version = "3.0.0-rc.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c94241e1d2edf79bc77349f6b0ac21a078fdcc9ea08a10c22f9d60718aea60d5"
 dependencies = [
  "anyhow",
  "bincode",
@@ -5429,7 +5451,9 @@ dependencies = [
 
 [[package]]
 name = "risc0-zkvm-platform"
-version = "2.0.4"
+version = "2.0.4-rc.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf8d4268e4fb40635c7bb7e8ce9e5150444caaf6a9be1c8912283a6c8f040480"
 dependencies = [
  "bytemuck",
  "cfg-if",
@@ -5635,7 +5659,9 @@ checksum = "28d3b2b1366ec20994f1fd18c3c594f05c5dd4bc44d8bb0c1c632c8d6829481f"
 
 [[package]]
 name = "rzup"
-version = "0.5.0"
+version = "0.5.0-rc.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d821fd85277485368ee3473f7a7ab153e6289baf02f07ca2e7a002e49022967"
 dependencies = [
  "hex",
  "rsa",

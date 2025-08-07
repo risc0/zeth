@@ -19,7 +19,7 @@ revm = { version = "27.1", default-features = false, features = [
     "blst",
     "bn",
 ] }
-risc0-zkvm = { path = "/home/flaub/src/risc0/risc0/zkvm" }
+risc0-zkvm = "3.0.0-rc.3"
 sha2 = { version = "=0.10.9" }
 substrate-bn = { version = "=0.6.0" }
 tiny-keccak = { version = "=2.0.2" }

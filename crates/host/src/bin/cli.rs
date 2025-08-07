@@ -101,22 +101,29 @@ async fn get_cached_input<P: Provider>(
     block_id: BlockId,
     cache_dir: &Path,
 ) -> anyhow::Result<StatelessInput> {
-    // First, get the block header to determine the canonical hash for caching.
-    let header = processor
-        .provider()
-        .get_block(block_id)
-        .await?
-        .with_context(|| format!("block {block_id} not found"))?
-        .header;
+    let block_hash = match block_id {
+        BlockId::Hash(hash) => hash.block_hash,
+        _ => {
+            // First, get the block header to determine the canonical hash for caching.
+            let header = processor
+                .provider()
+                .get_block(block_id)
+                .await?
+                .with_context(|| format!("block {block_id} not found"))?
+                .header;
 
-    let cache_file = cache_dir.join(format!("input_{}.json", header.hash));
+            header.hash
+        }
+    };
+
+    let cache_file = cache_dir.join(format!("input_{}.json", block_hash));
     let input: StatelessInput = if cache_file.exists() {
-        println!("Cache hit for block {}. Loading from file: {:?}", header.hash, &cache_file);
+        println!("Cache hit for block {}. Loading from file: {:?}", block_hash, &cache_file);
         let f = File::open(&cache_file).context("failed to open file")?;
         serde_json::from_reader(BufReader::new(f)).context("failed to read file")?
     } else {
-        println!("Cache miss for block {}. Fetching from RPC.", header.hash);
-        let (input, _) = processor.create_input(header.hash).await?;
+        println!("Cache miss for block {}. Fetching from RPC.", block_hash);
+        let (input, _) = processor.create_input(block_hash).await?;
 
         // Save the newly fetched input to the cache.
         println!("Writing new input to cache: {:?}", &cache_file);
@@ -125,7 +132,7 @@ async fn get_cached_input<P: Provider>(
 
         input
     };
-    ensure!(input.block.hash_slow() == header.hash);
+    ensure!(input.block.hash_slow() == block_hash);
 
     Ok(input)
 }

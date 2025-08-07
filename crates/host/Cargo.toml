@@ -8,6 +8,7 @@ rust-version = { workspace = true }
 alloy = { workspace = true }
 alloy-chains = { workspace = true }
 anyhow = { workspace = true }
+blst = { workspace = true }
 bytemuck = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
 futures = { workspace = true }

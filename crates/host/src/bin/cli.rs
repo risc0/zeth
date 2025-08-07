@@ -52,13 +52,24 @@ struct Cli {
 #[derive(Subcommand, Debug, PartialEq, Eq)]
 enum Commands {
     /// Validate the block and generate a RISC Zero proof.
-    Prove,
+    Prove(ProveCommand),
+
     /// Validate the block on the host machine, without proving.
     Validate,
 }
 
+#[derive(Parser, Debug, PartialEq, Eq)]
+struct ProveCommand {
+    /// Optional segment limit po2
+    #[arg(long, env)]
+    segment_po2: Option<u32>,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // This is a hack to ensure that `blst` gets linked into this binary.
+    let _ = unsafe { blst::blst_p1_sizeof() };
+
     let cli = Cli::parse();
 
     // ensure the cache directory exists
@@ -84,8 +95,9 @@ async fn main() -> anyhow::Result<()> {
     println!("Host validation successful");
 
     // create proof if requested
-    if cli.command == Commands::Prove {
-        let (receipt, image_id) = processor.prove(input).await.context("proving failed")?;
+    if let Commands::Prove(ProveCommand { segment_po2 }) = cli.command {
+        let (receipt, image_id) =
+            processor.prove(input, segment_po2).await.context("proving failed")?;
         receipt.verify(image_id).context("proof verification failed")?;
 
         let proven_hash: B256 = receipt.journal.decode().context("failed to decode journal")?;

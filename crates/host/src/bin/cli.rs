@@ -116,17 +116,17 @@ async fn get_cached_input<P: Provider>(
         }
     };
 
-    let cache_file = cache_dir.join(format!("input_{}.json", block_hash));
+    let cache_file = cache_dir.join(format!("input_{block_hash}.json"));
     let input: StatelessInput = if cache_file.exists() {
-        println!("Cache hit for block {}. Loading from file: {:?}", block_hash, &cache_file);
+        println!("Cache hit for block {block_hash}. Loading from file: {cache_file:?}");
         let f = File::open(&cache_file).context("failed to open file")?;
         serde_json::from_reader(BufReader::new(f)).context("failed to read file")?
     } else {
-        println!("Cache miss for block {}. Fetching from RPC.", block_hash);
+        println!("Cache miss for block {block_hash}. Fetching from RPC.");
         let (input, _) = processor.create_input(block_hash).await?;
 
         // Save the newly fetched input to the cache.
-        println!("Writing new input to cache: {:?}", &cache_file);
+        println!("Writing new input to cache: {cache_file:?}");
         let f = File::create(&cache_file).context("failed to create file")?;
         serde_json::to_writer(BufWriter::new(f), &input).context("failed to write file")?;
 

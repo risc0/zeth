@@ -67,6 +67,8 @@ struct ProveCommand {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt::init();
+
     // This is a hack to ensure that `blst` gets linked into this binary.
     let _ = unsafe { blst::blst_p1_sizeof() };
 

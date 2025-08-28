@@ -199,6 +199,9 @@ async fn handle_debug_execution_witness(
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
+    // This is a hack to ensure that `blst` gets linked into this binary.
+    let _ = unsafe { blst::blst_p1_sizeof() };
+
     let args = Args::parse();
 
     let retry = RetryBackoffLayer::new(10, args.rpc_retry_backoff, args.rpc_retry_cu);

@@ -12,8 +12,14 @@ lto = "fat"
 [dependencies]
 blst = { version = "=0.3.15" }
 c-kzg = { version = "=2.1.1" }
-revm = { version = "27.1", default-features = false, features = ["std", "c-kzg", "portable", "blst", "bn"] }
-risc0-zkvm = { version = "2.3", features = ["unstable"] }
+revm = { version = "27.1", default-features = false, features = [
+    "std",
+    "c-kzg",
+    "portable",
+    "blst",
+    "bn",
+] }
+risc0-zkvm = "3.0.3"
 sha2 = { version = "=0.10.9" }
 substrate-bn = { version = "=0.6.0" }
 tiny-keccak = { version = "=2.0.2" }

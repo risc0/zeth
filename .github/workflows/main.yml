@@ -38,7 +38,7 @@ jobs:
         uses: risc0/risc0/.github/actions/rustup@fbe1d0bb75c21fe36cefd87bae25f424b711b291
 
       - name: install sccache
-        uses: risc0/risc0/.github/actions/sccache@fbe1d0bb75c21fe36cefd87bae25f424b711b291
+        uses: boundless-xyz/boundless/.github/actions/sccache@main
         with:
           key: ${{ matrix.os }}-${{ matrix.feature }}
 
@@ -81,7 +81,7 @@ jobs:
         uses: risc0/risc0/.github/actions/rustup@fbe1d0bb75c21fe36cefd87bae25f424b711b291
 
       - name: install sccache
-        uses: risc0/risc0/.github/actions/sccache@fbe1d0bb75c21fe36cefd87bae25f424b711b291
+        uses: boundless-xyz/boundless/.github/actions/sccache@main
         with:
           key: ${{ matrix.os }}-${{ matrix.feature }}
 
